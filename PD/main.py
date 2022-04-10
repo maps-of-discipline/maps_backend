@@ -1,8 +1,8 @@
 import xlsxwriter
 import openpyxl
-from openpyxl.styles import PatternFill, Border, Side, Alignment, Protection, Font, NamedStyle
+from openpyxl.styles import PatternFill, Border, Side, Alignment, Font, NamedStyle
 import pyodbc
-
+import sys, os
 import start
 
 # функция подключения к базе данных, на вход требует путь к базе данных возвращает курсор, который указывает на БД
@@ -51,7 +51,7 @@ def select_to_DataBase(cur, id_op):
                 data.append(row[2])
                 set.append(data.copy())
                 data_rev = set[j]
-                if data_rev[1] == "Элективные дисциплины по физической культуре и спорту":
+                if data_rev[1] == "Элективные дисциплины по физической культуре и спорту" or data_rev[1] == "Элективные курсы по физической культуре и спорту":
                     zet = 0
                 if len(data_rev) == 3:
                     data_rev.append(int(zet))
@@ -79,7 +79,7 @@ def select_color(cur, modul):
 
 def  create_directory_of_modul(ws, modul, cur):
     adr_cell = "B"
-    row = 40
+    row = 44
     modul = list(modul)
     for i in range(len(modul)):
         dip = adr_cell + str(row) + ':' + adr_cell + str(row + 1)
@@ -175,14 +175,20 @@ def filling_map(fullname_db, filename_map, name_map):
     conn.close()
     print("Отключение от базы данных")
 
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
 
+    return os.path.join(base_path, relative_path)
 
 # основная функция-связующая все части и вводит основные параметры всего
 def main():
     file = input("Введите полное название выгрузки из 1С: ")
-    start.start(file)
+    fullname_db = resource_path('db.accdb') + ";"
+    start.start(file, fullname_db)
     filename_map = 'Map ' + file
-    fullname_db = '..\db.accdb;'
     filling_map(fullname_db, filename_map, file[0:-5])
     print('Программа успешно завершила свою работу!')
 

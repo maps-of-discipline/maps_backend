@@ -15,8 +15,8 @@ def connect_to_DateBase(fullname_db):
 
 
 
-def start(file):
-    fullname_db = "..\db.accdb;"
+def start(file, fullname_db):
+
     cur, conn = connect_to_DateBase(fullname_db)
     data = pd.read_excel(file)
     data = data.to_dict(orient='records')
