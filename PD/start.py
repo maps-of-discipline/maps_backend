@@ -20,7 +20,8 @@ def start(file, fullname_db):
     cur, conn = connect_to_DateBase(fullname_db)
     data = pd.read_excel(file)
     data = data.to_dict(orient='records')
-    name_map = file[0:-5]
+    name_map = file[:-5]
+
     cur.execute(
         'Select ID_OP From OP WHERE Name_OP LIKE ?', name_map)
     row = cur.fetchall()
@@ -48,8 +49,7 @@ def start(file, fullname_db):
             mod_id = row[0][0]
         else:
             r = lambda: random.randint(0, 255)
-            fake = '%02X%02X%02X' % (r(), r(), r())
-            color = fake.hex_color()
+            color = '%02X%02X%02X' % (r(), r(), r())
             cur.execute(
                 'INSERT INTO Module_reference (Name_module, Color) VALUES (?, ?);',
                 (mod, color))
