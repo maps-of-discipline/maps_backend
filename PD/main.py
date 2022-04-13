@@ -1,7 +1,7 @@
 import xlsxwriter
 import openpyxl
 from openpyxl.styles import PatternFill, Border, Side, Alignment, Font, NamedStyle
-import pyodbc
+import pypyodbc as pyodbc
 import sys, os, datetime
 import start
 
@@ -9,7 +9,7 @@ import start
 
 def connect_to_DateBase(fullname_db):
     try:
-        conn_string = r'DRIVER={Microsoft Access Driver (*.mdb)};DBQ=' + fullname_db
+        conn_string = r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=' + fullname_db
         conn = pyodbc.connect(conn_string)
         cursor = conn.cursor()
         print("Подключение к базе данных")
@@ -43,7 +43,7 @@ def select_to_DataBase(cur, id_op):
     for i in range(len(sem)):
         cur.execute(
             'SELECT ID_module, Discipline, Period, ZET, Num_block, Record_type   FROM Load WHERE Period LIKE ? AND ID_OP = ?',
-            (sem[i] + " семестр"), id_op)
+            [(sem[i] + " семестр"), id_op])
         for row in cur.fetchall():
             if buf != row[1]:
                 buf = row[1]
@@ -76,7 +76,7 @@ def select_to_DataBase(cur, id_op):
 
 
 def select_color(cur, modul):
-    cur.execute('SELECT Color  FROM Module_reference WHERE ID_module LIKE ?', (modul))
+    cur.execute('SELECT Color  FROM Module_reference WHERE ID_module LIKE ?', [modul])
     for row in cur.fetchall():
         return (row[0])
 
@@ -87,7 +87,7 @@ def  create_directory_of_modul(ws, modul, cur):
     for i in range(len(modul)):
         dip = adr_cell + str(row) + ':' + adr_cell + str(row + 1)
         cur.execute(
-            'SELECT Name_module  FROM Module_reference WHERE ID_module LIKE ?', (modul[i]))
+            'SELECT Name_module  FROM Module_reference WHERE ID_module LIKE ?', [modul[i]])
         for r in cur.fetchall():
             modul_buf = (r[0])
         ws[adr_cell + str(row)] = modul_buf
@@ -130,7 +130,7 @@ def CreateMap(filename_map):
 # Так же мы красим предметы в соответствии с модулем
 def filling_map(fullname_db, filename_map, name_map):
     cur, conn = connect_to_DateBase(fullname_db)
-    cur.execute('SELECT ID_OP  FROM OP WHERE Name_OP LIKE ?', (name_map))
+    cur.execute('SELECT ID_OP  FROM OP WHERE Name_OP LIKE ?', [name_map])
     id_op = cur.fetchall()[0][0]
     date = select_to_DataBase(cur, id_op)
     ws, wk = CreateMap(filename_map)
@@ -194,15 +194,20 @@ def resource_path(relative_path):
 
 # основная функция-связующая все части и вводит основные параметры всего
 def main():
-    file = input("Введите полное название выгрузки из 1С: ")
-    fullname_db = resource_path('db.mdb') + ";"
-    start.start(file, fullname_db)
-    day_time = datetime.datetime.now()
-    day_time = " от " + str(day_time)[:16].replace("-", ".").replace(":", "-")
-    filename_map = 'КД ' + file[0:-5] + day_time + '.xlsx'
-    filling_map(fullname_db, filename_map, file[0:-5])
-    print('Программа успешно завершила свою работу!')
-    main()
+    try:
+        file = input("Введите имя выгрузки из 1С: ") + ".xlsx"
+        fullname_db = resource_path('db.mdb')
+        print(fullname_db)
+        start.start(file, fullname_db)
+        day_time = datetime.datetime.now()
+        day_time = " от " + str(day_time)[:16].replace("-", ".").replace(":", "-")
+        filename_map = 'КД ' + file[0:-5] + day_time + '.xlsx'
+        filling_map(fullname_db, filename_map, file[0:-5])
+        print('Программа успешно завершила свою работу!')
+        main()
+    except Exception as ex:
+        print(ex)
+        input()
 
 if __name__ == "__main__":
     main()
