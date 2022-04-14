@@ -1,6 +1,7 @@
 import pandas as pd
 import random
 import main
+import os
 # функция подключения к базе данных, на вход требует путь к базе данных возвращает курсор, который указывает на БД
 
 
@@ -9,13 +10,13 @@ def start(file, fullname_db):
     cur, conn = main.connect_to_DateBase(fullname_db)
     data = pd.read_excel(file, sheet_name='Лист2').sort_values(by='Дисциплина')
     data = data.to_dict(orient='records')
-    name_map = file[:-5]
+    name_map = os.path.basename(file)[:-5]
     cur.execute("SELECT ID_OP FROM OP WHERE Name_OP LIKE ?", [name_map])
     row = cur.fetchall()
     if row == []:
         cur.execute('INSERT INTO OP (Name_OP, Faculty_ID) VALUES (?, 1);', [name_map])
     else:
-        print("Данные карты с таким названием уже существуют, произойдет удаление старых данных!")
+        #print("Данные карты с таким названием уже существуют, произойдет удаление старых данных!")
         cur.execute('DELETE FROM Load WHERE ID_OP LIKE ?;', [row[0][0]])
     for i in range(len(data)):
         xl = data[i]
@@ -56,4 +57,4 @@ def start(file, fullname_db):
     cur.close()
     del cur
     conn.close()
-    print("Отключение от базы данных")
+    #print("Отключение от базы данных")

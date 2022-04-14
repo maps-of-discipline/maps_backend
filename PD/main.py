@@ -12,7 +12,7 @@ def connect_to_DateBase(fullname_db):
         conn_string = r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=' + fullname_db
         conn = pyodbc.connect(conn_string)
         cursor = conn.cursor()
-        print("Подключение к базе данных")
+        #print("Подключение к базе данных")
         return cursor, conn
     except pyodbc.Error as e:
         print("Ошибка подключения к базе данных", e)
@@ -70,7 +70,6 @@ def select_to_DataBase(cur, id_op):
     data_rev.append(int(zet))
     set[-1] = data_rev.copy()
     set = sort_modul(set)
-    print(sum_zet)
     return set
 
 
@@ -163,7 +162,6 @@ def filling_map(fullname_db, filename_map, name_map):
             sum_row += row -3
             row = 3
             i -= 1
-    print(sum_row + row)
     ws.merge_cells('A1:' + adr_cell +'1')
     ws['A1'] = 'КАРТА ДИСЦИПЛИН'
     ws['A1'].style = 'standart'
@@ -178,7 +176,7 @@ def filling_map(fullname_db, filename_map, name_map):
     cur.close()
     del cur
     conn.close()
-    print("Отключение от базы данных")
+    #print("Отключение от базы данных")
 
 def resource_path(relative_path):
     try:
@@ -188,22 +186,36 @@ def resource_path(relative_path):
 
     return os.path.join(base_path, relative_path)
 
+
+def get_file_list(name_dir):
+    extensions = [".xlsx"]
+    file_list = []
+    for root, directories, filenames in os.walk(name_dir):
+        for filename in filenames:
+            if any(ext in filename for ext in extensions):
+                file_list.append(os.path.join(root, filename))
+    return file_list
+
+
 # основная функция-связующая все части и вводит основные параметры всего
 def main():
-    #try:
-        file = input("Введите имя выгрузки из 1С: ") + ".xlsx"
+    try:
+        name_dir = input("Введите название папки в которой находятся выгрузки из 1С: ")
+        fullname_dir = resource_path(name_dir)
+        list_name_img = get_file_list(fullname_dir)
         fullname_db = resource_path('db.accdb')
-        print(fullname_db)
-        start.start(file, fullname_db)
-        day_time = datetime.datetime.now()
-        day_time = " от " + str(day_time)[:16].replace("-", ".").replace(":", "-")
-        filename_map = 'КД ' + file[0:-5] + day_time + '.xlsx'
-        filling_map(fullname_db, filename_map, file[0:-5])
+        for file in list_name_img:
+            start.start(file, fullname_db)
+            day_time = datetime.datetime.now()
+            day_time = " от " + str(day_time)[:16].replace("-", ".").replace(":", "-")
+            filename_map = 'КД ' + os.path.basename(file)[0:-5] + day_time + '.xlsx'
+            filling_map(fullname_db, filename_map, os.path.basename(file)[0:-5])
+            print("Создана карта для выгрузки ", os.path.basename(file))
         print('Программа успешно завершила свою работу!')
-        main()
-    #except Exception as ex:
-        #print(ex)
-        #input()
+        input("Нажмите любую кнопку для закрытия окна программы!")
+    except Exception:
+        print(Exception)
+        input("Нажмите любую кнопку для закрытия окна программы!")
 
 if __name__ == "__main__":
     main()
