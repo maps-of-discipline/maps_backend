@@ -42,24 +42,23 @@ def select_to_DataBase(cur, id_op):
     sum_zet = 0
     for i in range(len(sem)):
         cur.execute(
-            'SELECT ID_module, Discipline, Period, ZET, Num_block, Record_type   FROM Load WHERE Period LIKE ? AND ID_OP = ?',
+            'SELECT ID_module, Discipline, Period, ZET, Block, Record_type   FROM Load WHERE Period LIKE ? AND ID_OP = ?',
             [(sem[i] + " семестр"), id_op])
         for row in cur.fetchall():
             if buf != row[1]:
                 buf = row[1]
-                data.append(str(row[4]) + " " + str(row[0]))
+                data.append(str(row[4])[:7] + " " + str(row[0]))
                 data.append(row[1])
                 data.append(row[2])
                 set.append(data.copy())
                 data_rev = set[j]
-
                 if data_rev[1] == "Элективные курсы по физической культуре и спорту" or data_rev[1] == "Элективные дисциплины по физической культуре и спорту":
                     zet = 0
                 if len(data_rev) == 3:
-                    data_rev.append(int(zet))
+                    data_rev.append(int(round(zet)))
                     set[j] = data_rev.copy()
                 else:
-                    data_rev[3] = int(zet)
+                    data_rev[3] = int(round(zet))
                     set[j] = data_rev.copy()
                 sum_zet += zet
                 zet = 0.0
@@ -117,9 +116,6 @@ def CreateMap(filename_map):
     worksheet.row_dimensions[2].height = 20
     worksheet["A2"] = "З.Е."
     worksheet['A2'].style = 'standart'
-    for col in range(3, 34):
-        worksheet["A" + str(col)] = col - 2
-        worksheet["A" + str(col)].style = 'standart'
     for col in range(ord('B'), ord('C')):
         worksheet[chr(col) + str(2)] = str(col - 65) + " семестр"
         worksheet[chr(col) + str(2)].style = 'standart'
@@ -147,12 +143,12 @@ def filling_map(fullname_db, filename_map, name_map):
         if date_dist[2] == buf and date_dist[3] != 0:
             ws["A" + str(row)] = row - 2
             ws["A" + str(row)].style = 'standart'
-            modul.add(str(date_dist[0])[2:])
+            modul.add(str(date_dist[0])[8:])
             dip = adr_cell + str(row) + ':' + adr_cell + str(row + date_dist[3] - 1)
             ws[adr_cell + str(row)].style = 'standart'
             ws[adr_cell + str(row)] = date_dist[1]
             cell = ws[adr_cell + str(row)]
-            color = select_color(cur, str(date_dist[0])[2:])
+            color = select_color(cur, str(date_dist[0])[8:])
             cell.fill = openpyxl.styles.PatternFill(start_color=str(color), end_color=str(color), fill_type='solid')
             ws.merge_cells(dip)
             row += date_dist[3] - 1
@@ -194,9 +190,9 @@ def resource_path(relative_path):
 
 # основная функция-связующая все части и вводит основные параметры всего
 def main():
-    try:
+    #try:
         file = input("Введите имя выгрузки из 1С: ") + ".xlsx"
-        fullname_db = resource_path('db.mdb')
+        fullname_db = resource_path('db.accdb')
         print(fullname_db)
         start.start(file, fullname_db)
         day_time = datetime.datetime.now()
@@ -205,9 +201,9 @@ def main():
         filling_map(fullname_db, filename_map, file[0:-5])
         print('Программа успешно завершила свою работу!')
         main()
-    except Exception as ex:
-        print(ex)
-        input()
+    #except Exception as ex:
+        #print(ex)
+        #input()
 
 if __name__ == "__main__":
     main()

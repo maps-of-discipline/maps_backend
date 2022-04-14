@@ -7,10 +7,9 @@ import main
 def start(file, fullname_db):
 
     cur, conn = main.connect_to_DateBase(fullname_db)
-    data = pd.read_excel(file)
+    data = pd.read_excel(file, sheet_name='Лист2').sort_values(by='Дисциплина')
     data = data.to_dict(orient='records')
     name_map = file[:-5]
-
     cur.execute("SELECT ID_OP FROM OP WHERE Name_OP LIKE ?", [name_map])
     row = cur.fetchall()
     if row == []:
@@ -43,16 +42,16 @@ def start(file, fullname_db):
         sem = xl['Период контроля']
         nagruzka = xl['Нагрузка']
         kolich = str(xl['Количество'])
-        ed_izm = xl['Единица измерения']
+        ed_izm = xl['Ед. изм.']
         zet = str(xl['ЗЕТ'])
         if kolich == 'nan':
-            kolich = 0
+            kolich = '0'
         if zet == 'nan':
-            zet = 0
+            zet = '0'
         cur.execute(
-            """INSERT INTO Load (ID_OP, Num_block, Part, ID_module, Record_type, Cypher, Discipline, Period, Load, Quantity, Measurement, ZET) 
+            """INSERT INTO Load (ID_OP, Block, Part, ID_module, Record_type, Cypher, Discipline, Period, Load, Quantity, Measurement, ZET) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);""",
-            [pe_id, block, part, mod_id, record_t, cypher, discipline, sem,  nagruzka, float(kolich), ed_izm, float(zet)])
+            [pe_id, block, part, mod_id, record_t, cypher, discipline, sem,  nagruzka, float(kolich.replace(",", ".")), ed_izm, float(zet.replace(",", "."))])
     cur.commit()
     cur.close()
     del cur
