@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{url_for('static', filename='css/style.css')}}">
+    <title>Abiturients</title>
+</head>
+<body>
+    <div class="container">
+        <select class = "select" name="select2" id="select2">
+            <option value="0" spec_code="">Не выбрано...</option>
+            <!--Москва (бакалавриат/специалитет)-->
+            <option value="1" spec_code="15.03.04">15.03.04 Автоматизация технологических процессов и производств</option>
+            <option value="1" spec_code="38.03.05">38.03.05 Бизнес-информатика</option>
+            <option value="1" spec_code="19.03.01">19.03.01 Биотехнология</option>
+            <option value="1" spec_code="21.05.04">21.05.04 Горное дело</option>
+            <option value="1" spec_code="38.03.04">38.03.04 Государственное и муниципальное управление</option>
+            <option value="1" spec_code="54.05.03">54.05.03 Графика</option>
+            <option value="1" spec_code="54.03.01">54.03.01 Дизайн</option>
+            <option value="1" spec_code="42.03.02">42.03.02 Журналистика</option>
+            <option value="1" spec_code="42.03.03">42.03.03 Издательское дело</option>
+            <option value="1" spec_code="27.03.05">27.03.05 Инноватика</option>
+            <option value="1" spec_code="09.03.01">09.03.01 Информатика и вычислительная техника</option>
+            <option value="1" spec_code="10.03.01">10.03.01 Информационная безопасность</option>
+            <option value="1" spec_code="10.05.03">10.05.03 Информационная безопасность автоматизированных систем</option>
+            <option value="1" spec_code="09.03.02">09.03.02 Информационные системы и технологии</option>
+            <option value="1" spec_code="15.03.05">15.03.05 Конструкторско-технологическое обеспечение машиностроительных производств</option>
+            <option value="1" spec_code="22.03.01">22.03.01 Материаловедение и технологии материалов</option>
+            <option value="1" spec_code="15.03.01">15.03.01 Машиностроение</option>
+            <option value="1" spec_code="38.03.02">38.03.02 Менеджмент</option>
+            <option value="1" spec_code="22.03.02">22.03.02 Металлургия</option>
+            <option value="1" spec_code="23.03.02">23.03.02 Наземные транспортно-технологические комплексы</option>
+            <option value="1" spec_code="23.05.01">23.05.01 Наземные транспортно-технологические средства</option>
+            <option value="1" spec_code="21.03.01">21.03.01 Нефтегазовое дело</option>
+            <option value="1" spec_code="21.05.02">21.05.02 Прикладная геология</option>
+            <option value="1" spec_code="09.03.03">09.03.03 Прикладная информатика</option>
+            <option value="1" spec_code="01.03.02">01.03.02 Прикладная математика и информатика</option>
+            <option value="1" spec_code="15.03.03">15.03.03 Прикладная механика</option>
+            <option value="1" spec_code="15.05.01">15.05.01 Проектирование технологических машин и комплексов</option>
+            <option value="1" spec_code="11.03.01">11.03.01 Радиотехника</option>
+            <option value="1" spec_code="11.05.01">11.05.01 Радиоэлектронные системы и комплексы</option>
+            <option value="1" spec_code="42.03.01">42.03.01 Реклама и связи с общественностью</option>
+            <option value="1" spec_code="27.03.01">27.03.01 Стандартизация и метрология</option>
+            <option value="1" spec_code="08.03.01">08.03.01 Строительство</option>
+            <option value="1" spec_code="08.05.01">08.05.01 Строительство уникальных зданий и сооружений</option>
+            <option value="1" spec_code="13.03.01">13.03.01 Теплоэнергетика и теплотехника</option>
+            <option value="1" spec_code="15.03.02">15.03.02 Технологические машины и оборудование</option>
+            <option value="1" spec_code="21.05.03">21.05.03 Технология геологической разведки</option>
+            <option value="1" spec_code="29.03.03">29.03.03 Технология полиграфического и упаковочного производства</option>
+            <option value="1" spec_code="29.03.04">29.03.04 Технология художественной обработки материалов</option>
+            <option value="1" spec_code="20.03.01">20.03.01 Техносферная безопасность</option>
+            <option value="1" spec_code="27.03.04">27.03.04 Управление в технических системах</option>
+            <option value="1" spec_code="27.03.02">27.03.02 Управление качеством</option>
+            <option value="1" spec_code="38.03.03">38.03.03 Управление персоналом</option>
+            <option value="1" spec_code="18.05.01">18.05.01 Химическая технология энергонасыщенных материалов и изделий</option>
+            <option value="1" spec_code="16.03.03">16.03.03 Холодильная, криогенная техника и системы жизнеобеспечения</option>
+            <option value="1" spec_code="38.03.01">38.03.01 Экономика</option>
+            <option value="1" spec_code="23.03.03">23.03.03 Эксплуатация транспортно-технологических машин и комплексов</option>
+            <option value="1" spec_code="13.03.02">13.03.02 Электроэнергетика и электротехника</option>
+            <option value="1" spec_code="13.03.03">13.03.03 Энергетическое машиностроение</option>
+            <option value="1" spec_code="18.03.02">18.03.02 Энерго- и ресурсосберегающие процессы химической технологии, нефтехимии и биотехнологии</option>
+            <!--Москва (магистратура)-->
+            <option value="2" spec_code="15.04.04">15.04.04 Автоматизация технологических процессов и производств</option>
+            <option value="2" spec_code="54.04.01">54.04.01 Дизайн</option>
+            <option value="2" spec_code="42.04.02">42.04.02 Журналистика</option>
+            <option value="2" spec_code="42.04.03">42.04.03 Издательское дело</option>
+            <option value="2" spec_code="09.04.01">09.04.01 Информатика и вычислительная техника</option>
+            <option value="2" spec_code="10.04.01">10.04.01 Информационная безопасность</option>
+            <option value="2" spec_code="09.04.02">09.04.02 Информационные системы и технологии</option>
+            <option value="2" spec_code="15.04.05">15.04.05 Конструкторско-технологическое обеспечение машиностроительных производств</option>
+            <option value="2" spec_code="22.04.01">22.04.01 Материаловедение и технологии материалов</option>
+            <option value="2" spec_code="15.04.01">15.04.01 Машиностроение</option>
+            <option value="2" spec_code="22.04.02">22.04.02 Металлургия</option>
+            <option value="2" spec_code="23.04.02">23.04.02 Наземные транспортно-технологические комплексы</option>
+            <option value="2" spec_code="01.04.02">01.04.02 Прикладная математика и информатика</option>
+            <option value="2" spec_code="42.04.01">42.04.01 Реклама и связи с общественностью</option>
+            <option value="2" spec_code="27.04.01">27.04.01 Стандартизация и метрология</option>
+            <option value="2" spec_code="13.04.01">13.04.01 Теплоэнергетика и теплотехника</option>
+            <option value="2" spec_code="15.04.02">15.04.02 Технологические машины и оборудование</option>
+            <option value="2" spec_code="29.04.03">29.04.03 Технология полиграфического и упаковочного производства</option>
+            <option value="2" spec_code="20.04.01">20.04.01 Техносферная безопасность</option>
+            <option value="2" spec_code="27.04.04">27.04.04 Управление в технических системах</option>
+            <option value="2" spec_code="27.04.02">27.04.02 Управление качеством</option>
+            <option value="2" spec_code="16.04.03">16.04.03 Холодильная, криогенная техника и системы жизнеобеспечения</option>
+            <option value="2" spec_code="13.04.02">13.04.02 Электроэнергетика и электротехника</option>
+            <option value="2" spec_code="13.04.03">13.04.03 Энергетическое машиностроение</option>
+            <!--Москва (аспирантура)-->
+            <option value="3" spec_code="06.06.01">06.06.01 Биологические науки</option>
+            <option value="3" spec_code="09.06.01">09.06.01 Информатика и вычислительная техника</option>
+            <option value="3" spec_code="50.06.01">50.06.01 Искусствоведение</option>
+            <option value="3" spec_code="01.06.01">01.06.01 Математика и механика</option>
+            <option value="3" spec_code="15.06.01">15.06.01 Машиностроение</option>
+            <option value="3" spec_code="19.06.01">19.06.01 Промышленная экология и биотехнологии</option>
+            <option value="3" spec_code="23.06.01">23.06.01 Техника и технологии наземного транспорта</option>
+            <option value="3" spec_code="08.06.01">08.06.01 Техника и технологии строительства</option>
+            <option value="3" spec_code="22.06.01">22.06.01 Технологии материалов</option>
+            <option value="3" spec_code="27.06.01">27.06.01 Управление в технических системах</option>
+            <option value="3" spec_code="03.06.01">03.06.01 Физика и астрономия</option>
+            <option value="3" spec_code="16.06.01">16.06.01 Физико-технические науки и технологии</option>
+            <option value="3" spec_code="18.06.01">18.06.01 Химическая технология</option>
+            <option value="3" spec_code="13.06.01">13.06.01 Электро- и теплотехника</option>
+            <option value="3" spec_code="45.06.01">45.06.01 Языкознание и литературоведение</option>	
+        </select>
+        <div class="content">
+            <div class="column zet-column">
+                <div class="header-container">
+                    <p class="header-text" style="color: white;">ZET</p>
+                </div>
+                <p class="zet-item">1</p>
+                <p class="zet-item">2</p>
+                <p class="zet-item">3</p>
+                <p class="zet-item">4</p>
+                <p class="zet-item">5</p>
+                <p class="zet-item">6</p>
+                <p class="zet-item">7</p>
+                <p class="zet-item">8</p>
+                <p class="zet-item">9</p>
+                <p class="zet-item">10</p>
+                <p class="zet-item">11</p>
+                <p class="zet-item">12</p>
+                <p class="zet-item">13</p>
+                <p class="zet-item">14</p>
+                <p class="zet-item">15</p>
+                <p class="zet-item">16</p>
+                <p class="zet-item">17</p>
+                <p class="zet-item">18</p>
+                <p class="zet-item">19</p>
+                <p class="zet-item">20</p>
+                <p class="zet-item">21</p>
+                <p class="zet-item">22</p>
+                <p class="zet-item">23</p>
+                <p class="zet-item">24</p>
+                <p class="zet-item">25</p>
+                <p class="zet-item">26</p>
+                <p class="zet-item">27</p>
+                <p class="zet-item">28</p>
+                <p class="zet-item">29</p>
+                <p class="zet-item">30</p>
+                <p class="zet-item">31</p>
+                <p class="zet-item">32</p>
+                <p class="zet-item">33</p>
+                <p class="zet-item">34</p>
+            </div>
+            {% for i in range(0,8) %}
+            <div class="column">
+
+                {% if table[i] != [] %}
+                    <div class="header-container">
+                        <p class="header-text" style="color: white;">{{table[i][0]["term"]}}</p>
+                    </div>
+
+                    {% for el in table[i] %}
+                    <div class="item-container" style="height: {{el['zet']*zet}}px;">
+                        <div class="item" style="background-color: {{el['module_color']}};">
+                            <p class="item-text">{{el["discipline"]}}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% endif%}
+                </div>    
+            {% endfor %}                
+    
+        </div> 
+    </div>
+</body>
+</html>
+
