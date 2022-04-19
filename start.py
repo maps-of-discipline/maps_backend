@@ -7,6 +7,7 @@ import main
 def start(file, fullname_db):
 
     cur, conn = main.connect_to_DateBase(fullname_db)
+    print("[Start]" + file)
     data = pd.read_excel(file)
     data = data.to_dict(orient='records')
     name_map = file[:-5]

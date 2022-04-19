@@ -4,12 +4,13 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
     <link rel="stylesheet" href="{{url_for('static', filename='css/style.css')}}">
     <title>Abiturients</title>
 </head>
 <body>
-    <div class="container">
-        <select class = "select" name="select2" id="select2">
+    <div class="header">
+        <select class="form-select select_">
             <option value="0" spec_code="">Не выбрано...</option>
             <!--Москва (бакалавриат/специалитет)-->
             <option value="1" spec_code="15.03.04">15.03.04 Автоматизация технологических процессов и производств</option>
@@ -103,6 +104,16 @@
             <option value="3" spec_code="13.06.01">13.06.01 Электро- и теплотехника</option>
             <option value="3" spec_code="45.06.01">45.06.01 Языкознание и литературоведение</option>	
         </select>
+        <a href="{{url_for('upload')}}">
+            <img src="{{url_for('static', filename='img/excel.png')}}" id="upload_img" align="right" class="excel_img">
+        </a>
+        {%if showDownloadBtn%}
+        <a href="{{url_for('save', filename=mapname)}}">
+            <button type="button" class="btn btn-outline-light">Загрузить</button>
+        </a>
+        {%endif%}
+    </div>
+    <div class="container_">
         <div class="content">
             <div class="column zet-column">
                 <div class="header-container">

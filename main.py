@@ -9,29 +9,48 @@ import sys, os, datetime
 import start
 
 
-class cell():
-    module_color: str
-    discipline: str
-    term: str
-    zet: float
+def saveMap(file):
+    # file = "29.03.03_2022_Технологии упаковочного производства.xlsx"
+    filepath  = "static\\temp\\" + file
+    fullname_db = resource_path('db.mdb')
+    start.start(file=filepath, fullname_db=fullname_db)
+    day_time = datetime.datetime.now()
+    day_time = " от " + str(day_time)[:16].replace("-", ".").replace(":", "-")
+    filename_map = "static\\temp\\" + 'КД ' + file[0:-5] + day_time + '.xlsx'
+    filling_map(fullname_db, filename_map, file[0:-5])
+    print('Программа успешно завершила свою работу!')
+    return filename_map.split("temp\\")[1]
 
-def get_Table():
+
+def get_Table(filenameMap=None):
     fullname_db = 'db.mdb'
     fullname_db = resource_path('db.mdb')
     sem = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой", "Седьмой", "Восьмой", ]
-    cursor, connection = connect_to_DateBase(fullname_db=fullname_db)
-    data = select_to_DataBase(cursor, 20)
+    
+    cursor, conn = connect_to_DateBase(fullname_db=fullname_db)
+    
+    if filenameMap == None:
+        data = select_to_DataBase(cursor, 20)
+    else:
+        filenameMap = filenameMap.split('.xl')[0]
+        cursor.execute('SELECT ID_OP  FROM OP WHERE Name_OP LIKE ?', [filenameMap])
+        id_op = cursor.fetchall()[0][0]
+        data = select_to_DataBase(cursor, id_op)
+        
+
     cell_list = []
 
     for el in data:
         modul_id = el[0].split(" ")[1]
-        с = { 
+        c = { 
         "module_color": "#" + select_color(cursor, modul_id), 
         "discipline": el[1], 
         "term": el[2], 
         "zet": el[3]
         }
-        cell_list.append(с)
+        if c['zet'] == 0:
+            continue
+        cell_list.append(c)
 
     table = []
     for i in range(0,8):
@@ -79,11 +98,14 @@ def select_to_DataBase(cur, id_op):
     zet = 0.0
     j = -1
     sum_zet = 0
+    print(F"id_op = {id_op}")
     for i in range(len(sem)):
         cur.execute(
-            'SELECT ID_module, Discipline, Period, ZET, Num_block, Record_type   FROM Load WHERE Period LIKE ? AND ID_OP = ?',
+            'SELECT ID_module, Discipline, Period, ZET, Num_block, Record_type FROM Load WHERE Period LIKE ? AND ID_OP = ?',
             [(sem[i] + " семестр"), id_op])
-        for row in cur.fetchall():
+        rows = cur.fetchall()
+        # print(rows)
+        for row in rows:
             if buf != row[1]:
                 buf = row[1]
                 data.append(str(row[4]) + " " + str(row[0]))
@@ -106,6 +128,7 @@ def select_to_DataBase(cur, id_op):
             if row[3] != None and row[5] != "Факультативная":
                 zet += float(row[3])
             data.clear()
+    # print(set)
     data_rev = set[-1]
     data_rev.append(int(zet))
     set[-1] = data_rev.copy()
@@ -120,7 +143,7 @@ def select_color(cur, modul):
         return (row[0])
 
 
-def  create_directory_of_modul(ws, modul, cur):
+def create_directory_of_modul(ws, modul, cur):
     adr_cell = "B"
     row = 50
     modul = list(modul)
@@ -235,14 +258,14 @@ def resource_path(relative_path):
 # основная функция-связующая все части и вводит основные параметры всего
 def main():
     try:
-        # file = input("Введите имя выгрузки из 1С: ") + ".xlsx"
-        file = "2022 НиИД.xlsx"
+        file = "29.03.03_2022_Технологии упаковочного производства.xlsx"
+        filepath  = "static\\temp\\" + file
         fullname_db = resource_path('db.mdb')
-        print(fullname_db)
-        start.start(file, fullname_db)
+        print("[check filepath]" + filepath)
+        start.start(file=filepath, fullname_db=fullname_db)
         day_time = datetime.datetime.now()
         day_time = " от " + str(day_time)[:16].replace("-", ".").replace(":", "-")
-        filename_map = 'КД ' + file[0:-5] + day_time + '.xlsx'
+        filename_map = "static\\temp\\" + 'КД ' + file[0:-5] + day_time + '.xlsx'
         filling_map(fullname_db, filename_map, file[0:-5])
         print('Программа успешно завершила свою работу!')
         # main()
@@ -253,4 +276,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # file = '29.03.03_2022_Технологии упаковочного производства.xlsx'
+    # saveMap(file)
     # get_Table()
