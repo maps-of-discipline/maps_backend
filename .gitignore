@@ -1,0 +1,5 @@
+.idea
+*__pycache__/
+test.py
+db.laccdb
+db.mdb.old

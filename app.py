@@ -1,16 +1,11 @@
-from cmath import log
 from fileinput import filename
-from importlib.resources import path
-from msilib.schema import Directory
 import os
 from pickle import NONE
 from flask import Flask, flash, redirect, url_for, render_template, request, send_file
-from numpy import true_divide
-from requests import get
-from main import get_Table, saveMap 
+from main import Table, get_Table, saveMap 
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileRequired, FileAllowed
-from werkzeug.utils import secure_filename
+
 
 class FileForm(FlaskForm):
     file = FileField(validators=[FileRequired(), FileAllowed(["xlsx", "xls"], "xlsx only!")])
@@ -19,33 +14,41 @@ app = Flask(__name__)
 WTF_CSRF_ENABLED = False;
 
 OneZetHeight = 50;
-filename = None
+# filename = None
 
-@app.route('/')
-def main():
-    global filename
-    mapname = ''
-    showDownloadBtn = False
-    if filename != None:
-        for directory in os.listdir(app.static_folder+"\\temp"):
-            if "КД" in directory:
-                os.remove(path=app.static_folder + '\\temp\\' + directory)
-        table = get_Table(filenameMap=filename)
-        mapname = saveMap(filename)
-        os.remove(path=app.static_folder + '\\temp\\' + filename)
-        print(f"map name is {mapname}")
-        print(f"[Map Name] {mapname}")
-        # os.remove(app.static_folder + '\\temp\\' + mapname)
-        showDownloadBtn = True
-        filename = None
-    # elif mapname != "":
-    #     print("in elif")
-    #     table = get_Table(filenameMap=mapname)
-    else: 
-        showDownloadBtn = False
-        table = get_Table()
+@app.route("/map/<str:aup>")
+def main(aup):
+    table = Table(aup)    
+    return render_template("base.html", table=table, zet=OneZetHeight, aup=aup)
+
     
-    return render_template("base.html", table=table, zet=OneZetHeight, showDownloadBtn=showDownloadBtn, mapname=mapname)
+
+
+# @app.route('/map/<aup>')
+# def main():
+#     global filename
+#     mapname = ''
+#     showDownloadBtn = False
+#     if filename != None:
+#         for directory in os.listdir(app.static_folder+"\\temp"):
+#             if "КД" in directory:
+#                 os.remove(path=app.static_folder + '\\temp\\' + directory)
+#         table = get_Table(filenameMap=filename)
+#         mapname = saveMap(filename)
+#         os.remove(path=app.static_folder + '\\temp\\' + filename)
+#         print(f"map name is {mapname}")
+#         print(f"[Map Name] {mapname}")
+#         # os.remove(app.static_folder + '\\temp\\' + mapname)
+#         showDownloadBtn = True
+#         filename = None
+#     # elif mapname != "":
+#     #     print("in elif")
+#     #     table = get_Table(filenameMap=mapname)
+#     else: 
+#         showDownloadBtn = False
+#         table = get_Table()
+    
+#     return render_template("base.html", table=table, zet=OneZetHeight, showDownloadBtn=showDownloadBtn, mapname=mapname)
 
 @app.route('/upload', methods=["POST", "GET"])
 def upload():
@@ -65,8 +68,9 @@ def upload():
         return render_template("upload.html", form=form)
 
 
-@app.route("/save/<string:filename>")
-def save(filename):
+@app.route("/save/<string:aup>")
+def save(aup):
+    saveMap(aup)
     return send_file(
             path_or_file=app.static_folder + "\\temp\\" + filename, 
             download_name=filename) 
