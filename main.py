@@ -23,8 +23,8 @@ def saveMap(file):
 
 
 def get_Table(filenameMap=None):
-    fullname_db = 'db.mdb'
-    fullname_db = resource_path('db.mdb')
+
+    fullname_db = resource_path('db.accdb')
     sem = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой", "Седьмой", "Восьмой", ]
     
     cursor, conn = connect_to_DateBase(fullname_db=fullname_db)
@@ -33,7 +33,7 @@ def get_Table(filenameMap=None):
         data = select_to_DataBase(cursor, 20)
     else:
         filenameMap = filenameMap.split('.xl')[0]
-        cursor.execute('SELECT ID_OP  FROM OP WHERE Name_OP LIKE ?', [filenameMap])
+        cursor.execute('SELECT id_op FROM tbl_op WHERE Name_OP LIKE ?', [filenameMap]) #TODO fix name_op 
         id_op = cursor.fetchall()[0][0]
         data = select_to_DataBase(cursor, id_op)
         
@@ -101,7 +101,7 @@ def select_to_DataBase(cur, id_op):
     print(F"id_op = {id_op}")
     for i in range(len(sem)):
         cur.execute(
-            'SELECT ID_module, Discipline, Period, ZET, Num_block, Record_type FROM Load WHERE Period LIKE ? AND ID_OP = ?',
+            'SELECT id_module, discipline, period, zet, block, record_type FROM workload WHERE period LIKE ? AND id_aup = ?',  # may be id_op != id_op
             [(sem[i] + " семестр"), id_op])
         rows = cur.fetchall()
         # print(rows)
@@ -138,10 +138,10 @@ def select_to_DataBase(cur, id_op):
 
 
 def select_color(cur, modul):
-    cur.execute('SELECT Color FROM Module_reference WHERE ID_module LIKE ?', [modul])
+    cur.execute('SELECT Color FROM tbl_module WHERE ID_module LIKE ?', [modul])
     for row in cur.fetchall():
         return (row[0])
-
+    
 
 def create_directory_of_modul(ws, modul, cur):
     adr_cell = "B"
@@ -150,7 +150,7 @@ def create_directory_of_modul(ws, modul, cur):
     for i in range(len(modul)):
         dip = adr_cell + str(row) + ':' + adr_cell + str(row + 1)
         cur.execute(
-            'SELECT Name_module  FROM Module_reference WHERE ID_module LIKE ?', [modul[i]])
+            'SELECT Name_module  FROM tbl_module WHERE ID_module LIKE ?', [modul[i]])
         for r in cur.fetchall():
             modul_buf = (r[0])
         ws[adr_cell + str(row)] = modul_buf
@@ -193,7 +193,7 @@ def CreateMap(filename_map):
 # Так же мы красим предметы в соответствии с модулем
 def filling_map(fullname_db, filename_map, name_map):
     cur, conn = connect_to_DateBase(fullname_db)
-    cur.execute('SELECT ID_OP  FROM OP WHERE Name_OP LIKE ?', [name_map])
+    cur.execute('SELECT ID_OP FROM OP WHERE Name_OP LIKE ?', [name_map]) #TODO fix
     id_op = cur.fetchall()[0][0]
     date = select_to_DataBase(cur, id_op)
     ws, wk = CreateMap(filename_map)
