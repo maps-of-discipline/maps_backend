@@ -1,18 +1,23 @@
-
-from asyncio import selector_events
-from distutils.log import debug
-from re import fullmatch
+from shutil import ExecError
 import xlsxwriter
 import openpyxl
 from openpyxl.styles import PatternFill, Border, Side, Alignment, Font, NamedStyle
 import sys, os, datetime
 from start import *
 
-def saveMap(aup):
-    fullname_db = 'C:\\Users\\Dezzy\\Documents\\GitHub\\PD_EP_spring2022(1)\\db.accdb'
-    cur, conn = connect_to_DateBase(fullname_db)
+
+FULLNAME_DB = 'C:\\Users\\Dezzy\\Documents\\GitHub\\PD_EP_spring2022(1)\\db.accdb'
+
+
+
+
+def saveMap(aup, cursor):
+    # fullname_db = 'C:\\Users\\Dezzy\\Documents\\GitHub\\PD_EP_spring2022(1)\\db.accdb'
+    # cur, conn = connect_to_DateBase(fullname_db)
     
-    id_aup, filename_map = cur.execute("SELECT id_aup, file FROM tbl_aup WHERE num_aup LIKE ?", [aup,]).fetchall()[0]
+    cur = cursor
+
+    id_aup, filename_map = cur.execute(f"SELECT id_aup, file FROM tbl_aup WHERE num_aup LIKE {aup}").fetchall()[0]
     filename_map = 'static/temp/' + "КД " + filename_map
 
     date = select_to_DataBase(cur, id_aup)
@@ -52,7 +57,7 @@ def saveMap(aup):
             row = 3
             i -= 1
     print(sum_row + row)
-    ws.merge_cells('A1:' + adr_cell +'1')
+    ws.merge_cells('A1:' + adr_cell + '1')
     ws['A1'] = 'КАРТА ДИСЦИПЛИН'
     ws['A1'].style = 'standart'
     ws['A1'].font = Font(bold=True, size=12)
@@ -60,40 +65,64 @@ def saveMap(aup):
         ws["A" + str(col)] = col - 2
         ws["A" + str(col)].style = 'standart'
         ws.row_dimensions[col].height = 25
-    
-    #TODO fix if need 
+
+
+    # TODO fix if need  
     # create_directory_of_modul(ws, modul, cur)
-    
     wk.save(filename=filename_map)
 
     cur.close()
     del cur
-    conn.close()
     print("Отключение от базы данных")
+    filename_map = filename_map.split('/')[-1]
+    return filename_map 
 
 
-# def saveMap(file):
-#     filepath  = "static\\temp\\" + file
-#     fullname_db = resource_path('db.mdb')
-#     start.start(file=filepath, fullname_db=fullname_db)
-#     day_time = datetime.datetime.now()
-#     day_time = " от " + str(day_time)[:16].replace("-", ".").replace(":", "-")
-#     filename_map = "static\\temp\\" + 'КД ' + file[0:-5] + day_time + '.xlsx'
-#     filling_map(fullname_db, filename_map, file[0:-5])
-#     print('Программа успешно завершила свою работу!')
-#     return filename_map.split("temp\\")[1]
+def Header(aup, Cursor):
+    # cursor, connection = connect_to_DateBase(FULLNAME_DB)
 
+    cursor = Cursor
 
-def Table(aup):
-    sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой", "Седьмой", "Восьмой", ]
-    print(aup)
-    cursor, connection = connect_to_DateBase('C:\\Users\\Dezzy\\Documents\\GitHub\\PD_EP_spring2022(1)\\db.accdb')
+    cursor.execute(f'SELECT id_op FROM tbl_aup WHERE num_aup LIKE {aup}')
+    id_op = cursor.fetchall()[0][0]
+
+    cursor.execute(f'SELECT year_begin, program_code, id_spec, id_form FROM tbl_op WHERE id_op LIKE {id_op}')
+    (year_begin, program_code, id_spec, id_form) = cursor.fetchall()[0]
     
-    try:
-        id_aup = cursor.execute('SELECT id_aup FROM tbl_aup WHERE num_aup LIKE ?', [aup,]).fetchall()[0][0]
-    except IndexError:
-        print("There is no such aup in data base")
+    cursor.execute(f'SELECT name_okco FROM spr_okco WHERE program_code LIKE {program_code}')
+    program = program_code + " " + cursor.fetchall()[0][0]
+    
+    cursor.execute(f'SELECT name_spec FROM spr_specializationialization WHERE id_spec LIKE {id_spec}')
+    spec = cursor.fetchall()[0][0]
+
+    cursor.execute(f'SELECT form FROM spr_form_education WHERE id_form LIKE {id_form}')
+    form = cursor.fetchall()[0][0] + " форма обучения"
+
+    cursor.close()
+    del cursor
+
+    return [program, spec, year_begin, form]
+
+
+def Table(aup, Cursor):
+    sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой", "Седьмой", "Восьмой", ]
+    # print(aup)
+    # cursor, connection = connect_to_DateBase(FULLNAME_DB)
+
+    cursor = Cursor
+
+    
+    print("[DEBUG] aup = ", aup)
+    cursor.execute('SELECT id_aup FROM tbl_aup WHERE num_aup LIKE %s', (aup,))
+    id_aup = cursor.fetchall()
+    
+    if id_aup == []:
+        print("There is no such aup in data base", e)
         return None
+    else:
+        id_aup = id_aup[0][0]
+    
+    print("[DEBUG] id_aup = ", id_aup)
     
     data = select_to_DataBase(cursor, id_aup)
     cell_list = []
@@ -118,7 +147,8 @@ def Table(aup):
                 temp_list.append(el)
         table.append(temp_list)
 
-    connection.close()
+    cursor.close()
+    del cursor
     return table
     
 
@@ -167,7 +197,6 @@ def Table(aup):
 
 #     return table
 
-# функция подключения к базе данных, на вход требует путь к базе данных возвращает курсор, который указывает на БД
 
 
 
@@ -195,9 +224,7 @@ def select_to_DataBase(cur, id_aup):
     sum_zet = 0
     print(F"id_aup = {id_aup}")
     for i in range(len(sem)):
-        cur.execute(
-            'SELECT id_module, discipline, period, zet, block, record_type FROM workload WHERE period LIKE ? AND id_aup = ?',  
-            [(sem[i] + " семестр"), id_aup])
+        cur.execute('SELECT `id_module`, `discipline`, `period`, `zet`, `block`, `record_type` FROM workload WHERE `period` LIKE %s AND id_aup = %s', (sem[i] + " семестр", id_aup,))
         rows = cur.fetchall()
         # print(rows)
         for row in rows:
@@ -234,7 +261,8 @@ def select_to_DataBase(cur, id_aup):
 
 
 def select_color(cur, modul):
-    return cur.execute('SELECT Color FROM tbl_module WHERE ID_module LIKE ?', [modul]).fetchall()[0][0]
+    cur.execute('SELECT Color FROM tbl_module WHERE ID_module LIKE %s', (modul,))
+    return cur.fetchall()[0][0]
     
 
 def create_directory_of_modul(ws, modul, cur):
@@ -244,7 +272,7 @@ def create_directory_of_modul(ws, modul, cur):
     for i in range(len(modul)):
         dip = adr_cell + str(row) + ':' + adr_cell + str(row + 1)
         cur.execute(
-            'SELECT Name_module  FROM tbl_module WHERE ID_module LIKE ?', [modul[i]])
+            f'SELECT Name_module  FROM tbl_module WHERE ID_module LIKE {modul[i]}')
         modul_buf = ''
         for r in cur.fetchall():
             modul_buf = (r[0])
@@ -286,61 +314,62 @@ def CreateMap(filename_map):
 
 # заполняем данные, размер и цвет  в ячейках карты,
 # Так же мы красим предметы в соответствии с модулем
-def filling_map(fullname_db, filename_map, name_map):
-    cur, conn = connect_to_DateBase(fullname_db)
-    cur.execute('SELECT ID_OP FROM OP WHERE Name_OP LIKE ?', [name_map]) #TODO fix
-    id_op = cur.fetchall()[0][0]
-    date = select_to_DataBase(cur, id_op)
-    ws, wk = CreateMap(filename_map)
-    adr_cell = "B"
-    buf = "Первый семестр"
-    row = 3
-    i = -1
-    modul = set()
-    max_row = 0
-    sum_row = 0
-    while i < len(date) - 1:
-        i += 1
-        date_dist = date[i]
-        if date_dist[2] == buf and date_dist[3] != 0:
-            ws["A" + str(row)] = row - 2
-            ws["A" + str(row)].style = 'standart'
-            modul.add(str(date_dist[0])[2:])
-            dip = adr_cell + str(row) + ':' + adr_cell + str(row + date_dist[3] - 1)
-            ws[adr_cell + str(row)].style = 'standart'
-            ws[adr_cell + str(row)] = date_dist[1]
-            cell = ws[adr_cell + str(row)]
-            color = select_color(cur, str(date_dist[0])[2:])
-            cell.fill = openpyxl.styles.PatternFill(start_color=str(color), end_color=str(color), fill_type='solid')
-            ws.merge_cells(dip)
-            row += date_dist[3] - 1
-            buf = date_dist[2]
-            row += 1
-            max_row = max(max_row, row)
-        elif date_dist[3] != 0:
-            adr_cell = chr(ord(adr_cell) + 1)
-            ws[adr_cell + str(2)] = str(ord(adr_cell) - 65) + " семестр"
-            ws[adr_cell + str(2)].style = 'standart'
-            buf = date_dist[2]
-            sum_row += row -3
-            row = 3
-            i -= 1
-    print(sum_row + row)
-    ws.merge_cells('A1:' + adr_cell +'1')
-    ws['A1'] = 'КАРТА ДИСЦИПЛИН'
-    ws['A1'].style = 'standart'
-    ws['A1'].font = Font(bold=True, size=12)
-    for col in range(3, max_row):
-        ws["A" + str(col)] = col - 2
-        ws["A" + str(col)].style = 'standart'
-        ws.row_dimensions[col].height = 25
-    create_directory_of_modul(ws, modul, cur)
-    wk.save(filename=filename_map)
+# def filling_map(fullname_db, filename_map, name_map):
+#     # cur, conn = connect_to_DateBase(fullname_db)
+#     cur = Connect()
+#     cur.execute(f'SELECT ID_OP FROM OP WHERE Name_OP LIKE {name_map}') 
+#     id_op = cur.fetchall()[0][0]
+#     date = select_to_DataBase(cur, id_op)
+#     ws, wk = CreateMap(filename_map)
+#     adr_cell = "B"
+#     buf = "Первый семестр"
+#     row = 3
+#     i = -1
+#     modul = set()
+#     max_row = 0
+#     sum_row = 0
+#     while i < len(date) - 1:
+#         i += 1
+#         date_dist = date[i]
+#         if date_dist[2] == buf and date_dist[3] != 0:
+#             ws["A" + str(row)] = row - 2
+#             ws["A" + str(row)].style = 'standart'
+#             modul.add(str(date_dist[0])[2:])
+#             dip = adr_cell + str(row) + ':' + adr_cell + str(row + date_dist[3] - 1)
+#             ws[adr_cell + str(row)].style = 'standart'
+#             ws[adr_cell + str(row)] = date_dist[1]
+#             cell = ws[adr_cell + str(row)]
+#             color = select_color(cur, str(date_dist[0])[2:])
+#             cell.fill = openpyxl.styles.PatternFill(start_color=str(color), end_color=str(color), fill_type='solid')
+#             ws.merge_cells(dip)
+#             row += date_dist[3] - 1
+#             buf = date_dist[2]
+#             row += 1
+#             max_row = max(max_row, row)
+#         elif date_dist[3] != 0:
+#             adr_cell = chr(ord(adr_cell) + 1)
+#             ws[adr_cell + str(2)] = str(ord(adr_cell) - 65) + " семестр"
+#             ws[adr_cell + str(2)].style = 'standart'
+#             buf = date_dist[2]
+#             sum_row += row -3
+#             row = 3
+#             i -= 1
+#     print(sum_row + row)
+#     ws.merge_cells('A1:' + adr_cell +'1')
+#     ws['A1'] = 'КАРТА ДИСЦИПЛИН'
+#     ws['A1'].style = 'standart'
+#     ws['A1'].font = Font(bold=True, size=12)
+#     for col in range(3, max_row):
+#         ws["A" + str(col)] = col - 2
+#         ws["A" + str(col)].style = 'standart'
+#         ws.row_dimensions[col].height = 25
+#     create_directory_of_modul(ws, modul, cur)
+#     wk.save(filename=filename_map)
 
-    cur.close()
-    del cur
-    conn.close()
-    print("Отключение от базы данных")
+#     cur.close()
+#     del cur
+#     # conn.close()
+#     print("Отключение от базы данных")
 
 def resource_path(relative_path):
     try:
@@ -351,30 +380,31 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 # основная функция-связующая все части и вводит основные параметры всего
-def main():
-    try:
-        file = "29.03.03_2022_Технологии упаковочного производства.xlsx"
-        filepath  = "static\\temp\\" + file
-        fullname_db = resource_path('db.mdb')
-        print("[check filepath]" + filepath)
-        start(file=filepath, fullname_db=fullname_db)
-        day_time = datetime.datetime.now()
-        day_time = " от " + str(day_time)[:16].replace("-", ".").replace(":", "-")
-        filename_map = "static\\temp\\" + 'КД ' + file[0:-5] + day_time + '.xlsx'
-        filling_map(fullname_db, filename_map, file[0:-5])
-        print('Программа успешно завершила свою работу!')
-        # main()
-    except Exception as ex:
-        print(ex)
-        input()
+# def main():
+#     try:
+#         file = "29.03.03_2022_Технологии упаковочного производства.xlsx"
+#         filepath  = "static\\temp\\" + file
+#         fullname_db = resource_path('db.mdb')
+#         print("[check filepath]" + filepath)
+#         start(file=filepath, fullname_db=fullname_db)
+#         day_time = datetime.datetime.now()
+#         day_time = " от " + str(day_time)[:16].replace("-", ".").replace(":", "-")
+#         filename_map = "static\\temp\\" + 'КД ' + file[0:-5] + day_time + '.xlsx'
+#         filling_map(fullname_db, filename_map, file[0:-5])
+#         print('Программа успешно завершила свою работу!')
+#         # main()
+#     except Exception as ex:
+#         print(ex)
+#         input()
 
 
 if __name__ == "__main__":
     # main()
-    # Table('000016957')
+    # print(Table('000016957'))
+    Header('000016957')
     # cur, conn = connect_to_DateBase('C:\\Users\\Dezzy\\Documents\\GitHub\\PD_EP_spring2022(1)\\db.accdb')
     # print(select_to_DataBase(cur, 3))
-    saveMap('000016957')
+    # saveMap('000016957')
     # file = '29.03.03_2022_Технологии упаковочного производства.xlsx'
     # saveMap(file)
     # get_Table()

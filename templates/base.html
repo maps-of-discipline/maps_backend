@@ -9,54 +9,59 @@
     <title>Abiturients</title>
 </head>
 <body>
-    <div class="header">
-        <a href="{{url_for('upload')}}">
-            <img src="{{url_for('static', filename='img/excel.png')}}" id="upload_img" align="right" class="excel_img">
-        </a>
-        <a href="{{url_for('save', aup=aup)}}">
-            <button type="button" class="btn btn-outline-light">Загрузить</button>
-        </a>
-    </div>
     <div class="container_">
+        <div class="header">
+            <div class="header_text">
+                <span class="map_title">КАРТА ДИСЦИПЛИН УЧЕБНОГО ПЛАНА</span><br>
+                <span>по направлению подготовки {{ header[0] }}</span><br>
+                <span>Профиль: {{ header[1] }}, {{header[2]}} год набора, {{header[3]}}</span>
+            </div>
+            <a href="{{url_for('save', aup=aup)}}">
+                <img src="{{url_for('static', filename='img/excel.png')}}" id="upload_img" align="right" class="excel_img">
+            </a>
+        </div>
         <div class="content">
             <div class="column zet-column">
                 <div class="header-container">
                     <p class="header-text" style="color: white;">ZET</p>
                 </div>
-                <p class="zet-item">1</p>
-                <p class="zet-item">2</p>
-                <p class="zet-item">3</p>
-                <p class="zet-item">4</p>
-                <p class="zet-item">5</p>
-                <p class="zet-item">6</p>
-                <p class="zet-item">7</p>
-                <p class="zet-item">8</p>
-                <p class="zet-item">9</p>
-                <p class="zet-item">10</p>
-                <p class="zet-item">11</p>
-                <p class="zet-item">12</p>
-                <p class="zet-item">13</p>
-                <p class="zet-item">14</p>
-                <p class="zet-item">15</p>
-                <p class="zet-item">16</p>
-                <p class="zet-item">17</p>
-                <p class="zet-item">18</p>
-                <p class="zet-item">19</p>
-                <p class="zet-item">20</p>
-                <p class="zet-item">21</p>
-                <p class="zet-item">22</p>
-                <p class="zet-item">23</p>
-                <p class="zet-item">24</p>
-                <p class="zet-item">25</p>
-                <p class="zet-item">26</p>
-                <p class="zet-item">27</p>
-                <p class="zet-item">28</p>
-                <p class="zet-item">29</p>
-                <p class="zet-item">30</p>
-                <p class="zet-item">31</p>
-                <p class="zet-item">32</p>
-                <p class="zet-item">33</p>
-                <p class="zet-item">34</p>
+
+                <div class="zet-container">
+                    <p class="zet-item">1</p>
+                    <p class="zet-item">2</p>
+                    <p class="zet-item">3</p>
+                    <p class="zet-item">4</p>
+                    <p class="zet-item">5</p>
+                    <p class="zet-item">6</p>
+                    <p class="zet-item">7</p>
+                    <p class="zet-item">8</p>
+                    <p class="zet-item">9</p>
+                    <p class="zet-item">10</p>
+                    <p class="zet-item">11</p>
+                    <p class="zet-item">12</p>
+                    <p class="zet-item">13</p>
+                    <p class="zet-item">14</p>
+                    <p class="zet-item">15</p>
+                    <p class="zet-item">16</p>
+                    <p class="zet-item">17</p>
+                    <p class="zet-item">18</p>
+                    <p class="zet-item">19</p>
+                    <p class="zet-item">20</p>
+                    <p class="zet-item">21</p>
+                    <p class="zet-item">22</p>
+                    <p class="zet-item">23</p>
+                    <p class="zet-item">24</p>
+                    <p class="zet-item">25</p>
+                    <p class="zet-item">26</p>
+                    <p class="zet-item">27</p>
+                    <p class="zet-item">28</p>
+                    <p class="zet-item">29</p>
+                    <p class="zet-item">30</p>
+                    <p class="zet-item">31</p>
+                    <p class="zet-item">32</p>
+                    <p class="zet-item">33</p>
+                    <p class="zet-item">34</p>
+                </div>
             </div>
             {% for i in range(0,8) %}
             <div class="column">
