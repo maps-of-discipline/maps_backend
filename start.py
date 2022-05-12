@@ -29,13 +29,15 @@ def start(files, Cursor):
         files = [f,]
 
     for file in files:
-        filename = re.split('\/', file)[-1]
+        filename = file.split('/')[-1]
+        filename = filename.split('\\')[-1]
         
         if len(files) > 1:
             print(f'[!] Файл: {filename}')
         
         data = pd.read_excel(file, sheet_name='Лист1')
         
+        print("[DEBUG] filename = ", filename)
         aup_num = filename.split(' - ')[1]
         
         cursor.execute(f'SELECT id_aup FROM tbl_aup WHERE num_aup LIKE "{aup_num}"')
@@ -115,7 +117,8 @@ def start(files, Cursor):
                 r = lambda: randint(0,255)
                 color = '%02X%02X%02X' % (r(),r(),r())
                 cursor.execute("INSERT INTO tbl_module (name_module, color) VALUES (%s, %s)", [row[3], color])
-                mod_id = cursor.execute("SELECT id_module FROM tbl_module WHERE name_module LIKE %s", [row[3]]).fetchall()[0][0]
+                cursor.execute("SELECT id_module FROM tbl_module WHERE name_module LIKE %s", [row[3]])
+                mod_id = cursor.fetchall()[0][0]
 
             if pd.isna(row[8]):
                 row[8] = 0
@@ -129,10 +132,7 @@ def start(files, Cursor):
             row[3] = mod_id
 
             row.insert(0, id_aup)
-            print(row)
-
-            
-            
+        
             cursor.execute('''INSERT INTO workload (`id_aup`, `block`, `cypher`, `part`, `id_module`, `record_type`, `discipline`, `period`, `load`, `quantity`, `measurement`, `zet`) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''', row)
     
 

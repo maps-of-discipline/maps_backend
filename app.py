@@ -28,7 +28,7 @@ ZET_HEIGHT = 50;
 def main(aup):
     cursor = db.connection.cursor(buffered=True)
     table = Table(aup, cursor)
-    db.connection.commit()
+    
 
     if table != None:
         header = Header(aup, db.connection.cursor(buffered=True))    
@@ -44,16 +44,21 @@ def upload():
     if request.method == "POST":
         if form.validate_on_submit():
             f = form.file.data
-            id_aup = f.filename.split(' - ')[1].strip()
+            aup = f.filename.split(' - ')[1].strip()
             path = os.path.join(app.static_folder, 'temp', f.filename)
             
-            f.save(path)
-            
-            start(path, db.connection.cursor(buffered=True))
-            db.connection.commit()
-            
-            os.remove(path)
-            return redirect(f'/map/{id_aup}')
+            cursor = db.connection.cursor()
+            cursor.execute('SELECT id_aup FROM tbl_aup WHERE num_aup LIKE %s', (aup,))
+
+            if cursor.fetchall() == []:
+                f.save(path)
+                start(path, db.connection.cursor(buffered=True))
+                db.connection.commit()
+                os.remove(path)
+            else:
+                print(f"[!] such aup already in db. REDIRECT to {aup}")
+
+            return redirect(f'/map/{aup}')
         else:
             return redirect('/load')
     else: 

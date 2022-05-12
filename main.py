@@ -4,7 +4,7 @@ import openpyxl
 from openpyxl.styles import PatternFill, Border, Side, Alignment, Font, NamedStyle
 import sys, os, datetime
 from start import *
-
+from pprint import pprint
 
 FULLNAME_DB = 'C:\\Users\\Dezzy\\Documents\\GitHub\\PD_EP_spring2022(1)\\db.accdb'
 
@@ -17,7 +17,8 @@ def saveMap(aup, cursor):
     
     cur = cursor
 
-    id_aup, filename_map = cur.execute(f"SELECT id_aup, file FROM tbl_aup WHERE num_aup LIKE {aup}").fetchall()[0]
+    cur.execute("SELECT id_aup, file FROM tbl_aup WHERE num_aup LIKE %s", (aup,))
+    id_aup, filename_map = cursor.fetchall()[0]
     filename_map = 'static/temp/' + "КД " + filename_map
 
     date = select_to_DataBase(cur, id_aup)
@@ -83,19 +84,19 @@ def Header(aup, Cursor):
 
     cursor = Cursor
 
-    cursor.execute(f'SELECT id_op FROM tbl_aup WHERE num_aup LIKE {aup}')
+    cursor.execute('SELECT id_op FROM tbl_aup WHERE num_aup LIKE %s', (aup,))
     id_op = cursor.fetchall()[0][0]
 
-    cursor.execute(f'SELECT year_begin, program_code, id_spec, id_form FROM tbl_op WHERE id_op LIKE {id_op}')
+    cursor.execute('SELECT year_begin, program_code, id_spec, id_form FROM tbl_op WHERE id_op LIKE %s', (id_op,))
     (year_begin, program_code, id_spec, id_form) = cursor.fetchall()[0]
     
-    cursor.execute(f'SELECT name_okco FROM spr_okco WHERE program_code LIKE {program_code}')
+    cursor.execute('SELECT name_okco FROM spr_okco WHERE program_code LIKE %s', (program_code,))
     program = program_code + " " + cursor.fetchall()[0][0]
     
-    cursor.execute(f'SELECT name_spec FROM spr_specializationialization WHERE id_spec LIKE {id_spec}')
+    cursor.execute('SELECT name_spec FROM spr_specialization WHERE id_spec LIKE %s', (id_spec,))
     spec = cursor.fetchall()[0][0]
 
-    cursor.execute(f'SELECT form FROM spr_form_education WHERE id_form LIKE {id_form}')
+    cursor.execute('SELECT form FROM spr_form_education WHERE id_form LIKE %s', (id_form,))
     form = cursor.fetchall()[0][0] + " форма обучения"
 
     cursor.close()
@@ -117,22 +118,68 @@ def Table(aup, Cursor):
     id_aup = cursor.fetchall()
     
     if id_aup == []:
-        print("There is no such aup in data base", e)
+        print("There is no such aup in data base")
         return None
     else:
         id_aup = id_aup[0][0]
     
     print("[DEBUG] id_aup = ", id_aup)
     
-    data = select_to_DataBase(cursor, id_aup)
+    
+    cursor.execute("SELECT id_module, record_type, discipline, period, zet FROM workload WHERE id_aup LIKE %s ORDER BY record_type, discipline, period", (id_aup,))
+    workload = cursor.fetchall()
+    pprint(workload)
+
+
+    data = []
+
+    
+    previous = None
+    zet = 0.0
+    for item in workload:
+        if previous == None:
+            previous = item
+            zet += item[4]
+            continue
+
+        if item[1] == "Факультативные дисциплины" :
+            continue
+
+        if (item[2] == previous[2] and item[3] == previous[3]):
+            zet += item[4]
+            continue
+        else:
+            li = []
+            li.append('#' + select_color(cursor, previous[0]))
+            li.append(previous[1])
+            li.append(previous[2])
+            li.append(previous[3])
+            li.append(zet)
+            data.append(li)
+
+            zet = item[4]
+            previous = item
+    else:
+        li = []
+        li.append('#' + select_color(cursor, previous[0]))
+        li.append(previous[1])
+        li.append(previous[2])
+        li.append(previous[3])
+        li.append(zet)
+        data.append(li)
+        
+    # pprint(data, width=200)
+
+    # data = select_to_DataBase(cursor, id_aup)
+    
     cell_list = []
 
     for el in data:
         c = { 
-        "module_color": "#" + select_color(cursor, el[0].split(" ")[-1]), 
-        "discipline": ' '.join(el[1].split()), 
-        "term": el[2], 
-        "zet": el[3]
+        "module_color": el[0], 
+        "discipline": el[2], 
+        "term": el[3], 
+        "zet": el[4]
         }
         if c['zet'] == 0:
             continue
@@ -145,10 +192,23 @@ def Table(aup, Cursor):
         for el in cell_list:
             if el["term"] == sems[i] + ' семестр':
                 temp_list.append(el)
+        
+        # sort by color
+        for i in range(len(temp_list)-1):
+            for j in range(len(temp_list)-1):
+                if temp_list[j]['zet'] < temp_list[j+1]['zet']:
+                    t = temp_list[j]['zet']
+                    temp_list[j]['zet'] = temp_list[j+1]['zet']
+                    temp_list[j+1]['zet'] = t
+
         table.append(temp_list)
+
+    
 
     cursor.close()
     del cursor
+    # print("[DEBUG] table = ", table)
+    # pprint(table)
     return table
     
 
