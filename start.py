@@ -114,7 +114,7 @@ def start(files, Cursor):
             if mod_id != []:
                 mod_id = mod_id[0][0]
             else:
-                r = lambda: randint(0,255)
+                r = lambda: randint(0,128)
                 color = '%02X%02X%02X' % (r(),r(),r())
                 cursor.execute("INSERT INTO tbl_module (name_module, color) VALUES (%s, %s)", [row[3], color])
                 cursor.execute("SELECT id_module FROM tbl_module WHERE name_module LIKE %s", [row[3]])

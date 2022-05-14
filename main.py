@@ -1,4 +1,3 @@
-from shutil import ExecError
 import xlsxwriter
 import openpyxl
 from openpyxl.styles import PatternFill, Border, Side, Alignment, Font, NamedStyle
@@ -110,6 +109,10 @@ def Table(aup, Cursor):
     # print(aup)
     # cursor, connection = connect_to_DateBase(FULLNAME_DB)
 
+    
+
+
+
     cursor = Cursor
 
     
@@ -128,55 +131,94 @@ def Table(aup, Cursor):
     
     cursor.execute("SELECT id_module, record_type, discipline, period, zet FROM workload WHERE id_aup LIKE %s ORDER BY record_type, discipline, period", (id_aup,))
     workload = cursor.fetchall()
-    pprint(workload)
+#    pprint(workload)
 
 
     data = []
 
+    skiplist = [
+        'Физическая культура и спорт', 
+        'Элективные дисциплины по физической культуре и спорту', 
+        'Элективные курсы по физической культуре и спорту', 
+    ]
     
+    colorset = [
+        '#19535F',
+        '#0B7A75',
+        '#7B2D26',
+        '#2AB7CA',
+        '#FE4A49',
+        '#84596B',
+        '#574D68',
+        '#A38560',
+        '#7EA172',
+        '#E7A977',
+        '#80475E',
+        '#CC5A71',
+        '#F0F757',
+        '#3B7080',
+        '#C97064',
+        
+    ]
+
     previous = None
     zet = 0.0
+    sumzet = 0.0
+    module_list = []
     for item in workload:
         if previous == None:
             previous = item
             zet += item[4]
             continue
 
-        if item[1] == "Факультативные дисциплины" :
+        if item[2] in skiplist:
             continue
 
-        if (item[2] == previous[2] and item[3] == previous[3]):
+        if (("Элективные дисциплины " in item[1] and item[1] == previous[1]) or (item[2] == previous[2] and item[3] == previous[3])):
             zet += item[4]
             continue
         else:
             li = []
-            li.append('#' + select_color(cursor, previous[0]))
+            if not previous[0] in module_list:
+                module_list.append(previous[0])
+            li.append(previous[0])
             li.append(previous[1])
             li.append(previous[2])
             li.append(previous[3])
             li.append(zet)
+            sumzet += zet
             data.append(li)
 
             zet = item[4]
             previous = item
     else:
         li = []
-        li.append('#' + select_color(cursor, previous[0]))
+        li.append(previous[0])
         li.append(previous[1])
         li.append(previous[2])
         li.append(previous[3])
         li.append(zet)
+        sumzet += zet
         data.append(li)
         
     # pprint(data, width=200)
-
+    print("[DEBUG] sumzet = ", sumzet)
     # data = select_to_DataBase(cursor, id_aup)
     
     cell_list = []
+    # color_list = []
+    # i = 0
+    # for modul in module_list:
+    #     color_list.append([modul,colorset[i]])
+    #     i += 1
 
     for el in data:
+        
+        # if not el[0] in color_list:
+        #     color_list.append(el[0])
+        
         c = { 
-        "module_color": el[0], 
+        "module_color": colorset[module_list.index(el[0])], 
         "discipline": el[2], 
         "term": el[3], 
         "zet": el[4]
@@ -196,14 +238,19 @@ def Table(aup, Cursor):
         # sort by color
         for i in range(len(temp_list)-1):
             for j in range(len(temp_list)-1):
-                if temp_list[j]['zet'] < temp_list[j+1]['zet']:
-                    t = temp_list[j]['zet']
-                    temp_list[j]['zet'] = temp_list[j+1]['zet']
-                    temp_list[j+1]['zet'] = t
+                if temp_list[j]['module_color'] < temp_list[j+1]['module_color']:
+                    t = temp_list[j]
+                    temp_list[j] = temp_list[j+1]
+                    temp_list[j+1] = t
 
         table.append(temp_list)
 
-    
+    # print("[DEBUG] len(color_list) = ", len(color_list))
+
+
+    pprint(table)    
+
+     
 
     cursor.close()
     del cursor
