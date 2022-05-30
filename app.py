@@ -1,4 +1,5 @@
 import os
+from pprint import pprint
 from flask import Flask, flash, redirect, url_for, render_template, request, send_file
 from main import Table, saveMap, Header
 from flask_wtf import FlaskForm
@@ -18,8 +19,9 @@ db = MySQL(app)
 @app.route('/test/')
 def test():
     cursor = db.connection.cursor(buffered=True)
-    cursor.execute('SELECT * FROM tbl_aup')
-    return str(cursor.fetchall())
+    # cursor.execute('SELECT * FROM tbl_aup')
+    # return str(cursor.fetchall())
+    return Table('000018048', cursor)
     
 ZET_HEIGHT = 50;
 # filename = None
@@ -28,7 +30,7 @@ ZET_HEIGHT = 50;
 def main(aup):
     cursor = db.connection.cursor(buffered=True)
     table = Table(aup, cursor)
-    
+    # pprint(table)
 
     if table != None:
         header = Header(aup, db.connection.cursor(buffered=True))    

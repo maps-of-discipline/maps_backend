@@ -1,3 +1,5 @@
+import json
+from numpy import unpackbits
 import xlsxwriter
 import openpyxl
 from openpyxl.styles import PatternFill, Border, Side, Alignment, Font, NamedStyle
@@ -5,14 +7,8 @@ import sys, os, datetime
 from start import *
 from pprint import pprint
 
-FULLNAME_DB = 'C:\\Users\\Dezzy\\Documents\\GitHub\\PD_EP_spring2022(1)\\db.accdb'
-
-
-
 
 def saveMap(aup, cursor):
-    # fullname_db = 'C:\\Users\\Dezzy\\Documents\\GitHub\\PD_EP_spring2022(1)\\db.accdb'
-    # cur, conn = connect_to_DateBase(fullname_db)
     
     cur = cursor
 
@@ -104,44 +100,7 @@ def Header(aup, Cursor):
     return [program, spec, year_begin, form]
 
 
-def Table(aup, Cursor):
-    sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой", "Седьмой", "Восьмой", ]
-    # print(aup)
-    # cursor, connection = connect_to_DateBase(FULLNAME_DB)
-
-    
-
-
-
-    cursor = Cursor
-
-    
-    print("[DEBUG] aup = ", aup)
-    cursor.execute('SELECT id_aup FROM tbl_aup WHERE num_aup LIKE %s', (aup,))
-    id_aup = cursor.fetchall()
-    
-    if id_aup == []:
-        print("There is no such aup in data base")
-        return None
-    else:
-        id_aup = id_aup[0][0]
-    
-    print("[DEBUG] id_aup = ", id_aup)
-    
-    
-    cursor.execute("SELECT id_module, record_type, discipline, period, zet FROM workload WHERE id_aup LIKE %s ORDER BY record_type, discipline, period", (id_aup,))
-    workload = cursor.fetchall()
-#    pprint(workload)
-
-
-    data = []
-
-    skiplist = [
-        'Физическая культура и спорт', 
-        'Элективные дисциплины по физической культуре и спорту', 
-        'Элективные курсы по физической культуре и спорту', 
-    ]
-    
+def colorize(table):
     colorset = [
         '#19535F',
         '#0B7A75',
@@ -158,153 +117,121 @@ def Table(aup, Cursor):
         '#F0F757',
         '#3B7080',
         '#C97064',
-        
     ]
+
+    unique_modules = []
+    for i in table:
+        for j in i:
+            if not j["module_color"] in unique_modules:
+                unique_modules.append(j["module_color"])
+    
+    unique_modules = list(map(lambda x: [x,0], unique_modules))
+    
+    if len(unique_modules) > 1:
+        
+        for i in range(len(table)):
+            checked = []
+            for j in range(len(table[i])):
+                if table[i][j]["module_color"] in checked:
+                    continue
+                checked.append(table[i][j]["module_color"])
+                
+                for k in range(len(unique_modules)):
+                    if unique_modules[k][0] == table[i][j]["module_color"]:
+                        unique_modules[k][1] += 1
+                
+        t = {}
+        for el in unique_modules:
+            t.update({str(el[0]) : el[1]})
+        unique_modules = t
+
+        for i in range(len(table)):
+            for j in range(len(table[i])):
+                table[i][j].update({"count": unique_modules[str(table[i][j]['module_color'])]})  
+
+        
+        for i in range(len(table)):
+            table[i].sort(key=lambda x: (x["count"], x["module_color"]), reverse=True)
+            j = 0
+            swapped = 0
+            while j < len(table[i]) - swapped:
+                if table[i][j]["module_color"] == 4:
+                    table[i][j]["module_color"] = colorset[list(unique_modules.keys()).index(str(table[i][j]["module_color"]))]
+                    table[i].append(table[i].pop(j))
+                    j -= 1 
+                    swapped += 1
+                else:
+                    table[i][j]["module_color"] = colorset[list(unique_modules.keys()).index(str(table[i][j]["module_color"]))]
+                j += 1
+                                    
+    pprint(table[1])
+    return table
+
+        
+def Table(aup, Cursor):
+    sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой", "Седьмой", "Восьмой", "Девятый", "Десятый", "Одиннадцатый", "Двенадцатый"]
+    
+    # Условия фильтра, если добавлять категорию, то нужно исправить if 
+    skiplist = {
+        "discipline": [
+            'Физическая культура и спорт', 
+            'Элективные дисциплины по физической культуре и спорту', 
+            'Элективные курсы по физической культуре и спорту', 
+        ],
+        "record_type": []
+    }
+
+    cursor = Cursor
+
+    cursor.execute('SELECT id_aup FROM tbl_aup WHERE num_aup LIKE %s', (aup,))
+    id_aup = cursor.fetchall()
+    
+    if id_aup == []:
+        print("There is no such aup in data base")
+        return None
+    else:
+        id_aup = id_aup[0][0]
+
+    cursor.execute("SELECT id_module, record_type, discipline, period, zet FROM workload WHERE id_aup LIKE %s ORDER BY record_type, discipline, period", (id_aup,))
+    workload = cursor.fetchall()
 
     previous = None
     zet = 0.0
     sumzet = 0.0
-    module_list = []
-    for item in workload:
-        if previous == None:
-            previous = item
-            zet += item[4]
-            continue
-
-        if item[2] in skiplist:
-            continue
-
-        if (("Элективные дисциплины " in item[1] and item[1] == previous[1]) or (item[2] == previous[2] and item[3] == previous[3])):
-            zet += item[4]
-            continue
-        else:
-            li = []
-            if not previous[0] in module_list:
-                module_list.append(previous[0])
-            li.append(previous[0])
-            li.append(previous[1])
-            li.append(previous[2])
-            li.append(previous[3])
-            li.append(zet)
-            sumzet += zet
-            data.append(li)
-
-            zet = item[4]
-            previous = item
-    else:
-        li = []
-        li.append(previous[0])
-        li.append(previous[1])
-        li.append(previous[2])
-        li.append(previous[3])
-        li.append(zet)
-        sumzet += zet
-        data.append(li)
-        
-    # pprint(data, width=200)
-    print("[DEBUG] sumzet = ", sumzet)
-    # data = select_to_DataBase(cursor, id_aup)
-    
-    cell_list = []
-    # color_list = []
-    # i = 0
-    # for modul in module_list:
-    #     color_list.append([modul,colorset[i]])
-    #     i += 1
-
-    for el in data:
-        
-        # if not el[0] in color_list:
-        #     color_list.append(el[0])
-        
-        c = { 
-        "module_color": colorset[module_list.index(el[0])], 
-        "discipline": el[2], 
-        "term": el[3], 
-        "zet": el[4]
-        }
-        if c['zet'] == 0:
-            continue
-        cell_list.append(c)
-
     table = []
-    for i in range(0,8):
-        temp_list = []
-
-        for el in cell_list:
-            if el["term"] == sems[i] + ' семестр':
-                temp_list.append(el)
+    for item in workload:
+        moduleID, record_type, discipline, period, zet = item
         
-        # sort by color
-        for i in range(len(temp_list)-1):
-            for j in range(len(temp_list)-1):
-                if temp_list[j]['module_color'] < temp_list[j+1]['module_color']:
-                    t = temp_list[j]
-                    temp_list[j] = temp_list[j+1]
-                    temp_list[j+1] = t
-
-        table.append(temp_list)
-
-    # print("[DEBUG] len(color_list) = ", len(color_list))
-
-
-    pprint(table)    
-
-     
-
-    cursor.close()
-    del cursor
-    # print("[DEBUG] table = ", table)
-    # pprint(table)
-    return table
-    
-
-
-
-# def get_Table(filenameMap=None):
-
-#     fullname_db = resource_path('db.accdb')
-    
-#     sem = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой", "Седьмой", "Восьмой", ]
-#     cursor, conn = connect_to_DateBase(fullname_db=fullname_db)
-    
-
-#     if filenameMap == None:
-#         data = select_to_DataBase(cursor, 20)
-#     else:
-#         filenameMap = filenameMap.split('.xl')[0]
-#         cursor.execute('SELECT id_op FROM tbl_op WHERE Name_OP LIKE ?', [filenameMap]) #TODO fix name_op 
-#         id_op = cursor.fetchall()[0][0]
-#         data = select_to_DataBase(cursor, id_op)
+        # Фильтрация, тут исправлять if
+        if discipline in skiplist["discipline"] or record_type in skiplist['record_type']:
+            continue
         
 
-#     cell_list = []
+        sumzet += zet 
+        period = period.split()[0]
+        
+        cell = {
+            "module_color": moduleID,
+            "discipline": discipline, 
+            "term": period, 
+            "zet": zet   
+        }
 
-#     for el in data:
-#         modul_id = el[0].split(" ")[1]
-#         c = { 
-#         "module_color": "#" + select_color(cursor, modul_id), 
-#         "discipline": el[1], 
-#         "term": el[2], 
-#         "zet": el[3]
-#         }
-#         if c['zet'] == 0:
-#             continue
-#         cell_list.append(c)
-
-#     table = []
-#     for i in range(0,8):
-#         temp_list = []
-
-#         for el in cell_list:
-#             if el["term"] == sem[i] + ' семестр':
-#                 temp_list.append(el)
-
-#         table.append(temp_list)
-
-#     return table
-
-
+        
+        delta = len(table) - sems.index(period) - 1
+        if delta < 0:
+            for i in range(-delta):
+                table.append([])
+        
+        for el in table[sems.index(period)]: 
+            if el['discipline'] == discipline:
+                el["zet"] += zet
+                break
+        else:
+            table[sems.index(period)].append(cell)
+    print("[DEBUG] sumzet = ", sumzet)
+    # return json.dumps(colorize(table), ensure_ascii=False)
+    return colorize(table)
 
 
 def sort_modul(date):
@@ -478,40 +405,16 @@ def CreateMap(filename_map):
 #     # conn.close()
 #     print("Отключение от базы данных")
 
-def resource_path(relative_path):
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-
-    return os.path.join(base_path, relative_path)
-
-# основная функция-связующая все части и вводит основные параметры всего
-# def main():
-#     try:
-#         file = "29.03.03_2022_Технологии упаковочного производства.xlsx"
-#         filepath  = "static\\temp\\" + file
-#         fullname_db = resource_path('db.mdb')
-#         print("[check filepath]" + filepath)
-#         start(file=filepath, fullname_db=fullname_db)
-#         day_time = datetime.datetime.now()
-#         day_time = " от " + str(day_time)[:16].replace("-", ".").replace(":", "-")
-#         filename_map = "static\\temp\\" + 'КД ' + file[0:-5] + day_time + '.xlsx'
-#         filling_map(fullname_db, filename_map, file[0:-5])
-#         print('Программа успешно завершила свою работу!')
-#         # main()
-#     except Exception as ex:
-#         print(ex)
-#         input()
 
 
 if __name__ == "__main__":
     # main()
     # print(Table('000016957'))
-    Header('000016957')
+    # Header('000016957')
     # cur, conn = connect_to_DateBase('C:\\Users\\Dezzy\\Documents\\GitHub\\PD_EP_spring2022(1)\\db.accdb')
     # print(select_to_DataBase(cur, 3))
     # saveMap('000016957')
     # file = '29.03.03_2022_Технологии упаковочного производства.xlsx'
     # saveMap(file)
     # get_Table()
+    pass
