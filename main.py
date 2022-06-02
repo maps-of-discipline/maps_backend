@@ -8,13 +8,17 @@ from start import *
 from pprint import pprint
 
 
-def saveMap(aup, cursor):
+def saveMap(aup, cursor, static):   
+    # fullname_db = 'C:\\Users\\Dezzy\\Documents\\GitHub\\PD_EP_spring2022(1)\\db.accdb'
+    # cur, conn = connect_to_DateBase(fullname_db)
     
     cur = cursor
 
     cur.execute("SELECT id_aup, file FROM tbl_aup WHERE num_aup LIKE %s", (aup,))
     id_aup, filename_map = cursor.fetchall()[0]
-    filename_map = 'static/temp/' + "КД " + filename_map
+    
+    # filename_map = '{static_folder}"/temp/КД" {filename_map}'
+    filename_map = os.path.join(static, 'temp', f"КД {filename_map}")
 
     date = select_to_DataBase(cur, id_aup)
     ws, wk = CreateMap(filename_map)
@@ -70,7 +74,7 @@ def saveMap(aup, cursor):
     cur.close()
     del cur
     print("Отключение от базы данных")
-    filename_map = filename_map.split('/')[-1]
+    
     return filename_map 
 
 

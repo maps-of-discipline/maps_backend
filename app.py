@@ -69,10 +69,10 @@ def upload():
 
 @app.route("/save/<string:aup>")
 def save(aup):
-    filename = saveMap(aup, db.connection.cursor(buffered=True)) 
+    filename = saveMap(aup, db.connection.cursor(buffered=True), app.static_folder) 
     return send_file(
-            path_or_file=app.static_folder + "\\temp\\" + filename, 
-            download_name=filename) 
+            path_or_file=filename, 
+            download_name=os.path.split(filename)[-1]) 
 
 
     
