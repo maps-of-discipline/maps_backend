@@ -1,13 +1,13 @@
 import os
 from pprint import pprint
 from flask import Flask, flash, redirect, url_for, render_template, request, send_file
-from main import Table, saveMap, Header
+from main import  Table, saveMap, Header, saveMap
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileRequired, FileAllowed
 from sql_db  import MySQL
 from start import start
 
-
+# форма для загрузки файла 
 class FileForm(FlaskForm):
     file = FileField(validators=[FileRequired(), FileAllowed(["xlsx", "xls"], "xlsx only!")])
 
@@ -19,17 +19,16 @@ db = MySQL(app)
 @app.route('/test/')
 def test():
     cursor = db.connection.cursor(buffered=True)
-    # cursor.execute('SELECT * FROM tbl_aup')
-    # return str(cursor.fetchall())
-    return Table('000018048', cursor)
+    # saveMap1('000018048', cursor, app.static_folder)
+    return "json.dumps(Table('000018048', cursor))"
     
 ZET_HEIGHT = 50;
-# filename = None
 
+# доменный путь к карте 
 @app.route("/map/<string:aup>")
 def main(aup):
     cursor = db.connection.cursor(buffered=True)
-    table = Table(aup, cursor)
+    table, legend = Table(aup, cursor)
     # pprint(table)
 
     if table != None:
@@ -38,7 +37,7 @@ def main(aup):
     else:
         return redirect('/load')
 
-
+# доменный путь к форме загрузки 
 @app.route('/load', methods=["POST", "GET"])
 def upload():
     form = FileForm(meta={'csrf':False})
@@ -66,7 +65,7 @@ def upload():
     else: 
         return render_template("upload.html", form=form)
 
-
+# путь для загрузки сформированной КД
 @app.route("/save/<string:aup>")
 def save(aup):
     filename = saveMap(aup, db.connection.cursor(buffered=True), app.static_folder) 

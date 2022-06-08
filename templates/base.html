@@ -58,20 +58,17 @@
                     <p class="zet-item">29</p>
                     <p class="zet-item">30</p>
                     <p class="zet-item">31</p>
-                    <p class="zet-item">32</p>
-                    <p class="zet-item">33</p>
-                    <p class="zet-item">34</p>
                 </div>
             </div>
-            {% for i in range(0,8) %}
+            {% for column in table %}
             <div class="column">
 
-                {% if table[i] != [] %}
+                {% if column != [] %}
                     <div class="header-container">
-                        <p class="header-text" style="color: white;">{{table[i][0]["term"]}}</p>
+                        <p class="header-text" style="color: white;"> {{column[0]["term"]}} </p>
                     </div>
 
-                    {% for el in table[i] %}
+                    {% for el in column %}
                     <div class="item-container" style="height: {{el['zet']*zet}}px;">
                         <div class="item" style="background-color: {{el['module_color']}};">
                             <p class="item-text">{{el["discipline"]}}</p>

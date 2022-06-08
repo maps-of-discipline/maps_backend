@@ -1,6 +1,7 @@
 .idea
 *__pycache__/
-test.py
-db.laccdb
+db.laccdb   
 db.mdb.old
 static copy
+db.accdb
+test.py
