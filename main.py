@@ -99,9 +99,12 @@ def saveMap(aup, cursor, static):
 
 
         # Вывод легенды в КД excel
+        sum_zet = 0.0
         for i, el in enumerate(legend):
             cellA = f"A{41+i}" 
             cellB = f"B{41+i}" 
+
+            sum_zet += el[1]
 
             ws[cellA].style = ws[cellB].style = 'standart'
             ws[cellA] = el[1]
@@ -119,6 +122,13 @@ def saveMap(aup, cursor, static):
 
             ws[cellB].fill = PatternFill(start_color=str(color), end_color=str(color), fill_type='solid')
             ws.merge_cells(cellB + ':' + cellB.replace('B', 'C'))
+    
+    # сумма зет 
+    cellA = 'A' + str(40+len(legend) + 1)
+    ws[cellA].style = 'standart'
+    ws[cellA] = f'Итого: {sum_zet}'
+    
+
 
     wk.save(filename=filename_map)
     return filename_map
