@@ -119,7 +119,7 @@ def start(files, Cursor):
                 cursor.execute("INSERT INTO tbl_module (name_module, color) VALUES (%s, %s)", [row[3], color])
                 cursor.execute("SELECT id_module FROM tbl_module WHERE name_module LIKE %s", [row[3]])
                 mod_id = cursor.fetchall()[0][0]
-
+            
             if pd.isna(row[8]):
                 row[8] = 0
             else: row[8] = int(float(row[8].replace(',', '.')))
@@ -132,7 +132,7 @@ def start(files, Cursor):
             row[3] = mod_id
 
             row.insert(0, id_aup)
-        
+            row = list(map(lambda x: None if pd.isna(x) else x, row))
             cursor.execute('''INSERT INTO workload (`id_aup`, `block`, `cypher`, `part`, `id_module`, `record_type`, `discipline`, `period`, `load`, `quantity`, `measurement`, `zet`) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''', row)
     
 
