@@ -1,23 +1,27 @@
 from pprint import pprint
+from random import randint
 import xlsxwriter
 import openpyxl
 from openpyxl.styles import PatternFill, Border, Side, Alignment, Font, NamedStyle
 import os
-from start import *
+from models import NameOP, SprFormEducation, SprOKCO, Workload, Module, AUP, OP
+from sqlalchemy import desc
+from save_into_bd import save_into_bd
 
 
-def Legend(table, cursor):
-    def getName(el, cursor):
-        cursor.execute(
-            'SELECT Name_module FROM tbl_module where id_module LIKE %s', (el[0],))
-        name = cursor.fetchone()[0]
+def Legend(table):
+    def getName(el):
+        # cursor.execute(
+        #     'SELECT Name_module FROM tbl_module where id_module LIKE %s', (el[0],))
+
+        name = Module.query.filter_by(id_module=el[0]).first().name_module
         return [name, el[1], el[0]]
 
     legend = []
 
     for i in range(len(table)):
         # [name, sum_zet, module]
-        
+
         for el in table[i]:
             res = list(filter(lambda x: x[0] == el['module_color'], legend))
 
@@ -30,7 +34,7 @@ def Legend(table, cursor):
     if len(legend) <= 3:
         legend = []
         # [name, sum_zet, module]
-        for i in range(len(table)):        
+        for i in range(len(table)):
             for el in table[i]:
                 res = list(filter(lambda x: x[0] == el['block'], legend))
 
@@ -42,31 +46,31 @@ def Legend(table, cursor):
         for i in range(len(legend)):
             legend[i].append(i)
 
-        
         legend.sort(key=lambda x: x[0])
     else:
-        legend = list(map(lambda x: getName(x, cursor), legend))
-    
+        legend = list(map(lambda x: getName(x), legend))
+
     return legend
 
 
 # Формируем карту excel и сохраняем ее в папку static/temp
-def saveMap(aup, cursor, static, **kwargs):
+def saveMap(aup, static, **kwargs):
 
-    cur = cursor
+    # cur = cursor
 
-    cur.execute("SELECT id_aup, file FROM tbl_aup WHERE num_aup LIKE %s", (aup,))
-    id_aup, filename_map = cursor.fetchall()[0]
-    
+    # cur.execute("SELECT id_aup, file FROM tbl_aup WHERE num_aup LIKE %s", (aup,))
+    select_aup = AUP.query.filter_by(num_aup=aup).first()
+    id_aup = select_aup.id_aup
+    filename_map = select_aup.file
+
     filename_map_down = f"КД {filename_map}"
     filename_map = os.path.join(static, 'temp', f"КД {filename_map}")
 
-    table, legend = Table(aup, cur, **kwargs)
+    table, legend = Table(aup, **kwargs)
     ws, wk = CreateMap(filename_map)
 
     ws.merge_cells(f'A1:{chr(ord("A") + len(table))}1')
-    header = Header(aup, cursor)
-
+    header = Header(aup)
 
     header = f'''
         КАРТА ДИСЦИПЛИН УЧЕБНОГО ПЛАНА от {header[4]}
@@ -149,44 +153,54 @@ def saveMap(aup, cursor, static, **kwargs):
     ws[cellA].style = 'standart'
     ws[cellA] = f'Итого: {sum_zet}'
 
-    ws['A'+ str(40+len(legend) + 5)] = f'Карта составлена из файла: {filename_map_down}'
+    ws['A' + str(40+len(legend) + 5)
+       ] = f'Карта составлена из файла: {filename_map_down}'
 
     wk.save(filename=filename_map)
     return filename_map
 
 
 # Возвращает данные для шапка карты
-def Header(aup, Cursor):
+def Header(aup):
     # cursor, connection = connect_to_DateBase(FULLNAME_DB)
 
-    cursor = Cursor
+    # cursor = Cursor
 
-    cursor.execute('SELECT id_op FROM tbl_aup WHERE num_aup LIKE %s', (aup,))
-    id_op = cursor.fetchall()[0][0]
+    # cursor.execute('SELECT id_op FROM tbl_aup WHERE num_aup LIKE %s', (aup,))
+    id_op = AUP.query.filter_by(num_aup=aup).first().id_op
 
-    cursor.execute(
-        'SELECT year_begin, program_code, id_spec, id_form FROM tbl_op WHERE id_op LIKE %s', (id_op,))
-    (year_begin, program_code, id_spec, id_form) = cursor.fetchall()[0]
+    # cursor.execute(
+    #     'SELECT year_begin, program_code, id_spec, id_form FROM tbl_op WHERE id_op LIKE %s', (id_op,))
+    # (year_begin, program_code, id_spec, id_form) = cursor.fetchall()[0]
+    select_op = OP.query.filter_by(id_op=id_op).first()
+    year_begin = select_op.duration.year_beg
+    program_code = select_op.duration.name_op.program_code
+    id_spec = select_op.duration.id_spec
+    id_form = select_op.duration.id_form
 
-    cursor.execute(
-        'SELECT name_okco FROM spr_okco WHERE program_code LIKE %s', (program_code,))
-    program = program_code + " " + cursor.fetchall()[0][0]
+    # cursor.execute(
+    #     'SELECT name_okco FROM spr_okco WHERE program_code LIKE %s', (program_code,))
+    program = program_code + " " + \
+        SprOKCO.query.filter_by(program_code=program_code).first().name_okco
 
-    cursor.execute(
-        'SELECT name_spec FROM spr_specialization WHERE id_spec LIKE %s', (id_spec,))
-    spec = cursor.fetchall()[0][0]
+    # cursor.execute(
+    #     'SELECT name_spec FROM spr_specialization WHERE id_spec LIKE %s', (id_spec,))
+    spec = NameOP.query.filter_by(id_spec=id_spec).first().name_spec
 
-    cursor.execute(
-        'SELECT form FROM spr_form_education WHERE id_form LIKE %s', (id_form,))
-    form = cursor.fetchall()[0][0] + " форма обучения"
+    # cursor.execute(
+    #     'SELECT form FROM spr_form_education WHERE id_form LIKE %s', (id_form,))
+    form = SprFormEducation.query.filter_by(
+        id_form=id_form).first().form + " форма обучения"
 
-    cursor.execute(
-        'SELECT file FROM tbl_aup WHERE num_aup LIKE %s', (aup,))
-    date_file = cursor.fetchall()[0][0].split(' ')[-4]
+    # cursor.execute(
+    #     'SELECT file FROM tbl_aup WHERE num_aup LIKE %s', (aup,))
+    date_file = AUP.query.filter_by(num_aup=aup).first().file.split(' ')[-4]
 
     return [program, spec, year_begin, form, date_file]
 
 # раскраска и сортировка данных в таблице
+
+
 def colorize(table, legend=None, **kwargs):
     COLOR_SET = 0
     EXPO = 0
@@ -208,8 +222,8 @@ def colorize(table, legend=None, **kwargs):
             '#F0F757',
             '#3B7080',
             '#C97064',
-        ], 
-        # Случайные цвета, должен быть последним 
+        ],
+        # Случайные цвета, должен быть последним
         [
             '#%02x%02x%02x' % (randint(0, 255), randint(0, 255), randint(0, 255)) for _ in range(20)
         ]
@@ -238,7 +252,7 @@ def colorize(table, legend=None, **kwargs):
         for i, el in enumerate(colorset):
             colorset[i] = '#%02x%02x%02x' % (el[0], el[1], el[2])
 
-        return(colorset)
+        return (colorset)
 
     if 'colorSet' in kwargs.keys():
         if kwargs['colorSet'] < len(colorsets)-1:
@@ -248,8 +262,6 @@ def colorize(table, legend=None, **kwargs):
         EXPO = kwargs['expo']
 
     colorset = expo(colorsets[COLOR_SET], EXPO)
-
-
 
     # находим количество уникальных модулей
     unique_modules = []
@@ -265,11 +277,10 @@ def colorize(table, legend=None, **kwargs):
     unique_modules = list(map(lambda x: [x, 0], unique_modules))
 
     # проверка наличия модулей в карте (бывают карты без заполненного поля модуль)
-    
-        
+
     if len(unique_modules) > 3:
 
-        print("[DEBUG] true  = " )
+        print("[DEBUG] true  = ")
         if legend:
             for i, el in enumerate(legend):
                 index = unique_modules.index([el[2], 0])
@@ -304,50 +315,47 @@ def colorize(table, legend=None, **kwargs):
             table[i].sort(key=lambda x: (
                 x["count"], x["module_color"]), reverse=True)
 
-            
-
             # перемещаем проектную деятельность в конец каждого семестра и раскрашиваем
             j = 0
             swapped = 0
             while j < len(table[i]) - swapped:
                 if table[i][j]["module_color"] == 4:
-                    table[i][j]["module_color"] = colorset[list(unique_modules.keys()).index(str(table[i][j]["module_color"]))]
+                    table[i][j]["module_color"] = colorset[list(
+                        unique_modules.keys()).index(str(table[i][j]["module_color"]))]
                     table[i].append(table[i].pop(j))
-                    j -= 1 
+                    j -= 1
                     swapped += 1
                 else:
-                    table[i][j]["module_color"] = colorset[list(unique_modules.keys()).index(str(table[i][j]["module_color"]))]
+                    table[i][j]["module_color"] = colorset[list(
+                        unique_modules.keys()).index(str(table[i][j]["module_color"]))]
                 j += 1
             table[i].sort(key=lambda x: x['block'])
-            
+
     else:
         # добавляем цвета легенде
         if legend:
             for i, el in enumerate(legend):
                 legend[i][2] = colorset[el[2]]
 
-        
-
         # раскрашиваем в соответствии с блоком
         for i in range(len(table)):
             # table[i].sort(key=lambda x: x['block'])
-            
+
             j = 0
             swapped = 0
             while j < len(table[i]) - swapped:
-                if table[i][j]["module_color"] in [4,21]:
-                    
+                if table[i][j]["module_color"] in [4, 21]:
+
                     el = table[i][j]
                     if "Блок 1" in el['block']:
                         table[i][j]['module_color'] = colorset[0]
-                    
+
                     elif "Блок 2" in el['block']:
                         table[i][j]['module_color'] = colorset[1]
 
                     else:
                         table[i][j]['module_color'] = colorset[2]
 
-                        
                     table[i].append(table[i].pop(j))
                     j -= 1
                     swapped += 1
@@ -355,19 +363,16 @@ def colorize(table, legend=None, **kwargs):
                     el = table[i][j]
                     if "Блок 1" in el['block']:
                         table[i][j]['module_color'] = colorset[0]
-                    
+
                     elif "Блок 2" in el['block']:
                         table[i][j]['module_color'] = colorset[1]
 
                     else:
                         table[i][j]['module_color'] = colorset[2]
 
-                j += 1    
-            
-            table[i].sort(key=lambda x: x['block'])        
-            
-          
+                j += 1
 
+            table[i].sort(key=lambda x: x['block'])
 
         # # если модулей нет
         # disciplines = []
@@ -402,7 +407,7 @@ def colorize(table, legend=None, **kwargs):
 
 
 # возвращает сформированную таблицу с раскрашенными ячейками
-def Table(aup, Cursor, **kwargs):
+def Table(aup, **kwargs):
     """
     Make sql-query by aup and buid discipline map \n
     keyword arguments: \n
@@ -411,7 +416,7 @@ def Table(aup, Cursor, **kwargs):
     """
     sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой",
             "Седьмой", "Восьмой", "Девятый", "Десятый", "Одиннадцатый", "Двенадцатый", 'Тринадцатый', 'Четырнадцатый']
-    
+
     # Условия фильтра, если добавлять категорию, то нужно исправить if
     skiplist = {
         "discipline": [
@@ -420,37 +425,42 @@ def Table(aup, Cursor, **kwargs):
             'Элективная физическая культура',
             'Физическая культура',
         ],
-        
+
         "record_type": [
             "Факультативная",
             "Факультативные",
         ]
     }
-    
-    cursor = Cursor
 
-    cursor.execute('SELECT id_aup FROM tbl_aup WHERE num_aup LIKE %s', (aup,))
-    id_aup = cursor.fetchall()
+    # cursor = Cursor
 
-    if id_aup == []:
+    # cursor.execute('SELECT id_aup FROM tbl_aup WHERE num_aup LIKE %s', (aup,))
+    id_aup = AUP.query.filter_by(num_aup=aup).first().id_aup
+
+    if id_aup == None:
         # если в бд нет выгрузки
         print("There is no such aup in data base")
         return None
-    else:
-        id_aup = id_aup[0][0]
 
-    cursor.execute("SELECT id_module, record_type, discipline, period, zet, block FROM workload WHERE id_aup LIKE %s ORDER BY record_type, discipline, period", (id_aup,))
-    workload = cursor.fetchall()
-
+    # cursor.execute("SELECT id_module, record_type, discipline, period, zet, block FROM workload WHERE id_aup LIKE %s ORDER BY record_type, discipline, period", (id_aup,))
+    workload = Workload.query.filter_by(id_aup=id_aup).order_by(
+        Workload.record_type.desc(), Workload.discipline.desc(), Workload.period.desc()).all()
+    print('--------------------', workload[0].load)
     zet = 0.0
     sumzet = 0.0
     # формируем таблицу
     table = []
     for item in workload:
-        moduleID, record_type, discipline, period, zet, block = item
-        
-        # Фильтрация, тут исправлять if 
-        if (len(list(filter(lambda x: x in discipline, skiplist['discipline']))) > 0 or 
+        # moduleID, record_type, discipline, period, zet, block = item
+        moduleID = item.id_module
+        record_type = item.record_type
+        discipline = item.discipline
+        period = item.period
+        zet = item.zet
+        block = item.block
+
+        # Фильтрация, тут исправлять if
+        if (len(list(filter(lambda x: x in discipline, skiplist['discipline']))) > 0 or
                 len(list(filter(lambda x: x in record_type, skiplist['record_type']))) > 0):
             continue
 
@@ -481,7 +491,7 @@ def Table(aup, Cursor, **kwargs):
             # если такой дисциплины нет, то добовляем в таблицу
             table[sems.index(period)].append(cell)
 
-    leg = Legend(table, cursor)
+    leg = Legend(table)
     return colorize(table, legend=leg, **kwargs)  # раскрашиваем и возвращаем
 
 
@@ -514,13 +524,5 @@ def CreateMap(filename_map):
 
 
 if __name__ == "__main__":
-    # main()
-    # print(Table('000016957'))
-    # Header('000016957')
-    # cur, conn = connect_to_DateBase('C:\\Users\\Dezzy\\Documents\\GitHub\\PD_EP_spring2022(1)\\db.accdb')
-    # print(select_to_DataBase(cur, 3))
-    # saveMap('000016957')
-    # file = '29.03.03_2022_Технологии упаковочного производства.xlsx'
-    # saveMap(file)
-    # get_Table()
+
     pass

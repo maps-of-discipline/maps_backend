@@ -1,6 +1,4 @@
-WTF_CSRF_ENABLED = False;
-SECRET_KEY = 'fbe6b0f9b97deadac8a8315c2c7d7421dc3d7a62f68263eac40fc150d60c65f7'
-MYSQL_USER = 'std_1986_pd_test'
-MYSQL_DATABASE = 'std_1986_pd_test'
-MYSQL_HOST = 'std-mysql.ist.mospolytech.ru'
-MYSQL_PASSWORD = 'passtoyourheart'
+SECRET_KEY = 'e1c6fe5819c4bc8857e2cbce963a7be5904692eba862d1a809f195710aff5cdc'
+SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://std_1655_pd_autumn_2022_flask:std_1655_pd_autumn_2022_flask@std-mysql.ist.mospolytech.ru/std_1655_pd_autumn_2022_flask'
+SQLALCHEMY_TRACK_MODIFICATIONS = False
+SQLALCHEMY_ECHO = True

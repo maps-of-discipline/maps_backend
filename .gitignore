@@ -1,7 +1,3 @@
-.idea
-*__pycache__/
-db.laccdb   
-db.mdb.old
-static copy
-db.accdb
-test.py
+__pycache__
+static
+config.py
