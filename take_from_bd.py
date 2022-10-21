@@ -8,11 +8,24 @@ from models import NameOP, SprFormEducation, SprOKCO, Workload, Module, AUP, OP
 from sqlalchemy import desc
 from save_into_bd import save_into_bd
 
+# Условия фильтра, если добавлять категорию, то нужно исправить if
+skiplist = {
+    "discipline": [
+        'Элективные дисциплины по физической культуре и спорту',
+        'Элективные курсы по физической культуре и спорту',
+        'Элективная физическая культура',
+        'Физическая культура'
+    ],
+
+    "record_type": [
+        "Факультативная",
+        "Факультативные"
+    ]
+}
+
 
 def Legend(table):
     def getName(el):
-        # cursor.execute(
-        #     'SELECT Name_module FROM tbl_module where id_module LIKE %s', (el[0],))
 
         name = Module.query.filter_by(id_module=el[0]).first().name_module
         return [name, el[1], el[0]]
@@ -417,24 +430,7 @@ def Table(aup, **kwargs):
     sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой",
             "Седьмой", "Восьмой", "Девятый", "Десятый", "Одиннадцатый", "Двенадцатый", 'Тринадцатый', 'Четырнадцатый']
 
-    # Условия фильтра, если добавлять категорию, то нужно исправить if
-    skiplist = {
-        "discipline": [
-            'Элективные дисциплины по физической культуре и спорту',
-            'Элективные курсы по физической культуре и спорту',
-            'Элективная физическая культура',
-            'Физическая культура',
-        ],
 
-        "record_type": [
-            "Факультативная",
-            "Факультативные",
-        ]
-    }
-
-    # cursor = Cursor
-
-    # cursor.execute('SELECT id_aup FROM tbl_aup WHERE num_aup LIKE %s', (aup,))
     id_aup = AUP.query.filter_by(num_aup=aup).first().id_aup
 
     if id_aup == None:
@@ -442,11 +438,9 @@ def Table(aup, **kwargs):
         print("There is no such aup in data base")
         return None
 
-    # cursor.execute("SELECT id_module, record_type, discipline, period, zet, block FROM workload WHERE id_aup LIKE %s ORDER BY record_type, discipline, period", (id_aup,))
     workload = Workload.query.filter_by(id_aup=id_aup).order_by(
         Workload.record_type.desc(), Workload.discipline.desc(), Workload.period.desc()).all()
     print('--------------------', workload[0].load)
-    zet = 0.0
     sumzet = 0.0
     # формируем таблицу
     table = []
@@ -485,13 +479,14 @@ def Table(aup, **kwargs):
         # считаем сумму зет для каждой дисциплины, включая экзамены, лаб.занятия, лекции и т.д.
         for el in table[sems.index(period)]:
             if el['discipline'] == discipline:
-                el["zet"] += zet
+                el['zet'] += zet
                 break
         else:
-            # если такой дисциплины нет, то добовляем в таблицу
+            # если такой дисциплины нет, то добавляем в таблицу
             table[sems.index(period)].append(cell)
 
     leg = Legend(table)
+    print('-------------------', sumzet)
     return colorize(table, legend=leg, **kwargs)  # раскрашиваем и возвращаем
 
 

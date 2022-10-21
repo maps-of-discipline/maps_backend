@@ -1,13 +1,13 @@
+import os
 import pandas as pd
 from random import randint
 from flask import Blueprint, request
 import re
 import datetime
-
-
 from sqlalchemy import desc
 from models import AUP, OP, Module, NameOP, SprDegreeEducation, SprFormEducation, SprFaculty, Workload, DurationEducation, db
 
+# from app import static_folder
 
 bp = Blueprint('upload_to_db', __name__, url_prefix='/upload_to_db')
 
@@ -23,18 +23,6 @@ def _params(params_list, _PARAMS):
     for i in range(len(_PARAMS)):
         temp_dict[_PARAMS[i]] = params_list[i]
     return temp_dict
-
-# def nameop_params(params_list):
-#     temp_dict = {}
-#     for i in range(len(NAMEOP_PARAMS)):
-#         temp_dict[NAMEOP_PARAMS[i]] = params_list[i]
-#     return temp_dict
-
-# def duration_educ_params(params_list):
-#     temp_dict = {}
-#     for i in range(len(DURATION_EDUC_PARAMS)):
-#         temp_dict[DURATION_EDUC_PARAMS[i]] = params_list[i]
-#     return temp_dict
 
 def save_into_bd(files):
     """Write to DataBase data from exel files. 
@@ -56,7 +44,9 @@ def save_into_bd(files):
         if len(files) > 1:
             print(f'[!] Файл: {filename}')
 
-        print('----------------------------', files)
+        # print('----------------------------', files)
+
+        # ЛИСТ 1
 
         data = pd.read_excel(file, sheet_name='Лист1')
 
@@ -119,11 +109,9 @@ def save_into_bd(files):
                 take_profiles_from_nameop = take_profiles_from_nameop.num_profile
                 take_profiles_from_nameop = str(int(take_profiles_from_nameop) + 1 )
                 take_profiles_from_nameop_len = len(take_profiles_from_nameop)
-                if take_profiles_from_nameop < 2: # number 2 is the max length of profile code
+                if take_profiles_from_nameop_len < 2: # number 2 is the max length of profile code
                     take_profiles_from_nameop = "0" * (2 - take_profiles_from_nameop_len) + take_profiles_from_nameop
 
-            # cursor.execute(
-            #     "INSERT INTO spr_specialization (num_spec, name_spec) VALUES (%s, %s)", (data[4], data[6],)) # ?????
             
             new_nameop = NameOP(**_params([program_code, take_profiles_from_nameop, name_spec], NAMEOP_PARAMS))
             db.session.add(new_nameop)
@@ -142,21 +130,12 @@ def save_into_bd(files):
 
         id_duration = new_str_tbl_duration.id_duration
 
-        # TODO fix id_rop
-
-        # cursor.execute("""INSERT INTO tbl_op (id_faculty, year_begin, program_code, type_educ, id_degree, qualification, 
-        #     id_spec, type_standard, department, period_educ, direction, id_form, id_rop) VALUES
-        #     (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", [id_faculty, year_begin, program_code, type_education, id_degree, qualification, id_spec, type_standart, department, period_edication, direction, id_form, 1])
-
         new_str_tbl_op = OP(**_params([id_duration, id_faculty, 1, type_education, qualification, type_standard, department, period_edication], OP_PARAMS)) # ЗАМЕСТО ВЕРХНЕЙ СТРОЧКИ
         db.session.add(new_str_tbl_op)
         db.session.commit()
 
-        # cursor.execute("SELECT id_op FROM tbl_op ORDER BY id_op DESC")
         id_op = new_str_tbl_op.id_op
         
-        # cursor.execute("INSERT INTO tbl_aup (file, num_aup, id_op, base, fso) VALUES (%s, %s, %s, %s, %s)",
-        #                (filename, aup_num, id_op, base, fso,))
         new_str_tbl_aup = AUP(**_params([id_op, filename, aup_num, base], AUP_PARAMS))
         db.session.add(new_str_tbl_aup)
 
@@ -175,9 +154,10 @@ def save_into_bd(files):
         # 9   Ед. изм.         93 non-null     object
         # 10  ЗЕТ              62 non-null     object
 
+        # ЛИСТ 2
+
         data = pd.read_excel(file, sheet_name="Лист2")
-        # cursor.execute(
-        #     "SELECT id_aup FROM tbl_aup WHERE num_aup LIKE %s", [aup_num])
+
         id_aup = AUP.query.filter_by(num_aup = aup_num).first().id_aup
 
         for i in range(len(data)):
@@ -187,21 +167,16 @@ def save_into_bd(files):
 
             if pd.isna(row[3]):
                 row[3] = 'Без названия'
-            # cursor.execute(
-            #     "SELECT id_module FROM tbl_module WHERE name_module LIKE %s", [row[3], ])
+
             mod_id = Module.query.filter_by(name_module = row[3]).first()
             if mod_id == None:
                 def r(): return randint(0, 128)
                 color = '%02X%02X%02X' % (r(), r(), r())
 
-                # cursor.execute(
-                #     "INSERT INTO tbl_module (name_module, color) VALUES (%s, %s)", [row[3], color])
                 new_module = Module(**_params([row[3], color], MODULE_PARAMS))
                 db.session.add(new_module)
                 db.session.commit()
 
-                # cursor.execute(
-                #     "SELECT id_module FROM tbl_module WHERE name_module LIKE %s", [row[3]])
                 mod_id = Module.query.filter_by(name_module = row[3]).first().id_module
             else:
                 mod_id = mod_id.id_module
@@ -220,12 +195,14 @@ def save_into_bd(files):
 
             row.insert(0, id_aup)
             row = list(map(lambda x: None if pd.isna(x) else x, row))
-            # cursor.execute('''INSERT INTO workload (`id_aup`, `block`, `cypher`, `part`, `id_module`, `record_type`, `discipline`, `period`, `load`, `quantity`, `measurement`, `zet`) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''', row)
+            # print('+++++++++++++++++', row)
             new_str_workload = Workload(**_params(row, WORKLOAD_PARAMS))
             db.session.add(new_str_workload)
 
     db.session.commit()
     print("[+] Запись данных завершена. Отключение от БД")
+    # path = os.path.join(static_folder, 'temp', filename)
+    # os.remove(path)
     return aup_num
 
 

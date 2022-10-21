@@ -3,11 +3,11 @@ from pprint import pprint
 from flask import Flask, flash, redirect, url_for, render_template, send_file, request
 from sqlalchemy import MetaData
 from tools import FileForm
-from main import Table, saveMap, Header, saveMap
+from take_from_bd import Table, saveMap, Header, saveMap
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from save_into_bd import save_into_bd
-from excel_check import check_empty_ceils, layout_of_disciplines
+from excel_check import check_empty_ceils, layout_of_disciplines, check_full_zet_in_plan
 
 
 app = Flask(__name__)
@@ -33,7 +33,7 @@ app.register_blueprint(save_db_bp)
 
 from models import AUP
 
-ZET_HEIGHT = 50
+ZET_HEIGHT = 90
 
 @app.route('/')
 def index():
@@ -41,7 +41,6 @@ def index():
 
 @app.route("/map/<string:aup>")
 def main(aup):
-    # cursor = db.connection.cursor(buffered=True)
     table, legend = Table(aup, colorSet=1)
 
     if table != None:
@@ -60,6 +59,7 @@ def upload():
             aup = f.filename.split(' - ')[1].strip()
             path = os.path.join(app.static_folder, 'temp', f.filename)
             
+
             ### ------------------------------------ ###
             ### Проверка на пустые ячейки ###
             f.save(path)
@@ -68,12 +68,21 @@ def upload():
 
             if temp_check == False:
                 os.remove(path)
-                errors = 'ячейки:' + ', '.join(err_arr)
+                errors = 'В документе не заполнены ячейки:' + ', '.join(err_arr)
                 return error(errors)
             ### ------------------------------------ ###
             ### Компановка элективных курсов ###
             layout_of_disciplines(path)
             ### ---------------------------- ###
+
+            ### ------------------------------------ ###
+            ### Проверка, чтобы общая сумма ЗЕТ соответствовало норме (30 * кол-во семестров) ###
+            check_zet, sum_normal, sum_zet = check_full_zet_in_plan(path)
+            if check_zet == False:
+                os.remove(path)
+                errors = 'В выгрузке общая сумма ЗЕТ не соответствует норме. Норма {} ЗЕТ. В карте {} ЗЕТ.'.format(sum_normal, sum_zet)
+                return error(errors)
+            ### ------------------------------------ ###
 
             get_aup = AUP.query.filter_by(num_aup = aup).first()
             if get_aup == None:
@@ -81,10 +90,11 @@ def upload():
                 
                 aup = save_into_bd(path)
                 
-                os.remove(path)
             else:
                 print(f"[!] such aup already in db. REDIRECT to {aup}")
 
+            os.remove(path)
+            
             return redirect(f'/map/{aup}')
         else:
             return redirect('/load')
