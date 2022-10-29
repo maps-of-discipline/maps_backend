@@ -75,14 +75,14 @@ def upload():
             layout_of_disciplines(path)
             ### ---------------------------- ###
 
-            ### ------------------------------------ ###
-            ### Проверка, чтобы общая сумма ЗЕТ соответствовало норме (30 * кол-во семестров) ###
-            check_zet, sum_normal, sum_zet = check_full_zet_in_plan(path)
-            if check_zet == False:
-                os.remove(path)
-                errors = 'В выгрузке общая сумма ЗЕТ не соответствует норме. Норма {} ЗЕТ. В карте {} ЗЕТ.'.format(sum_normal, sum_zet)
-                return error(errors)
-            ### ------------------------------------ ###
+            # ### ------------------------------------ ###
+            # ### Проверка, чтобы общая сумма ЗЕТ соответствовало норме (30 * кол-во семестров) ###
+            # check_zet, sum_normal, sum_zet = check_full_zet_in_plan(path)
+            # if check_zet == False:
+            #     os.remove(path)
+            #     errors = 'В выгрузке общая сумма ЗЕТ не соответствует норме. Норма {} ЗЕТ. В карте {} ЗЕТ.'.format(sum_normal, sum_zet)
+            #     return error(errors)
+            # ### ------------------------------------ ###
 
             get_aup = AUP.query.filter_by(num_aup = aup).first()
             if get_aup == None:

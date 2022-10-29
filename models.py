@@ -140,7 +140,7 @@ class OP(db.Model):
     type_educ = db.Column(db.String(255), nullable=False)
     qualification = db.Column(db.String(255), nullable=False)
     type_standard = db.Column(db.String(255), nullable=False)
-    department = db.Column(db.String(255), nullable=False)
+    department = db.Column(db.String(255), nullable=True)
     period_educ = db.Column(db.String(255), nullable=False)
 
     duration = db.relationship('DurationEducation')
@@ -188,3 +188,20 @@ class Workload(db.Model):
     def __repr__(self):
         return '<Workload %r>' % self.id_workload
 
+
+class SprVolumeDegreeZET(db.Model):
+    __tablename__ = 'spr_volume_degree_zet'
+
+    id_volume_deg = db.Column(db.Integer, primary_key=True)
+    program_code = db.Column(db.String(255), db.ForeignKey('spr_okco.program_code'), nullable=False)
+    type_standard = db.Column(db.String(255), nullable=False)
+    zet = db.Column(db.Integer, nullable=False)
+
+    okco = db.relationship('SprOKCO')
+
+    @property
+    def volume_degree_zet(self):
+        return 'id: {}, program_code: {}, type_standard: {}, ZET: {}'.format(self.id_volume_deg, self.program_code, self.type_standard, self.zet)
+
+    def __repr__(self):
+        return '<SprVolumeDegreeZET %r>' % self.volume_degree_zet

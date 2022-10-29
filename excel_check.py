@@ -55,7 +55,6 @@ def layout_of_disciplines(file):  # Компоновка элективных д
 def check_full_zet_in_plan(file):
     wb = load_workbook(file)
     ws = wb['Лист2']
-    max_row = get_maximum_rows(sheet_object=ws)
     column_semester = ws['G']
     column_zet = ws['K']
     column_record_type = ws['E']
