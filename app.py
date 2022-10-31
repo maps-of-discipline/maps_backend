@@ -1,14 +1,14 @@
 import os
-from pprint import pprint
-from flask import Flask, flash, redirect, url_for, render_template, send_file, request
-from sqlalchemy import MetaData
-from tools import FileForm
-from take_from_bd import Table, saveMap, Header, saveMap
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from save_into_bd import save_into_bd
-from excel_check import check_empty_ceils, layout_of_disciplines, check_full_zet_in_plan
 
+from flask import Flask, redirect, render_template, request, send_file
+from flask_migrate import Migrate
+from sqlalchemy import MetaData
+
+from excel_check import (check_empty_ceils, check_full_zet_in_plan,
+                         layout_of_disciplines)
+from save_into_bd import save_into_bd
+from take_from_bd import Header, Table, saveMap
+from tools import FileForm
 
 app = Flask(__name__)
 application = app
@@ -24,11 +24,13 @@ convention = {
 }
 
 from models import db
+
 metadata = MetaData(naming_convention=convention)
 db.init_app(app)
 migrate = Migrate(app, db)
 
 from save_into_bd import bp as save_db_bp
+
 app.register_blueprint(save_db_bp)
 
 from models import AUP
@@ -77,11 +79,11 @@ def upload():
 
             # ### ------------------------------------ ###
             # ### Проверка, чтобы общая сумма ЗЕТ соответствовало норме (30 * кол-во семестров) ###
-            # check_zet, sum_normal, sum_zet = check_full_zet_in_plan(path)
-            # if check_zet == False:
-            #     os.remove(path)
-            #     errors = 'В выгрузке общая сумма ЗЕТ не соответствует норме. Норма {} ЗЕТ. В карте {} ЗЕТ.'.format(sum_normal, sum_zet)
-            #     return error(errors)
+            check_zet, sum_normal, sum_zet = check_full_zet_in_plan(path)
+            if check_zet == False:
+                os.remove(path)
+                errors = 'В выгрузке общая сумма ЗЕТ не соответствует норме. Норма {} ЗЕТ. В карте {} ЗЕТ.'.format(sum_normal, sum_zet)
+                return error(errors)
             # ### ------------------------------------ ###
 
             get_aup = AUP.query.filter_by(num_aup = aup).first()

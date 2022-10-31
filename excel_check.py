@@ -1,4 +1,6 @@
 from openpyxl import load_workbook
+
+from models import SprVolumeDegreeZET
 from take_from_bd import skiplist
 
 
@@ -63,7 +65,13 @@ def check_full_zet_in_plan(file):
     for i in range(1, len(column_semester)):
         if column_semester[i].value not in temp_list:
             temp_list.append(column_semester[i].value)
-    sum_normal = len(temp_list) * 30
+
+    a = wb['Лист1']
+    b = a['B6'].value
+    select = SprVolumeDegreeZET.query.filter_by(program_code=b).first()
+    sum_normal = select.zet
+
+
     sum_zet = 0
     for i in range(1, len(column_zet)):
         if (column_zet[i].value is not None and (
