@@ -43,11 +43,11 @@ def index():
 
 @app.route("/map/<string:aup>")
 def main(aup):
-    table, legend = Table(aup, colorSet=1)
+    table, legend, max_zet = Table(aup, colorSet=1)
 
     if table != None:
         header = Header(aup)    
-        return render_template("base.html", table=table, header=header, zet=ZET_HEIGHT, aup=aup)
+        return render_template("base.html", table=table, header=header, zet=ZET_HEIGHT, aup=aup, max_zet=max_zet)
     else:
         return redirect('/load')
 
@@ -80,6 +80,7 @@ def upload():
             # ### ------------------------------------ ###
             # ### Проверка, чтобы общая сумма ЗЕТ соответствовало норме (30 * кол-во семестров) ###
             check_zet, sum_normal, sum_zet = check_full_zet_in_plan(path)
+            print(check_zet, sum_normal, sum_zet)
             if check_zet == False:
                 os.remove(path)
                 errors = 'В выгрузке общая сумма ЗЕТ не соответствует норме. Норма {} ЗЕТ. В карте {} ЗЕТ.'.format(sum_normal, sum_zet)

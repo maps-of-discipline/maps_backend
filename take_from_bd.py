@@ -14,7 +14,6 @@ skiplist = {
         'Элективные дисциплины по физической культуре и спорту',
         'Элективные курсы по физической культуре и спорту', 
         'Элективная физическая культура',
-        'Физическая культура',
         'Общая физическая подготовка',
         'Игровые виды спорта',
         'Неолимпийские виды спорта'
@@ -178,45 +177,30 @@ def saveMap(aup, static, **kwargs):
 
 # Возвращает данные для шапка карты
 def Header(aup):
-    # cursor, connection = connect_to_DateBase(FULLNAME_DB)
 
-    # cursor = Cursor
-
-    # cursor.execute('SELECT id_op FROM tbl_aup WHERE num_aup LIKE %s', (aup,))
     id_op = AUP.query.filter_by(num_aup=aup).first().id_op
 
-    # cursor.execute(
-    #     'SELECT year_begin, program_code, id_spec, id_form FROM tbl_op WHERE id_op LIKE %s', (id_op,))
-    # (year_begin, program_code, id_spec, id_form) = cursor.fetchall()[0]
     select_op = OP.query.filter_by(id_op=id_op).first()
     year_begin = select_op.duration.year_beg
     program_code = select_op.duration.name_op.program_code
     id_spec = select_op.duration.id_spec
     id_form = select_op.duration.id_form
 
-    # cursor.execute(
-    #     'SELECT name_okco FROM spr_okco WHERE program_code LIKE %s', (program_code,))
     program = program_code + " " + \
         SprOKCO.query.filter_by(program_code=program_code).first().name_okco
 
-    # cursor.execute(
-    #     'SELECT name_spec FROM spr_specialization WHERE id_spec LIKE %s', (id_spec,))
     spec = NameOP.query.filter_by(id_spec=id_spec).first().name_spec
 
-    # cursor.execute(
-    #     'SELECT form FROM spr_form_education WHERE id_form LIKE %s', (id_form,))
     form = SprFormEducation.query.filter_by(
         id_form=id_form).first().form + " форма обучения"
 
-    # cursor.execute(
-    #     'SELECT file FROM tbl_aup WHERE num_aup LIKE %s', (aup,))
     date_file = AUP.query.filter_by(num_aup=aup).first().file.split(' ')[-4]
 
     return [program, spec, year_begin, form, date_file]
 
+
+
 # раскраска и сортировка данных в таблице
-
-
 def colorize(table, legend=None, **kwargs):
     COLOR_SET = 0
     EXPO = 0
@@ -490,7 +474,21 @@ def Table(aup, **kwargs):
 
     leg = Legend(table)
     print('-------------------', sumzet)
-    return colorize(table, legend=leg, **kwargs)  # раскрашиваем и возвращаем
+    max_zet = find_max_zet(table)
+    table, legend = colorize(table, legend=leg, **kwargs) # раскрашиваем и возвращаем
+    return table, legend, max_zet
+
+
+def find_max_zet(table):
+    print('!!!!!---------!!!!!!!', table)
+    max_zet = 0
+    for column in table:
+        temp = 0
+        for it in column:
+            temp += it['zet']
+        if temp > max_zet:
+            max_zet = temp
+    return int(max_zet)
 
 
 # функция создает карту и задаем все данные кроме предметов в семестрах, на вход требует имя карты

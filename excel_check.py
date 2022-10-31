@@ -1,6 +1,5 @@
 from openpyxl import load_workbook
-
-from models import SprVolumeDegreeZET
+from models import SprVolumeDegreeZET, SprStandard
 from take_from_bd import skiplist
 
 
@@ -66,9 +65,13 @@ def check_full_zet_in_plan(file):
         if column_semester[i].value not in temp_list:
             temp_list.append(column_semester[i].value)
 
-    a = wb['Лист1']
-    b = a['B6'].value
-    select = SprVolumeDegreeZET.query.filter_by(program_code=b).first()
+    ws = wb['Лист1']
+    program_code = ws['B6'].value
+    standard = format_standard(ws['B9'].value)
+    id_standard = SprStandard.query.filter_by(type_standard = standard).first().id_standard
+
+    
+    select = SprVolumeDegreeZET.query.filter_by(program_code=program_code, id_standard=id_standard).first()
     sum_normal = select.zet
 
 
@@ -80,8 +83,14 @@ def check_full_zet_in_plan(file):
             
             sum_zet += float(column_zet[i].value.replace(',', '.'))
     
-    print('normal:', sum_normal, '\nzet:', sum_zet)
+    print(sum_normal == sum_zet, 'normal:', sum_normal, '\nzet:', sum_zet)
     if sum_normal == sum_zet:
-        return True
+        return True, None, None
     else:
         return False, sum_normal, sum_zet
+
+
+def format_standard(standard):
+    if standard == 'ФГОС3++' or standard == 'ФГОС ВО (3++)':
+        standard = 'ФГОС ВО 3++'
+    return standard
