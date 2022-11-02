@@ -71,9 +71,6 @@ def Legend(table):
 # Формируем карту excel и сохраняем ее в папку static/temp
 def saveMap(aup, static, **kwargs):
 
-    # cur = cursor
-
-    # cur.execute("SELECT id_aup, file FROM tbl_aup WHERE num_aup LIKE %s", (aup,))
     select_aup = AUP.query.filter_by(num_aup=aup).first()
     id_aup = select_aup.id_aup
     filename_map = select_aup.file
@@ -81,8 +78,8 @@ def saveMap(aup, static, **kwargs):
     filename_map_down = f"КД {filename_map}"
     filename_map = os.path.join(static, 'temp', f"КД {filename_map}")
 
-    table, legend = Table(aup, **kwargs)
-    ws, wk = CreateMap(filename_map)
+    table, legend, max_zet = Table(aup, **kwargs)
+    ws, wk = CreateMap(filename_map, max_zet)
 
     ws.merge_cells(f'A1:{chr(ord("A") + len(table))}1')
     header = Header(aup)
@@ -492,7 +489,7 @@ def find_max_zet(table):
 
 
 # функция создает карту и задаем все данные кроме предметов в семестрах, на вход требует имя карты
-def CreateMap(filename_map):
+def CreateMap(filename_map, max_zet):
     wk = xlsxwriter.Workbook(filename_map)
     ws = wk.add_worksheet()
     ws.set_column(1, 40, 40)
@@ -510,7 +507,7 @@ def CreateMap(filename_map):
     worksheet.row_dimensions[2].height = 41
     worksheet["A2"] = "З.Е."
     worksheet['A2'].style = 'standart'
-    for col in range(3, 34):
+    for col in range(3, max_zet + 3):
         worksheet["A" + str(col)] = col - 2
         worksheet["A" + str(col)].style = 'standart'
     for col in range(ord('B'), ord('C')):

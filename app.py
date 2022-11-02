@@ -1,12 +1,12 @@
+import io
 import os
 
-from flask import Flask, redirect, render_template, request, send_file
+from flask import Flask, redirect, render_template, request, send_file, after_this_request
 from flask_migrate import Migrate
 from sqlalchemy import MetaData
-
 from excel_check import (check_empty_ceils, check_full_zet_in_plan,
                          layout_of_disciplines)
-from save_into_bd import save_into_bd
+from save_into_bd import save_into_bd, delete_from_workload, update_workload
 from take_from_bd import Header, Table, saveMap
 from tools import FileForm
 
@@ -89,11 +89,19 @@ def upload():
 
             get_aup = AUP.query.filter_by(num_aup = aup).first()
             if get_aup == None:
-                # f.save(path)
                 
                 aup = save_into_bd(path)
                 
             else:
+                files = path
+                delete_from_workload(aup)
+                if type(files) != list:
+                    f = files
+                    files = [f, ]
+
+                for file in files:
+                    update_workload(file, aup)
+
                 print(f"[!] such aup already in db. REDIRECT to {aup}")
 
             os.remove(path)
@@ -109,9 +117,19 @@ def upload():
 @app.route("/save/<string:aup>")
 def save(aup):
     filename = saveMap(aup, app.static_folder, expo=60) 
-    return send_file(
-            path_or_file=filename, 
-            download_name=os.path.split(filename)[-1]) 
+    ### Upload xlxs file in memory and delete file from storage -----
+    return_data = io.BytesIO()
+    with open(filename, 'rb') as fo:
+        return_data.write(fo.read())
+    # (after writing, cursor will be at last byte, so move it to start)
+    return_data.seek(0)
+
+    # path = os.path.join(app.static_folder, 'temp', filename)
+    os.remove(filename)
+    ### --------------
+    return send_file(return_data, 
+            download_name=os.path.split(filename)[-1])
+
 
 
 @app.route('/error')

@@ -156,54 +156,66 @@ def save_into_bd(files):
 
         # ЛИСТ 2
 
-        data = pd.read_excel(file, sheet_name="Лист2")
-
-        id_aup = AUP.query.filter_by(num_aup = aup_num).first().id_aup
-
-        for i in range(len(data)):
-            row = []
-            for column in data.columns:
-                row.append(data[column][i])
-
-            if pd.isna(row[3]):
-                row[3] = 'Без названия'
-
-            mod_id = Module.query.filter_by(name_module = row[3]).first()
-            if mod_id == None:
-                def r(): return randint(0, 128)
-                color = '%02X%02X%02X' % (r(), r(), r())
-
-                new_module = Module(**_params([row[3], color], MODULE_PARAMS))
-                db.session.add(new_module)
-                db.session.commit()
-
-                mod_id = Module.query.filter_by(name_module = row[3]).first().id_module
-            else:
-                mod_id = mod_id.id_module
-
-            if pd.isna(row[8]):
-                row[8] = 0
-            else:
-                row[8] = int(float(row[8].replace(',', '.')))
-
-            if pd.isna(row[10]):
-                row[10] = 0
-            else:
-                row[10] = float(row[10].replace(',', '.'))
-
-            row[3] = mod_id
-
-            row.insert(0, id_aup)
-            row = list(map(lambda x: None if pd.isna(x) else x, row))
-            # print('+++++++++++++++++', row)
-            new_str_workload = Workload(**_params(row, WORKLOAD_PARAMS))
-            db.session.add(new_str_workload)
+        update_workload(file, aup_num) ### Закинуть файлы в бд
 
     db.session.commit()
     print("[+] Запись данных завершена. Отключение от БД")
     # path = os.path.join(static_folder, 'temp', filename)
     # os.remove(path)
     return aup_num
+
+
+def update_workload(file, aup_num):
+    data = pd.read_excel(file, sheet_name="Лист2")
+
+    id_aup = AUP.query.filter_by(num_aup = aup_num).first().id_aup
+
+    for i in range(len(data)):
+        row = []
+        for column in data.columns:
+            row.append(data[column][i])
+
+        if pd.isna(row[3]):
+            row[3] = 'Без названия'
+
+        mod_id = Module.query.filter_by(name_module = row[3]).first()
+        if mod_id == None:
+            def r(): return randint(0, 128)
+            color = '%02X%02X%02X' % (r(), r(), r())
+
+            new_module = Module(**_params([row[3], color], MODULE_PARAMS))
+            db.session.add(new_module)
+            db.session.commit()
+
+            mod_id = Module.query.filter_by(name_module = row[3]).first().id_module
+        else:
+            mod_id = mod_id.id_module
+
+        if pd.isna(row[8]):
+            row[8] = 0
+        else:
+            row[8] = int(float(row[8].replace(',', '.')))
+
+        if pd.isna(row[10]):
+            row[10] = 0
+        else:
+            row[10] = float(row[10].replace(',', '.'))
+
+        row[3] = mod_id
+
+        row.insert(0, id_aup)
+        row = list(map(lambda x: None if pd.isna(x) else x, row))
+        # print('+++++++++++++++++', row)
+        new_str_workload = Workload(**_params(row, WORKLOAD_PARAMS))
+        db.session.add(new_str_workload)
+    db.session.commit()
+
+
+def delete_from_workload(aup):
+    
+    id_aup = AUP.query.filter_by(num_aup=aup).first().id_aup
+    Workload.query.filter_by(id_aup=id_aup).delete()
+    db.session.commit()
 
 
 def take_duration_year_month(fso):
