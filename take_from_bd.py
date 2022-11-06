@@ -1,12 +1,12 @@
-from pprint import pprint
-from random import randint
-import xlsxwriter
-import openpyxl
-from openpyxl.styles import PatternFill, Border, Side, Alignment, Font, NamedStyle
 import os
-from models import NameOP, SprFormEducation, SprOKCO, Workload, Module, AUP, OP
-from sqlalchemy import desc
-from save_into_bd import save_into_bd
+from random import randint
+
+import openpyxl
+import xlsxwriter
+from openpyxl.styles import (Alignment, Border, Font, NamedStyle, PatternFill,
+                             Side)
+
+from models import AUP, OP, Module, NameOP, SprFormEducation, SprOKCO, Workload
 
 # Условия фильтра, если добавлять категорию, то нужно исправить if
 skiplist = {
@@ -515,6 +515,19 @@ def CreateMap(filename_map, max_zet):
         worksheet[chr(col) + str(2)].style = 'standart'
     return worksheet, workbook
 
+
+# получить все сущестующие карты
+def GetAllMaps(param=None):
+    res = dict()
+    if param != None:
+        search = "%{}%".format(param)
+        maps = AUP.query.filter(AUP.file.like(search)).all()
+    else:
+        maps = AUP.query.all()
+    for i in range(len(maps)):
+        print(maps[i].id_aup)
+        res[maps[i].id_aup] = [maps[i].id_op, maps[i].file, maps[i].num_aup, maps[i].op]
+    return maps
 
 if __name__ == "__main__":
 

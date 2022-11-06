@@ -1,13 +1,14 @@
 import io
 import os
 
-from flask import Flask, redirect, render_template, request, send_file, after_this_request
+from flask import Flask, redirect, render_template, request, send_file
 from flask_migrate import Migrate
 from sqlalchemy import MetaData
+
 from excel_check import (check_empty_ceils, check_full_zet_in_plan,
                          layout_of_disciplines)
-from save_into_bd import save_into_bd, delete_from_workload, update_workload
-from take_from_bd import Header, Table, saveMap
+from save_into_bd import delete_from_workload, save_into_bd, update_workload
+from take_from_bd import GetAllMaps, Header, Table, saveMap
 from tools import FileForm
 
 app = Flask(__name__)
@@ -37,9 +38,14 @@ from models import AUP
 
 ZET_HEIGHT = 90
 
-@app.route('/')
+@app.route('/', methods=["POST", "GET"])
 def index():
-    return render_template('index.html')
+    if request.method == "POST":
+        searchParam = request.form.get('name')
+        maps = GetAllMaps(param=searchParam)
+        return render_template('index.html', maps=maps)
+    maps = GetAllMaps()
+    return render_template('index.html', maps=maps)
 
 @app.route("/map/<string:aup>")
 def main(aup):

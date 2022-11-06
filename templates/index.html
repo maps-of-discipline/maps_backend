@@ -23,10 +23,10 @@
     </div>
    
 
-    <form class="form d-flex flex-column w-100">
-      <label class="form-label d-flex flex-column">
+    <form class="form d-flex flex-column w-100" method="POST" action="{{ url_for('index')}}">
+      <label class="form-label d-flex flex-column" for="name">
         Введите направление
-        <input type="text" class="form-control">
+        <input type="text" class="form-control" name="name" id="name">
       </label>
       <label class="form-label d-flex flex-column" style="gap: 0.5rem;">
         Выберите профиль
@@ -73,6 +73,11 @@
 
       <input type="submit" value="Поиск" class="btn btn-success mt-3 p-3">
     </form>
+    {% for elem in maps %}
+    <div>
+      <a href="{{ url_for('main', aup=elem.num_aup) }}">{{elem.file}}</a>
+    </div>
+    {% endfor %}
   </main>
 </body>
 </html>
