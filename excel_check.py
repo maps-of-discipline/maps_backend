@@ -1,6 +1,39 @@
+from collections import defaultdict
+
 from openpyxl import load_workbook
-from models import SprVolumeDegreeZET, SprStandard
+
+from models import SprStandard, SprVolumeDegreeZET
 from take_from_bd import skiplist
+
+
+def check_smt(file):
+    wb = load_workbook(file)
+    ws = wb['Лист2']
+    max_row = get_maximum_rows(sheet_object=ws)
+    d = defaultdict(list)
+    for i in range(2, max_row):
+        sem = ws['G'+str(i)].value
+        proj = ws['F'+str(i)].value
+        zet = ws['K'+str(i)].value
+        if zet:
+            d[sem].append([proj, zet])
+    for key, value in d.items():
+        print()
+        print("{0}: {1}".format(key,value))
+    
+    for key, value in d.items():
+        ddd = dict()
+        for i in range(0, len(value)):
+            if ddd.get(value[i][0]):
+                ddd[value[i][0]] += float(value[i][1].replace(",", "."))
+            else:
+                ddd[value[i][0]] = float(value[i][1].replace(",", "."))
+        for key1, value1 in ddd.items():
+            if not value1.is_integer() and key1 not in skiplist['discipline']:
+                # print("Ошибка при подсчёте ZET. {0}: {1} {2}".format(key,key1, value1))
+                return "Ошибка при подсчёте ZET. {0}: {1} {2}".format(key,key1, value1)
+    return None
+
 
 
 def get_maximum_rows(*, sheet_object):  # Взять максимальное значение строк в плане

@@ -5,7 +5,7 @@ from flask import Flask, redirect, render_template, request, send_file
 from flask_migrate import Migrate
 from sqlalchemy import MetaData
 
-from excel_check import (check_empty_ceils, check_full_zet_in_plan,
+from excel_check import (check_empty_ceils, check_full_zet_in_plan, check_smt,
                          layout_of_disciplines)
 from save_into_bd import delete_from_workload, save_into_bd, update_workload
 from take_from_bd import GetAllMaps, Header, Table, saveMap
@@ -73,12 +73,16 @@ def upload():
             f.save(path)
             temp_check, err_arr = check_empty_ceils(path)
             ### ------------------------------------ ###
-
             if temp_check == False:
                 os.remove(path)
                 errors = 'В документе не заполнены ячейки:' + ', '.join(err_arr)
                 return error(errors)
             ### ------------------------------------ ###
+
+            c = check_smt(path)
+            if c != None:
+                return error(c)
+
             ### Компановка элективных курсов ###
             layout_of_disciplines(path)
             ### ---------------------------- ###
