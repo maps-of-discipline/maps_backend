@@ -69,7 +69,10 @@ def check_smt(file):
             except:
                 pass
             # print(zet)
-            sumzet += zet
+            try:
+                sumzet += float(zet)
+            except:
+                sumzet += zet
         else:
             continue
         period = period.split()[0]
