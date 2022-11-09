@@ -194,12 +194,18 @@ def update_workload(file, aup_num):
         if pd.isna(row[8]):
             row[8] = 0
         else:
-            row[8] = int(float(row[8].replace(',', '.')))
+            try:
+                row[8] = int(float(row[8].replace(',', '.')))
+            except:
+                row[8] = int(float(row[8]))
 
         if pd.isna(row[10]):
             row[10] = 0
         else:
-            row[10] = float(row[10].replace(',', '.'))
+            try:
+                row[10] = float(row[10].replace(',', '.'))
+            except:
+                row[10] = float(row[10])
 
         row[3] = mod_id
 

@@ -79,15 +79,13 @@ def upload():
                 return error(errors)
             ### ------------------------------------ ###
 
-            c = check_smt(path)
-            if c != None:
-                return error(c)
+            # ### Проверка на целочисленность ЗЕТ у каждой дисциплины ###
+            err_arr = check_smt(path)
+            if err_arr != []:
+                os.remove(path)
+                errors = 'Ошибка при подсчете ЗЕТ:\n' + '|||'.join(err_arr)
+                return error(errors)
 
-            ### Компановка элективных курсов ###
-            layout_of_disciplines(path)
-            ### ---------------------------- ###
-
-            # ### ------------------------------------ ###
             # ### Проверка, чтобы общая сумма ЗЕТ соответствовало норме (30 * кол-во семестров) ###
             check_zet, sum_normal, sum_zet = check_full_zet_in_plan(path)
             print(check_zet, sum_normal, sum_zet)
@@ -96,6 +94,11 @@ def upload():
                 errors = 'В выгрузке общая сумма ЗЕТ не соответствует норме. Норма {} ЗЕТ. В карте {} ЗЕТ.'.format(sum_normal, sum_zet)
                 return error(errors)
             # ### ------------------------------------ ###
+
+            ### Компановка элективных курсов ###
+            layout_of_disciplines(path)
+            ### ---------------------------- ###
+
 
             get_aup = AUP.query.filter_by(num_aup = aup).first()
             if get_aup == None:

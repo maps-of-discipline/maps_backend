@@ -402,6 +402,8 @@ def colorize(table, legend=None, **kwargs):
 
     return table, legend
 
+sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой",
+            "Седьмой", "Восьмой", "Девятый", "Десятый", "Одиннадцатый", "Двенадцатый", 'Тринадцатый', 'Четырнадцатый']
 
 # возвращает сформированную таблицу с раскрашенными ячейками
 def Table(aup, **kwargs):
@@ -411,8 +413,8 @@ def Table(aup, **kwargs):
     colorSet -- number of color set. Default(0)
     expo -- exposition. Bounds: -255 - only black color, only 255 - white color. Default(0)
     """
-    sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой",
-            "Седьмой", "Восьмой", "Девятый", "Десятый", "Одиннадцатый", "Двенадцатый", 'Тринадцатый', 'Четырнадцатый']
+    # sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой",
+    #         "Седьмой", "Восьмой", "Девятый", "Десятый", "Одиннадцатый", "Двенадцатый", 'Тринадцатый', 'Четырнадцатый']
 
 
     id_aup = AUP.query.filter_by(num_aup=aup).first().id_aup
@@ -425,6 +427,7 @@ def Table(aup, **kwargs):
     workload = Workload.query.filter_by(id_aup=id_aup).order_by(
         Workload.record_type.desc(), Workload.discipline.desc(), Workload.period.desc()).all()
     print('--------------------', workload[0].load)
+    
     sumzet = 0.0
     # формируем таблицу
     table = []
