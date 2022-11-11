@@ -216,9 +216,11 @@ def colorize(table, legend=None, **kwargs):
             '#E7A977',
             '#80475E',
             '#CC5A71',
-            '#F0F757',
+            '#FFCC00',
             '#3B7080',
             '#C97064',
+            '#008B8B',
+            '#B8860B'
         ],
         # Случайные цвета, должен быть последним
         [
@@ -259,6 +261,8 @@ def colorize(table, legend=None, **kwargs):
         EXPO = kwargs['expo']
 
     colorset = expo(colorsets[COLOR_SET], EXPO)
+    print(colorset)
+    
 
     # находим количество уникальных модулей
     unique_modules = []
@@ -280,6 +284,7 @@ def colorize(table, legend=None, **kwargs):
         print("[DEBUG] true  = ")
         if legend:
             for i, el in enumerate(legend):
+                print(i, el)
                 index = unique_modules.index([el[2], 0])
                 legend[i][2] = colorset[index]
 
