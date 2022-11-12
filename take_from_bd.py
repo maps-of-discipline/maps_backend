@@ -168,6 +168,18 @@ def saveMap(aup, static, **kwargs):
     ws['A' + str(40+len(legend) + 5)
        ] = f'Карта составлена из файла: {filename_map_down}'
 
+    alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+    ### Set properties
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.print_options.horizontalCentered = True
+    ws.print_options.verticalCentered = True
+    ws.page_setup.paperHeight = '594mm'
+    ws.page_setup.paperWidth = '420mm'
+    ws.print_area = 'A1:' + str(alphabet[len(table) + 2]) + '32'
+    ###
+
+
     wk.save(filename=filename_map)
     return filename_map
 

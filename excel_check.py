@@ -36,9 +36,12 @@ def check_smt1(file):
                 except:
                     ddd[value[i][0]] += float(value[i][1])
             else:
-                ddd[value[i][0]] = float(value[i][1].replace(",", "."))
+                try:
+                    ddd[value[i][0]] = float(value[i][1].replace(",", "."))
+                except:
+                    ddd[value[i][0]] = float(value[i][1])
         for key1, value1 in ddd.items():
-            if not value1.is_integer() and key1 not in skiplist['discipline']:
+            if not value1.is_integer():
                 ret_arr.append("{0}: {1} {2}".format(key,key1, value1))
     return ret_arr
 
@@ -102,7 +105,8 @@ def check_smt(file):
 
     for semester in table:
         for disc in semester:
-            if not disc['zet'].is_integer():
+            print(disc)
+            if not float(disc['zet']).is_integer():
                 arr_err.append(disc['term'] + ' ' + 'семестр' + ' ' + disc['discipline'] + ' ' + str(disc['zet']))
     print(arr_err)
     return arr_err
