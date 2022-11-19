@@ -5,6 +5,7 @@ import openpyxl
 import xlsxwriter
 from openpyxl.styles import (Alignment, Border, Font, NamedStyle, PatternFill,
                              Side)
+from tools import get_maximum_rows
 
 from models import (AUP, OP, Module, NameOP, SprFaculty, SprFormEducation,
                     SprOKCO, Workload, db)
@@ -169,6 +170,22 @@ def saveMap(aup, static, **kwargs):
     ws['A' + str(40+len(legend) + 5)
        ] = f'Карта составлена из файла: {filename_map_down}'
 
+
+    ### Set properties
+    alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.print_options.horizontalCentered = True
+    ws.print_options.verticalCentered = True
+    ws.page_setup.fitToPage = True
+    # ws.page_setup.paperHeight = '594mm'
+    # ws.page_setup.paperWidth = '420mm'
+    ws.row_dimensions[1].height = 100
+    # max_row = get_maximum_rows(sheet_object=ws)
+    # print("--------------------------------------", max_row, "--------------------------------------")
+    ws.print_area = 'A1:' + str(alphabet[len(table)]) + '32'
+    ###
+
     wk.save(filename=filename_map)
     return filename_map
 
@@ -217,9 +234,12 @@ def colorize(table, legend=None, **kwargs):
             '#E7A977',
             '#80475E',
             '#CC5A71',
-            '#F0F757',
+            '#FFCC00',
             '#3B7080',
             '#C97064',
+            '#008B8B',
+            '#B8860B',
+            '#01B235'
         ],
         # Случайные цвета, должен быть последним
         [
@@ -404,6 +424,9 @@ def colorize(table, legend=None, **kwargs):
     return table, legend
 
 
+sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой",
+            "Седьмой", "Восьмой", "Девятый", "Десятый", "Одиннадцатый", "Двенадцатый", 'Тринадцатый', 'Четырнадцатый']
+
 # возвращает сформированную таблицу с раскрашенными ячейками
 def Table(aup, **kwargs):
     """
@@ -412,8 +435,8 @@ def Table(aup, **kwargs):
     colorSet -- number of color set. Default(0)
     expo -- exposition. Bounds: -255 - only black color, only 255 - white color. Default(0)
     """
-    sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой",
-            "Седьмой", "Восьмой", "Девятый", "Десятый", "Одиннадцатый", "Двенадцатый", 'Тринадцатый', 'Четырнадцатый']
+    # sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой",
+    #         "Седьмой", "Восьмой", "Девятый", "Десятый", "Одиннадцатый", "Двенадцатый", 'Тринадцатый', 'Четырнадцатый']
 
 
     id_aup = AUP.query.filter_by(num_aup=aup).first().id_aup
@@ -504,7 +527,7 @@ def CreateMap(filename_map, max_zet):
     ns.alignment = Alignment(
         horizontal='center', vertical='center', wrapText=True)
     workbook.add_named_style(ns)
-    worksheet.row_dimensions[1].height = 50
+    worksheet.row_dimensions[1].height = 75
     worksheet.row_dimensions[2].height = 41
     worksheet["A2"] = "З.Е."
     worksheet['A2'].style = 'standart'

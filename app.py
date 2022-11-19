@@ -85,9 +85,13 @@ def upload():
                 return error(errors)
             ### ------------------------------------ ###
 
-            c = check_smt(path)
-            if c != None:
-                return error(c)
+            # ### Проверка на целочисленность ЗЕТ у каждой дисциплины ###
+            err_arr = check_smt(path)
+            if err_arr != []:
+                os.remove(path)
+                errors = 'Ошибка при подсчете ЗЕТ:\n' + '|||'.join(err_arr)
+                return error(errors)
+            # ### ------------------------------------ ###
 
             ### Компановка элективных курсов ###
             layout_of_disciplines(path)
