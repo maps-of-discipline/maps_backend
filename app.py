@@ -8,7 +8,7 @@ from sqlalchemy import MetaData
 from excel_check import (check_empty_ceils, check_full_zet_in_plan, check_smt,
                          layout_of_disciplines)
 from save_into_bd import delete_from_workload, save_into_bd, update_workload
-from take_from_bd import GetAllMaps, Header, Table, saveMap
+from take_from_bd import GetAllFaculties, GetMaps, Header, Table, saveMap
 from tools import FileForm
 
 app = Flask(__name__)
@@ -40,12 +40,18 @@ ZET_HEIGHT = 90
 
 @app.route('/', methods=["POST", "GET"])
 def index():
+    faculties = GetAllFaculties()
     if request.method == "POST":
-        searchParam = request.form.get('name')
-        maps = GetAllMaps(param=searchParam)
-        return render_template('index.html', maps=maps)
-    maps = GetAllMaps()
-    return render_template('index.html', maps=maps)
+        name = request.form.get('name')
+        id = request.form.get('id_faculty')
+        maps = GetMaps(id=id, name=name)
+        print(maps, id, name)
+        if maps == []:
+            flag = False
+        else:
+            flag = True
+        return render_template('index.html', maps=maps, faculties=faculties, flag=flag)
+    return render_template('index.html', faculties=faculties)
 
 @app.route("/map/<string:aup>")
 def main(aup):
@@ -79,13 +85,15 @@ def upload():
                 return error(errors)
             ### ------------------------------------ ###
 
-            # ### Проверка на целочисленность ЗЕТ у каждой дисциплины ###
-            err_arr = check_smt(path)
-            if err_arr != []:
-                os.remove(path)
-                errors = 'Ошибка при подсчете ЗЕТ:\n' + '|||'.join(err_arr)
-                return error(errors)
+            c = check_smt(path)
+            if c != None:
+                return error(c)
 
+            ### Компановка элективных курсов ###
+            layout_of_disciplines(path)
+            ### ---------------------------- ###
+
+            # ### ------------------------------------ ###
             # ### Проверка, чтобы общая сумма ЗЕТ соответствовало норме (30 * кол-во семестров) ###
             check_zet, sum_normal, sum_zet = check_full_zet_in_plan(path)
             print(check_zet, sum_normal, sum_zet)
@@ -94,11 +102,6 @@ def upload():
                 errors = 'В выгрузке общая сумма ЗЕТ не соответствует норме. Норма {} ЗЕТ. В карте {} ЗЕТ.'.format(sum_normal, sum_zet)
                 return error(errors)
             # ### ------------------------------------ ###
-
-            ### Компановка элективных курсов ###
-            layout_of_disciplines(path)
-            ### ---------------------------- ###
-
 
             get_aup = AUP.query.filter_by(num_aup = aup).first()
             if get_aup == None:

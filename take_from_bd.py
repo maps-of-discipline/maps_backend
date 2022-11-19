@@ -6,7 +6,8 @@ import xlsxwriter
 from openpyxl.styles import (Alignment, Border, Font, NamedStyle, PatternFill,
                              Side)
 
-from models import AUP, OP, Module, NameOP, SprFormEducation, SprOKCO, Workload
+from models import (AUP, OP, Module, NameOP, SprFaculty, SprFormEducation,
+                    SprOKCO, Workload, db)
 
 # Условия фильтра, если добавлять категорию, то нужно исправить if
 skiplist = {
@@ -168,18 +169,6 @@ def saveMap(aup, static, **kwargs):
     ws['A' + str(40+len(legend) + 5)
        ] = f'Карта составлена из файла: {filename_map_down}'
 
-    alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-
-    ### Set properties
-    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
-    ws.print_options.horizontalCentered = True
-    ws.print_options.verticalCentered = True
-    ws.page_setup.paperHeight = '594mm'
-    ws.page_setup.paperWidth = '420mm'
-    ws.print_area = 'A1:' + str(alphabet[len(table) + 2]) + '32'
-    ###
-
-
     wk.save(filename=filename_map)
     return filename_map
 
@@ -228,12 +217,9 @@ def colorize(table, legend=None, **kwargs):
             '#E7A977',
             '#80475E',
             '#CC5A71',
-            '#FFCC00',
+            '#F0F757',
             '#3B7080',
             '#C97064',
-            '#008B8B',
-            '#B8860B',
-            '#01B235'
         ],
         # Случайные цвета, должен быть последним
         [
@@ -274,8 +260,6 @@ def colorize(table, legend=None, **kwargs):
         EXPO = kwargs['expo']
 
     colorset = expo(colorsets[COLOR_SET], EXPO)
-    print(colorset)
-    
 
     # находим количество уникальных модулей
     unique_modules = []
@@ -297,7 +281,6 @@ def colorize(table, legend=None, **kwargs):
         print("[DEBUG] true  = ")
         if legend:
             for i, el in enumerate(legend):
-                print(i, el)
                 index = unique_modules.index([el[2], 0])
                 legend[i][2] = colorset[index]
 
@@ -420,8 +403,6 @@ def colorize(table, legend=None, **kwargs):
 
     return table, legend
 
-sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой",
-            "Седьмой", "Восьмой", "Девятый", "Десятый", "Одиннадцатый", "Двенадцатый", 'Тринадцатый', 'Четырнадцатый']
 
 # возвращает сформированную таблицу с раскрашенными ячейками
 def Table(aup, **kwargs):
@@ -431,8 +412,8 @@ def Table(aup, **kwargs):
     colorSet -- number of color set. Default(0)
     expo -- exposition. Bounds: -255 - only black color, only 255 - white color. Default(0)
     """
-    # sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой",
-    #         "Седьмой", "Восьмой", "Девятый", "Десятый", "Одиннадцатый", "Двенадцатый", 'Тринадцатый', 'Четырнадцатый']
+    sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой",
+            "Седьмой", "Восьмой", "Девятый", "Десятый", "Одиннадцатый", "Двенадцатый", 'Тринадцатый', 'Четырнадцатый']
 
 
     id_aup = AUP.query.filter_by(num_aup=aup).first().id_aup
@@ -445,7 +426,6 @@ def Table(aup, **kwargs):
     workload = Workload.query.filter_by(id_aup=id_aup).order_by(
         Workload.record_type.desc(), Workload.discipline.desc(), Workload.period.desc()).all()
     print('--------------------', workload[0].load)
-    
     sumzet = 0.0
     # формируем таблицу
     table = []
@@ -538,17 +518,38 @@ def CreateMap(filename_map, max_zet):
 
 
 # получить все сущестующие карты
-def GetAllMaps(param=None):
+def GetMaps(id, name=None):
     res = dict()
-    if param != None:
-        search = "%{}%".format(param)
-        maps = AUP.query.filter(AUP.file.like(search)).all()
+    q = db.session.query(
+       AUP.num_aup,
+       AUP.file, 
+    )
+
+    if name != None:
+        search = "%{}%".format(name)
+        join_query = q.join(OP).join(SprFaculty).filter(AUP.file.like(search))
     else:
-        maps = AUP.query.all()
-    for i in range(len(maps)):
-        print(maps[i].id_aup)
-        res[maps[i].id_aup] = [maps[i].id_op, maps[i].file, maps[i].num_aup, maps[i].op]
+        join_query = q.join(OP).join(SprFaculty)
+
+    maps = join_query.filter(SprFaculty.id_faculty == id).all()
+
+    db.session.close()
+    db.session.expunge_all()
+
+    # print(maps)
+
+
+
+    # for i in range(len(maps)):
+    #     print(maps[i].id_aup)
+    #     res[maps[i].id_aup] = [maps[i].id_op, maps[i].file, maps[i].num_aup, maps[i].op]
+
     return maps
+
+# получить список всех факултетов
+def GetAllFaculties():
+    fac = SprFaculty.query.all()
+    return fac
 
 if __name__ == "__main__":
 

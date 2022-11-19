@@ -24,52 +24,22 @@
    
 
     <form class="form d-flex flex-column w-100" method="POST" action="{{ url_for('index')}}">
+      
+      <label class="form-label d-flex flex-column" style="gap: 0.5rem;">
+        Выберите факультет
+        <select class="form-select" id="faculty" name="id_faculty" title="Факультет">
+          {% for faculty in faculties %}
+              <option value="{{ faculty.id_faculty }}" {% if faculty.id_faculty | string in request.args.getlist('id_faculty') %}selected{% endif %}>{{ faculty.name_faculty }}</option>
+          {% endfor %}
+      </select>
+      </label>
+
+      {% if flag %}
       <label class="form-label d-flex flex-column" for="name">
         Введите направление
         <input type="text" class="form-control" name="name" id="name">
       </label>
-      <label class="form-label d-flex flex-column" style="gap: 0.5rem;">
-        Выберите профиль
-        <select class="form-select">
-          <option value="Пример" selected>
-            Пример1
-          </option>
-          <option value="Пример">
-            Пример2
-          </option>
-          <option value="Пример">
-            Пример3
-          </option>
-        </select>
-      </label>
-      <label class="form-label d-flex flex-column" style="gap: 0.5rem;">
-        Выберите год
-        <select class="form-select">
-          <option value="Пример" selected>
-            Пример1
-          </option>
-          <option value="Пример">
-            Пример2
-          </option>
-          <option value="Пример">
-            Пример3
-          </option>
-        </select>
-      </label>
-      <label class="form-label d-flex flex-column" style="gap: 0.5rem;">
-        Выберите форму обучения
-        <select class="form-select">
-          <option value="Пример" selected>
-            Пример1
-          </option>
-          <option value="Пример">
-            Пример2
-          </option>
-          <option value="Пример">
-            Пример3
-          </option>
-        </select>
-      </label>
+      {% endif %}
 
       <input type="submit" value="Поиск" class="btn btn-success mt-3 p-3">
     </form>
@@ -79,5 +49,8 @@
     </div>
     {% endfor %}
   </main>
+  <footer class="bg-dark text-white d-flex align-items-center justify-content-center py-3">
+    &copy; Московский политехнический университет
+  </footer>
 </body>
 </html>

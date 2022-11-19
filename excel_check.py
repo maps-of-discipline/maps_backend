@@ -1,5 +1,4 @@
 from collections import defaultdict
-from math import ceil
 
 from openpyxl import load_workbook
 
@@ -7,7 +6,7 @@ from models import SprStandard, SprVolumeDegreeZET
 from take_from_bd import skiplist
 
 
-def check_smt1(file):
+def check_smt(file):
     wb = load_workbook(file)
     ws = wb['Лист2']
     max_row = get_maximum_rows(sheet_object=ws)
@@ -16,100 +15,26 @@ def check_smt1(file):
         sem = ws['G'+str(i)].value
         proj = ws['F'+str(i)].value
         zet = ws['K'+str(i)].value
-        record_type = ws['E'+str(i)].value
-        if (len(list(filter(lambda x: x in proj, skiplist['discipline']))) > 0 or
-                len(list(filter(lambda x: x in record_type, skiplist['record_type']))) > 0):
-            continue
         if zet:
             d[sem].append([proj, zet])
-    # Print semesters
-    # for key, value in d.items():
-    #     print()
-    #     print("{0}: {1}".format(key,value))
-    ret_arr = []
+    for key, value in d.items():
+        print()
+        print("{0}: {1}".format(key,value))
+    
     for key, value in d.items():
         ddd = dict()
         for i in range(0, len(value)):
             if ddd.get(value[i][0]):
-                try:
-                    ddd[value[i][0]] += float(value[i][1].replace(",", "."))
-                except:
-                    ddd[value[i][0]] += float(value[i][1])
+                ddd[value[i][0]] += float(value[i][1].replace(",", "."))
             else:
-                try:
-                    ddd[value[i][0]] = float(value[i][1].replace(",", "."))
-                except:
-                    ddd[value[i][0]] = float(value[i][1])
+                ddd[value[i][0]] = float(value[i][1].replace(",", "."))
         for key1, value1 in ddd.items():
-            if not value1.is_integer():
-                ret_arr.append("{0}: {1} {2}".format(key,key1, value1))
-    return ret_arr
+            if not value1.is_integer() and key1 not in skiplist['discipline']:
+                print("Ошибка при подсчёте ZET. {0}: {1} {2}".format(key,key1, value1))
+                # return "Ошибка при подсчёте ZET. {0}: {1} {2}".format(key,key1, value1)
+    return None
 
 
-def check_smt(file):
-    wb = load_workbook(file)
-    ws = wb['Лист2']
-    max_row = get_maximum_rows(sheet_object=ws)
-    from take_from_bd import sems
-    sumzet = 0.0
-    arr_err = []
-    table = []
-    for i in range(2, max_row):
-        period = ws['G'+str(i)].value
-        discipline = ws['F'+str(i)].value
-        zet = ws['K'+str(i)].value
-        record_type = ws['E'+str(i)].value
-
-        # Фильтрация, тут исправлять if
-        if (len(list(filter(lambda x: x in discipline, skiplist['discipline']))) > 0 or
-                len(list(filter(lambda x: x in record_type, skiplist['record_type']))) > 0):
-            continue
-        
-        if zet != None:
-            # print(zet)
-            try:
-                zet = float(zet.replace(',', '.'))
-            except:
-                pass
-            # print(zet)
-            try:
-                sumzet += float(zet)
-            except:
-                sumzet += zet
-        else:
-            continue
-        period = period.split()[0]
-
-        # словарь с данными ячейчи
-        cell = {
-            "discipline": discipline,
-            "term": period,
-            "zet": zet
-        }
-
-        # добаляем в таблицу недостоющее количество семестров для очередной записи в списке workload
-        delta = len(table) - sems.index(period) - 1
-        if delta < 0:
-            for i in range(-delta):
-                table.append([])
-
-        # считаем сумму зет для каждой дисциплины, включая экзамены, лаб.занятия, лекции и т.д.
-        for el in table[sems.index(period)]:
-            if el['discipline'] == discipline:
-                el['zet'] += zet
-                break
-        else:
-            # если такой дисциплины нет, то добавляем в таблицу
-            table[sems.index(period)].append(cell)
-    print(table)
-
-    for semester in table:
-        for disc in semester:
-            print(disc)
-            if not float(disc['zet']).is_integer():
-                arr_err.append(disc['term'] + ' ' + 'семестр' + ' ' + disc['discipline'] + ' ' + str(disc['zet']))
-    print(arr_err)
-    return arr_err
 
 def get_maximum_rows(*, sheet_object):  # Взять максимальное значение строк в плане
     rows = 0
@@ -189,16 +114,9 @@ def check_full_zet_in_plan(file):
                 len(list(filter(lambda x: x in column_discipline[i].value, skiplist['discipline']))) == 0 and
                 len(list(filter(lambda x: x in column_record_type[i].value, skiplist['record_type']))) == 0)):
             
-            try:
-                sum_zet += float(column_zet[i].value.replace(',', '.'))
-            except:
-                sum_zet += float(column_zet[i].value)
-
-    print('normal:', sum_normal, '\nzet:', sum_zet)
+            sum_zet += float(column_zet[i].value.replace(',', '.'))
     
-    if abs(round(sum_zet) - sum_zet) < 0.001:
-        sum_zet = round(sum_zet)
-    
+    print(sum_normal == sum_zet, 'normal:', sum_normal, '\nzet:', sum_zet)
     if sum_normal == sum_zet:
         return True, None, None
     else:
