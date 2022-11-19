@@ -129,47 +129,7 @@ def saveMap(aup, static, **kwargs):
 
             merged += round(el['zet'])
 
-        ws['A40'] = 'З.Е'
-        ws['A40'].style = 'standart'
-        ws['B40'] = 'МОДУЛИ:'
-        ws['B40'].style = 'standart'
-        ws.merge_cells('B40:C40')
-
-        # Вывод легенды в КД excel
-        sum_zet = 0.0
-        for i, el in enumerate(legend):
-            cellA = f"A{41+i}"
-            cellB = f"B{41+i}"
-
-            sum_zet += el[1]
-
-            ws[cellA].style = ws[cellB].style = 'standart'
-            ws[cellA] = el[1]
-            ws[cellB] = el[0]
-            ws[cellB].alignment = Alignment(
-                horizontal='left', vertical='center', wrapText=True)
-
-            color = el[2].replace('#', '')
-            r, g, b = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
-            gray = (r + g + b)/3
-
-            if gray < 140:
-                ws[cellB].font = Font(color="FFFFFF", size=12)
-            else:
-                ws[cellB].font = Font(color="000000", size=12)
-
-            ws[cellB].fill = PatternFill(start_color=str(
-                color), end_color=str(color), fill_type='solid')
-            ws.merge_cells(cellB + ':' + cellB.replace('B', 'C'))
-
-    # сумма зет
-    cellA = 'A' + str(40+len(legend) + 1)
-    ws[cellA].style = 'standart'
-    ws[cellA] = f'Итого: {sum_zet}'
-
-    ws['A' + str(40+len(legend) + 5)
-       ] = f'Карта составлена из файла: {filename_map_down}'
-
+    legend_on_2nd_sheet(wk, legend, filename_map_down)
 
     ### Set properties
     alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -178,17 +138,58 @@ def saveMap(aup, static, **kwargs):
     ws.print_options.horizontalCentered = True
     ws.print_options.verticalCentered = True
     ws.page_setup.fitToPage = True
-    # ws.page_setup.paperHeight = '594mm'
-    # ws.page_setup.paperWidth = '420mm'
     ws.row_dimensions[1].height = 100
-    # max_row = get_maximum_rows(sheet_object=ws)
-    # print("--------------------------------------", max_row, "--------------------------------------")
-    ws.print_area = 'A1:' + str(alphabet[len(table)]) + '32'
+    max_row = get_maximum_rows(sheet_object=ws)
+    ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_row)
     ###
 
     wk.save(filename=filename_map)
     return filename_map
 
+
+def legend_on_2nd_sheet(wb, legend, filename_map_down):
+    # Вывод легенды в КД excel
+    ws = wb.create_sheet('Legend')
+    ws['A1'] = 'З.Е'
+    ws['A1'].style = 'standart'
+    ws['B1'] = 'МОДУЛИ:'
+    ws['B1'].style = 'standart'
+    ws.merge_cells('B1:C1')
+
+    sum_zet = 0.0
+    for i, el in enumerate(legend):
+        cellA = f"A{2+i}"
+        cellB = f"B{2+i}"
+
+        sum_zet += el[1]
+
+        ws[cellA].style = ws[cellB].style = 'standart'
+        ws[cellA] = el[1]
+        ws[cellB] = el[0]
+        ws[cellB].alignment = Alignment(
+            horizontal='left', vertical='center', wrapText=True)
+
+        color = el[2].replace('#', '')
+        r, g, b = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
+        gray = (r + g + b)/3
+
+        if gray < 140:
+            ws[cellB].font = Font(color="FFFFFF", size=12)
+        else:
+            ws[cellB].font = Font(color="000000", size=12)
+
+        ws[cellB].fill = PatternFill(start_color=str(
+            color), end_color=str(color), fill_type='solid')
+        ws.merge_cells(cellB + ':' + cellB.replace('B', 'C'))
+
+    # сумма зет
+    cellA = 'A' + str(1+len(legend) + 1)
+    ws[cellA].style = 'standart'
+    ws[cellA] = f'Итого: {sum_zet}'
+
+    ws['A' + str(1+len(legend) + 5)
+    ] = f'Карта составлена из файла: {filename_map_down}'
+    ws.column_dimensions['C'].width = 75
 
 # Возвращает данные для шапка карты
 def Header(aup):
