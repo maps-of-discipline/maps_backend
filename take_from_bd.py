@@ -464,7 +464,8 @@ def Table(aup, **kwargs):
 
         # Фильтрация, тут исправлять if
         if (len(list(filter(lambda x: x in discipline, skiplist['discipline']))) > 0 or
-                len(list(filter(lambda x: x in record_type, skiplist['record_type']))) > 0):
+                len(list(filter(lambda x: x in record_type, skiplist['record_type']))) > 0 or
+                len(list(filter(lambda x: x in block, skiplist['record_type']))) > 0):
             continue
 
         sumzet += zet

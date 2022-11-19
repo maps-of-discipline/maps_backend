@@ -182,7 +182,7 @@ class Workload(db.Model):
         'tbl_aup.id_aup', ondelete='CASCADE'), nullable=False)
     block = db.Column(db.String(255), nullable=False)
     cypher = db.Column(db.String(255), nullable=False)
-    part = db.Column(db.String(255), nullable=False)
+    part = db.Column(db.String(255), nullable=True)
     id_module = db.Column(db.Integer, db.ForeignKey(
         'tbl_module.id_module'), nullable=False)
     id_group = db.Column(db.Integer, db.ForeignKey(
