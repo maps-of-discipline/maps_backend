@@ -11,7 +11,7 @@ from models import AUP, OP, Module, NameOP, SprDegreeEducation, SprFormEducation
 
 bp = Blueprint('upload_to_db', __name__, url_prefix='/upload_to_db')
 
-WORKLOAD_PARAMS = ['id_aup', 'block', 'cypher', 'part', 'id_module', 'record_type', 'discipline', 'period', 'load', 'quantity', 'measurement', 'zet']
+WORKLOAD_PARAMS = ['id_aup', 'block', 'cypher', 'part', 'id_module', 'id_group', 'record_type', 'discipline', 'period', 'load', 'quantity', 'measurement', 'zet']
 NAMEOP_PARAMS = ['program_code', 'num_profile', 'name_spec']
 DURATION_EDUC_PARAMS = ['id_degree', 'id_form', 'years', 'months', 'id_spec', 'year_beg', 'year_end', 'is_actual']
 OP_PARAMS = ['id_duration', 'id_faculty', 'id_rop', 'type_educ', 'qualification', 'type_standard', 'department', 'period_educ']
@@ -206,6 +206,7 @@ def update_workload(file, aup_num):
         row.insert(0, id_aup)
         row = list(map(lambda x: None if pd.isna(x) else x, row))
         # print('+++++++++++++++++', row)
+        row.insert(5, None)
         new_str_workload = Workload(**_params(row, WORKLOAD_PARAMS))
         db.session.add(new_str_workload)
     db.session.commit()

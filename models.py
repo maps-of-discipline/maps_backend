@@ -185,6 +185,8 @@ class Workload(db.Model):
     part = db.Column(db.String(255), nullable=False)
     id_module = db.Column(db.Integer, db.ForeignKey(
         'tbl_module.id_module'), nullable=False)
+    id_group = db.Column(db.Integer, db.ForeignKey(
+        'tbl_group.id_group'), nullable=True)
     record_type = db.Column(db.String(255), nullable=False)
     discipline = db.Column(db.String(255), nullable=False)
     period = db.Column(db.String(255), nullable=False)
@@ -198,6 +200,13 @@ class Workload(db.Model):
 
     def __repr__(self):
         return '<Workload %r>' % self.id_workload
+
+
+class Grouping(db.Model):
+    __tablename__ = 'tbl_group'
+
+    id_group = db.Column(db.Integer, primary_key=True)
+    name_group = db.Column(db.String(255), nullable=False)
 
 
 class SprVolumeDegreeZET(db.Model):
