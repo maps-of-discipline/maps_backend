@@ -1,7 +1,7 @@
 import io
 import os
 
-from flask import Flask, redirect, render_template, request, send_file
+from flask import Flask, redirect, render_template, request, send_file, jsonify
 from flask_migrate import Migrate
 from sqlalchemy import MetaData
 
@@ -62,6 +62,17 @@ def main(aup):
         return render_template("base.html", table=table, header=header, zet=ZET_HEIGHT, aup=aup, max_zet=max_zet)
     else:
         return redirect('/load')
+
+@app.route("/api/aup/<string:aup>")
+def aupJSON(aup):
+    table, legend, max_zet = Table(aup, colorSet=1)
+
+    data = {
+        'table':table,
+        'max_zet':max_zet
+    }
+
+    return jsonify(data)
 
 @app.route('/upload', methods=["POST", "GET"])
 def upload():
