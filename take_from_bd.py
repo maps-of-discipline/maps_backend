@@ -1,3 +1,4 @@
+from math import ceil
 import os
 from random import randint
 
@@ -81,32 +82,44 @@ def saveMap(aup, static, **kwargs):
     filename_map = os.path.join(static, 'temp', f"КД {filename_map}")
 
     table, legend, max_zet = Table(aup, **kwargs)
-    ws, wk = CreateMap(filename_map, max_zet)
+    ws, wk = CreateMap(filename_map, max_zet, len(table))
 
-    ws.merge_cells(f'A1:{chr(ord("A") + len(table))}1')
+    for row_header in range(1, 3):
+        ws.merge_cells(f'A{row_header}:{chr(ord("A") + len(table))}{row_header}')
+
+    for width_border in range(1, len(table)+1):
+        ws[f"{chr(ord('A') + width_border)}1"].style = 'standart'
+        ws[f"{chr(ord('A') + width_border)}2"].style = 'standart'
+
     header = Header(aup)
+    header1 = f'''КАРТА ДИСЦИПЛИН УЧЕБНОГО ПЛАНА от {header[4]}'''
+    header2 = f'''Направление подготовки: {header[0]}. Профиль: {header[1]}, {header[2]}. Год набора, {header[3]}. АУП: {aup}'''
 
-    header = f'''
-        КАРТА ДИСЦИПЛИН УЧЕБНОГО ПЛАНА от {header[4]}
-        по направлению подготовки {header[0]}
-        Профиль: {header[1]}, {header[2]} год набора, {header[3]}
-        АУП: {aup}
-    '''
-    for i in range(len(table)):
-        ws[chr(ord("B")+i)+"2"] = str(i+1) + " семестр"
-        ws[chr(ord("B")+i)+"2"].style = 'standart'
+    for course in range(ceil(len(table)/2)):
+        ws[chr(ord("B")+course*2)+"3"] = str(course+1) + " курс"
+        ws[chr(ord("B")+course*2)+"3"].style = 'standart'
+        ws.merge_cells(f'{chr(ord("B")+course*2)}3:{chr(ord("B")+course*2+1)}3')
+
+    for semester in range(len(table)):
+        ws[chr(ord("B")+semester)+"4"] = str(semester+1)
+        ws[chr(ord("B")+semester)+"4"].style = 'standart'
 
     ws['A1'].style = 'standart'
-    ws['A1'] = header
+    ws['A1'] = header1
+
+    ws['A2'].style = 'standart'
+    ws['A2'] = header2
+
+    ROW_START_DISCIPLINES = 5
 
     for i in range(len(table)):
         merged = 0
         for el in table[i]:
             column = chr(ord("B") + i)
-            cell = f"{column}{3+merged}"
+            cell = f"{column}{ROW_START_DISCIPLINES+merged}"
 
             ws[cell] = el['discipline']
-            ws[cell].style = "standart"
+            ws[cell].style = 'standart'
 
             color = el['module_color'].replace('#', '')
 
@@ -114,9 +127,9 @@ def saveMap(aup, static, **kwargs):
             gray = (r + g + b)/3
 
             if gray < 140:
-                ws[cell].font = Font(color="FFFFFF", size=12)
+                ws[cell].font = Font(bold=False, size=14, color="FFFFFF")
             else:
-                ws[cell].font = Font(color="000000", size=12)
+                ws[cell].font = Font(bold=False, size=14, color="000000")
 
             ws[cell].fill = PatternFill(start_color=str(
                 color), end_color=str(color), fill_type='solid')
@@ -124,7 +137,7 @@ def saveMap(aup, static, **kwargs):
             if el['zet'] < 1:
                 el['zet'] = 1.0
 
-            merge_range = f"{cell}:{column}{3+merged + round(el['zet'])-1}"
+            merge_range = f"{cell}:{column}{ROW_START_DISCIPLINES+merged + round(el['zet'])-1}"
             ws.merge_cells(merge_range)
 
             merged += round(el['zet'])
@@ -138,9 +151,17 @@ def saveMap(aup, static, **kwargs):
     ws.print_options.horizontalCentered = True
     ws.print_options.verticalCentered = True
     ws.page_setup.fitToPage = True
-    ws.row_dimensions[1].height = 100
+    # ws.row_dimensions[1].height = 100
     max_row = get_maximum_rows(sheet_object=ws)
     ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_row)
+    
+    for height_row in range(ROW_START_DISCIPLINES, max_zet + ROW_START_DISCIPLINES):
+        ws.row_dimensions[height_row].height = 35
+
+    ws.column_dimensions['A'].width = 5
+
+    for width_column in range(1, len(table)+1):
+        ws.column_dimensions[f'{chr(ord("A")+width_column)}'].width = 40
     ###
 
     wk.save(filename=filename_map)
@@ -515,7 +536,7 @@ def find_max_zet(table):
 
 
 # функция создает карту и задаем все данные кроме предметов в семестрах, на вход требует имя карты
-def CreateMap(filename_map, max_zet):
+def CreateMap(filename_map, max_zet, table_length):
     wk = xlsxwriter.Workbook(filename_map)
     ws = wk.add_worksheet()
     ws.set_column(1, 40, 40)
@@ -523,22 +544,25 @@ def CreateMap(filename_map, max_zet):
     workbook = openpyxl.load_workbook(filename_map)
     worksheet = workbook.active
     ns = NamedStyle(name='standart')
-    ns.font = Font(bold=False, size=12)
-    border = Side(style='medium', color='000000')
+    ns.font = Font(bold=False, size=14)
+    border = Side(style='thick', color='000000')
     ns.border = Border(left=border, top=border, right=border, bottom=border)
     ns.alignment = Alignment(
         horizontal='center', vertical='center', wrapText=True)
     workbook.add_named_style(ns)
-    worksheet.row_dimensions[1].height = 75
-    worksheet.row_dimensions[2].height = 41
-    worksheet["A2"] = "З.Е."
-    worksheet['A2'].style = 'standart'
-    for col in range(3, max_zet + 3):
-        worksheet["A" + str(col)] = col - 2
+    
+    QUANTITY_HEADER_ROWS = 3
+    for i in range(1, QUANTITY_HEADER_ROWS):
+        worksheet.row_dimensions[i].height = 25
+
+    worksheet["A3"].style = 'standart'
+    worksheet["A4"].style = 'standart'
+
+    for col in range(5, max_zet + 5):
+        worksheet["A" + str(col)] = col - 4
         worksheet["A" + str(col)].style = 'standart'
     for col in range(ord('B'), ord('C')):
-        worksheet[chr(col) + str(2)] = str(col - 65) + " семестр"
-        worksheet[chr(col) + str(2)].style = 'standart'
+        worksheet[chr(col) + str(5)].style = 'standart'
     return worksheet, workbook
 
 
