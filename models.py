@@ -241,3 +241,15 @@ class SprStandard(db.Model):
 
     def __repr__(self):
         return '<SprStandardZET %r>' % self.standard_date
+
+class WorkMap(db.Model):
+    tablename = 'work_maps'
+    id = db.Column(db.Integer, primary_key=True)
+    id_aup = db.Column(db.Integer, nullable=False)
+    module_color = db.Column(db.String(30), nullable=False)
+    block = db.Column(db.String(255), nullable=False)
+    discipline = db.Column(db.String(255), nullable=False)
+    term = db.Column(db.String(255), nullable=False)
+    zet = db.Column(db.Integer, nullable=False)
+    column = db.Column(db.Integer, nullable=False)
+    number = db.Column(db.Integer, nullable=False)
