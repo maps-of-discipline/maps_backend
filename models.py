@@ -242,14 +242,18 @@ class SprStandard(db.Model):
     def __repr__(self):
         return '<SprStandardZET %r>' % self.standard_date
 
+
 class WorkMap(db.Model):
     tablename = 'work_maps'
     id = db.Column(db.Integer, primary_key=True)
-    id_aup = db.Column(db.Integer, nullable=False)
-    module_color = db.Column(db.String(30), nullable=False)
-    block = db.Column(db.String(255), nullable=False)
+    id_aup = db.Column(db.Integer, db.ForeignKey(
+        'tbl_aup.id_aup', ondelete='CASCADE'), nullable=False)
+    id_group = db.Column(db.Integer, db.ForeignKey(
+        'tbl_group.id_group'), nullable=True)
+    id_module = db.Column(db.Integer, db.ForeignKey(
+        'tbl_module.id_module'), nullable=False)
     discipline = db.Column(db.String(255), nullable=False)
-    term = db.Column(db.String(255), nullable=False)
     zet = db.Column(db.Integer, nullable=False)
-    column = db.Column(db.Integer, nullable=False)
-    number = db.Column(db.Integer, nullable=False)
+    num_col = db.Column(db.Integer, nullable=False)
+    num_row = db.Column(db.Integer, nullable=False)
+    disc_color = db.Column(db.String(8), nullable=False)
