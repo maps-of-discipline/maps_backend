@@ -7,7 +7,6 @@ from sqlalchemy import MetaData
 
 from excel_check import (check_empty_ceils, check_full_zet_in_plan, check_smt,
                          layout_of_disciplines)
-from models import Module
 from save_into_bd import delete_from_workload, save_into_bd, update_workload
 from take_from_bd import GetAllFaculties, GetMaps, Header, Table, saveMap
 from tools import FileForm
@@ -25,7 +24,7 @@ convention = {
     "pk": "pk_%(table_name)s"
 }
 
-from models import WorkMap, db
+from models import db
 
 metadata = MetaData(naming_convention=convention)
 db.init_app(app)
@@ -129,39 +128,6 @@ def upload():
                 print(f"[!] such aup already in db. REDIRECT to {aup}")
 
             os.remove(path)
-
-            table, _, _ = Table(aup)
-
-            moduls = Module.query.all()
-            d = dict()
-            for i in moduls:
-                d[i.id_module] = i.color
-            print(d)
-            
-            print(table)
-
-            for i in range(0, len(table)):
-                for j in range(0, len(table[i])):
-                    new_row = WorkMap(id_aup=aup, 
-                                        id_group=None,
-                                        id_module=table[i][j]['module_color'],
-                                        discipline=table[i][j]['discipline'],
-                                        zet=table[i][j]['zet'],
-                                        num_col=i,
-                                        num_row=j,
-                                        disc_color=d[table[i][j]['module_color']])
-                    print(new_row)
-                    print()
-                print()
-                print()
-                print()
-            print()
-            print()
-            print()
-            print(table)
-            print()
-            print()
-            print()
             
             return redirect(f'/map/{aup}')
         else:
