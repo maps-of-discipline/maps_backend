@@ -207,6 +207,7 @@ class Grouping(db.Model):
 
     id_group = db.Column(db.Integer, primary_key=True)
     name_group = db.Column(db.String(255), nullable=False)
+    color = db.Column(db.String(8), nullable=False)
 
 
 class SprVolumeDegreeZET(db.Model):

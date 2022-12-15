@@ -1,7 +1,7 @@
 import io
 import os
 
-from flask import Flask, redirect, render_template, request, send_file
+from flask import Flask, redirect, render_template, request, send_file, jsonify
 from flask_migrate import Migrate
 from sqlalchemy import MetaData
 
@@ -81,7 +81,8 @@ def upload():
             ### ------------------------------------ ###
             if temp_check == False:
                 os.remove(path)
-                errors = 'В документе не заполнены ячейки:' + ', '.join(err_arr)
+                errors = 'АУП: ' + aup + ' В документе не заполнены ячейки:' + ', '.join(err_arr)
+                print(errors)
                 return error(errors)
             ### ------------------------------------ ###
 
@@ -89,7 +90,8 @@ def upload():
             err_arr = check_smt(path)
             if err_arr != []:
                 os.remove(path)
-                errors = 'Ошибка при подсчете ЗЕТ:\n' + '|||'.join(err_arr)
+                errors = 'АУП: ' + aup + ' Ошибка при подсчете ЗЕТ:\n' + '\n'.join(err_arr)
+                print(errors)
                 return error(errors)
             # ### ------------------------------------ ###
 
@@ -103,7 +105,8 @@ def upload():
             print(check_zet, sum_normal, sum_zet)
             if check_zet == False:
                 os.remove(path)
-                errors = 'В выгрузке общая сумма ЗЕТ не соответствует норме. Норма {} ЗЕТ. В карте {} ЗЕТ.'.format(sum_normal, sum_zet)
+                errors = 'АУП: ' + aup + ' В выгрузке общая сумма ЗЕТ не соответствует норме. Норма {} ЗЕТ. В карте {} ЗЕТ.'.format(sum_normal, sum_zet)
+                print(errors)
                 return error(errors)
             # ### ------------------------------------ ###
 
@@ -131,6 +134,18 @@ def upload():
             return redirect('/load')
     else: 
         return render_template("upload.html", form=form)
+
+
+@app.route("/api/aup/<string:aup>")
+def aupJSON(aup):
+    table, legend, max_zet = Table(aup, colorSet=1)
+
+    data = {
+        'table':table,
+        'max_zet':max_zet
+    }
+
+    return jsonify(data)
 
 
 # путь для загрузки сформированной КД

@@ -519,12 +519,13 @@ def Table(aup, **kwargs):
     leg = Legend(table)
     print('-------------------', sumzet)
     max_zet = find_max_zet(table)
+    print('!!!!!---------!!!!!!!', table)
     table, legend = colorize(table, legend=leg, **kwargs) # раскрашиваем и возвращаем
+    print('!!!!!---------!!!!!!!', table)
     return table, legend, max_zet
 
 
 def find_max_zet(table):
-    print('!!!!!---------!!!!!!!', table)
     max_zet = 0
     for column in table:
         temp = 0
