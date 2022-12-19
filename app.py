@@ -10,6 +10,7 @@ from excel_check import (check_empty_ceils, check_full_zet_in_plan, check_smt,
 from save_into_bd import delete_from_workload, save_into_bd, update_workload
 from take_from_bd import GetAllFaculties, GetMaps, Header, Table, saveMap
 from tools import FileForm
+from models import Module, WorkMap
 
 app = Flask(__name__)
 application = app
@@ -56,10 +57,32 @@ def index():
 @app.route("/map/<string:aup>")
 def main(aup):
     table, legend, max_zet = Table(aup, colorSet=1)
-
+    q = WorkMap.query.filter_by(id_aup=aup).all()
+    d = dict()
+    d["id_aup"] = q[0].id_aup
+    l = list()
+    for i in q:
+        a = dict()
+        a["id"] = i.id
+        a["discipline"] = i.discipline
+        a["zet"] = i.zet
+        a["id_group"] = i.id_group
+        a["num_col"] = i.num_col
+        a["num_row"] = i.num_row
+        a["disc_color"] = i.disc_color
+        l.append(a)
+    d["data"] = l
+    print()
+    print()
+    print()
+    print(d)
+    print()
+    print()
+    print()
     if table != None:
-        header = Header(aup)    
-        return render_template("base.html", table=table, header=header, zet=ZET_HEIGHT, aup=aup, max_zet=max_zet)
+        header = Header(aup)   
+        d["header"] = header 
+        return jsonify(d)
     else:
         return redirect('/load')
 
@@ -128,6 +151,34 @@ def upload():
                 print(f"[!] such aup already in db. REDIRECT to {aup}")
 
             os.remove(path)
+
+            table, _,_ = Table(aup)
+
+            print(table)
+
+            moduls = Module.query.all()
+            d = dict()
+            for i in moduls:
+                d[i.id_module] = i.color
+
+            
+
+            for i in range(0, len(table)):
+                for j in range(0, len(table[i])):
+                    new_raw = WorkMap(
+                        id_aup = aup,
+                        discipline = table[i][j]['discipline'],
+                        zet = table[i][j]['zet'],
+                        num_col = i,
+                        num_row = j,
+                        disc_color = table[i][j]['module_color']
+                    )
+                    db.session.add(new_raw)
+                    db.session.commit()
+                    
+            #print("table: ", table)
+
+            print(d)
             
             return redirect(f'/map/{aup}')
         else:

@@ -1,0 +1,4 @@
+SECRET_KEY = 'e1c6fe5819c4bc8857e2cbce963a7be5904692eba862d1a809f195710aff5cdc'
+SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://std_1655_pd_autumn_2022_flask:std_1655_pd_autumn_2022_flask@std-mysql.ist.mospolytech.ru/std_1655_pd_autumn_2022_flask'
+SQLALCHEMY_TRACK_MODIFICATIONS = False
+SQLALCHEMY_ECHO = True

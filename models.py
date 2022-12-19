@@ -247,12 +247,9 @@ class SprStandard(db.Model):
 class WorkMap(db.Model):
     tablename = 'work_maps'
     id = db.Column(db.Integer, primary_key=True)
-    id_aup = db.Column(db.Integer, db.ForeignKey(
-        'tbl_aup.id_aup', ondelete='CASCADE'), nullable=False)
-    id_group = db.Column(db.Integer, db.ForeignKey(
-        'tbl_group.id_group'), nullable=True)
-    id_module = db.Column(db.Integer, db.ForeignKey(
-        'tbl_module.id_module'), nullable=False)
+    id_aup = db.Column(db.Integer, nullable=False)
+    id_group = db.Column(db.Integer, nullable=True)
+    id_module = db.Column(db.Integer, nullable=True)
     discipline = db.Column(db.String(255), nullable=False)
     zet = db.Column(db.Integer, nullable=False)
     num_col = db.Column(db.Integer, nullable=False)
