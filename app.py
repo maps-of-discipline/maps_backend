@@ -198,6 +198,34 @@ def aupJSON(aup):
 
     return jsonify(data)
 
+@app.route("/getAllMaps")
+def getAllMaps():
+    fac = GetAllFaculties()
+    print(fac)
+    li = list()
+    for i in fac:
+        simple_d = dict()
+        simple_d["faculty_name"] = i.name_faculty
+        maps = GetMaps(id=i.id_faculty)
+        l = list()
+        for j in maps:
+            dd = dict()
+            dd["map_id"] = j.num_aup
+            name = str(j.file).split(" ")
+            dd["map_name"] = " ".join(name[5:len(name)-4])
+            l.append(dd)
+        simple_d["data"] = l
+
+        print()
+        print()
+        print(simple_d)
+        print()
+        print()
+
+        li.append(simple_d)
+
+    return jsonify(li)
+
 
 # путь для загрузки сформированной КД
 @app.route("/save/<string:aup>")
