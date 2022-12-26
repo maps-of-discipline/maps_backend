@@ -1,7 +1,8 @@
 import io
 import os
+from urllib import response
 
-from flask import Flask, redirect, render_template, request, send_file, jsonify
+from flask import Flask, make_response, redirect, render_template, request, send_file, jsonify
 from flask_migrate import Migrate
 from sqlalchemy import MetaData
 
@@ -85,6 +86,22 @@ def main(aup):
         return jsonify(d)
     else:
         return redirect('/load')
+
+
+@app.route('/save/<string:aup>', methods=["POST", "GET"])
+def saveMap1(aup):
+    if request.method == "POST":
+        request_data = request.get_json()
+        for i in range(0, len(request_data)):
+            row = WorkMap.query.filter_by(id=request_data[i]['id']).first()
+            row.discipline = request_data[i]['discipline']
+            row.zet = request_data[i]['zet']
+            row.num_col = request_data[i]['num_col']
+            row.num_row = request_data[i]['num_row']
+            # row.disc_color = request_data[i]['module_color']
+            # row.id_group = request_data[i]['id_group']
+            db.session.commit()
+        return make_response(jsonify(''), 200)
 
 @app.route('/upload', methods=["POST", "GET"])
 def upload():
@@ -227,22 +244,22 @@ def getAllMaps():
     return jsonify(li)
 
 
-# путь для загрузки сформированной КД
-@app.route("/save/<string:aup>")
-def save(aup):
-    filename = saveMap(aup, app.static_folder, expo=60) 
-    ### Upload xlxs file in memory and delete file from storage -----
-    return_data = io.BytesIO()
-    with open(filename, 'rb') as fo:
-        return_data.write(fo.read())
-    # (after writing, cursor will be at last byte, so move it to start)
-    return_data.seek(0)
+# # путь для загрузки сформированной КД
+# @app.route("/save/<string:aup>")
+# def save(aup):
+#     filename = saveMap(aup, app.static_folder, expo=60) 
+#     ### Upload xlxs file in memory and delete file from storage -----
+#     return_data = io.BytesIO()
+#     with open(filename, 'rb') as fo:
+#         return_data.write(fo.read())
+#     # (after writing, cursor will be at last byte, so move it to start)
+#     return_data.seek(0)
 
-    # path = os.path.join(app.static_folder, 'temp', filename)
-    os.remove(filename)
-    ### --------------
-    return send_file(return_data, 
-            download_name=os.path.split(filename)[-1])
+#     # path = os.path.join(app.static_folder, 'temp', filename)
+#     os.remove(filename)
+#     ### --------------
+#     return send_file(return_data, 
+#             download_name=os.path.split(filename)[-1])
 
 
 
