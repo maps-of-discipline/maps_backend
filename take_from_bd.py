@@ -1,7 +1,6 @@
 from math import ceil
 import os
 from random import randint
-
 import openpyxl
 import xlsxwriter
 from openpyxl.styles import (Alignment, Border, Font, NamedStyle, PatternFill,
@@ -9,7 +8,7 @@ from openpyxl.styles import (Alignment, Border, Font, NamedStyle, PatternFill,
 from tools import get_maximum_rows
 
 from models import (AUP, OP, Module, NameOP, SprFaculty, SprFormEducation,
-                    SprOKCO, Workload, db)
+                    SprOKCO, Workload, WorkMap, db)
 
 # Условия фильтра, если добавлять категорию, то нужно исправить if
 skiplist = {
@@ -27,6 +26,23 @@ skiplist = {
         "Факультативные"
     ]
 }
+
+def takeTableForExcel(aup):
+    q = WorkMap.query.filter_by(id_aup=aup).all()
+    d = dict()
+    l = list()
+    for i in q:
+        a = dict()
+        a["id"] = i.id
+        a["discipline"] = i.discipline
+        a["zet"] = i.zet
+        a["id_group"] = i.id_group
+        a["num_col"] = i.num_col
+        a["num_row"] = i.num_row
+        a["disc_color"] = i.disc_color
+        l.append(a)
+    d["data"] = l
+    return d
 
 
 def Legend(table):
@@ -71,9 +87,7 @@ def Legend(table):
     return legend
 
 
-# Формируем карту excel и сохраняем ее в папку static/temp
 def saveMap(aup, static, **kwargs):
-
     select_aup = AUP.query.filter_by(num_aup=aup).first()
     id_aup = select_aup.id_aup
     filename_map = select_aup.file
@@ -81,8 +95,12 @@ def saveMap(aup, static, **kwargs):
     filename_map_down = f"КД {filename_map}"
     filename_map = os.path.join(static, 'temp', f"КД {filename_map}")
 
-    table, legend, max_zet = Table(aup, **kwargs)
+    _, legend, _ = Table(aup, **kwargs)
+    table = takeTableForExcel(aup)
+    max_zet = find_max_zet_excel(table)
     ws, wk = CreateMap(filename_map, max_zet, len(table))
+    
+    table = add_table_to_arr_and_sort(table['data'])
 
     for row_header in range(1, 3):
         ws.merge_cells(f'A{row_header}:{chr(ord("A") + len(table))}{row_header}')
@@ -121,7 +139,7 @@ def saveMap(aup, static, **kwargs):
             ws[cell] = el['discipline']
             ws[cell].style = 'standart'
 
-            color = el['module_color'].replace('#', '')
+            color = el['disc_color'].replace('#', '')
 
             r, g, b = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
             gray = (r + g + b)/3
@@ -150,8 +168,9 @@ def saveMap(aup, static, **kwargs):
     ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
     ws.print_options.horizontalCentered = True
     ws.print_options.verticalCentered = True
-    ws.page_setup.fitToPage = True
+    # ws.page_setup.fitToPage = True
     # ws.row_dimensions[1].height = 100
+    ws.page_setup.scale = 200
     max_row = get_maximum_rows(sheet_object=ws)
     ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_row)
     
@@ -167,6 +186,26 @@ def saveMap(aup, static, **kwargs):
     wk.save(filename=filename_map)
     return filename_map
 
+def add_table_to_arr_and_sort(table):
+    print(table)
+    new_table = []
+    count_columns = 0
+    for item in table:
+        if item['num_col'] > count_columns:
+            count_columns = item['num_col']
+    
+    for i in range(count_columns + 1):
+        new_table.append([])
+
+    for item in table:
+        new_table[item['num_col']].append(item)
+
+    for a in range(len(new_table)):
+        for i in range(len(new_table[a])-1):
+            for j in range(len(new_table[a])-i-1):
+                if new_table[a][j]['num_row'] > new_table[a][j+1]['num_row']:
+                    new_table[a][j], new_table[a][j+1] = new_table[a][j+1], new_table[a][j]
+    return(new_table)
 
 def legend_on_2nd_sheet(wb, legend, filename_map_down):
     # Вывод легенды в КД excel
@@ -524,7 +563,6 @@ def Table(aup, **kwargs):
     print('!!!!!---------!!!!!!!', table)
     return table, legend, max_zet
 
-
 def find_max_zet(table):
     max_zet = 0
     for column in table:
@@ -535,6 +573,21 @@ def find_max_zet(table):
             max_zet = temp
     return int(max_zet)
 
+
+def find_max_zet_excel(table):
+    # print('!=!=!=!=!=!=!')
+    # print(table)
+    max_zet = 0
+    terms = {}
+    for item in table['data']:
+        if item['num_col'] not in terms:
+            terms[item['num_col']] = item['zet']
+            continue
+        terms[item['num_col']] += item['zet']
+    for _, value in terms.items():
+        if value > max_zet:
+            max_zet = value
+    return int(max_zet)
 
 # функция создает карту и задаем все данные кроме предметов в семестрах, на вход требует имя карты
 def CreateMap(filename_map, max_zet, table_length):

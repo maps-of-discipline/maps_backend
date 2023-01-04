@@ -1,7 +1,7 @@
 import io
 import os
 from urllib import response
-
+from flask_cors import CORS, cross_origin
 from flask import Flask, make_response, redirect, render_template, request, send_file, jsonify
 from flask_migrate import Migrate
 from sqlalchemy import MetaData
@@ -15,8 +15,9 @@ from models import Module, WorkMap
 
 app = Flask(__name__)
 application = app
-
+cors = CORS(app)
 app.config.from_pyfile('config.py')
+app.config['CORS_HEADERS'] = 'Content-Type'
 
 convention = {
     "ix": 'ix_%(column_0_label)s',
@@ -41,6 +42,7 @@ from models import AUP
 ZET_HEIGHT = 90
 
 @app.route('/', methods=["POST", "GET"])
+@cross_origin()
 def index():
     faculties = GetAllFaculties()
     if request.method == "POST":
@@ -56,8 +58,9 @@ def index():
     return render_template('index.html', faculties=faculties)
 
 @app.route("/map/<string:aup>")
-def main(aup):
-    table, legend, max_zet = Table(aup, colorSet=1)
+@cross_origin()
+def getMap(aup):
+    # table, legend, max_zet = Table(aup, colorSet=1)
     q = WorkMap.query.filter_by(id_aup=aup).all()
     d = dict()
     d["id_aup"] = q[0].id_aup
@@ -73,22 +76,23 @@ def main(aup):
         a["disc_color"] = i.disc_color
         l.append(a)
     d["data"] = l
-    print()
-    print()
-    print()
-    print(d)
-    print()
-    print()
-    print()
-    if table != None:
-        header = Header(aup)   
-        d["header"] = header 
-        return jsonify(d)
-    else:
-        return redirect('/load')
+    # print()
+    # print()
+    # print()
+    # print(d)
+    # print()
+    # print()
+    # print()
+    # if table != None:
+    header = Header(aup)   
+    d["header"] = header 
+    return jsonify(d)
+    # else:
+    #     return redirect('/load')
 
 
-@app.route('/save/<string:aup>', methods=["POST", "GET"])
+@app.route('/save/<string:aup>', methods=["POST"])
+@cross_origin()
 def saveMap1(aup):
     if request.method == "POST":
         request_data = request.get_json()
@@ -104,6 +108,7 @@ def saveMap1(aup):
         return make_response(jsonify(''), 200)
 
 @app.route('/upload', methods=["POST", "GET"])
+@cross_origin()
 def upload():
     form = FileForm(meta={'csrf':False})
     
@@ -205,6 +210,7 @@ def upload():
 
 
 @app.route("/api/aup/<string:aup>")
+@cross_origin()
 def aupJSON(aup):
     table, legend, max_zet = Table(aup, colorSet=1)
 
@@ -216,6 +222,7 @@ def aupJSON(aup):
     return jsonify(data)
 
 @app.route("/getAllMaps")
+@cross_origin()
 def getAllMaps():
     fac = GetAllFaculties()
     print(fac)
@@ -244,22 +251,23 @@ def getAllMaps():
     return jsonify(li)
 
 
-# # путь для загрузки сформированной КД
-# @app.route("/save/<string:aup>")
-# def save(aup):
-#     filename = saveMap(aup, app.static_folder, expo=60) 
-#     ### Upload xlxs file in memory and delete file from storage -----
-#     return_data = io.BytesIO()
-#     with open(filename, 'rb') as fo:
-#         return_data.write(fo.read())
-#     # (after writing, cursor will be at last byte, so move it to start)
-#     return_data.seek(0)
+# путь для загрузки сформированной КД
+@app.route("/save_excel/<string:aup>", methods=["GET", "POST"])
+@cross_origin()
+def save_excel(aup):
+    filename = saveMap(aup, app.static_folder, expo=60) 
+    ### Upload xlxs file in memory and delete file from storage -----
+    return_data = io.BytesIO()
+    with open(filename, 'rb') as fo:
+        return_data.write(fo.read())
+    # (after writing, cursor will be at last byte, so move it to start)
+    return_data.seek(0)
 
-#     # path = os.path.join(app.static_folder, 'temp', filename)
-#     os.remove(filename)
-#     ### --------------
-#     return send_file(return_data, 
-#             download_name=os.path.split(filename)[-1])
+    # path = os.path.join(app.static_folder, 'temp', filename)
+    os.remove(filename)
+    ### --------------
+    return send_file(return_data, 
+            download_name=os.path.split(filename)[-1])
 
 
 
