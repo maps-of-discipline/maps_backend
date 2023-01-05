@@ -171,7 +171,7 @@ def saveMap(aup, static, **kwargs):
     ws.print_options.verticalCentered = True
     # ws.page_setup.fitToPage = True
     # ws.row_dimensions[1].height = 100
-    ws.page_setup.scale = 65
+    ws.page_setup.scale = 60
     max_row = get_maximum_rows(sheet_object=ws)
     ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_row)
     ws.page_margins = openpyxl.worksheet.page.PageMargins(left=1/3.81, right=1/3.81, top=1/3.81, bottom=1/3.81, header=1/3.81, footer=1/3.81)
