@@ -98,9 +98,9 @@ def saveMap(aup, static, **kwargs):
     _, legend, _ = Table(aup, **kwargs)
     table = takeTableForExcel(aup)
     max_zet = find_max_zet_excel(table)
+    table = add_table_to_arr_and_sort(table['data'])
     ws, wk = CreateMap(filename_map, max_zet, len(table))
     
-    table = add_table_to_arr_and_sort(table['data'])
 
     for row_header in range(1, 3):
         ws.merge_cells(f'A{row_header}:{chr(ord("A") + len(table))}{row_header}')
@@ -145,9 +145,9 @@ def saveMap(aup, static, **kwargs):
             gray = (r + g + b)/3
 
             if gray < 140:
-                ws[cell].font = Font(bold=False, size=14, color="FFFFFF")
+                ws[cell].font = Font(bold=False, size=18, color="FFFFFF")
             else:
-                ws[cell].font = Font(bold=False, size=14, color="000000")
+                ws[cell].font = Font(bold=False, size=18, color="000000")
 
             ws[cell].fill = PatternFill(start_color=str(
                 color), end_color=str(color), fill_type='solid')
@@ -166,13 +166,15 @@ def saveMap(aup, static, **kwargs):
     alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
     
     ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.paperSize = ws.PAPERSIZE_A3
     ws.print_options.horizontalCentered = True
     ws.print_options.verticalCentered = True
     # ws.page_setup.fitToPage = True
     # ws.row_dimensions[1].height = 100
-    ws.page_setup.scale = 200
+    ws.page_setup.scale = 65
     max_row = get_maximum_rows(sheet_object=ws)
     ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_row)
+    ws.page_margins = openpyxl.worksheet.page.PageMargins(left=1/3.81, right=1/3.81, top=1/3.81, bottom=1/3.81, header=1/3.81, footer=1/3.81)
     
     for height_row in range(ROW_START_DISCIPLINES, max_zet + ROW_START_DISCIPLINES):
         ws.row_dimensions[height_row].height = 35
@@ -234,9 +236,9 @@ def legend_on_2nd_sheet(wb, legend, filename_map_down):
         gray = (r + g + b)/3
 
         if gray < 140:
-            ws[cellB].font = Font(color="FFFFFF", size=12)
+            ws[cellB].font = Font(color="FFFFFF", size=18)
         else:
-            ws[cellB].font = Font(color="000000", size=12)
+            ws[cellB].font = Font(color="000000", size=18)
 
         ws[cellB].fill = PatternFill(start_color=str(
             color), end_color=str(color), fill_type='solid')
@@ -598,7 +600,7 @@ def CreateMap(filename_map, max_zet, table_length):
     workbook = openpyxl.load_workbook(filename_map)
     worksheet = workbook.active
     ns = NamedStyle(name='standart')
-    ns.font = Font(bold=False, size=14)
+    ns.font = Font(bold=False, size=18)
     border = Side(style='thick', color='000000')
     ns.border = Border(left=border, top=border, right=border, bottom=border)
     ns.alignment = Alignment(
@@ -607,7 +609,7 @@ def CreateMap(filename_map, max_zet, table_length):
     
     QUANTITY_HEADER_ROWS = 3
     for i in range(1, QUANTITY_HEADER_ROWS):
-        worksheet.row_dimensions[i].height = 25
+        worksheet.row_dimensions[i].height = 30
 
     worksheet["A3"].style = 'standart'
     worksheet["A4"].style = 'standart'
