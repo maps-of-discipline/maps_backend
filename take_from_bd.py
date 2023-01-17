@@ -7,7 +7,7 @@ from openpyxl.styles import (Alignment, Border, Font, NamedStyle, PatternFill,
                              Side)
 from tools import get_maximum_rows
 
-from models import (AUP, OP, Module, NameOP, SprFaculty, SprFormEducation,
+from models import (AUP, OP, NameOP, SprFaculty, SprFormEducation,
                     SprOKCO, Workload, WorkMap, db)
 
 # Условия фильтра, если добавлять категорию, то нужно исправить if

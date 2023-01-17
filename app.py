@@ -1,6 +1,5 @@
 import io
 import os
-from urllib import response
 from flask_cors import CORS, cross_origin
 from flask import Flask, make_response, redirect, render_template, request, send_file, jsonify
 from flask_migrate import Migrate
@@ -11,7 +10,7 @@ from excel_check import (check_empty_ceils, check_full_zet_in_plan, check_smt,
 from save_into_bd import delete_from_workload, save_into_bd, update_workload
 from take_from_bd import GetAllFaculties, GetMaps, Header, Table, saveMap
 from tools import FileForm
-from models import Module, WorkMap
+from models import WorkMap
 
 app = Flask(__name__)
 application = app
@@ -41,22 +40,6 @@ from models import AUP
 
 ZET_HEIGHT = 90
 
-@app.route('/', methods=["POST", "GET"])
-@cross_origin()
-def index():
-    faculties = GetAllFaculties()
-    if request.method == "POST":
-        name = request.form.get('name')
-        id = request.form.get('id_faculty')
-        maps = GetMaps(id=id, name=name)
-        print(maps, id, name)
-        if maps == []:
-            flag = False
-        else:
-            flag = True
-        return render_template('index.html', maps=maps, faculties=faculties, flag=flag)
-    return render_template('index.html', faculties=faculties)
-
 @app.route("/map/<string:aup>")
 @cross_origin()
 def getMap(aup):
@@ -76,19 +59,10 @@ def getMap(aup):
         a["disc_color"] = i.disc_color
         l.append(a)
     d["data"] = l
-    # print()
-    # print()
-    # print()
-    # print(d)
-    # print()
-    # print()
-    # print()
-    # if table != None:
     header = Header(aup)   
     d["header"] = header 
     return jsonify(d)
-    # else:
-    #     return redirect('/load')
+
 
 
 @app.route('/save/<string:aup>', methods=["POST"])
@@ -225,7 +199,6 @@ def aupJSON(aup):
 @cross_origin()
 def getAllMaps():
     fac = GetAllFaculties()
-    print(fac)
     li = list()
     for i in fac:
         simple_d = dict()
@@ -239,12 +212,6 @@ def getAllMaps():
             dd["map_name"] = " ".join(name[5:len(name)-4])
             l.append(dd)
         simple_d["data"] = l
-
-        print()
-        print()
-        print(simple_d)
-        print()
-        print()
 
         li.append(simple_d)
 

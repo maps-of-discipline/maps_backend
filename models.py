@@ -124,17 +124,6 @@ class DurationEducation(db.Model):
         return '<DurationEducation %r>' % self.full_text
 
 
-class Module(db.Model):
-    __tablename__ = 'tbl_module'
-
-    id_module = db.Column(db.Integer, primary_key=True)
-    name_module = db.Column(db.String(255), nullable=False)
-    color = db.Column(db.String(255), nullable=False)
-
-    def __repr__(self):
-        return '<Module %r>' % self.name_module
-
-
 class OP(db.Model):
     __tablename__ = 'tbl_op'
 
@@ -183,10 +172,9 @@ class Workload(db.Model):
     block = db.Column(db.String(255), nullable=False)
     cypher = db.Column(db.String(255), nullable=False)
     part = db.Column(db.String(255), nullable=True)
-    id_module = db.Column(db.Integer, db.ForeignKey(
-        'tbl_module.id_module'), nullable=False)
     id_group = db.Column(db.Integer, db.ForeignKey(
         'tbl_group.id_group'), nullable=True)
+    module = db.Column(db.String(255), nullable=True)
     record_type = db.Column(db.String(255), nullable=False)
     discipline = db.Column(db.String(255), nullable=False)
     period = db.Column(db.String(255), nullable=False)
@@ -195,8 +183,8 @@ class Workload(db.Model):
     measurement = db.Column(db.String(255), nullable=False)
     zet = db.Column(db.Float, nullable=False)
 
-    module = db.relationship('Module')
     aup = db.relationship('AUP')
+    group = db.relationship('Grouping')
 
     def __repr__(self):
         return '<Workload %r>' % self.id_workload
@@ -209,6 +197,9 @@ class Grouping(db.Model):
     name_group = db.Column(db.String(255), nullable=False)
     color = db.Column(db.String(8), nullable=False)
 
+    def __repr__(self):
+        return '<Grouping.NameGroup %r>' % self.name_group
+
 
 class SprVolumeDegreeZET(db.Model):
     __tablename__ = 'spr_volume_degree_zet'
@@ -220,7 +211,7 @@ class SprVolumeDegreeZET(db.Model):
     zet = db.Column(db.Integer, nullable=False)
     effective_date = db.Column(db.Date, nullable=True)
 
-    # standard = db.relationship('SprStandard')
+    program_code = db.relationship('SprOKCO')
 
     @property
     def volume_degree_zet(self):
@@ -246,12 +237,18 @@ class SprStandard(db.Model):
 
 class WorkMap(db.Model):
     tablename = 'work_maps'
+
     id = db.Column(db.Integer, primary_key=True)
     id_aup = db.Column(db.Integer, nullable=False)
-    id_group = db.Column(db.Integer, nullable=True)
-    id_module = db.Column(db.Integer, nullable=True)
+    id_group = db.Column(db.Integer, db.ForeignKey(
+        'tbl_group.id_group'), nullable=True)
     discipline = db.Column(db.String(255), nullable=False)
     zet = db.Column(db.Integer, nullable=False)
     num_col = db.Column(db.Integer, nullable=False)
     num_row = db.Column(db.Integer, nullable=False)
     disc_color = db.Column(db.String(8), nullable=False)
+
+    group = db.relationship('Grouping')
+
+    def __repr__(self):
+        return '<WorkMap(front).MAP_AUP: %r>' % self.id_aup

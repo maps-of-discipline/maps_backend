@@ -5,7 +5,7 @@ from flask import Blueprint, request
 import re
 import datetime
 from sqlalchemy import desc
-from models import AUP, OP, Module, NameOP, SprDegreeEducation, SprFormEducation, SprFaculty, Workload, DurationEducation, db
+from models import AUP, OP, NameOP, SprDegreeEducation, SprFormEducation, SprFaculty, Workload, DurationEducation, db
 
 # from app import static_folder
 
@@ -54,7 +54,6 @@ def save_into_bd(files):
 
         print("[DEBUG] filename = ", filename)
         aup_num = filename.split(' - ')[1]
-        #       ЗДЕСЬ МОГЛА БЫТЬ ПРОВЕРКА НА СУЩЕСТВУЮЩИЙ АУП (ЕСЛИ СУЩЕСТВУЕТ - УДЯЛЕМ ВСЕ ИЗ WORKLOAD И ДОБАВЛЯЕМ СНИЗУ ЗАНОВО)
         data = data['Содержание']
 
         #                     Наименование
@@ -175,21 +174,7 @@ def update_workload(file, aup_num):
         for column in data.columns:
             row.append(data[column][i])
 
-        if pd.isna(row[3]):
-            row[3] = 'Без названия'
 
-        mod_id = Module.query.filter_by(name_module = row[3]).first()
-        if mod_id == None:
-            def r(): return randint(0, 128)
-            color = '%02X%02X%02X' % (r(), r(), r())
-
-            new_module = Module(**_params([row[3], color], MODULE_PARAMS))
-            db.session.add(new_module)
-            db.session.commit()
-
-            mod_id = Module.query.filter_by(name_module = row[3]).first().id_module
-        else:
-            mod_id = mod_id.id_module
 
         if pd.isna(row[8]):
             row[8] = 0
@@ -207,8 +192,6 @@ def update_workload(file, aup_num):
             except:
                 row[10] = float(row[10])
                 
-        row[3] = mod_id
-
         row.insert(0, id_aup)
         row = list(map(lambda x: None if pd.isna(x) else x, row))
         # print('+++++++++++++++++', row)
