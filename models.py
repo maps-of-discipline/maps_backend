@@ -224,7 +224,7 @@ class SprVolumeDegreeZET(db.Model):
     zet = db.Column(db.Integer, nullable=False)
     effective_date = db.Column(db.Date, nullable=True)
 
-    program_code = db.relationship('SprOKCO')
+    progr_code = db.relationship('SprOKCO')
 
     @property
     def volume_degree_zet(self):
