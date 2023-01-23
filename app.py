@@ -10,7 +10,6 @@ from excel_check import (check_empty_ceils, check_full_zet_in_plan, check_smt,
 from save_into_bd import delete_from_workload, save_into_bd, update_workload
 from take_from_bd import GetAllFaculties, GetMaps, Header, Table, saveMap
 from tools import FileForm
-from models import WorkMap
 
 app = Flask(__name__)
 application = app
@@ -40,46 +39,46 @@ from models import AUP
 
 ZET_HEIGHT = 90
 
-@app.route("/map/<string:aup>")
-@cross_origin()
-def getMap(aup):
-    # table, legend, max_zet = Table(aup, colorSet=1)
-    q = WorkMap.query.filter_by(id_aup=aup).all()
-    d = dict()
-    d["id_aup"] = q[0].id_aup
-    l = list()
-    for i in q:
-        a = dict()
-        a["id"] = i.id
-        a["discipline"] = i.discipline
-        a["zet"] = i.zet
-        a["id_group"] = i.id_group
-        a["num_col"] = i.num_col
-        a["num_row"] = i.num_row
-        a["disc_color"] = i.disc_color
-        l.append(a)
-    d["data"] = l
-    header = Header(aup)   
-    d["header"] = header 
-    return jsonify(d)
+# @app.route("/map/<string:aup>")
+# @cross_origin()
+# def getMap(aup):
+#     # table, legend, max_zet = Table(aup, colorSet=1)
+#     q = WorkMap.query.filter_by(id_aup=aup).all()
+#     d = dict()
+#     d["id_aup"] = q[0].id_aup
+#     l = list()
+#     for i in q:
+#         a = dict()
+#         a["id"] = i.id
+#         a["discipline"] = i.discipline
+#         a["zet"] = i.zet
+#         a["id_group"] = i.id_group
+#         a["num_col"] = i.num_col
+#         a["num_row"] = i.num_row
+#         a["disc_color"] = i.disc_color
+#         l.append(a)
+#     d["data"] = l
+#     header = Header(aup)   
+#     d["header"] = header 
+#     return jsonify(d)
 
 
 
-@app.route('/save/<string:aup>', methods=["POST"])
-@cross_origin()
-def saveMap1(aup):
-    if request.method == "POST":
-        request_data = request.get_json()
-        for i in range(0, len(request_data)):
-            row = WorkMap.query.filter_by(id=request_data[i]['id']).first()
-            row.discipline = request_data[i]['discipline']
-            row.zet = request_data[i]['zet']
-            row.num_col = request_data[i]['num_col']
-            row.num_row = request_data[i]['num_row']
-            # row.disc_color = request_data[i]['module_color']
-            # row.id_group = request_data[i]['id_group']
-            db.session.commit()
-        return make_response(jsonify(''), 200)
+# @app.route('/save/<string:aup>', methods=["POST"])
+# @cross_origin()
+# def saveMap1(aup):
+#     if request.method == "POST":
+#         request_data = request.get_json()
+#         for i in range(0, len(request_data)):
+#             row = WorkMap.query.filter_by(id=request_data[i]['id']).first()
+#             row.discipline = request_data[i]['discipline']
+#             row.zet = request_data[i]['zet']
+#             row.num_col = request_data[i]['num_col']
+#             row.num_row = request_data[i]['num_row']
+#             # row.disc_color = request_data[i]['module_color']
+#             # row.id_group = request_data[i]['id_group']
+#             db.session.commit()
+#         return make_response(jsonify(''), 200)
 
 @app.route('/upload', methods=["POST", "GET"])
 @cross_origin()
@@ -152,29 +151,29 @@ def upload():
 
             print(table)
 
-            moduls = Module.query.all()
-            d = dict()
-            for i in moduls:
-                d[i.id_module] = i.color
+            # moduls = Module.query.all()
+            # d = dict()
+            # for i in moduls:
+            #     d[i.id_module] = i.color
 
             
 
-            for i in range(0, len(table)):
-                for j in range(0, len(table[i])):
-                    new_raw = WorkMap(
-                        id_aup = aup,
-                        discipline = table[i][j]['discipline'],
-                        zet = table[i][j]['zet'],
-                        num_col = i,
-                        num_row = j,
-                        disc_color = table[i][j]['module_color']
-                    )
-                    db.session.add(new_raw)
-                    db.session.commit()
+            # for i in range(0, len(table)):
+            #     for j in range(0, len(table[i])):
+            #         new_raw = WorkMap(
+            #             id_aup = aup,
+            #             discipline = table[i][j]['discipline'],
+            #             zet = table[i][j]['zet'],
+            #             num_col = i,
+            #             num_row = j,
+            #             disc_color = table[i][j]['module_color']
+            #         )
+            #         db.session.add(new_raw)
+            #         db.session.commit()
                     
             #print("table: ", table)
 
-            print(d)
+            # print(d)
             
             return redirect(f'/map/{aup}')
         else:

@@ -8,7 +8,7 @@ from openpyxl.styles import (Alignment, Border, Font, NamedStyle, PatternFill,
 from tools import get_maximum_rows
 
 from models import (AUP, OP, NameOP, SprFaculty, SprFormEducation,
-                    SprOKCO, Workload, WorkMap, db)
+                    SprOKCO, Workload, db)
 
 # Условия фильтра, если добавлять категорию, то нужно исправить if
 skiplist = {

@@ -169,25 +169,38 @@ class Workload(db.Model):
     id_workload = db.Column(db.Integer, primary_key=True)
     id_aup = db.Column(db.Integer, db.ForeignKey(
         'tbl_aup.id_aup', ondelete='CASCADE'), nullable=False)
-    block = db.Column(db.String(255), nullable=False)
+    block = db.Column(db.Integer, nullable=False)
     cypher = db.Column(db.String(255), nullable=False)
-    part = db.Column(db.String(255), nullable=True)
+    part = db.Column(db.Integer, nullable=True)
     id_group = db.Column(db.Integer, db.ForeignKey(
-        'tbl_group.id_group'), nullable=True)
-    module = db.Column(db.String(255), nullable=True)
-    record_type = db.Column(db.String(255), nullable=False)
+        'tbl_group.id_group'), nullable=False)
+    module = db.Column(db.Integer, db.ForeignKey(
+        'tbl_module.id_module'), nullable=False)
+    record_type = db.Column(db.Integer, nullable=False)
     discipline = db.Column(db.String(255), nullable=False)
-    period = db.Column(db.String(255), nullable=False)
-    load = db.Column(db.String(255), nullable=False)
+    period = db.Column(db.Integer, nullable=False)
+    sequence_num_col = db.Column(db.Integer, nullable=False)
+    load = db.Column(db.Integer, nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
-    measurement = db.Column(db.String(255), nullable=False)
-    zet = db.Column(db.Float, nullable=False)
+    measurement = db.Column(db.Integer, nullable=False)
+    zet = db.Column(db.Integer, nullable=False)
 
+    module = db.relationship('Module')
     aup = db.relationship('AUP')
     group = db.relationship('Grouping')
 
     def __repr__(self):
         return '<Workload %r>' % self.id_workload
+
+
+class Module(db.Model):
+    __tablename__ = 'tbl_module'
+
+    id_module = db.Column(db.Integer, primary_key=True)
+    name_module = db.Column(db.String(255), nullable=False)
+
+    def __repr__(self):
+        return '<Module.NameModule %r>' % self.name_module
 
 
 class Grouping(db.Model):
@@ -233,22 +246,3 @@ class SprStandard(db.Model):
 
     def __repr__(self):
         return '<SprStandardZET %r>' % self.standard_date
-
-
-class WorkMap(db.Model):
-    tablename = 'work_maps'
-
-    id = db.Column(db.Integer, primary_key=True)
-    id_aup = db.Column(db.Integer, nullable=False)
-    id_group = db.Column(db.Integer, db.ForeignKey(
-        'tbl_group.id_group'), nullable=True)
-    discipline = db.Column(db.String(255), nullable=False)
-    zet = db.Column(db.Integer, nullable=False)
-    num_col = db.Column(db.Integer, nullable=False)
-    num_row = db.Column(db.Integer, nullable=False)
-    disc_color = db.Column(db.String(8), nullable=False)
-
-    group = db.relationship('Grouping')
-
-    def __repr__(self):
-        return '<WorkMap(front).MAP_AUP: %r>' % self.id_aup

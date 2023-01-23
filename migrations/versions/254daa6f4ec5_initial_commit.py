@@ -1,8 +1,8 @@
-"""Initial commit.
+"""Initial commit
 
-Revision ID: 66ebbd29e059
+Revision ID: 254daa6f4ec5
 Revises: 
-Create Date: 2022-09-29 03:05:44.958445
+Create Date: 2023-01-23 13:53:03.597663
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '66ebbd29e059'
+revision = '254daa6f4ec5'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -22,22 +22,22 @@ def upgrade():
     sa.Column('id_branch', sa.Integer(), nullable=False),
     sa.Column('city', sa.String(length=255), nullable=False),
     sa.Column('location', sa.String(length=255), nullable=False),
-    sa.PrimaryKeyConstraint('id_branch', name=op.f('pk_spr_branch'))
+    sa.PrimaryKeyConstraint('id_branch')
     )
     op.create_table('spr_degree_education',
     sa.Column('id_degree', sa.Integer(), nullable=False),
     sa.Column('name_deg', sa.String(length=255), nullable=False),
-    sa.PrimaryKeyConstraint('id_degree', name=op.f('pk_spr_degree_education'))
+    sa.PrimaryKeyConstraint('id_degree')
     )
     op.create_table('spr_form_education',
     sa.Column('id_form', sa.Integer(), nullable=False),
     sa.Column('form', sa.String(length=255), nullable=False),
-    sa.PrimaryKeyConstraint('id_form', name=op.f('pk_spr_form_education'))
+    sa.PrimaryKeyConstraint('id_form')
     )
     op.create_table('spr_okco',
     sa.Column('program_code', sa.String(length=255), nullable=False),
     sa.Column('name_okco', sa.String(length=255), nullable=False),
-    sa.PrimaryKeyConstraint('program_code', name=op.f('pk_spr_okco'))
+    sa.PrimaryKeyConstraint('program_code')
     )
     op.create_table('spr_rop',
     sa.Column('id_rop', sa.Integer(), nullable=False),
@@ -46,44 +46,61 @@ def upgrade():
     sa.Column('middle_name', sa.String(length=255), nullable=False),
     sa.Column('email', sa.String(length=255), nullable=False),
     sa.Column('telephone', sa.String(length=255), nullable=False),
-    sa.PrimaryKeyConstraint('id_rop', name=op.f('pk_spr_rop'))
+    sa.PrimaryKeyConstraint('id_rop')
+    )
+    op.create_table('spr_standard_zet',
+    sa.Column('id_standard', sa.Integer(), nullable=False),
+    sa.Column('type_standard', sa.String(length=255), nullable=False),
+    sa.PrimaryKeyConstraint('id_standard')
+    )
+    op.create_table('spr_volume_degree_zet',
+    sa.Column('id_volume_deg', sa.Integer(), nullable=False),
+    sa.Column('id_standard', sa.Integer(), nullable=False),
+    sa.Column('zet', sa.Integer(), nullable=False),
+    sa.Column('effective_date', sa.Date(), nullable=True),
+    sa.PrimaryKeyConstraint('id_volume_deg')
+    )
+    op.create_table('tbl_group',
+    sa.Column('id_group', sa.Integer(), nullable=False),
+    sa.Column('name_group', sa.String(length=255), nullable=False),
+    sa.Column('color', sa.String(length=8), nullable=False),
+    sa.PrimaryKeyConstraint('id_group')
     )
     op.create_table('tbl_module',
     sa.Column('id_module', sa.Integer(), nullable=False),
     sa.Column('name_module', sa.String(length=255), nullable=False),
-    sa.Column('color', sa.String(length=255), nullable=False),
-    sa.PrimaryKeyConstraint('id_module', name=op.f('pk_tbl_module'))
+    sa.PrimaryKeyConstraint('id_module')
     )
     op.create_table('spr_faculty',
     sa.Column('id_faculty', sa.Integer(), nullable=False),
     sa.Column('name_faculty', sa.String(length=255), nullable=False),
     sa.Column('id_branch', sa.Integer(), nullable=False),
     sa.Column('dean', sa.String(length=255), nullable=False),
-    sa.ForeignKeyConstraint(['id_branch'], ['spr_branch.id_branch'], name=op.f('fk_spr_faculty_id_branch_spr_branch')),
-    sa.PrimaryKeyConstraint('id_faculty', name=op.f('pk_spr_faculty'))
+    sa.ForeignKeyConstraint(['id_branch'], ['spr_branch.id_branch'], ),
+    sa.PrimaryKeyConstraint('id_faculty')
     )
     op.create_table('spr_name_op',
     sa.Column('id_spec', sa.Integer(), nullable=False),
     sa.Column('program_code', sa.String(length=255), nullable=False),
     sa.Column('num_profile', sa.String(length=255), nullable=False),
     sa.Column('name_spec', sa.String(length=255), nullable=False),
-    sa.ForeignKeyConstraint(['program_code'], ['spr_okco.program_code'], name=op.f('fk_spr_name_op_program_code_spr_okco')),
-    sa.PrimaryKeyConstraint('id_spec', name=op.f('pk_spr_name_op'))
+    sa.ForeignKeyConstraint(['program_code'], ['spr_okco.program_code'], ),
+    sa.PrimaryKeyConstraint('id_spec')
     )
     op.create_table('tbl_duration_edu',
     sa.Column('id_duration', sa.Integer(), nullable=False),
     sa.Column('id_degree', sa.Integer(), nullable=False),
     sa.Column('id_form', sa.Integer(), nullable=False),
     sa.Column('years', sa.Integer(), nullable=False),
-    sa.Column('months', sa.Integer(), nullable=False),
+    sa.Column('months', sa.Integer(), nullable=True),
     sa.Column('id_spec', sa.Integer(), nullable=False),
     sa.Column('year_beg', sa.Integer(), nullable=False),
     sa.Column('year_end', sa.Integer(), nullable=False),
     sa.Column('is_actual', sa.Boolean(), nullable=False),
-    sa.ForeignKeyConstraint(['id_degree'], ['spr_degree_education.id_degree'], name=op.f('fk_tbl_duration_edu_id_degree_spr_degree_education')),
-    sa.ForeignKeyConstraint(['id_form'], ['spr_form_education.id_form'], name=op.f('fk_tbl_duration_edu_id_form_spr_form_education')),
-    sa.ForeignKeyConstraint(['id_spec'], ['spr_name_op.id_spec'], name=op.f('fk_tbl_duration_edu_id_spec_spr_name_op')),
-    sa.PrimaryKeyConstraint('id_duration', name=op.f('pk_tbl_duration_edu'))
+    sa.ForeignKeyConstraint(['id_degree'], ['spr_degree_education.id_degree'], ),
+    sa.ForeignKeyConstraint(['id_form'], ['spr_form_education.id_form'], ),
+    sa.ForeignKeyConstraint(['id_spec'], ['spr_name_op.id_spec'], ),
+    sa.PrimaryKeyConstraint('id_duration')
     )
     op.create_table('tbl_op',
     sa.Column('id_op', sa.Integer(), nullable=False),
@@ -93,12 +110,12 @@ def upgrade():
     sa.Column('type_educ', sa.String(length=255), nullable=False),
     sa.Column('qualification', sa.String(length=255), nullable=False),
     sa.Column('type_standard', sa.String(length=255), nullable=False),
-    sa.Column('department', sa.String(length=255), nullable=False),
+    sa.Column('department', sa.String(length=255), nullable=True),
     sa.Column('period_educ', sa.String(length=255), nullable=False),
-    sa.ForeignKeyConstraint(['id_duration'], ['tbl_duration_edu.id_duration'], name=op.f('fk_tbl_op_id_duration_tbl_duration_edu')),
-    sa.ForeignKeyConstraint(['id_faculty'], ['spr_faculty.id_faculty'], name=op.f('fk_tbl_op_id_faculty_spr_faculty')),
-    sa.ForeignKeyConstraint(['id_rop'], ['spr_rop.id_rop'], name=op.f('fk_tbl_op_id_rop_spr_rop')),
-    sa.PrimaryKeyConstraint('id_op', name=op.f('pk_tbl_op'))
+    sa.ForeignKeyConstraint(['id_duration'], ['tbl_duration_edu.id_duration'], ),
+    sa.ForeignKeyConstraint(['id_faculty'], ['spr_faculty.id_faculty'], ),
+    sa.ForeignKeyConstraint(['id_rop'], ['spr_rop.id_rop'], ),
+    sa.PrimaryKeyConstraint('id_op')
     )
     op.create_table('tbl_aup',
     sa.Column('id_aup', sa.Integer(), nullable=False),
@@ -106,27 +123,27 @@ def upgrade():
     sa.Column('file', sa.String(length=255), nullable=False),
     sa.Column('num_aup', sa.String(length=255), nullable=False),
     sa.Column('base', sa.String(length=255), nullable=False),
-    sa.Column('fso', sa.String(length=255), nullable=False),
-    sa.ForeignKeyConstraint(['id_op'], ['tbl_op.id_op'], name=op.f('fk_tbl_aup_id_op_tbl_op'), ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id_aup', name=op.f('pk_tbl_aup'))
+    sa.ForeignKeyConstraint(['id_op'], ['tbl_op.id_op'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id_aup')
     )
     op.create_table('workload',
     sa.Column('id_workload', sa.Integer(), nullable=False),
-    sa.Column('cypher', sa.String(length=255), nullable=False),
-    sa.Column('part', sa.String(length=255), nullable=False),
-    sa.Column('id_module', sa.Integer(), nullable=False),
     sa.Column('id_aup', sa.Integer(), nullable=False),
-    sa.Column('record_type', sa.String(length=255), nullable=False),
+    sa.Column('block', sa.Integer(), nullable=False),
+    sa.Column('cypher', sa.String(length=255), nullable=False),
+    sa.Column('part', sa.Integer(), nullable=True),
+    sa.Column('id_group', sa.Integer(), nullable=False),
+    sa.Column('record_type', sa.Integer(), nullable=False),
     sa.Column('discipline', sa.String(length=255), nullable=False),
-    sa.Column('period', sa.String(length=255), nullable=False),
-    sa.Column('load', sa.String(length=255), nullable=False),
+    sa.Column('period', sa.Integer(), nullable=False),
+    sa.Column('sequence_num_col', sa.Integer(), nullable=False),
+    sa.Column('load', sa.Integer(), nullable=False),
     sa.Column('quantity', sa.Integer(), nullable=False),
-    sa.Column('measurement', sa.String(length=255), nullable=False),
-    sa.Column('zet', sa.Float(), nullable=False),
-    sa.Column('block', sa.String(length=255), nullable=False),
-    sa.ForeignKeyConstraint(['id_aup'], ['tbl_aup.id_aup'], name=op.f('fk_workload_id_aup_tbl_aup'), ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['id_module'], ['tbl_module.id_module'], name=op.f('fk_workload_id_module_tbl_module')),
-    sa.PrimaryKeyConstraint('id_workload', name=op.f('pk_workload'))
+    sa.Column('measurement', sa.Integer(), nullable=False),
+    sa.Column('zet', sa.Integer(), nullable=False),
+    sa.ForeignKeyConstraint(['id_aup'], ['tbl_aup.id_aup'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['id_group'], ['tbl_group.id_group'], ),
+    sa.PrimaryKeyConstraint('id_workload')
     )
     # ### end Alembic commands ###
 
@@ -140,6 +157,9 @@ def downgrade():
     op.drop_table('spr_name_op')
     op.drop_table('spr_faculty')
     op.drop_table('tbl_module')
+    op.drop_table('tbl_group')
+    op.drop_table('spr_volume_degree_zet')
+    op.drop_table('spr_standard_zet')
     op.drop_table('spr_rop')
     op.drop_table('spr_okco')
     op.drop_table('spr_form_education')
