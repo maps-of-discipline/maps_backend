@@ -245,7 +245,7 @@ class SprStandard(db.Model):
 
 
 class WorkMap(db.Model):
-    tablename = 'work_maps'
+    tablename = 'work_map'
     id = db.Column(db.Integer, primary_key=True)
     id_aup = db.Column(db.Integer, nullable=False)
     id_group = db.Column(db.Integer, nullable=True)
