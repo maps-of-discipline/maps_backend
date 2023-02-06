@@ -185,7 +185,7 @@ def upload():
 
             ### WORKMAP ###
 
-            workmap_aup = WorkMap.query.filter_by(num_aup = aup).all()
+            workmap_aup = WorkMap.query.filter_by(id_aup = int(aup)).all()
             db.session.delete(workmap_aup)
             db.session.commit()
 
