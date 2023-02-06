@@ -137,7 +137,7 @@ def upload():
                 os.remove(path)
                 errors = 'АУП: ' + aup + ' Ошибка при подсчете ЗЕТ:\n' + '\n'.join(err_arr)
                 print(errors)
-                return error(errors)
+                return make_response(jsonify(errors), 400)
             # ### ------------------------------------ ###
 
             ### Компановка элективных курсов ###
@@ -152,7 +152,7 @@ def upload():
                 os.remove(path)
                 errors = 'АУП: ' + aup + ' В выгрузке общая сумма ЗЕТ не соответствует норме. Норма {} ЗЕТ. В карте {} ЗЕТ.'.format(sum_normal, sum_zet)
                 print(errors)
-                return error(errors)
+                return make_response(jsonify(errors), 400)
             # ### ------------------------------------ ###
 
             get_aup = AUP.query.filter_by(num_aup = aup).first()
@@ -202,9 +202,9 @@ def upload():
 
             print(d)
             
-            return redirect(f'/map/{aup}')
+            return make_response(jsonify(''), 200)
         else:
-            return redirect('/load')
+            return make_response(jsonify('Произошла неизвестная ошибка'), 500)
     else: 
         return render_template("upload.html", form=form)
 
