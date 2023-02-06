@@ -183,7 +183,11 @@ def upload():
             for i in moduls:
                 d[i.id_module] = i.color
 
-            
+            ### WORKMAP ###
+
+            workmap_aup = WorkMap.query.filter_by(num_aup = aup).all()
+            db.session.delete(workmap_aup)
+            db.session.commit()
 
             for i in range(0, len(table)):
                 for j in range(0, len(table[i])):
