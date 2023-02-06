@@ -248,7 +248,7 @@ class WorkMap(db.Model):
     tablename = 'work_map'
     id = db.Column(db.Integer, primary_key=True)
     id_aup = db.Column(db.Integer, db.ForeignKey(
-        'tbl_aup.id_aup'), nullable=False)
+        'tbl_aup.id_aup', ondelete='CASCADE'), nullable=False, )
     id_group = db.Column(db.Integer, nullable=True)
     id_module = db.Column(db.Integer, nullable=True)
     discipline = db.Column(db.String(255), nullable=False)
