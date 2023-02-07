@@ -8,7 +8,7 @@ from sqlalchemy import MetaData
 
 from excel_check import (check_empty_ceils, check_full_zet_in_plan, check_smt,
                          layout_of_disciplines)
-from save_into_bd import delete_from_workload, save_into_bd, update_workload
+from save_into_bd import delete_from_workload, delete_from_workmap, save_into_bd, update_workload
 from take_from_bd import GetAllFaculties, GetMaps, Header, Table, saveMap
 from tools import FileForm
 from models import Module, WorkMap
@@ -61,7 +61,8 @@ def index():
 @cross_origin(origin='*')
 def getMap(aup):
     # table, legend, max_zet = Table(aup, colorSet=1)
-    q = WorkMap.query.filter_by(id_aup=aup).all()
+    aup = AUP.query.filter_by(num_aup=aup).first()
+    q = WorkMap.query.filter_by(id_aup=aup.id_aup).all()
     d = dict()
     d["id_aup"] = q[0].id_aup
     l = list()
@@ -76,19 +77,10 @@ def getMap(aup):
         a["disc_color"] = i.disc_color
         l.append(a)
     d["data"] = l
-    # print()
-    # print()
-    # print()
-    # print(d)
-    # print()
-    # print()
-    # print()
-    # if table != None:
-    header = Header(aup)   
+
+    header = Header(aup.num_aup)   
     d["header"] = header 
     return jsonify(d)
-    # else:
-    #     return redirect('/load')
 
 
 @app.route('/save/<string:aup>', methods=["POST"])
@@ -159,36 +151,33 @@ def upload():
             if get_aup == None:
                 
                 aup = save_into_bd(path)
+                aup = aup.num_aup
                 
             else:
                 files = path
-                delete_from_workload(aup)
+                delete_from_workload(get_aup.num_aup)
+                delete_from_workmap(get_aup.num_aup)
                 if type(files) != list:
                     f = files
                     files = [f, ]
 
                 for file in files:
-                    update_workload(file, aup)
+                    update_workload(file, get_aup.num_aup)
 
-                print(f"[!] such aup already in db. REDIRECT to {aup}")
+                print(f"[!] such aup already in db. REDIRECT to {get_aup.num_aup}")
 
             os.remove(path)
-
-            table, _,_ = Table(aup)
+            aup = AUP.query.filter_by(num_aup = aup).first()
+            table, _,_ = Table(aup.num_aup)
 
             print(table)
 
-            moduls = Module.query.all()
-            d = dict()
-            for i in moduls:
-                d[i.id_module] = i.color
-
-            
+            ### WORKMAP ###
 
             for i in range(0, len(table)):
                 for j in range(0, len(table[i])):
                     new_raw = WorkMap(
-                        id_aup = aup,
+                        id_aup = aup.id_aup,
                         discipline = table[i][j]['discipline'],
                         zet = table[i][j]['zet'],
                         num_col = i,
@@ -197,10 +186,6 @@ def upload():
                     )
                     db.session.add(new_raw)
                     db.session.commit()
-                    
-            #print("table: ", table)
-
-            print(d)
             
             return make_response(jsonify(''), 200)
         else:

@@ -28,7 +28,8 @@ skiplist = {
 }
 
 def takeTableForExcel(aup):
-    q = WorkMap.query.filter_by(id_aup=aup).all()
+    aup = AUP.query.filter_by(num_aup=aup).first()
+    q = WorkMap.query.filter_by(id_aup=aup.id_aup).all()
     d = dict()
     l = list()
     for i in q:

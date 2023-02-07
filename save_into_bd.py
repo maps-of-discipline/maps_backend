@@ -5,7 +5,7 @@ from flask import Blueprint, request
 import re
 import datetime
 from sqlalchemy import desc
-from models import AUP, OP, Module, NameOP, SprDegreeEducation, SprFormEducation, SprFaculty, Workload, DurationEducation, db
+from models import AUP, OP, Module, NameOP, SprDegreeEducation, SprFormEducation, SprFaculty, Workload, DurationEducation, WorkMap, db
 
 # from app import static_folder
 
@@ -138,6 +138,7 @@ def save_into_bd(files):
         
         new_str_tbl_aup = AUP(**_params([id_op, filename, aup_num, base], AUP_PARAMS))
         db.session.add(new_str_tbl_aup)
+        db.session.commit()
 
         # добавить модуль в tbl_module и получить id, заменить модуль на id
         # #   Column           Non-Null Count  Dtype
@@ -162,7 +163,7 @@ def save_into_bd(files):
     print("[+] Запись данных завершена. Отключение от БД")
     # path = os.path.join(static_folder, 'temp', filename)
     # os.remove(path)
-    return aup_num
+    return new_str_tbl_aup
 
 
 def update_workload(file, aup_num):
@@ -222,6 +223,12 @@ def delete_from_workload(aup):
     
     id_aup = AUP.query.filter_by(num_aup=aup).first().id_aup
     Workload.query.filter_by(id_aup=id_aup).delete()
+    db.session.commit()
+
+
+def delete_from_workmap(aup):
+    id_aup = AUP.query.filter_by(num_aup=aup).first().id_aup
+    WorkMap.query.filter_by(id_aup=id_aup).delete()
     db.session.commit()
 
 
