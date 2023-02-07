@@ -76,19 +76,10 @@ def getMap(aup):
         a["disc_color"] = i.disc_color
         l.append(a)
     d["data"] = l
-    # print()
-    # print()
-    # print()
-    # print(d)
-    # print()
-    # print()
-    # print()
-    # if table != None:
+
     header = Header(aup)   
     d["header"] = header 
     return jsonify(d)
-    # else:
-    #     return redirect('/load')
 
 
 @app.route('/save/<string:aup>', methods=["POST"])
