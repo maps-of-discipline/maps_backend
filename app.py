@@ -78,7 +78,7 @@ def getMap(aup):
         l.append(a)
     d["data"] = l
 
-    header = Header(aup)   
+    header = Header(aup.num_aup)   
     d["header"] = header 
     return jsonify(d)
 
