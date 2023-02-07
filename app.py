@@ -42,7 +42,7 @@ from models import AUP
 ZET_HEIGHT = 90
 
 @app.route('/', methods=["POST", "GET"])
-@cross_origin()
+@cross_origin(origin='*')
 def index():
     faculties = GetAllFaculties()
     if request.method == "POST":
@@ -58,7 +58,7 @@ def index():
     return render_template('index.html', faculties=faculties)
 
 @app.route("/map/<string:aup>")
-@cross_origin()
+@cross_origin(origin='*')
 def getMap(aup):
     # table, legend, max_zet = Table(aup, colorSet=1)
     q = WorkMap.query.filter_by(id_aup=aup).all()
@@ -92,7 +92,7 @@ def getMap(aup):
 
 
 @app.route('/save/<string:aup>', methods=["POST"])
-@cross_origin()
+@cross_origin(origin='*')
 def saveMap1(aup):
     if request.method == "POST":
         request_data = request.get_json()
@@ -108,7 +108,7 @@ def saveMap1(aup):
         return make_response(jsonify(''), 200)
 
 @app.route('/upload', methods=["POST", "GET"])
-@cross_origin()
+@cross_origin(origin='*')
 def upload():
     form = FileForm(meta={'csrf':False})
     
@@ -210,7 +210,7 @@ def upload():
 
 
 @app.route("/api/aup/<string:aup>")
-@cross_origin()
+@cross_origin(origin='*')
 def aupJSON(aup):
     table, legend, max_zet = Table(aup, colorSet=1)
 
@@ -222,7 +222,7 @@ def aupJSON(aup):
     return jsonify(data)
 
 @app.route("/getAllMaps")
-@cross_origin()
+@cross_origin(origin='*')
 def getAllMaps():
     fac = GetAllFaculties()
     print(fac)
@@ -253,7 +253,7 @@ def getAllMaps():
 
 # путь для загрузки сформированной КД
 @app.route("/save_excel/<string:aup>", methods=["GET", "POST"])
-@cross_origin()
+@cross_origin(origin='*')
 def save_excel(aup):
     filename = saveMap(aup, app.static_folder, expo=60) 
     ### Upload xlxs file in memory and delete file from storage -----
