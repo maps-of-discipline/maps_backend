@@ -61,7 +61,8 @@ def index():
 @cross_origin()
 def getMap(aup):
     # table, legend, max_zet = Table(aup, colorSet=1)
-    q = WorkMap.query.filter_by(id_aup=aup).all()
+    aup = AUP.query.filter_by(num_aup=aup).first()
+    q = WorkMap.query.filter_by(id_aup=aup.id_aup).all()
     d = dict()
     d["id_aup"] = q[0].id_aup
     l = list()
