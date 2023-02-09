@@ -15,7 +15,7 @@ from models import Module, WorkMap
 
 app = Flask(__name__)
 application = app
-CORS(app)
+cors = CORS(app, resources={r"/api/*": {"origins": "*"}})
 app.config.from_pyfile('config.py')
 app.config['CORS_HEADERS'] = 'Content-Type'
 
