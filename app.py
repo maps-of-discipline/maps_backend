@@ -183,7 +183,7 @@ def upload():
                     db.session.add(new_raw)
                     db.session.commit()
             
-            return make_response(jsonify(''), 200)
+            return make_response(jsonify(aup.num_aup), 200)
         else:
             return make_response(jsonify('Произошла неизвестная ошибка'), 500)
     else: 
