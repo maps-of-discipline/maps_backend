@@ -18,11 +18,17 @@ from save_into_bd import SaveCard
 from tools import FileForm
 
 blocks = {}
+blocks_r = {}
 period = {}
+period_r = {}
 control_type = {}
+control_type_r = {}
 ed_izmereniya = {}
+ed_izmereniya_r = {}
 chast = {}
+chast_r = {}
 type_record = {}
+type_record_r = {}
 
 app = Flask(__name__)
 application = app
@@ -57,11 +63,14 @@ migrate = Migrate(app, db)
 
 ZET_HEIGHT = 90
 
-setGlobalVariables(app, blocks, period, control_type, ed_izmereniya, chast, type_record)
-
+setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r, ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
+# @app.route("/map/<string:aup>")
 # @app.route("/map/<string:aup>")
 # @cross_origin()
+# @cross_origin()
 # def getMap(aup):
+# def getMap(aup):
+#     # table, legend, max_zet = Table(aup, colorSet=1)
 #     # table, legend, max_zet = Table(aup, colorSet=1)
 #     q = WorkMap.query.filter_by(id_aup=aup).all()
 #     d = dict()
@@ -124,8 +133,7 @@ def upload():
             # массив с содержимым 2 листа
             aupData = getAupData(path)
 
-            # одна функция, описанная в отдельном файле, которая будет выпослнять все проверки
-
+            # одна функция, описанная в отдельном файле, которая будет выполнять все проверки
 
             # сохранение карты
             SaveCard(db, aupInfo, aupData)
@@ -321,6 +329,7 @@ def getAupData(file):
         if row[0] == None:
             id = addGlobalVariable(db, D_Blocks, val)
             blocks[val] = id
+            blocks_r[id] = val
             row[0] = id
 
         val = row[2]
@@ -328,6 +337,7 @@ def getAupData(file):
         if row[2] == None:
             id = addGlobalVariable(db, D_Chast, val)
             chast[val] = id
+            chast_r[id] = val
             row[2] = id
 
         if pd.isna(row[3]):
@@ -344,6 +354,7 @@ def getAupData(file):
         if row[4] == None:
             id = addGlobalVariable(db, D_TypeRecord, val)
             type_record[val] = id
+            type_record_r[id] = val
             row[4] = id
 
         val = row[6]
@@ -351,6 +362,7 @@ def getAupData(file):
         if row[6] == None:
             id = addGlobalVariable(db, D_Period, val)
             period[val] = id
+            period_r[id] = val
             row[6] = id
 
         val = row[7]
@@ -358,6 +370,7 @@ def getAupData(file):
         if row[7] == None:
             id = addGlobalVariable(db, D_ControlType, val)
             control_type[val] = id
+            control_type_r[id] = val
             row[7] = id
 
         val = row[9]
@@ -365,6 +378,7 @@ def getAupData(file):
         if row[9] == None:
             id = addGlobalVariable(db, D_EdIzmereniya, val)
             ed_izmereniya[val] = id
+            ed_izmereniya_r[id] = val
             row[9] = id
 
         if pd.isna(row[8]):
