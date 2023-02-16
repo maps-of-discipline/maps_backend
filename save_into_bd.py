@@ -6,7 +6,7 @@
 # import datetime
 # from sqlalchemy import desc
 # from models import AUP, OP, NameOP, SprDegreeEducation, SprFormEducation, SprFaculty, Workload, DurationEducation, db
-from models import AupInfo, AupData
+from models import AupData
 # # from app import static_folder
 
 # bp = Blueprint('upload_to_db', __name__, url_prefix='/upload_to_db')

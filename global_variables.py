@@ -1,37 +1,37 @@
-from models import D_Blocks, D_Chast, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules
+from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules
 
 def setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r, ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r):
     with app.app_context():
 
         blocks_q = D_Blocks.query.all()
         for row in blocks_q:
-            blocks[row.title] = row.id
+            blocks[row.title] = row.id_block
             blocks_r[row.id] = row.title
             
 
-        chast_q = D_Chast.query.all()
+        chast_q = D_Part.query.all()
         for row in chast_q:
-            chast[row.title] = row.id
+            chast[row.title] = row.id_part
             chast_r[row.id] = row.title
 
         period_q = D_Period.query.all()
         for row in period_q:
-            period[row.title] = row.id
+            period[row.title] = row.id_period
             period_r[row.id] = row.title
 
         control_type_q = D_ControlType.query.all()
         for row in control_type_q:
-            control_type[row.title] = row.id
+            control_type[row.title] = row.id_type_control
             control_type_r[row.id] = row.title
         
         ed_izmereniya_q = D_EdIzmereniya.query.all()
         for row in ed_izmereniya_q:
-            ed_izmereniya[row.title] = row.id
+            ed_izmereniya[row.title] = row.id_edizm
             ed_izmereniya_r[row.id] = row.title
 
         type_record_q = D_TypeRecord.query.all()
         for row in type_record_q:
-            type_record[row.title] = row.id
+            type_record[row.title] = row.id_type_record
             type_record_r[row.id] = row.title
 
 
