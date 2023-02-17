@@ -340,17 +340,17 @@ class AupData(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     id_aup = db.Column(db.Integer, db.ForeignKey(
         'tbl_aup.id_aup', ondelete='CASCADE'), nullable=False)
-    id_block = db.Column(db.Integer, db.ForeignKey('d_blocks.id_block'), nullable=True)
+    id_block = db.Column(db.Integer, db.ForeignKey('d_blocks.id_block'), nullable=False)
     shifr = db.Column(db.String(30), nullable=False)
-    id_part = db.Column(db.Integer, db.ForeignKey('d_part.id_part'), nullable=True)
-    id_module = db.Column(db.Integer, db.ForeignKey('d_modules.id_module'), nullable=True)
-    id_group = db.Column(db.Integer, db.ForeignKey('groups.id_group'), nullable=True)
-    id_type_record = db.Column(db.Integer, db.ForeignKey('d_type_record.id_type_record'), nullable=True)
+    id_part = db.Column(db.Integer, db.ForeignKey('d_part.id_part'), nullable=False)
+    id_module = db.Column(db.Integer, db.ForeignKey('d_modules.id_module'), nullable=False)
+    id_group = db.Column(db.Integer, db.ForeignKey('groups.id_group'), nullable=False)
+    id_type_record = db.Column(db.Integer, db.ForeignKey('d_type_record.id_type_record'), nullable=False)
     discipline = db.Column(db.String(150), nullable=False)
-    id_period = db.Column(db.Integer, db.ForeignKey('d_period.id_period'), nullable=True)
-    id_type_control = db.Column(db.Integer, db.ForeignKey('d_control_type.id_type_control'), nullable=True)
+    id_period = db.Column(db.Integer, db.ForeignKey('d_period.id_period'), nullable=False)
+    id_type_control = db.Column(db.Integer, db.ForeignKey('d_control_type.id_type_control'), nullable=False)
     amount = db.Column(db.Integer, nullable=False)
-    measure = db.Column(db.Integer, nullable=False)
+    id_edizm = db.Column(db.Integer, db.ForeignKey('d_ed_izmereniya.id_edizm'), nullable=False)
     zet = db.Column(db.Integer, nullable=False)
 
     block = db.relationship('D_Blocks')
@@ -360,6 +360,8 @@ class AupData(db.Model):
     period = db.relationship('D_Period')
     type_control = db.relationship('D_ControlType')
     group = db.relationship('Groups')
+    aup = db.relationship('AUP')
+    ed_izmereniya = db.relationship('D_EdIzmereniya')
 
     def __repr__(self):
         return '<AupData %r>' % self.aup_num

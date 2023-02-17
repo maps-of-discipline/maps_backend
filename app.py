@@ -63,7 +63,7 @@ migrate = Migrate(app, db)
 
 ZET_HEIGHT = 90
 
-# setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r, ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
+setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r, ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
 # @app.route("/map/<string:aup>")
 # @app.route("/map/<string:aup>")
 # @cross_origin()
@@ -126,7 +126,7 @@ def upload():
             path = os.path.join(app.static_folder, 'temp', f.filename)
 
             # словарь с содержимым 1 листа
-            aupInfo = getAupInfo(path) 
+            aupInfo = getAupInfo(path, f.filename) 
 
             # берём aupInfo["num"] и смотрим, есть ли в БД уже такая карта, если есть, то редиректим на страницу с этой картой ???
 
@@ -294,7 +294,7 @@ def upload():
 #     app.run(debug=True)
 
 
-def getAupInfo(file):
+def getAupInfo(file, filename):
     data = pd.read_excel(file, sheet_name='Лист1')
     aupInfo = dict()
     data = data['Содержание']
@@ -308,11 +308,12 @@ def getAupInfo(file):
     aupInfo["type_standard"] = data[7]
     aupInfo["name_faculty"] = data[8]
     aupInfo["department"] = data[9]
-    aupInfo["form_educ"]= data[10]
-    aupInfo["years_begin"]= data[11]
-    aupInfo["period_edication"]= data[12]
-    aupInfo["base"]= data[13]
-    aupInfo["full_years"]= data[14]
+    aupInfo["form_educ"] = data[10]
+    aupInfo["years_begin"] = data[11]
+    aupInfo["period_edication"] = data[12]
+    aupInfo["base"] = data[13]
+    aupInfo["full_years"] = data[14]
+    aupInfo["filename"] = filename
     return aupInfo
 
 def getAupData(file):
