@@ -1,0 +1,151 @@
+body{
+    background-color: #001629;
+    font-family: 'Roboto';
+}
+
+.header{
+    /* margin: 0 10% 0 10%; */
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px;
+    color: white;
+}
+
+.header_text {
+    text-align: left;
+}
+
+.btn-outline-light{
+    margin: 9px;
+    height: 30px;
+    padding-top: 3px;
+}
+
+.excel_img{
+    height: 48px;
+}
+
+.container_{
+    margin: 0 3% 0 0%;
+    align-items: center;
+}
+
+.content{
+    display: flex;
+    flex-direction: row;
+}
+
+.column{
+    margin-left: 9px;
+    width: 12.5%;
+    display: flex;
+    flex-direction: column;
+}
+
+.item-container{
+    box-sizing: border-box;
+    padding: 5px 0 5px 0;
+    
+}
+
+.item{
+    height: inherit;
+    max-height: 100%;
+    text-align: center;
+    border-radius: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-wrap: break-word;
+}
+
+.item-text{
+    padding: 5px;
+    color: white;
+    font-family: montserrat;
+    /* overflow: hidden; */
+    margin: 0px;
+    justify-content: center;
+}
+
+.select{
+    height: 30px;
+    border: #001f4d 2px solid;
+    width: 80%;
+    margin-left: 10%;
+    margin-right: 10%;
+    display: block;
+    align-self: center;
+}
+
+.header-container{
+    /* height: 40px; */
+    padding-top: 1em;
+    padding-bottom: 1em;
+    /* border: white solid 2px; */
+    /* margin-bottom: 10px; */
+    text-align: center;
+}
+
+.header-text{
+    margin: 0;
+}
+
+.zet-column{
+    width: 3%;
+}
+
+.zet-item{
+    height: 50px;
+    box-sizing: border-box;
+    /* border: #001f4d 2px solid; */
+    color: white;
+    text-align: center;
+    padding-top: 40%;
+    margin: 0;
+}
+
+.aup-table {
+    display: grid;
+    grid-template-columns: 28px repeat(var(--columns-length), 1fr);
+    gap: 8px;
+    padding: 8px;
+    color: #fff;
+}
+
+.aup-table__column-header {
+    text-align: center;
+}
+
+.aup-table__block-wrapper {
+    padding: 5px 0;
+}
+
+.aup-table__block {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    border-radius: 8px;
+    font-size: 1.2em;
+    font-family: sans-serif;
+    cursor: grab;
+}
+
+.aup-table__left-column-header {
+    margin-bottom: 2px;
+    text-align: center;
+}
+
+.aup-table__zet-block {
+    padding: 0;
+    text-align: center;
+    border-bottom: 1px solid #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}

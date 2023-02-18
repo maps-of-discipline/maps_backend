@@ -1,0 +1,9 @@
+flask
+PyMySQL
+flask-migrate
+flask-sqlalchemy
+flask-wtf
+xlsxwriter
+openpyxl
+pandas
+flask-cors
