@@ -5,7 +5,7 @@ import pandas as pd
 # import re
 import datetime
 from sqlalchemy import desc
-from models import AupData, tbl_AupInfo, NameOP, SprDegreeEducation, SprFormEducation, SprFaculty, db
+from models import AupData, AupInfo, NameOP, SprDegreeEducation, SprFormEducation, SprFaculty, db
 # # from app import static_folder
 
 # bp = Blueprint('upload_to_db', __name__, url_prefix='/upload_to_db')

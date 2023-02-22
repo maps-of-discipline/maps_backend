@@ -63,7 +63,7 @@ migrate = Migrate(app, db)
 
 ZET_HEIGHT = 90
 
-# setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r, ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
+setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r, ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
 # @app.route("/map/<string:aup>")
 # @app.route("/map/<string:aup>")
 # @cross_origin()
