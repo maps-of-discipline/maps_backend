@@ -1,3 +1,4 @@
+from models import db
 import io
 import os
 from flask_cors import CORS, cross_origin
@@ -37,7 +38,6 @@ app.config.from_pyfile('config.py')
 app.config['CORS_HEADERS'] = 'Content-Type'
 
 
-
 convention = {
     "ix": 'ix_%(column_0_label)s',
     "uq": "uq_%(table_name)s_%(column_0_name)s",
@@ -46,10 +46,6 @@ convention = {
     "pk": "pk_%(table_name)s"
 }
 
-
-
-
-from models import db
 
 metadata = MetaData(naming_convention=convention)
 db.init_app(app)
@@ -63,7 +59,8 @@ migrate = Migrate(app, db)
 
 ZET_HEIGHT = 90
 
-setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r, ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
+setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r,
+                   ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
 # @app.route("/map/<string:aup>")
 # @app.route("/map/<string:aup>")
 # @cross_origin()
@@ -87,10 +84,9 @@ setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, contro
 #         a["disc_color"] = i.disc_color
 #         l.append(a)
 #     d["data"] = l
-#     header = Header(aup)   
-#     d["header"] = header 
+#     header = Header(aup)
+#     d["header"] = header
 #     return jsonify(d)
-
 
 
 # @app.route('/save/<string:aup>', methods=["POST"])
@@ -117,8 +113,8 @@ setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, contro
 @app.route('/upload', methods=["POST", "GET"])
 @cross_origin()
 def upload():
-    form = FileForm(meta={'csrf':False})
-    
+    form = FileForm(meta={'csrf': False})
+
     if request.method == "POST":
         if form.validate_on_submit():
             f = form.file.data
@@ -126,7 +122,7 @@ def upload():
             path = os.path.join(app.static_folder, 'temp', f.filename)
 
             # словарь с содержимым 1 листа
-            aupInfo = getAupInfo(path, f.filename) 
+            aupInfo = getAupInfo(path, f.filename)
 
             # берём aupInfo["num"] и смотрим, есть ли в БД уже такая карта, если есть, то редиректим на страницу с этой картой ???
 
@@ -138,7 +134,6 @@ def upload():
             # сохранение карты
             SaveCard(db, aupInfo, aupData)
 
-            
             return make_response(jsonify(aupData), 200)
             ### ------------------------------------ ###
             ### Проверка на пустые ячейки ###
@@ -178,9 +173,9 @@ def upload():
 
         #     get_aup = AUP.query.filter_by(num_aup = aup).first()
         #     if get_aup == None:
-                
+
         #         aup = save_into_bd(path)
-                
+
         #     else:
         #         files = path
         #         delete_from_workload(aup)
@@ -204,8 +199,6 @@ def upload():
         #     # for i in moduls:
         #     #     d[i.id_module] = i.color
 
-            
-
         #     # for i in range(0, len(table)):
         #     #     for j in range(0, len(table[i])):
         #     #         new_raw = WorkMap(
@@ -218,15 +211,15 @@ def upload():
         #     #         )
         #     #         db.session.add(new_raw)
         #     #         db.session.commit()
-                    
+
         #     #print("table: ", table)
 
         #     # print(d)
-            
+
         #     return redirect(f'/map/{aup}')
         # else:
         #     return redirect('/load')
-    else: 
+    else:
         return render_template("upload.html", form=form)
 
 
@@ -269,7 +262,7 @@ def upload():
 # @app.route("/save_excel/<string:aup>", methods=["GET", "POST"])
 # @cross_origin()
 # def save_excel(aup):
-#     filename = saveMap(aup, app.static_folder, expo=60) 
+#     filename = saveMap(aup, app.static_folder, expo=60)
 #     ### Upload xlxs file in memory and delete file from storage -----
 #     return_data = io.BytesIO()
 #     with open(filename, 'rb') as fo:
@@ -280,9 +273,8 @@ def upload():
 #     # path = os.path.join(app.static_folder, 'temp', filename)
 #     os.remove(filename)
 #     ### --------------
-#     return send_file(return_data, 
+#     return send_file(return_data,
 #             download_name=os.path.split(filename)[-1])
-
 
 
 # @app.route('/error')
@@ -298,6 +290,22 @@ def getAupInfo(file, filename):
     data = pd.read_excel(file, sheet_name='Лист1')
     aupInfo = dict()
     data = data['Содержание']
+    #                     Наименование
+    # 0                     Номер АУП
+    # 1               Вид образования
+    # 2           Уровень образования
+    # 3   Направление (специальность)
+    # 4             Код специальности
+    # 5                  Квалификация
+    # 6       Профиль (специализация)
+    # 7                 Тип стандарта
+    # 8                     Факультет
+    # 9           Выпускающая кафедра
+    # 10               Форма обучения
+    # 11                   Год набора
+    # 12              Период обучения
+    # 13                      На базе
+    # 14    Фактический срок обучения
     aupInfo["num"] = data[0]
     aupInfo["type_education"] = data[1]
     aupInfo["degree"] = data[2]
@@ -316,9 +324,22 @@ def getAupInfo(file, filename):
     aupInfo["filename"] = filename
     return aupInfo
 
+
 def getAupData(file):
     data = pd.read_excel(file, sheet_name="Лист2")
-    allRow = []    
+    #             Наименование
+    # 0                   Блок
+    # 1                   Шифр
+    # 2                  Часть
+    # 3                 Модуль
+    # 4             Тип записи
+    # 5             Дисциплина
+    # 6        Период контроля
+    # 7               Нагрузка
+    # 8             Количество
+    # 9               Ед. изм.
+    # 10                   ЗЕТ
+    allRow = []
     modules = {}
     for i in range(len(data)):
         row = []

@@ -10,12 +10,11 @@ from models import AupData, AupInfo, NameOP, SprDegreeEducation, SprFormEducatio
 
 # bp = Blueprint('upload_to_db', __name__, url_prefix='/upload_to_db')
 
-# WORKLOAD_PARAMS = ['id_aup', 'block', 'cypher', 'part', 'id_module', 'id_group', 'record_type', 'discipline', 'period', 'load', 'quantity', 'measurement', 'zet']
 NAMEOP_PARAMS = ['program_code', 'num_profile', 'name_spec']
-DURATION_EDUC_PARAMS = ['id_degree', 'id_form', 'years', 'months', 'id_spec', 'year_beg', 'year_end', 'is_actual']
-OP_PARAMS = ['id_duration', 'id_faculty', 'id_rop', 'type_educ', 'qualification', 'type_standard', 'department', 'period_educ']
-AUP_PARAMS = ['id_op', 'file', 'num_aup', 'base']
-# MODULE_PARAMS = ['name_module', 'color']
+AUP_PARAMS = ['file', 'num_aup', 'base', 'id_faculty', 'id_rop', 'type_educ',
+              'qualification', 'type_standard', 'department', 'period_educ',
+              'id_degree', 'id_form', 'years', 'months', 'id_spec', 'year_beg', 'year_end', 'is_actual']
+
 
 def _params(params_list, _PARAMS):
     temp_dict = {}
@@ -24,7 +23,7 @@ def _params(params_list, _PARAMS):
     return temp_dict
 
 # def save_into_bd(files):
-#     """Write to DataBase data from exel files. 
+#     """Write to DataBase data from exel files.
 #         :param files: path to file
 #         :type files: str or list
 
@@ -91,14 +90,14 @@ def _params(params_list, _PARAMS):
 
 #         id_degree = SprDegreeEducation.query.filter_by(
 #             name_deg=degree).first().id_degree
-        
+
 #         years, months = take_duration_year_month(fso)
 #         year_beg, year_end = set_year_begin_end(period_edication)
 #         is_actual = check_actual(year_end)
 
 #         # Проверка на наличие кода профиля:
 #         # Сначала проверяем есть ли уже такая специализация - если есть, то не добавляем ее
-#         # Если нет - то проверяем существуют ли вообще 
+#         # Если нет - то проверяем существуют ли вообще
 #         if NameOP.query.filter_by(name_spec=name_spec).first() == None:
 #             take_profiles_from_nameop = NameOP.query.filter_by(program_code=program_code).order_by(desc(NameOP.num_profile)).first()
 #             if take_profiles_from_nameop == None:
@@ -110,7 +109,7 @@ def _params(params_list, _PARAMS):
 #                 if take_profiles_from_nameop_len < 2: # number 2 is the max length of profile code
 #                     take_profiles_from_nameop = "0" * (2 - take_profiles_from_nameop_len) + take_profiles_from_nameop
 
-            
+
 #             new_nameop = NameOP(**_params([program_code, take_profiles_from_nameop, name_spec], NAMEOP_PARAMS))
 #             db.session.add(new_nameop)
 
@@ -120,7 +119,6 @@ def _params(params_list, _PARAMS):
 #         id_form = SprFormEducation.query.filter_by(
 #             form=form_educ).first().id_form
 
-        
 
 #         new_str_tbl_duration = DurationEducation(**_params([id_degree, id_form, years, months, id_spec, year_beg, year_end, is_actual], DURATION_EDUC_PARAMS))
 #         db.session.add(new_str_tbl_duration)
@@ -133,7 +131,7 @@ def _params(params_list, _PARAMS):
 #         db.session.commit()
 
 #         id_op = new_str_tbl_op.id_op
-        
+
 #         new_str_tbl_aup = AUP(**_params([id_op, filename, aup_num, base], AUP_PARAMS))
 #         db.session.add(new_str_tbl_aup)
 
@@ -174,7 +172,6 @@ def _params(params_list, _PARAMS):
 #             row.append(data[column][i])
 
 
-
 #         if pd.isna(row[8]):
 #             row[8] = 0
 #         else:
@@ -190,7 +187,7 @@ def _params(params_list, _PARAMS):
 #                 row[10] = float(row[10].replace(',', '.'))
 #             except:
 #                 row[10] = float(row[10])
-                
+
 #         row.insert(0, id_aup)
 #         row = list(map(lambda x: None if pd.isna(x) else x, row))
 #         # print('+++++++++++++++++', row)
@@ -201,8 +198,7 @@ def _params(params_list, _PARAMS):
 
 
 def delete_from_aupdata(aup):
-    id_aup = AUP.query.filter_by(num_aup=aup).first().id_aup
-    AupData.query.filter_by(id_aup=id_aup).delete()
+    AupData.query.filter_by(id_aup=aup.id_aup).delete()
     db.session.commit()
 
 
@@ -227,26 +223,25 @@ def check_actual(year_end):
     year_now = datetime.date.today().year
     if year_now > int(year_end):
         return True
-    else: 
+    else:
         return False
 
 
-def SaveCard(db, aupInfo, aupData):            
-    ### Перезапись карты, если есть уже в базе и мы обновляем ее
-    get_aup = AUP.query.filter_by(num_aup = aupInfo["num"]).first()
+def SaveCard(db, aupInfo, aupData):
+    # Перезапись карты, если есть уже в базе и мы обновляем ее
+    get_aup = AupInfo.query.filter_by(num_aup=aupInfo["num"]).first()
     if get_aup is None:
-        ### Функция добавления информации по карте (АУП)
+        # Функция добавления информации по карте (АУП)
         get_aup = add_new_aup(aupInfo)
     else:
-        ### Функция удаления из AupData
-        delete_from_aupdata(get_aup.aup_num)
+        # Функция удаления из AupData
+        delete_from_aupdata(get_aup)
 
     for i in aupData:
-        new_row = AupData(aup_num=get_aup.id_aup, block_id=i[0], shifr=i[1], part_id=i[2], module_id=i[3], type_id=i[4], discipline=i[5], period_control_id=i[6], type_control_id=i[7], amount=int(i[8]), measure=i[9], zet=int(i[10]))
-        db.session.add(new_row)        
+        new_row = AupData(aup_num=get_aup.id_aup, block_id=i[0], shifr=i[1], part_id=i[2], module_id=i[3], type_id=i[4],
+                          discipline=i[5], period_control_id=i[6], type_control_id=i[7], amount=int(i[8]), measure=i[9], zet=int(i[10]))
+        db.session.add(new_row)
     db.session.commit()
-
-    return 0
 
 
 def add_new_aup(aupInfo):
@@ -255,48 +250,41 @@ def add_new_aup(aupInfo):
 
     id_degree = SprDegreeEducation.query.filter_by(
         name_deg=aupInfo["degree"]).first().id_degree
-    
+
     years, months = take_duration_year_month(aupInfo["full_years"])
     year_beg, year_end = set_year_begin_end(aupInfo["period_edication"])
     is_actual = check_actual(year_end)
 
     # Проверка на наличие кода профиля:
     # Сначала проверяем есть ли уже такая специализация - если есть, то не добавляем ее
-    # Если нет - то проверяем существуют ли вообще 
+    # Если нет - то проверяем существуют ли вообще специализации по этому коду программы
+    # name_op_row = NameOP.query.filter_by(name_spec=aupInfo["name_spec"]).first()
     if NameOP.query.filter_by(name_spec=aupInfo["name_spec"]).first() == None:
-        take_profiles_from_nameop = NameOP.query.filter_by(program_code=aupInfo["program_code"]).order_by(desc(NameOP.num_profile)).first()
+        take_profiles_from_nameop = NameOP.query.filter_by(
+            program_code=aupInfo["program_code"]).order_by(desc(NameOP.num_profile)).first()
         if take_profiles_from_nameop == None:
             take_profiles_from_nameop = '01'
         else:
-            take_profiles_from_nameop = take_profiles_from_nameop.num_profile
-            take_profiles_from_nameop = str(int(take_profiles_from_nameop) + 1 )
+            take_profiles_from_nameop = str(int(take_profiles_from_nameop.num_profile) + 1)
             take_profiles_from_nameop_len = len(take_profiles_from_nameop)
-            if take_profiles_from_nameop_len < 2: # number 2 is the max length of profile code
-                take_profiles_from_nameop = "0" * (2 - take_profiles_from_nameop_len) + take_profiles_from_nameop
+            if take_profiles_from_nameop_len < 2:  # number 2 is the max length of profile code
+                take_profiles_from_nameop = "0" * \
+                    (2 - take_profiles_from_nameop_len) + \
+                    take_profiles_from_nameop
 
-        
-        new_nameop = NameOP(**_params([aupInfo["program_code"], take_profiles_from_nameop, aupInfo["name_spec"]], NAMEOP_PARAMS))
+        new_nameop = NameOP(
+            **_params([aupInfo["program_code"], take_profiles_from_nameop, aupInfo["name_spec"]], NAMEOP_PARAMS))
         db.session.add(new_nameop)
 
-    id_spec = NameOP.query.filter_by(name_spec=aupInfo["name_spec"]).first().id_spec
+    id_spec = NameOP.query.filter_by(
+        name_spec=aupInfo["name_spec"]).first().id_spec
     if pd.isna(department):
         department = None
     id_form = SprFormEducation.query.filter_by(
         form=aupInfo["form_educ"]).first().id_form
 
-    
-
-    new_str_tbl_duration = DurationEducation(**_params([id_degree, id_form, years, months, id_spec, year_beg, year_end, is_actual], DURATION_EDUC_PARAMS))
-    db.session.add(new_str_tbl_duration)
-    db.session.commit()
-
-    id_duration = new_str_tbl_duration.id_duration
-
-    new_str_tbl_op = OP(**_params([id_duration, id_faculty, 1, aupInfo["type_education"], aupInfo["qualification"], aupInfo["type_standard"], department, aupInfo["period_edication"]], OP_PARAMS)) # ЗАМЕСТО ВЕРХНЕЙ СТРОЧКИ
-    db.session.add(new_str_tbl_op)
-    db.session.commit()
-
-    id_op = new_str_tbl_op.id_op
-    
-    new_str_tbl_aup = AUP(**_params([id_op, aupInfo["filename"], aupInfo["num"], aupInfo["base"]], AUP_PARAMS))
+    new_str_tbl_aup = AupInfo(**_params([
+        aupInfo["filename"], aupInfo["num"], aupInfo["base"], id_faculty, 1, aupInfo["type_education"], aupInfo["qualification"],
+        aupInfo["type_standard"], department, aupInfo["period_edication"], id_degree, id_form, years, months, id_spec, year_beg,
+        year_end, is_actual], AUP_PARAMS))
     db.session.add(new_str_tbl_aup)
