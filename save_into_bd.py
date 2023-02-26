@@ -222,9 +222,9 @@ def set_year_begin_end(duration):
 def check_actual(year_end):
     year_now = datetime.date.today().year
     if year_now > int(year_end):
-        return True
-    else:
         return False
+    else:
+        return True
 
 
 def SaveCard(db, aupInfo, aupData):
@@ -238,8 +238,8 @@ def SaveCard(db, aupInfo, aupData):
         delete_from_aupdata(get_aup)
 
     for i in aupData:
-        new_row = AupData(aup_num=get_aup.id_aup, block_id=i[0], shifr=i[1], part_id=i[2], module_id=i[3], type_id=i[4],
-                          discipline=i[5], period_control_id=i[6], type_control_id=i[7], amount=int(i[8]), measure=i[9], zet=int(i[10]))
+        new_row = AupData(id_aup=get_aup.id_aup, id_block=i[0], shifr=i[1], id_part=i[2], id_module=i[3], id_group=i[11], id_type_record=i[4],
+                          discipline=i[5], id_period=i[6], id_type_control=i[7], amount=int(i[8]), id_edizm=i[9], zet=int(i[10]))
         db.session.add(new_row)
     db.session.commit()
 
@@ -278,13 +278,16 @@ def add_new_aup(aupInfo):
 
     id_spec = NameOP.query.filter_by(
         name_spec=aupInfo["name_spec"]).first().id_spec
-    if pd.isna(department):
-        department = None
+    if pd.isna(aupInfo["department"]):
+        aupInfo["department"] = None
     id_form = SprFormEducation.query.filter_by(
         form=aupInfo["form_educ"]).first().id_form
 
     new_str_tbl_aup = AupInfo(**_params([
         aupInfo["filename"], aupInfo["num"], aupInfo["base"], id_faculty, 1, aupInfo["type_education"], aupInfo["qualification"],
-        aupInfo["type_standard"], department, aupInfo["period_edication"], id_degree, id_form, years, months, id_spec, year_beg,
+        aupInfo["type_standard"], aupInfo["department"], aupInfo["period_edication"], id_degree, id_form, years, months, id_spec, year_beg,
         year_end, is_actual], AUP_PARAMS))
     db.session.add(new_str_tbl_aup)
+    db.session.commit()
+
+    return new_str_tbl_aup

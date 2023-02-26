@@ -13,7 +13,7 @@ import math
 
 # from excel_check import (check_empty_ceils, check_full_zet_in_plan, check_smt,
 #                          layout_of_disciplines)
-from global_variables import setGlobalVariables, addGlobalVariable, getModuleId
+from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
 from save_into_bd import SaveCard
 # from take_from_bd import GetAllFaculties, GetMaps, Header, Table, saveMap
 from tools import FileForm
@@ -120,7 +120,10 @@ def upload():
             f = form.file.data
             aup = f.filename.split(' - ')[1].strip()
             path = os.path.join(app.static_folder, 'temp', f.filename)
-
+            
+            # сохранить временный файл с учебным планом
+            f.save(path)
+            
             # словарь с содержимым 1 листа
             aupInfo = getAupInfo(path, f.filename)
 
@@ -133,6 +136,9 @@ def upload():
 
             # сохранение карты
             SaveCard(db, aupInfo, aupData)
+            
+            # удалить временный файл
+            os.remove(path)
 
             return make_response(jsonify(aupData), 200)
             ### ------------------------------------ ###
@@ -341,10 +347,12 @@ def getAupData(file):
     # 10                   ЗЕТ
     allRow = []
     modules = {}
+    groups = {}
     for i in range(len(data)):
         row = []
         for column in data.columns:
             row.append(data[column][i])
+        row.append('')
 
         val = row[0]
         row[0] = blocks.get(val)
@@ -370,6 +378,11 @@ def getAupData(file):
             id = getModuleId(db, val)
             modules[val] = id
             row[3] = id
+        row[11] = groups.get(val)
+        if row[11] == None:
+            id = getGroupId(db, val)
+            groups[val] = id
+            row[11] = id
 
         val = row[4]
         row[4] = type_record.get(val)

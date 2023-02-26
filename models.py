@@ -114,70 +114,8 @@ class AupInfo(db.Model):
     faculty = db.relationship('SprFaculty')
     rop = db.relationship('SprRop')
 
-
     def __repr__(self):
         return '<№ AUP %r>' % self.num_aup
-
-
-# class DurationEducation(db.Model):
-#     __tablename__ = 'tbl_duration_edu'
-
-#     id_degree = db.Column(db.Integer, db.ForeignKey(
-#         'spr_degree_education.id_degree'), nullable=False)
-#     id_form = db.Column(db.Integer, db.ForeignKey(
-#         'spr_form_education.id_form'), nullable=False)
-#     years = db.Column(db.Integer, nullable=False)
-#     months = db.Column(db.Integer, nullable=True)
-#     id_spec = db.Column(db.Integer, db.ForeignKey(
-#         'spr_name_op.id_spec'), nullable=False)
-#     year_beg = db.Column(db.Integer, nullable=False)
-#     year_end = db.Column(db.Integer, nullable=False)
-#     is_actual = db.Column(db.Boolean, nullable=False)
-
-#     degree = db.relationship('SprDegreeEducation')
-#     form = db.relationship('SprFormEducation')
-#     name_op = db.relationship('NameOP')
-
-#     @property
-#     def full_text(self):
-#         return '{} гг {} мм '.format(self.years, self.months)
-
-#     def __repr__(self):
-#         return '<DurationEducation %r>' % self.full_text
-
-
-# class OP(db.Model):
-#     __tablename__ = 'tbl_op'
-
-#     id_faculty = db.Column(db.Integer, db.ForeignKey(
-#         'spr_faculty.id_faculty'), nullable=False)
-#     id_rop = db.Column(db.Integer, db.ForeignKey(
-#         'spr_rop.id_rop'), nullable=False)
-#     type_educ = db.Column(db.String(255), nullable=False)
-#     qualification = db.Column(db.String(255), nullable=False)
-#     type_standard = db.Column(db.String(255), nullable=False)
-#     department = db.Column(db.String(255), nullable=True)
-#     period_educ = db.Column(db.String(255), nullable=False)
-#     id_degree = db.Column(db.Integer, db.ForeignKey(
-#         'spr_degree_education.id_degree'), nullable=False)
-#     id_form = db.Column(db.Integer, db.ForeignKey(
-#         'spr_form_education.id_form'), nullable=False)
-#     years = db.Column(db.Integer, nullable=False)
-#     months = db.Column(db.Integer, nullable=True)
-#     id_spec = db.Column(db.Integer, db.ForeignKey(
-#         'spr_name_op.id_spec'), nullable=False)
-#     year_beg = db.Column(db.Integer, nullable=False)
-#     year_end = db.Column(db.Integer, nullable=False)
-#     is_actual = db.Column(db.Boolean, nullable=False)
-
-#     degree = db.relationship('SprDegreeEducation')
-#     form = db.relationship('SprFormEducation')
-#     name_op = db.relationship('NameOP')
-#     faculty = db.relationship('SprFaculty')
-#     rop = db.relationship('SprRop')
-
-#     def __repr__(self):
-#         return '<ID_OP %r>' % self.id_op
 
 
 class NameOP(db.Model):
@@ -228,61 +166,69 @@ class SprStandard(db.Model):
     def __repr__(self):
         return '<SprStandardZET %r>' % self.standard_date
 
+
 class D_Blocks(db.Model):
     __tablename__ = 'd_blocks'
-    id_block = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
 
     def __repr__(self):
         return '<D_Blocks %r>' % self.title
 
+
 class D_Period(db.Model):
     __tablename__ = 'd_period'
-    id_period = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
 
     def __repr__(self):
         return '<D_Period %r>' % self.title
 
+
 class D_ControlType(db.Model):
     __tablename__ = 'd_control_type'
-    id_type_control = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
 
     def __repr__(self):
         return '<D_ControlType %r>' % self.title
 
+
 class D_EdIzmereniya(db.Model):
     __tablename__ = 'd_ed_izmereniya'
-    id_edizm = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
 
     def __repr__(self):
         return '<D_EdIzmereniya %r>' % self.title
 
+
 class D_Part(db.Model):
     __tablename__ = 'd_part'
-    id_part = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
 
     def __repr__(self):
         return '<D_Part %r>' % self.title
-    
+
+
 class D_TypeRecord(db.Model):
     __tablename__ = 'd_type_record'
-    id_type_record = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
 
     def __repr__(self):
         return '<D_TypeRecord %r>' % self.title
 
+
 class D_Modules(db.Model):
     __tablename__ = 'd_modules'
-    id_module = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
 
     def __repr__(self):
         return '<D_Modules %r>' % self.title
+
 
 class Groups(db.Model):
     __tablename__ = 'groups'
@@ -293,45 +239,31 @@ class Groups(db.Model):
     def __repr__(self):
         return '<Groups %r>' % self.name_group
 
-# class AupInfo(db.Model):
-#     __tablename__ = 'aup_info'
-#     id = db.Column(db.Integer, primary_key=True)
-#     aup_num = db.Column(db.String(20), nullable=False)
-#     type_education = db.Column(db.String(20), nullable=False)
-#     degree = db.Column(db.String(20), nullable=False)
-#     direction = db.Column(db.String(50), nullable=False)
-#     program_code = db.Column(db.String(20), nullable=False)
-#     qualification = db.Column(db.String(30), nullable=False)
-#     name_spec = db.Column(db.String(50), nullable=False)
-#     type_standard = db.Column(db.String(30), nullable=False)
-#     id_faculty = db.Column(db.Integer, db.ForeignKey(
-#         'spr_faculty.id_faculty'), nullable=False)
-#     department = db.Column(db.String(50), nullable=False)
-#     form_educ = db.Column(db.String(50), nullable=False)
-#     years_begin = db.Column(db.String(30), nullable=False)
-#     period_edication = db.Column(db.String(30), nullable=False)
-#     base = db.Column(db.String(30), nullable=False)
-#     full_years = db.Column(db.String(10), nullable=False)
-
-#     def __repr__(self):
-#         return '<AupInfo %r>' % self.aup_num
 
 class AupData(db.Model):
     __tablename__ = 'aup_data'
     id = db.Column(db.Integer, primary_key=True)
     id_aup = db.Column(db.Integer, db.ForeignKey(
         'tbl_aup.id_aup', ondelete='CASCADE'), nullable=False)
-    id_block = db.Column(db.Integer, db.ForeignKey('d_blocks.id_block'), nullable=False)
+    id_block = db.Column(db.Integer, db.ForeignKey(
+        'd_blocks.id'), nullable=False)
     shifr = db.Column(db.String(30), nullable=False)
-    id_part = db.Column(db.Integer, db.ForeignKey('d_part.id_part'), nullable=False)
-    id_module = db.Column(db.Integer, db.ForeignKey('d_modules.id_module'), nullable=False)
-    id_group = db.Column(db.Integer, db.ForeignKey('groups.id_group'), nullable=False)
-    id_type_record = db.Column(db.Integer, db.ForeignKey('d_type_record.id_type_record'), nullable=False)
+    id_part = db.Column(db.Integer, db.ForeignKey(
+        'd_part.id'), nullable=False)
+    id_module = db.Column(db.Integer, db.ForeignKey(
+        'd_modules.id'), nullable=False)
+    id_group = db.Column(db.Integer, db.ForeignKey(
+        'groups.id_group'), nullable=False)
+    id_type_record = db.Column(db.Integer, db.ForeignKey(
+        'd_type_record.id'), nullable=False)
     discipline = db.Column(db.String(150), nullable=False)
-    id_period = db.Column(db.Integer, db.ForeignKey('d_period.id_period'), nullable=False)
-    id_type_control = db.Column(db.Integer, db.ForeignKey('d_control_type.id_type_control'), nullable=False)
+    id_period = db.Column(db.Integer, db.ForeignKey(
+        'd_period.id'), nullable=False)
+    id_type_control = db.Column(db.Integer, db.ForeignKey(
+        'd_control_type.id'), nullable=False)
     amount = db.Column(db.Integer, nullable=False)
-    id_edizm = db.Column(db.Integer, db.ForeignKey('d_ed_izmereniya.id_edizm'), nullable=False)
+    id_edizm = db.Column(db.Integer, db.ForeignKey(
+        'd_ed_izmereniya.id'), nullable=False)
     zet = db.Column(db.Integer, nullable=False)
 
     block = db.relationship('D_Blocks')
@@ -341,7 +273,7 @@ class AupData(db.Model):
     period = db.relationship('D_Period')
     type_control = db.relationship('D_ControlType')
     group = db.relationship('Groups')
-    aup = db.relationship('AUP')
+    aup = db.relationship('AupInfo')
     ed_izmereniya = db.relationship('D_EdIzmereniya')
 
     def __repr__(self):
