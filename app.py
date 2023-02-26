@@ -481,7 +481,6 @@ def create_json(aupData, aupInfo):
                 json['data'].append(d)
             flag = aupData[i][5] + str(aupData[i][6])
             d = dict()
-            d["disc_color"] = "#ec815f"
             d["discipline"] = aupData[i][5]
             d["id_group"] = aupData[i][11]
             d["num_col"] = aupData[i][6]
