@@ -140,14 +140,16 @@ def upload():
 
             # массив с содержимым 2 листа
             aupData = getAupData(path)
-
+            json = create_json(aupData, aupInfo)
             # сохранение карты
-            SaveCard(db, aupInfo, aupData)
+            # SaveCard(db, aupInfo, aupData)
             
             # удалить временный файл
             os.remove(path)
 
-            return make_response(jsonify(aupData), 200)
+            
+
+            return make_response(jsonify(json), 200)
             ### ------------------------------------ ###
             ### Проверка на пустые ячейки ###
             # f.save(path)
@@ -334,6 +336,7 @@ def getAupInfo(file, filename):
 
 
 def getAupData(file):
+    d = dict()
     data = pd.read_excel(file, sheet_name="Лист2")
     #             Наименование
     # 0                   Блок
@@ -347,9 +350,17 @@ def getAupData(file):
     # 8             Количество
     # 9               Ед. изм.
     # 10                   ЗЕТ
+    # 11              групп ID
+    # 12                    ID
+    # 13    Позиция в семестре
+
+
     allRow = []
     modules = {}
     groups = {}
+    counter = 0
+    flag = ""
+    flag_val = 0
     for i in range(len(data)):
         row = []
         for column in data.columns:
@@ -380,6 +391,7 @@ def getAupData(file):
             id = getModuleId(db, val)
             modules[val] = id
             row[3] = id
+
         row[11] = groups.get(val)
         if row[11] == None:
             id = getGroupId(db, val)
@@ -433,7 +445,58 @@ def getAupData(file):
                 row[10] = int(float(row[10].replace(',', '.')) * 100)
             except:
                 row[10] = int(float(row[10]) * 100)
+        row.append(counter)
+        counter += 1
+
+        if flag != row[5] + str(row[6]):
+            flag = row[5] + str(row[6])
+            pos = d.get(row[6])
+            if pos == None:
+                d[row[6]] = 0
+                row.append(0)
+                flag_val = 0
+            else:
+                row.append(pos + 1)
+                d[row[6]] += 1
+                flag_val = d[row[6]]
+        else:
+            row.append(flag_val)
+            
+
 
         allRow.append(row)
+        
 
     return allRow
+
+
+def create_json(aupData, aupInfo):
+    json = dict()
+    json['header'] = [aupInfo['direction'], aupInfo['name_spec'], aupInfo['name_faculty']]
+    json['data'] = list()
+    flag = ""
+    for i in range(len(aupData)):
+        if flag != aupData[i][5] + str(aupData[i][6]):
+            if i != 0:
+                json['data'].append(d)
+            flag = aupData[i][5] + str(aupData[i][6])
+            d = dict()
+            d["disc_color"] = "#ec815f"
+            d["discipline"] = aupData[i][5]
+            d["id_group"] = aupData[i][11]
+            d["num_col"] = aupData[i][6]
+            d["num_row"] = aupData[i][13]
+            d["type"] = list()
+            zet = dict()
+            zet["control"] = control_type_r[aupData[i][7]]
+            zet["zet"] = aupData[i][10] / 100
+            zet["id"] = aupData[i][12]
+            d["type"].append(zet)
+        else:
+            zet = dict()
+            zet["control"] = control_type_r[aupData[i][7]]
+            zet["zet"] = aupData[i][10] / 100
+            zet["id"] = aupData[i][12]
+            d["type"].append(zet)
+
+    return json
