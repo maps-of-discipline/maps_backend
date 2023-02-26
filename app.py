@@ -9,14 +9,11 @@ from openpyxl import load_workbook
 import pandas as pd
 from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord
 import math
-
-
-# from excel_check import (check_empty_ceils, check_full_zet_in_plan, check_smt,
-#                          layout_of_disciplines)
+from excel_check import excel_check
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
 from save_into_bd import SaveCard
+from tools import FileForm, take_aup_from_excel_file, error
 # from take_from_bd import GetAllFaculties, GetMaps, Header, Table, saveMap
-from tools import FileForm
 
 blocks = {}
 blocks_r = {}
@@ -118,21 +115,31 @@ def upload():
     if request.method == "POST":
         if form.validate_on_submit():
             f = form.file.data
-            aup = f.filename.split(' - ')[1].strip()
+            # aup = f.filename.split(' - ')[1].strip()
             path = os.path.join(app.static_folder, 'temp', f.filename)
             
             # сохранить временный файл с учебным планом
             f.save(path)
             
+            # Вытащить из файла номер аупа
+            aup = take_aup_from_excel_file(path)
+
+            # одна функция, описанная в отдельном файле, которая будет выполнять все проверки
+            err_arr = excel_check(path, aup)
+            if err_arr != []:
+                os.remove(path)
+                return error('\n'.join(err_arr))
+
             # словарь с содержимым 1 листа
             aupInfo = getAupInfo(path, f.filename)
 
             # берём aupInfo["num"] и смотрим, есть ли в БД уже такая карта, если есть, то редиректим на страницу с этой картой ???
+            # Можно сделать всплывающее окно: "Хотите перезаписать существующий учебный план?" и ответы "Да" и "Нет". 
+            # Если нет, то просто редиректим на карту, если да, то просто стираем все по номеру аупа в aupData
+            # (в SaveCard уже реализован этот функционал)
 
             # массив с содержимым 2 листа
             aupData = getAupData(path)
-
-            # одна функция, описанная в отдельном файле, которая будет выполнять все проверки
 
             # сохранение карты
             SaveCard(db, aupInfo, aupData)
@@ -281,11 +288,6 @@ def upload():
 #     ### --------------
 #     return send_file(return_data,
 #             download_name=os.path.split(filename)[-1])
-
-
-# @app.route('/error')
-# def error(errors):
-#     return render_template('error.html', errors=errors)
 
 
 # if __name__ == "__main__":
