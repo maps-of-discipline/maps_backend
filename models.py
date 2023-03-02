@@ -259,6 +259,7 @@ class AupData(db.Model):
     discipline = db.Column(db.String(150), nullable=False)
     id_period = db.Column(db.Integer, db.ForeignKey(
         'd_period.id'), nullable=False)
+    num_row = db.Column(db.Integer, nullable=False)
     id_type_control = db.Column(db.Integer, db.ForeignKey(
         'd_control_type.id'), nullable=False)
     amount = db.Column(db.Integer, nullable=False)

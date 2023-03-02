@@ -7,7 +7,7 @@ from flask_migrate import Migrate
 from sqlalchemy import MetaData
 from openpyxl import load_workbook
 import pandas as pd
-from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord
+from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, AupData, AupInfo
 import math
 from excel_check import excel_check
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
@@ -58,32 +58,34 @@ ZET_HEIGHT = 90
 
 setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r,
                    ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
-# @app.route("/map/<string:aup>")
-# @app.route("/map/<string:aup>")
-# @cross_origin()
-# @cross_origin()
-# def getMap(aup):
-# def getMap(aup):
-#     # table, legend, max_zet = Table(aup, colorSet=1)
-#     # table, legend, max_zet = Table(aup, colorSet=1)
-#     q = WorkMap.query.filter_by(id_aup=aup).all()
-#     d = dict()
-#     d["id_aup"] = q[0].id_aup
-#     l = list()
-#     for i in q:
-#         a = dict()
-#         a["id"] = i.id
-#         a["discipline"] = i.discipline
-#         a["zet"] = i.zet
-#         a["id_group"] = i.id_group
-#         a["num_col"] = i.num_col
-#         a["num_row"] = i.num_row
-#         a["disc_color"] = i.disc_color
-#         l.append(a)
-#     d["data"] = l
-#     header = Header(aup)
-#     d["header"] = header
-#     return jsonify(d)
+
+
+@app.route("/map/<string:aup>")
+@cross_origin()
+def getMap(aup):
+    # table, legend, max_zet = Table(aup, colorSet=1)
+    aup = AupInfo.query.filter_by(num_aup=aup).first()
+    data = AupData.query.filter_by(id_aup=aup.id_aup).all()
+    json = create_json(aup, data)
+    return make_response(jsonify(json), 200)
+    # q = WorkMap.query.filter_by(id_aup=aup).all()
+    # d = dict()
+    # d["id_aup"] = q[0].id_aup
+    # l = list()
+    # for i in q:
+    #     a = dict()
+    #     a["id"] = i.id
+    #     a["discipline"] = i.discipline
+    #     a["zet"] = i.zet
+    #     a["id_group"] = i.id_group
+    #     a["num_col"] = i.num_col
+    #     a["num_row"] = i.num_row
+    #     a["disc_color"] = i.disc_color
+    #     l.append(a)
+    # d["data"] = l
+    # header = Header(aup)
+    # d["header"] = header
+    # return jsonify(d)
 
 
 # @app.route('/save/<string:aup>', methods=["POST"])
@@ -117,10 +119,10 @@ def upload():
             f = form.file.data
             # aup = f.filename.split(' - ')[1].strip()
             path = os.path.join(app.static_folder, 'temp', f.filename)
-            
+
             # сохранить временный файл с учебным планом
             f.save(path)
-            
+
             # Вытащить из файла номер аупа
             aup = take_aup_from_excel_file(path)
 
@@ -134,106 +136,20 @@ def upload():
             aupInfo = getAupInfo(path, f.filename)
 
             # берём aupInfo["num"] и смотрим, есть ли в БД уже такая карта, если есть, то редиректим на страницу с этой картой ???
-            # Можно сделать всплывающее окно: "Хотите перезаписать существующий учебный план?" и ответы "Да" и "Нет". 
+            # Можно сделать всплывающее окно: "Хотите перезаписать существующий учебный план?" и ответы "Да" и "Нет".
             # Если нет, то просто редиректим на карту, если да, то просто стираем все по номеру аупа в aupData
             # (в SaveCard уже реализован этот функционал)
 
             # массив с содержимым 2 листа
             aupData = getAupData(path)
-            json = create_json(aupData, aupInfo)
+            # json = create_json(aupData, aupInfo)
             # сохранение карты
-            # SaveCard(db, aupInfo, aupData)
-            
+            SaveCard(db, aupInfo, aupData)
+
             # удалить временный файл
             os.remove(path)
 
-            
-
-            return make_response(jsonify(json), 200)
-            ### ------------------------------------ ###
-            ### Проверка на пустые ячейки ###
-            # f.save(path)
-        #     emp_check, err_arr = check_empty_ceils(path)
-        #     ### ------------------------------------ ###
-        #     # if temp_check == False:
-        #     #     os.remove(path)
-        #     #     errors = 'АУП: ' + aup + ' В документе не заполнены ячейки:' + ', '.join(err_arr)
-        #     #     print(errors)
-        #     #     return error(errors)
-        #     ### ------------------------------------ ###
-
-        #     # ### Проверка на целочисленность ЗЕТ у каждой дисциплины ###
-        #     # err_arr = check_smt(path)
-        #     # if err_arr != []:
-        #     #     os.remove(path)
-        #     #     errors = 'АУП: ' + aup + ' Ошибка при подсчете ЗЕТ:\n' + '\n'.join(err_arr)
-        #     #     print(errors)
-        #     #     return error(errors)
-        #     # ### ------------------------------------ ###
-
-        #     ### Компановка элективных курсов ###
-        #     # layout_of_disciplines(path)
-        #     ### ---------------------------- ###
-
-        #     # ### ------------------------------------ ###
-        #     # ### Проверка, чтобы общая сумма ЗЕТ соответствовало норме (30 * кол-во семестров) ###
-        #     # check_zet, sum_normal, sum_zet = check_full_zet_in_plan(path)
-        #     # print(check_zet, sum_normal, sum_zet)
-        #     # if check_zet == False:
-        #     #     os.remove(path)
-        #     #     errors = 'АУП: ' + aup + ' В выгрузке общая сумма ЗЕТ не соответствует норме. Норма {} ЗЕТ. В карте {} ЗЕТ.'.format(sum_normal, sum_zet)
-        #     #     print(errors)
-        #     #     return error(errors)
-        #     # ### ------------------------------------ ###
-
-        #     get_aup = AUP.query.filter_by(num_aup = aup).first()
-        #     if get_aup == None:
-
-        #         aup = save_into_bd(path)
-
-        #     else:
-        #         files = path
-        #         delete_from_workload(aup)
-        #         if type(files) != list:
-        #             f = files
-        #             files = [f, ]
-
-        #         for file in files:
-        #             update_workload(file, aup)
-
-        #         print(f"[!] such aup already in db. REDIRECT to {aup}")
-
-        #     os.remove(path)
-
-        #     table, _,_ = Table(aup)
-
-        #     print(table)
-
-        #     # moduls = Module.query.all()
-        #     # d = dict()
-        #     # for i in moduls:
-        #     #     d[i.id_module] = i.color
-
-        #     # for i in range(0, len(table)):
-        #     #     for j in range(0, len(table[i])):
-        #     #         new_raw = WorkMap(
-        #     #             id_aup = aup,
-        #     #             discipline = table[i][j]['discipline'],
-        #     #             zet = table[i][j]['zet'],
-        #     #             num_col = i,
-        #     #             num_row = j,
-        #     #             disc_color = table[i][j]['module_color']
-        #     #         )
-        #     #         db.session.add(new_raw)
-        #     #         db.session.commit()
-
-        #     #print("table: ", table)
-
-        #     # print(d)
-
-        #     return redirect(f'/map/{aup}')
-        # else:
-        #     return redirect('/load')
+            return make_response(jsonify(aup), 200)
     else:
         return render_template("upload.html", form=form)
 
@@ -271,25 +187,6 @@ def upload():
 #         li.append(simple_d)
 
 #     return jsonify(li)
-
-
-# # путь для загрузки сформированной КД
-# @app.route("/save_excel/<string:aup>", methods=["GET", "POST"])
-# @cross_origin()
-# def save_excel(aup):
-#     filename = saveMap(aup, app.static_folder, expo=60)
-#     ### Upload xlxs file in memory and delete file from storage -----
-#     return_data = io.BytesIO()
-#     with open(filename, 'rb') as fo:
-#         return_data.write(fo.read())
-#     # (after writing, cursor will be at last byte, so move it to start)
-#     return_data.seek(0)
-
-#     # path = os.path.join(app.static_folder, 'temp', filename)
-#     os.remove(filename)
-#     ### --------------
-#     return send_file(return_data,
-#             download_name=os.path.split(filename)[-1])
 
 
 # if __name__ == "__main__":
@@ -353,7 +250,6 @@ def getAupData(file):
     # 11              групп ID
     # 12                    ID
     # 13    Позиция в семестре
-
 
     allRow = []
     modules = {}
@@ -461,41 +357,58 @@ def getAupData(file):
                 flag_val = d[row[6]]
         else:
             row.append(flag_val)
-            
-
 
         allRow.append(row)
-        
 
     return allRow
 
 
-def create_json(aupData, aupInfo):
+def create_json(aupInfo, aupData):
     json = dict()
-    json['header'] = [aupInfo['direction'], aupInfo['name_spec'], aupInfo['name_faculty']]
+    json['header'] = [aupInfo.name_op.okco.program_code + '.' + aupInfo.name_op.num_profile,
+                      aupInfo.name_op.okco.name_okco, aupInfo.name_op.name_spec, aupInfo.faculty.name_faculty]
     json['data'] = list()
     flag = ""
-    for i in range(len(aupData)):
-        if flag != aupData[i][5] + str(aupData[i][6]):
+    for i, item in enumerate(aupData):
+        if flag != item.discipline + str(item.id_period):
             if i != 0:
                 json['data'].append(d)
-            flag = aupData[i][5] + str(aupData[i][6])
+            flag = item.discipline + str(item.id_period)
             d = dict()
-            d["discipline"] = aupData[i][5]
-            d["id_group"] = aupData[i][11]
-            d["num_col"] = aupData[i][6]
-            d["num_row"] = aupData[i][13]
+            d["discipline"] = item.discipline
+            d["id_group"] = item.id_group
+            d["num_col"] = item.id_period
+            d["num_row"] = item.num_row
             d["type"] = list()
             zet = dict()
-            zet["control"] = control_type_r[aupData[i][7]]
-            zet["zet"] = aupData[i][10] / 100
-            zet["id"] = aupData[i][12]
+            zet["control"] = control_type_r[item.id_type_control]
+            zet["zet"] = item.zet / 100
+            # zet["id"] = item.[12]
             d["type"].append(zet)
         else:
             zet = dict()
-            zet["control"] = control_type_r[aupData[i][7]]
-            zet["zet"] = aupData[i][10] / 100
-            zet["id"] = aupData[i][12]
+            zet["control"] = control_type_r[item.id_type_control]
+            zet["zet"] = item.zet / 100
+            # zet["id"] = item.[12]
             d["type"].append(zet)
 
     return json
+
+
+# путь для загрузки сформированной КД
+@app.route("/save_excel/<string:aup>", methods=["GET"])
+@cross_origin()
+def save_excel(aup):
+    filename = saveMap(aup, app.static_folder, expo=60)
+    # Upload xlxs file in memory and delete file from storage -----
+    return_data = io.BytesIO()
+    with open(filename, 'rb') as fo:
+        return_data.write(fo.read())
+    # (after writing, cursor will be at last byte, so move it to start)
+    return_data.seek(0)
+
+    # path = os.path.join(app.static_folder, 'temp', filename)
+    os.remove(filename)
+    # --------------
+    return send_file(return_data,
+                     download_name=os.path.split(filename)[-1])
