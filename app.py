@@ -7,7 +7,7 @@ from flask_migrate import Migrate
 from sqlalchemy import MetaData
 from openpyxl import load_workbook
 import pandas as pd
-from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, AupData, AupInfo
+from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, AupData, AupInfo, Groups
 import math
 from excel_check import excel_check
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
@@ -412,3 +412,16 @@ def save_excel(aup):
     # --------------
     return send_file(return_data,
                      download_name=os.path.split(filename)[-1])
+
+
+@app.route("/getColors", methods=["GET"])
+def get_colors():
+    q = Groups.query.all()
+    l = list()
+    for row in q:
+        d = dict()
+        d["id"] = row.id_group
+        d["name"] = row.name_group
+        d["color"] = row.color
+        l.append(d)
+    return l
