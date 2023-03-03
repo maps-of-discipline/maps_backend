@@ -7,7 +7,7 @@ from flask_migrate import Migrate
 from sqlalchemy import MetaData
 from openpyxl import load_workbook
 import pandas as pd
-from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, AupData, AupInfo, Groups
+from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, AupData, AupInfo, Groups, SprFaculty
 import math
 from excel_check import excel_check
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
@@ -165,29 +165,6 @@ def upload():
 #     }
 
 #     return jsonify(data)
-
-# @app.route("/getAllMaps")
-# @cross_origin()
-# def getAllMaps():
-#     fac = GetAllFaculties()
-#     li = list()
-#     for i in fac:
-#         simple_d = dict()
-#         simple_d["faculty_name"] = i.name_faculty
-#         maps = GetMaps(id=i.id_faculty)
-#         l = list()
-#         for j in maps:
-#             dd = dict()
-#             dd["map_id"] = j.num_aup
-#             name = str(j.file).split(" ")
-#             dd["map_name"] = " ".join(name[5:len(name)-4])
-#             l.append(dd)
-#         simple_d["data"] = l
-
-#         li.append(simple_d)
-
-#     return jsonify(li)
-
 
 # if __name__ == "__main__":
 #     app.run(debug=True)
@@ -414,7 +391,7 @@ def save_excel(aup):
                      download_name=os.path.split(filename)[-1])
 
 
-@app.route("/getColors", methods=["GET"])
+@app.route("/getGroups", methods=["GET"])
 def get_colors():
     q = Groups.query.all()
     l = list()
@@ -423,5 +400,28 @@ def get_colors():
         d["id"] = row.id_group
         d["name"] = row.name_group
         d["color"] = row.color
+        l.append(d)
+    return l
+
+@app.route("/getAllMaps")
+@cross_origin()
+def getAllMaps():
+    fac = SprFaculty.query.all()
+    li = list()
+    for i in fac:
+        simple_d = dict()
+        simple_d["faculty_name"] = i.name_faculty
+        simple_d["directions"] = GetMaps(id=i.id_faculty)
+        li.append(simple_d)
+    return jsonify(li)
+
+def GetMaps(id):
+    q = AupInfo.query.filter(AupInfo.id_faculty == id).all()
+    l = list()
+    for row in q:
+        d = dict()
+        name = str(row.file).split(" ")
+        d["name"] = " ".join(name[5:len(name)-4])
+        d["code"] =  str(row.id_aup).split(" ")[0]
         l.append(d)
     return l
