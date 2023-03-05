@@ -43,3 +43,14 @@ def take_aup_from_excel_file(file):
 
 def error(errors):
     return make_response(jsonify(errors), 400)
+
+
+def check_skiplist(zet_or_hours, value_discipline, value_record_type, value_block):
+    if (zet_or_hours is not None and (
+            len(list(filter(lambda x: x in value_discipline, skiplist['discipline']))) == 0 and
+            len(list(filter(lambda x: x in value_record_type, skiplist['record_type']))) == 0 and
+            len(list(filter(lambda x: x in value_block, skiplist['record_type']))) == 0)):
+        return True
+    else:
+        return False
+    

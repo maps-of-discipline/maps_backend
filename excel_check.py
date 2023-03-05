@@ -175,7 +175,8 @@ def check_full_zet_in_plan(file):
     wb = load_workbook(file)
     ws = wb['Лист2']
     column_semester = ws['G']
-    column_zet = ws['K']
+    column_hours = ws['I']
+    column_edizm = ws['J']
     column_record_type = ws['E']
     column_discipline = ws['F']
     column_block = ws['A']
@@ -195,18 +196,23 @@ def check_full_zet_in_plan(file):
     sum_normal = select.zet
 
     sum_zet = 0
-    for i in range(1, len(column_zet)):
-        if (column_zet[i].value is not None and (
+    for i in range(1, len(column_hours)):
+        if (column_hours[i].value is not None and (
                 len(list(filter(lambda x: x in column_discipline[i].value, skiplist['discipline']))) == 0 and
                 len(list(filter(lambda x: x in column_record_type[i].value, skiplist['record_type']))) == 0 and
                 len(list(filter(lambda x: x in column_block[i].value, skiplist['record_type']))) == 0)):
-
-            try:
-                sum_zet += float(column_zet[i].value.replace(',', '.'))
-            except:
-                sum_zet += float(column_zet[i].value)
-
-    print('normal:', sum_normal, '\nzet:', sum_zet)
+            
+            if column_edizm[i].value == 'Недели':
+                try:
+                    sum_zet += float(column_hours[i].value.replace(',', '.'))*54
+                except:
+                    sum_zet += float(column_hours[i].value)*54
+            else:
+                try:
+                    sum_zet += float(column_hours[i].value.replace(',', '.'))
+                except:
+                    sum_zet += float(column_hours[i].value)
+    sum_zet /= 36
 
     if abs(round(sum_zet, 2) - sum_zet) < 0.001:
         sum_zet = round(sum_zet, 2)
@@ -215,6 +221,7 @@ def check_full_zet_in_plan(file):
     #     return True, None, None
     # else:
     return sum_normal, sum_zet
+
 
 
 def format_standard(standard):
