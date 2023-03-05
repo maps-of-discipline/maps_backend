@@ -35,13 +35,13 @@ def create_json(aupInfo, aupData):
             zet = dict()
             zet["control"] = control_type_r[item.id_type_control]
             zet["zet"] = item.zet / 100
-            # zet["id"] = item.[12]
+            zet["id"] = item.id
             d["type"].append(zet)
         else:
             zet = dict()
             zet["control"] = control_type_r[item.id_type_control]
             zet["zet"] = item.zet / 100
-            # zet["id"] = item.[12]
+            zet["id"] = item.id
             d["type"].append(zet)
 
     return json
