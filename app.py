@@ -246,7 +246,7 @@ def getAupData(file):
             row[2] = id
 
         if pd.isna(row[3]):
-            row[3] = ""
+            row[3] = "Без названия"
         val = row[3]
         row[3] = modules.get(val)
         if row[3] == None:
