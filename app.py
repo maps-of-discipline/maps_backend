@@ -56,42 +56,30 @@ def getMap(aup):
     aup = AupInfo.query.filter_by(num_aup=aup).first()
     data = AupData.query.filter_by(id_aup=aup.id_aup).all()
     json = create_json(aup, data)
+    # if check_sum_zet_in_type == False:
+    #     return make_response(jsonify('ERROR sum_zet=0'), 400)
     return make_response(jsonify(json), 200)
-    # q = WorkMap.query.filter_by(id_aup=aup).all()
-    # d = dict()
-    # d["id_aup"] = q[0].id_aup
-    # l = list()
-    # for i in q:
-    #     a = dict()
-    #     a["id"] = i.id
-    #     a["discipline"] = i.discipline
-    #     a["zet"] = i.zet
-    #     a["id_group"] = i.id_group
-    #     a["num_col"] = i.num_col
-    #     a["num_row"] = i.num_row
-    #     a["disc_color"] = i.disc_color
-    #     l.append(a)
-    # d["data"] = l
-    # header = Header(aup)
-    # d["header"] = header
-    # return jsonify(d)
 
 
-# @app.route('/save/<string:aup>', methods=["POST"])
-# @cross_origin()
-# def saveMap1(aup):
-#     if request.method == "POST":
-#         request_data = request.get_json()
-#         for i in range(0, len(request_data)):
-#             row = WorkMap.query.filter_by(id=request_data[i]['id']).first()
-#             row.discipline = request_data[i]['discipline']
-#             row.zet = request_data[i]['zet']
-#             row.num_col = request_data[i]['num_col']
-#             row.num_row = request_data[i]['num_row']
-#             # row.disc_color = request_data[i]['module_color']
-#             # row.id_group = request_data[i]['id_group']
-#             db.session.commit()
-#         return make_response(jsonify(''), 200)
+def check_sum_zet_in_type(json):
+    pass
+
+
+@app.route('/save/<string:aup>', methods=["POST"])
+@cross_origin()
+def saveMap1(aup):
+    if request.method == "POST":
+        request_data = request.get_json()
+        for i in range(0, len(request_data)):
+            row = AupData.query.filter_by(id=request_data[i]['id']).first()
+            row.discipline = request_data[i]['discipline']
+            row.zet = request_data[i]['zet']
+            row.num_col = request_data[i]['num_col']
+            row.num_row = request_data[i]['num_row']
+            # row.disc_color = request_data[i]['module_color']
+            # row.id_group = request_data[i]['id_group']
+            db.session.commit()
+        return make_response(jsonify(''), 200)
 
 # @app.route("/")
 # @cross_origin()

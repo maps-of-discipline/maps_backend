@@ -32,12 +32,14 @@ def create_json(aupInfo, aupData):
             d["num_col"] = item.id_period
             d["num_row"] = item.num_row
             d["type"] = list()
+            d["id"] = str(item.id)
             zet = dict()
             zet["control"] = control_type_r[item.id_type_control]
             zet["zet"] = item.zet / 100
             zet["id"] = item.id
             d["type"].append(zet)
         else:
+            d["id"] += str(item.id)
             zet = dict()
             zet["control"] = control_type_r[item.id_type_control]
             zet["zet"] = item.zet / 100
