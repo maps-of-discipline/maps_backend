@@ -20,7 +20,7 @@ def create_json(aupInfo, aupData):
     json['data'] = list()
     flag = ""
     for i, item in enumerate(aupData):
-        if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block) == False:
+        if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
             continue
         if flag != item.discipline + str(item.id_period):
             if i != 0:
