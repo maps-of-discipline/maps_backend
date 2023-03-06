@@ -5,6 +5,7 @@ from flask_cors import CORS, cross_origin
 from flask import Flask, make_response, redirect, render_template, request, send_file, jsonify
 from flask_migrate import Migrate
 from sqlalchemy import MetaData
+from sqlalchemy.sql.expression import func
 from openpyxl import load_workbook
 import pandas as pd
 from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, AupData, AupInfo, Groups, SprFaculty
@@ -14,7 +15,7 @@ from save_into_bd import SaveCard
 from tools import FileForm, take_aup_from_excel_file, error
 from print_excel import saveMap
 from take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
-                   ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r, create_json)
+                          ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r, create_json, create_json_test)
 
 
 app = Flask(__name__)
@@ -54,16 +55,21 @@ setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, contro
 def getMap(aup):
     # table, legend, max_zet = Table(aup, colorSet=1)
     aup = AupInfo.query.filter_by(num_aup=aup).first()
-    data = AupData.query.filter_by(id_aup=aup.id_aup).all()
-    json = create_json(aup, data)
-    # if check_sum_zet_in_type == False:
+    data = AupData.query.filter_by(id_aup=aup.id_aup)
+    max_column = db.session.query(func.max(AupData.id_period)).first()[0]
+    max_row = db.session.query(func.max(AupData.num_row)).first()[0]
+    json = create_json_test(aup, data, max_column, max_row)
+    # if check_sum_zet_in_type(json['data']) == False:
     #     return make_response(jsonify('ERROR sum_zet=0'), 400)
     return make_response(jsonify(json), 200)
 
 
-def check_sum_zet_in_type(json):
-    pass
-
+def check_sum_zet_in_type(data):
+    for item in data:
+        sum_zet_type = 0
+        for i in item['type']:
+            sum_zet_type += i['zet']
+        if sum_zet_type == 0: return False
 
 @app.route('/save/<string:aup>', methods=["POST"])
 @cross_origin()
@@ -85,6 +91,7 @@ def saveMap1(aup):
 # @cross_origin()
 # def index():
 #     return make_response(jsonify(''), 200)
+
 
 @app.route('/upload', methods=["POST", "GET"])
 @cross_origin()
@@ -348,6 +355,7 @@ def get_colors():
         l.append(d)
     return l
 
+
 @app.route("/getAllMaps")
 @cross_origin()
 def getAllMaps():
@@ -360,6 +368,7 @@ def getAllMaps():
         li.append(simple_d)
     return jsonify(li)
 
+
 def GetMaps(id):
     q = AupInfo.query.filter(AupInfo.id_faculty == id).all()
     l = list()
@@ -367,6 +376,6 @@ def GetMaps(id):
         d = dict()
         name = str(row.file).split(" ")
         d["name"] = " ".join(name[5:len(name)-4])
-        d["code"] =  str(row.num_aup).split(" ")[0]
+        d["code"] = str(row.num_aup).split(" ")[0]
         l.append(d)
     return l
