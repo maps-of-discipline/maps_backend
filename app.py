@@ -384,5 +384,6 @@ def GetMaps(id):
         name = str(row.file).split(" ")
         d["name"] = " ".join(name[5:len(name)-4])
         d["code"] = str(row.num_aup).split(" ")[0]
+        d["year"] = row.year_beg
         l.append(d)
     return l
