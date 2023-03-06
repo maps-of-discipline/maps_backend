@@ -17,6 +17,7 @@ def create_json(aupInfo, aupData):
     json = dict()
     json['header'] = [aupInfo.name_op.okco.program_code + '.' + aupInfo.name_op.num_profile,
                       aupInfo.name_op.okco.name_okco, aupInfo.name_op.name_spec, aupInfo.faculty.name_faculty]
+    json['year'] = aupInfo.year_beg
     json['data'] = list()
     flag = ""
     for i, item in enumerate(aupData):
@@ -53,6 +54,7 @@ def create_json_test(aupInfo, aupData, max_column, max_row):
     json = dict()
     json['header'] = [aupInfo.name_op.okco.program_code + '.' + aupInfo.name_op.num_profile,
                       aupInfo.name_op.okco.name_okco, aupInfo.name_op.name_spec, aupInfo.faculty.name_faculty]
+    json['year'] = aupInfo.year_beg
     json['data'] = list()
     for i in range(1, max_column + 1):
         for j in range(max_row + 1):

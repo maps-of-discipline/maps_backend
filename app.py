@@ -55,10 +55,17 @@ setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, contro
 def getMap(aup):
     # table, legend, max_zet = Table(aup, colorSet=1)
     aup = AupInfo.query.filter_by(num_aup=aup).first()
-    data = AupData.query.filter_by(id_aup=aup.id_aup)
-    max_column = db.session.query(func.max(AupData.id_period)).first()[0]
-    max_row = db.session.query(func.max(AupData.num_row)).first()[0]
-    json = create_json_test(aup, data, max_column, max_row)
+    
+    # # Второй способ доставать постоянными запросами, долго достаточно
+    # data = AupData.query.filter_by(id_aup=aup.id_aup)
+    # max_column = db.session.query(func.max(AupData.id_period)).first()[0]
+    # max_row = db.session.query(func.max(AupData.num_row)).first()[0]
+    # json = create_json_test(aup, data, max_column, max_row)
+
+    data = AupData.query.filter_by(id_aup=aup.id_aup).all()
+    json = create_json(aup, data)
+
+
     # if check_sum_zet_in_type(json['data']) == False:
     #     return make_response(jsonify('ERROR sum_zet=0'), 400)
     return make_response(jsonify(json), 200)
