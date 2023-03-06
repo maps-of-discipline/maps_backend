@@ -230,7 +230,7 @@ def format_standard(standard):
     return standard
 
 
-def excel_check(path, aup):
+def excel_check(path, aup, options_check):
     return_err_arr = []
     ## ------------------------------------ ###
     ## Проверка на пустые ячейки ###
@@ -242,11 +242,12 @@ def excel_check(path, aup):
     ### ------------------------------------ ###
 
     # ### Проверка на целочисленность ЗЕТ у каждой дисциплины ###
-    err_arr = check_smt1(path)
-    if err_arr != []:
-        errors = 'АУП: ' + aup + ' Ошибка при подсчете ЗЕТ:\n' + '\n'.join(err_arr)
-        print(errors)
-        return_err_arr.append(errors)
+    if options_check['checkIntegrality'] == True:
+        err_arr = check_smt1(path)
+        if err_arr != []:
+            errors = 'АУП: ' + aup + ' Ошибка при подсчете ЗЕТ:\n' + '\n'.join(err_arr)
+            print(errors)
+            return_err_arr.append(errors)
     # ### ------------------------------------ ###
 
     ### Компановка элективных курсов ###
@@ -255,11 +256,12 @@ def excel_check(path, aup):
 
     # ### ------------------------------------ ###
     # ### Проверка, чтобы общая сумма ЗЕТ соответствовало норме (30 * кол-во семестров) ###
-    sum_normal, sum_zet = check_full_zet_in_plan(path)
-    print(sum_normal, sum_zet)
-    if sum_normal != sum_zet:
-        errors = 'АУП: ' + aup + ' В выгрузке общая сумма ЗЕТ не соответствует норме. Норма {} ЗЕТ. В карте {} ЗЕТ.'.format(sum_normal, sum_zet)
-        print(errors)
-        return_err_arr.append(errors)
+    if options_check['checkSumMap'] == True:
+        sum_normal, sum_zet = check_full_zet_in_plan(path)
+        print(sum_normal, sum_zet)
+        if sum_normal != sum_zet:
+            errors = 'АУП: ' + aup + ' В выгрузке общая сумма ЗЕТ не соответствует норме. Норма {} ЗЕТ. В карте {} ЗЕТ.'.format(sum_normal, sum_zet)
+            print(errors)
+            return_err_arr.append(errors)
     # ### ------------------------------------ ###
     return return_err_arr

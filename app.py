@@ -108,6 +108,7 @@ def upload():
     if request.method == "POST":
         if form.validate_on_submit():
             f = form.file.data
+            options_check = form.options
             # aup = f.filename.split(' - ')[1].strip()
             path = os.path.join(app.static_folder, 'temp', f.filename)
 
@@ -118,7 +119,7 @@ def upload():
             aup = take_aup_from_excel_file(path)
 
             # одна функция, описанная в отдельном файле, которая будет выполнять все проверки
-            err_arr = excel_check(path, aup)
+            err_arr = excel_check(path, aup, options_check)
             if err_arr != []:
                 os.remove(path)
                 return error('\n'.join(err_arr))
