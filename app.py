@@ -14,6 +14,7 @@ from global_variables import setGlobalVariables, addGlobalVariable, getModuleId,
 from save_into_bd import SaveCard
 from tools import FileForm, take_aup_from_excel_file, error
 from print_excel import saveMap
+import json
 from take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
                           ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r, create_json, create_json_test)
 
@@ -108,7 +109,7 @@ def upload():
     if request.method == "POST":
         if form.validate_on_submit():
             f = form.file.data
-            options_check = form.options
+            options_check = json.loads(request.form['options'])
             # aup = f.filename.split(' - ')[1].strip()
             path = os.path.join(app.static_folder, 'temp', f.filename)
 

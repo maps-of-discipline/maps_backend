@@ -242,7 +242,7 @@ def excel_check(path, aup, options_check):
     ### ------------------------------------ ###
 
     # ### Проверка на целочисленность ЗЕТ у каждой дисциплины ###
-    if options_check['checkIntegrality'] == True:
+    if options_check['disableCheckIntegrality'] == False:
         err_arr = check_smt1(path)
         if err_arr != []:
             errors = 'АУП: ' + aup + ' Ошибка при подсчете ЗЕТ:\n' + '\n'.join(err_arr)
@@ -256,7 +256,7 @@ def excel_check(path, aup, options_check):
 
     # ### ------------------------------------ ###
     # ### Проверка, чтобы общая сумма ЗЕТ соответствовало норме (30 * кол-во семестров) ###
-    if options_check['checkSumMap'] == True:
+    if options_check['disableCheckSumMap'] == False:
         sum_normal, sum_zet = check_full_zet_in_plan(path)
         print(sum_normal, sum_zet)
         if sum_normal != sum_zet:
