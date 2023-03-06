@@ -57,6 +57,8 @@ def create_json_test(aupInfo, aupData, max_column, max_row):
     for i in range(1, max_column + 1):
         for j in range(max_row + 1):
             print(i, j)
+            if check_skiplist(disc[0].zet, disc[0].discipline, disc[0].type_record.title, disc[0].block.title) == False:
+                continue
             disc = aupData.filter_by(num_row=j, id_period=i).all()
             if disc == []: continue
             d = dict()
