@@ -59,8 +59,8 @@ def getMap(aup):
     max_column = db.session.query(func.max(AupData.id_period)).first()[0]
     max_row = db.session.query(func.max(AupData.num_row)).first()[0]
     json = create_json_test(aup, data, max_column, max_row)
-    if check_sum_zet_in_type(json['data']) == False:
-        return make_response(jsonify('ERROR sum_zet=0'), 400)
+    # if check_sum_zet_in_type(json['data']) == False:
+    #     return make_response(jsonify('ERROR sum_zet=0'), 400)
     return make_response(jsonify(json), 200)
 
 
