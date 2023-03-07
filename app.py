@@ -88,7 +88,7 @@ def saveMap1(aup):
             for j in range(0, len(request_data[i]['type'])):
                 row = AupData.query.filter_by(id=request_data[i]['type'][j]['id']).first()
                 row.discipline = request_data[i]['discipline']
-                row.zet = request_data[i]['type'][j]['zet']
+                row.zet = request_data[i]['type'][j]['zet']*100
                 row.num_col = request_data[i]['num_col']
                 row.num_row = request_data[i]['num_row']
                 # row.disc_color = request_data[i]['module_color']
