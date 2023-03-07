@@ -235,6 +235,7 @@ class Groups(db.Model):
     id_group = db.Column(db.Integer, primary_key=True)
     name_group = db.Column(db.String(255), nullable=False)
     color = db.Column(db.String(8), nullable=False)
+    weight = db.Column(db.Integer, nullable=False, default=5)
 
     def __repr__(self):
         return '<Groups %r>' % self.name_group

@@ -85,14 +85,15 @@ def saveMap1(aup):
     if request.method == "POST":
         request_data = request.get_json()
         for i in range(0, len(request_data)):
-            row = AupData.query.filter_by(id=request_data[i]['id']).first()
-            row.discipline = request_data[i]['discipline']
-            row.zet = request_data[i]['zet']
-            row.num_col = request_data[i]['num_col']
-            row.num_row = request_data[i]['num_row']
-            # row.disc_color = request_data[i]['module_color']
-            # row.id_group = request_data[i]['id_group']
-            db.session.commit()
+            for j in range(0, len(request_data[i]['type'])):
+                row = AupData.query.filter_by(id=request_data[i]['type'][j]['id']).first()
+                row.discipline = request_data[i]['discipline']
+                row.zet = request_data[i]['type'][j]['zet']
+                row.num_col = request_data[i]['num_col']
+                row.num_row = request_data[i]['num_row']
+                # row.disc_color = request_data[i]['module_color']
+                # row.id_group = request_data[i]['id_group']
+                db.session.commit()
         return make_response(jsonify(''), 200)
 
 # @app.route("/")
