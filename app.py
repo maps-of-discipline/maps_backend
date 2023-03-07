@@ -110,6 +110,7 @@ def upload():
         if form.validate_on_submit():
             f = form.file.data
             options_check = json.loads(request.form['options'])
+
             # aup = f.filename.split(' - ')[1].strip()
             path = os.path.join(app.static_folder, 'temp', f.filename)
 
@@ -329,7 +330,7 @@ def getAupData(file):
             row.append(flag_val)
 
         allRow.append(row)
-
+    allRow.sort(key = lambda x: (x[5], x[6]))
     return allRow
 
 
