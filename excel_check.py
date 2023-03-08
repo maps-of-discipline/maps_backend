@@ -129,7 +129,7 @@ def check_empty_ceils(file):  # Проверка на пустые обязат�
     ws = wb['Лист2']
     max_row = get_maximum_rows(sheet_object=ws)
     err_arr = []
-    for letter in 'ABEFGH':
+    for letter in 'ABEFGHJ':
         for num in range(1, max_row + 1):
             if ws[letter+str(num)].value == None:
                 err_arr.append(letter+str(num))

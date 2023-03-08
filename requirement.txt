@@ -4,6 +4,6 @@ flask-migrate
 flask-sqlalchemy
 flask-wtf
 xlsxwriter
-openpyxl
+openpyxl==3.1.0
 pandas
 flask-cors

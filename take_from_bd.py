@@ -21,6 +21,8 @@ def create_json(aupInfo, aupData):
     json['data'] = list()
     flag = ""
     for i, item in enumerate(aupData):
+        if item.discipline == 'Электронный документооборот': 
+            pass
         if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
             continue
         if flag != item.discipline + str(item.id_period):
@@ -46,6 +48,8 @@ def create_json(aupInfo, aupData):
             zet["zet"] = item.zet / 100
             zet["id"] = item.id
             d["type"].append(zet)
+            if i+1==len(aupData):
+                json['data'].append(d)
 
     return json
 

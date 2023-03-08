@@ -96,11 +96,10 @@ def saveMap1(aup):
             for j in range(0, len(request_data[i]['type'])):
                 row = AupData.query.filter_by(id=request_data[i]['type'][j]['id']).first()
                 row.discipline = request_data[i]['discipline']
-                row.zet = request_data[i]['type'][j]['zet']
+                row.zet = request_data[i]['type'][j]['zet']*100
                 row.num_col = request_data[i]['num_col']
                 row.num_row = request_data[i]['num_row']
-                # row.disc_color = request_data[i]['module_color']
-                # row.id_group = request_data[i]['id_group']
+                row.id_group = request_data[i]['id_group']
                 db.session.commit()
         return make_response(jsonify(''), 200)
 
@@ -400,8 +399,10 @@ def GetMaps(id):
     for row in q:
         d = dict()
         name = str(row.file).split(" ")
-        d["name"] = " ".join(name[5:len(name)-4])
-        d["code"] = str(row.num_aup).split(" ")[0]
+        # d["name"] = " ".join(name[5:len(name)-4])
+        # d["code"] = str(row.num_aup).split(" ")[0]
+        d["name"] = row.name_op.name_spec
+        d["code"] = row.num_aup
         d["year"] = row.year_beg
         l.append(d)
     return l
