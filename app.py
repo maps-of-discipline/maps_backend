@@ -35,6 +35,14 @@ convention = {
 }
 
 
+weith = {
+    'Проектная деятельность' : 10,
+    'Введение в проектную деятельность' : 10,
+    'Управление проектами' : 10,
+    'Иностранный язык' : 1
+}
+
+
 metadata = MetaData(naming_convention=convention)
 db.init_app(app)
 migrate = Migrate(app, db)
@@ -110,8 +118,11 @@ def upload():
     if request.method == "POST":
         if form.validate_on_submit():
             f = form.file.data
-            options_check = json.loads(request.form['options'])
-
+            # options_check = json.loads(request.form['options'])
+            options_check = dict()
+            options_check['disableCheckIntegrality'] = False
+            options_check['disableCheckSumMap'] = False
+            
             # aup = f.filename.split(' - ')[1].strip()
             path = os.path.join(app.static_folder, 'temp', f.filename)
 
@@ -220,20 +231,19 @@ def getAupData(file):
     # 9               Ед. изм.
     # 10                   ЗЕТ
     # 11              групп ID
-    # 12                    ID
-    # 13    Позиция в семестре
+    # 12    Позиция в семестре
+    # 13                   Вес
+
 
     allRow = []
     modules = {}
     groups = {}
-    counter = 0
     flag = ""
     flag_val = 0
     for i in range(len(data)):
         row = []
         for column in data.columns:
             row.append(data[column][i])
-        row.append('')
 
         val = row[0]
         row[0] = blocks.get(val)
@@ -260,7 +270,7 @@ def getAupData(file):
             modules[val] = id
             row[3] = id
 
-        row[11] = groups.get(val)
+        row.append(groups.get(val))
         if row[11] == None:
             id = getGroupId(db, val)
             groups[val] = id
@@ -313,25 +323,29 @@ def getAupData(file):
                 row[10] = int(float(row[10].replace(',', '.')) * 100)
             except:
                 row[10] = int(float(row[10]) * 100)
-        row.append(counter)
-        counter += 1
 
-        if flag != row[5] + str(row[6]):
-            flag = row[5] + str(row[6])
-            pos = d.get(row[6])
-            if pos == None:
-                d[row[6]] = 0
-                row.append(0)
-                flag_val = 0
-            else:
-                row.append(pos + 1)
-                d[row[6]] += 1
-                flag_val = d[row[6]]
-        else:
-            row.append(flag_val)
+        row.append("позиция")
+        row.append(weith.get(row[5], 5))
+        
 
         allRow.append(row)
-    allRow.sort(key = lambda x: (x[5], x[6]))
+    allRow.sort(key = lambda x: (x[6], x[13], x[5]))
+
+    counter = 0
+    semestr = allRow[0][6]
+    disc = allRow[0][5]
+    for i in range(len(allRow)):
+        if allRow[i][6] != semestr:
+            semestr = allRow[i][6]
+            counter = -1
+    
+        if allRow[i][5] != disc:
+            disc = allRow[i][5]
+            counter += 1
+
+        allRow[i][12] = counter
+
+
     return allRow
 
 
