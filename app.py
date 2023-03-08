@@ -92,6 +92,7 @@ def check_sum_zet_in_type(data):
 def saveMap1(aup):
     if request.method == "POST":
         request_data = request.get_json()
+        l = list()
         for i in range(0, len(request_data)):
             for j in range(0, len(request_data[i]['type'])):
                 row = AupData.query.filter_by(id=request_data[i]['type'][j]['id']).first()
@@ -100,7 +101,10 @@ def saveMap1(aup):
                 row.num_col = request_data[i]['num_col']
                 row.num_row = request_data[i]['num_row']
                 row.id_group = request_data[i]['id_group']
-                db.session.commit()
+                l.append(row)
+
+        db.session.bulk_save_objects(l)
+        db.session.commit()
         return make_response(jsonify(''), 200)
 
 # @app.route("/")
