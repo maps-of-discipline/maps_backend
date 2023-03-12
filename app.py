@@ -415,7 +415,10 @@ def GetMaps(id):
 @app.route('/add-group', methods=["POST"])
 def AddNewGroup():
     request_data = request.get_json()
-    db.session.add(Groups(name_group=request_data['name'], color=request_data['color']))
+    data = Groups(name_group=request_data['name'], color=request_data['color'])
+    db.session.add(data)
     db.session.commit()
-    return make_response(jsonify(success=True))
+    d = dict()
+    d["id"] = data.id_group
+    return make_response(jsonify(d), 200)
 
