@@ -410,3 +410,12 @@ def GetMaps(id):
         d["year"] = row.year_beg
         l.append(d)
     return l
+
+
+@app.route('/add-group', methods=["POST"])
+def AddNewGroup():
+    request_data = request.get_json()
+    db.session.add(Groups(name_group=request_data['name'], color=request_data['color']))
+    db.session.commit()
+    return make_response(jsonify(success=True))
+
