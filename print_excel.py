@@ -16,13 +16,31 @@ QUANTITY_HEADER_ROWS = 3
 
 def makeLegend(wb, table, filename_map_down):
     ws = wb.create_sheet('Legend')
-    # groups = Groups.query.all()
-    # list_of_group = []
-    # for item in table:
-    #     group_arr = []
-    data = AupData.query
-
-
+    ws['A1'].value = 'ЗЕТ'
+    ws['A1'].style = 'standart'
+    ws['B1'].value = 'Группа'
+    ws['B1'].style = 'standart'
+    ws.column_dimensions["B"].width = 60.0
+    groups = Groups.query.all()
+    table_dict = {}
+    group_dict = {}
+    for group in groups:
+        group_dict[group.id_group] = {'name': group.name_group, 'color': group.color}
+    for column in table:
+        for item in column:
+            if item['id_group'] in table_dict:
+                table_dict[item['id_group']] += item['zet']
+            else:
+                table_dict[item['id_group']] = item['zet']
+    sum_zet = 0
+    for i, key_value in enumerate(table_dict.items()):
+        ws['A' + str(i+2)].value = int(key_value[1])
+        ws['A' + str(i+2)].style = 'standart'
+        ws['B' + str(i+2)].value = group_dict[key_value[0]]['name']
+        sum_zet += int(key_value[1])
+        color_text_cell(ws, 'B' + str(i+2), group_dict[key_value[0]]['color'].replace('#', ''))
+        ws['A' + str(len(table_dict) + 2)].style = 'standart'
+        ws['A' + str(len(table_dict) + 2)].value = 'Итого: ' + str(sum_zet)
     # return legend
 
 
@@ -71,20 +89,23 @@ def saveMap(aup, static, **kwargs):
             cell = f"{column}{ROW_START_DISCIPLINES+merged}"
 
             ws[cell] = el['discipline']
-            ws[cell].style = 'standart'
 
             color = el['color'].replace('#', '')
+            
+            # ws[cell].style = 'standart'
 
-            r, g, b = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
-            gray = (r + g + b)/3
+            # r, g, b = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
+            # gray = (r + g + b)/3
 
-            if gray < 140:
-                ws[cell].font = Font(bold=False, size=18, color="FFFFFF")
-            else:
-                ws[cell].font = Font(bold=False, size=18, color="000000")
+            # if gray < 140:
+            #     ws[cell].font = Font(bold=False, size=18, color="FFFFFF")
+            # else:
+            #     ws[cell].font = Font(bold=False, size=18, color="000000")
 
-            ws[cell].fill = PatternFill(start_color=str(
-                color), end_color=str(color), fill_type='solid')
+            # ws[cell].fill = PatternFill(start_color=str(
+            #     color), end_color=str(color), fill_type='solid')
+
+            color_text_cell(ws, cell, color)
 
             if el['zet'] < 1:
                 el['zet'] = 1.0
@@ -102,6 +123,18 @@ def saveMap(aup, static, **kwargs):
     return filename_map
 
 
+def color_text_cell(ws, cell, color):
+    ws[cell].style = 'standart'
+    r, g, b = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
+    gray = (r + g + b)/3
+
+    if gray < 140:
+        ws[cell].font = Font(bold=False, size=18, color="FFFFFF")
+    else:
+        ws[cell].font = Font(bold=False, size=18, color="000000")
+
+    ws[cell].fill = PatternFill(start_color=str(
+        color), end_color=str(color), fill_type='solid')
 # def make_many_zet_to_one(table):
 #     for item in table:
 #         item['zet'] = take_sum_zet_in_discipline(item['type'])
@@ -174,7 +207,7 @@ def CreateMap(filename_map, max_zet, table_length):
     workbook = openpyxl.load_workbook(filename_map)
     worksheet = workbook.active
     ns = NamedStyle(name='standart')
-    ns.font = Font(bold=False, size=18)
+    ns.font = Font(bold=False, size=14)
     border = Side(style='thick', color='000000')
     ns.border = Border(left=border, top=border, right=border, bottom=border)
     ns.alignment = Alignment(

@@ -101,10 +101,12 @@ def create_json_print(aupData):
             d = dict()
             d["discipline"] = item.discipline
             d["color"] = item.group.color
+            d["id_group"] = item.id_group
             d["num_col"] = item.id_period
             d["num_row"] = item.num_row
             d["zet"] = item.zet / 100
         else:
             d["zet"] += item.zet / 100
-
+            if i+1==len(aupData):
+                json['data'].append(d)
     return json
