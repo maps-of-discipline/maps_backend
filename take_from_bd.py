@@ -15,7 +15,7 @@ type_record_r = {}
 
 def create_json(aup):
     aupInfo = AupInfo.query.filter_by(num_aup=aup).first()
-    aupData = AupData.query.filter_by(id_aup=aup.id_aup).all()
+    aupData = AupData.query.filter_by(id_aup=aupInfo.id_aup).all()
 
     json = dict()
     json['header'] = [aupInfo.name_op.okco.program_code + '.' + aupInfo.name_op.num_profile,
