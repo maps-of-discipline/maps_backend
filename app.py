@@ -105,7 +105,7 @@ def saveMap1(aup):
 
         db.session.bulk_save_objects(l)
         db.session.commit()
-        return make_response(jsonify(''), 200)
+        return make_response(jsonify(request_data), 200)
 
 # @app.route("/")
 # @cross_origin()

@@ -14,47 +14,16 @@ ROW_START_DISCIPLINES = 5
 QUANTITY_HEADER_ROWS = 3
 
 
-def Legend(table):
+def makeLegend(wb, table, filename_map_down):
+    ws = wb.create_sheet('Legend')
+    # groups = Groups.query.all()
+    # list_of_group = []
+    # for item in table:
+    #     group_arr = []
+    data = AupData.query
 
-    def getName(el):
 
-        name = Groups.query.filter_by(id_module=el[0]).first().name_module
-        return [name, el[1], el[0]]
-
-    legend = []
-
-    for i in range(len(table)):
-        # [name, sum_zet, module]
-
-        for el in table[i]:
-            res = list(filter(lambda x: x[0] == el['module_color'], legend))
-
-            if res != []:
-                index = legend.index(res[0])
-                legend[index][1] += el['zet']
-            else:
-                legend.append([el['module_color'], el['zet']])
-
-    if len(legend) <= 3:
-        legend = []
-        # [name, sum_zet, module]
-        for i in range(len(table)):
-            for el in table[i]:
-                res = list(filter(lambda x: x[0] == el['block'], legend))
-
-                if res != []:
-                    index = legend.index(res[0])
-                    legend[index][1] += el['zet']
-                else:
-                    legend.append([el['block'], el['zet']])
-        for i in range(len(legend)):
-            legend[i].append(i)
-
-        legend.sort(key=lambda x: x[0])
-    else:
-        legend = list(map(lambda x: getName(x), legend))
-
-    return legend
+    # return legend
 
 
 def saveMap(aup, static, **kwargs):
@@ -67,7 +36,7 @@ def saveMap(aup, static, **kwargs):
     table = create_json_print(data)
     max_zet = find_max_zet_excel(table)
     table = add_table_to_arr_and_sort(table['data'])
-    ws, wk = CreateMap(filename_map, max_zet, len(table))
+    ws, wb = CreateMap(filename_map, max_zet, len(table))
 
     header = Header(aup)
     header1 = f'''КАРТА ДИСЦИПЛИН УЧЕБНОГО ПЛАНА'''
@@ -125,11 +94,11 @@ def saveMap(aup, static, **kwargs):
 
             merged += round(el['zet'])
 
-    # legend_on_2nd_sheet(wk, legend, filename_map_down)
+    makeLegend(wb, table, filename_map_down)
 
     set_print_properties(table, ws, max_zet)
 
-    wk.save(filename=filename_map)
+    wb.save(filename=filename_map)
     return filename_map
 
 
