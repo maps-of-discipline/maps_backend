@@ -63,7 +63,7 @@ setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, contro
 @cross_origin()
 def getMap(aup):
     # table, legend, max_zet = Table(aup, colorSet=1)
-    aup = AupInfo.query.filter_by(num_aup=aup).first()
+    # aup = AupInfo.query.filter_by(num_aup=aup).first()
     
     # # Второй способ доставать постоянными запросами, долго достаточно
     # data = AupData.query.filter_by(id_aup=aup.id_aup)
@@ -71,8 +71,8 @@ def getMap(aup):
     # max_row = db.session.query(func.max(AupData.num_row)).first()[0]
     # json = create_json_test(aup, data, max_column, max_row)
 
-    data = AupData.query.filter_by(id_aup=aup.id_aup).all()
-    json = create_json(aup, data)
+    # data = AupData.query.filter_by(id_aup=aup.id_aup).all()
+    json = create_json(aup)
 
 
     # if check_sum_zet_in_type(json['data']) == False:
@@ -105,7 +105,8 @@ def saveMap1(aup):
 
         db.session.bulk_save_objects(l)
         db.session.commit()
-        return make_response(jsonify(request_data), 200)
+        json = create_json(aup)
+        return make_response(jsonify(json), 200)
 
 # @app.route("/")
 # @cross_origin()

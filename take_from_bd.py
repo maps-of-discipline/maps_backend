@@ -1,5 +1,5 @@
 from tools import check_skiplist
-
+from models import AupData, AupInfo
 blocks = {}
 blocks_r = {}
 period = {}
@@ -13,7 +13,10 @@ chast_r = {}
 type_record = {}
 type_record_r = {}
 
-def create_json(aupInfo, aupData):
+def create_json(aup):
+    aupInfo = AupInfo.query.filter_by(num_aup=aup).first()
+    aupData = AupData.query.filter_by(id_aup=aup.id_aup).all()
+
     json = dict()
     json['header'] = [aupInfo.name_op.okco.program_code + '.' + aupInfo.name_op.num_profile,
                       aupInfo.name_op.okco.name_okco, aupInfo.name_op.name_spec, aupInfo.faculty.name_faculty]
