@@ -122,10 +122,10 @@ def upload():
     if request.method == "POST":
         if form.validate_on_submit():
             f = form.file.data
-            # options_check = json.loads(request.form['options'])
-            options_check = dict()
-            options_check['disableCheckIntegrality'] = False
-            options_check['disableCheckSumMap'] = False
+            options_check = json.loads(request.form['options'])
+            # options_check = dict()
+            # options_check['enableCheckIntegrality'] = False
+            # options_check['enableCheckSumMap'] = False
             
             # aup = f.filename.split(' - ')[1].strip()
             path = os.path.join(app.static_folder, 'temp', f.filename)
@@ -421,5 +421,7 @@ def AddNewGroup():
     db.session.commit()
     d = dict()
     d["id"] = data.id_group
+    d["name"] = data.name_group
+    d["color"] = data.color
     return make_response(jsonify(d), 200)
 
