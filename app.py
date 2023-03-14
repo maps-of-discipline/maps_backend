@@ -1,7 +1,7 @@
 from models import db
 import io
 import os
-from flask_cors import cross_origin
+from flask_cors import CORS
 from flask import Flask, make_response, redirect, render_template, request, send_file, jsonify
 from flask_migrate import Migrate
 from sqlalchemy import MetaData
@@ -21,9 +21,9 @@ from take_from_bd import (blocks, blocks_r, period, period_r, control_type, cont
 
 app = Flask(__name__)
 application = app
-# cors = CORS(app)
+cors = CORS(app, resources={r"/api/*": {"origins": "*"}})
 app.config.from_pyfile('config.py')
-# app.config['CORS_HEADERS'] = 'Content-Type'
+app.config['CORS_HEADERS'] = 'Content-Type'
 
 
 convention = {
@@ -60,7 +60,6 @@ setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, contro
 
 
 @app.route("/map/<string:aup>")
-@cross_origin()
 def getMap(aup):
     # table, legend, max_zet = Table(aup, colorSet=1)
     # aup = AupInfo.query.filter_by(num_aup=aup).first()
@@ -88,7 +87,6 @@ def check_sum_zet_in_type(data):
         if sum_zet_type == 0: return False
 
 @app.route('/save/<string:aup>', methods=["POST"])
-@cross_origin()
 def saveMap1(aup):
     if request.method == "POST":
         request_data = request.get_json()
@@ -109,13 +107,11 @@ def saveMap1(aup):
         return make_response(jsonify(json), 200)
 
 # @app.route("/")
-# @cross_origin()
-# def index():
+# # def index():
 #     return make_response(jsonify(''), 200)
 
 
 @app.route('/upload', methods=["POST", "GET"])
-@cross_origin()
 def upload():
     form = FileForm(meta={'csrf': False})
 
@@ -165,8 +161,7 @@ def upload():
 
 
 # @app.route("/api/aup/<string:aup>")
-# @cross_origin()
-# def aupJSON(aup):
+# # def aupJSON(aup):
 #     table, legend, max_zet = Table(aup, colorSet=1)
 
 #     data = {
@@ -355,7 +350,6 @@ def getAupData(file):
 
 # путь для загрузки сформированной КД
 @app.route("/save_excel/<string:aup>", methods=["GET"])
-@cross_origin()
 def save_excel(aup):
     filename = saveMap(aup, app.static_folder, expo=60)
     # Upload xlxs file in memory and delete file from storage -----
@@ -373,7 +367,6 @@ def save_excel(aup):
 
 
 @app.route("/getGroups", methods=["GET"])
-@cross_origin()
 def get_colors():
     q = Groups.query.all()
     l = list()
@@ -387,7 +380,6 @@ def get_colors():
 
 
 @app.route("/getAllMaps")
-@cross_origin()
 def getAllMaps():
     fac = SprFaculty.query.all()
     li = list()
@@ -415,7 +407,6 @@ def GetMaps(id):
 
 
 @app.route('/add-group', methods=["POST"])
-@cross_origin()
 def AddNewGroup():
     request_data = request.get_json()
     if request_data['name'] == '':
