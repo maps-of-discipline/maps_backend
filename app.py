@@ -373,6 +373,7 @@ def save_excel(aup):
 
 
 @app.route("/getGroups", methods=["GET"])
+@cross_origin()
 def get_colors():
     q = Groups.query.all()
     l = list()
@@ -414,6 +415,7 @@ def GetMaps(id):
 
 
 @app.route('/add-group', methods=["POST"])
+@cross_origin()
 def AddNewGroup():
     request_data = request.get_json()
     if request_data['name'] == '':
