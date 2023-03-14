@@ -1,7 +1,7 @@
 from models import db
 import io
 import os
-from flask_cors import CORS, cross_origin
+from flask_cors import cross_origin
 from flask import Flask, make_response, redirect, render_template, request, send_file, jsonify
 from flask_migrate import Migrate
 from sqlalchemy import MetaData
