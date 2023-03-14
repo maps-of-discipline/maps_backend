@@ -98,7 +98,7 @@ def saveMap1(aup):
                 row = AupData.query.filter_by(id=request_data[i]['type'][j]['id']).first()
                 row.discipline = request_data[i]['discipline']
                 row.zet = request_data[i]['type'][j]['zet']*100
-                row.num_col = request_data[i]['num_col']
+                row.id_period = request_data[i]['num_col']
                 row.num_row = request_data[i]['num_row']
                 row.id_group = request_data[i]['id_group']
                 l.append(row)
