@@ -80,26 +80,22 @@ class SprRop(db.Model):
         return '<Rop %r>' % self.full_name
 
 
-class AUP(db.Model):
+class AupInfo(db.Model):
     __tablename__ = 'tbl_aup'
 
     id_aup = db.Column(db.Integer, primary_key=True)
-    id_op = db.Column(db.Integer, db.ForeignKey(
-        'tbl_op.id_op', ondelete='CASCADE'))
     file = db.Column(db.String(255), nullable=False)
     num_aup = db.Column(db.String(255), nullable=False)
     base = db.Column(db.String(255), nullable=False)
-
-    op = db.relationship('OP')
-
-    def __repr__(self):
-        return '<№ AUP %r>' % self.num_aup
-
-
-class DurationEducation(db.Model):
-    __tablename__ = 'tbl_duration_edu'
-
-    id_duration = db.Column(db.Integer, primary_key=True)
+    id_faculty = db.Column(db.Integer, db.ForeignKey(
+        'spr_faculty.id_faculty'), nullable=False)
+    id_rop = db.Column(db.Integer, db.ForeignKey(
+        'spr_rop.id_rop'), nullable=False)
+    type_educ = db.Column(db.String(255), nullable=False)
+    qualification = db.Column(db.String(255), nullable=False)
+    type_standard = db.Column(db.String(255), nullable=False)
+    department = db.Column(db.String(255), nullable=True)
+    period_educ = db.Column(db.String(255), nullable=False)
     id_degree = db.Column(db.Integer, db.ForeignKey(
         'spr_degree_education.id_degree'), nullable=False)
     id_form = db.Column(db.Integer, db.ForeignKey(
@@ -115,48 +111,11 @@ class DurationEducation(db.Model):
     degree = db.relationship('SprDegreeEducation')
     form = db.relationship('SprFormEducation')
     name_op = db.relationship('NameOP')
-
-    @property
-    def full_text(self):
-        return '{} гг {} мм '.format(self.years, self.months)
-
-    def __repr__(self):
-        return '<DurationEducation %r>' % self.full_text
-
-
-class Module(db.Model):
-    __tablename__ = 'tbl_module'
-
-    id_module = db.Column(db.Integer, primary_key=True)
-    name_module = db.Column(db.String(255), nullable=False)
-    color = db.Column(db.String(255), nullable=False)
-
-    def __repr__(self):
-        return '<Module %r>' % self.name_module
-
-
-class OP(db.Model):
-    __tablename__ = 'tbl_op'
-
-    id_op = db.Column(db.Integer, primary_key=True)
-    id_duration = db.Column(db.Integer, db.ForeignKey(
-        'tbl_duration_edu.id_duration'), nullable=False)
-    id_faculty = db.Column(db.Integer, db.ForeignKey(
-        'spr_faculty.id_faculty'), nullable=False)
-    id_rop = db.Column(db.Integer, db.ForeignKey(
-        'spr_rop.id_rop'), nullable=False)
-    type_educ = db.Column(db.String(255), nullable=False)
-    qualification = db.Column(db.String(255), nullable=False)
-    type_standard = db.Column(db.String(255), nullable=False)
-    department = db.Column(db.String(255), nullable=True)
-    period_educ = db.Column(db.String(255), nullable=False)
-
-    duration = db.relationship('DurationEducation')
     faculty = db.relationship('SprFaculty')
     rop = db.relationship('SprRop')
 
     def __repr__(self):
-        return '<ID_OP %r>' % self.id_op
+        return '<№ AUP %r>' % self.num_aup
 
 
 class NameOP(db.Model):
@@ -174,42 +133,6 @@ class NameOP(db.Model):
         return '<NameOP %r>' % self.id_spec
 
 
-class Workload(db.Model):
-    __tablename__ = 'workload'
-
-    id_workload = db.Column(db.Integer, primary_key=True)
-    id_aup = db.Column(db.Integer, db.ForeignKey(
-        'tbl_aup.id_aup', ondelete='CASCADE'), nullable=False)
-    block = db.Column(db.String(255), nullable=False)
-    cypher = db.Column(db.String(255), nullable=False)
-    part = db.Column(db.String(255), nullable=True)
-    id_module = db.Column(db.Integer, db.ForeignKey(
-        'tbl_module.id_module'), nullable=False)
-    id_group = db.Column(db.Integer, db.ForeignKey(
-        'tbl_group.id_group'), nullable=True)
-    record_type = db.Column(db.String(255), nullable=False)
-    discipline = db.Column(db.String(255), nullable=False)
-    period = db.Column(db.String(255), nullable=False)
-    load = db.Column(db.String(255), nullable=False)
-    quantity = db.Column(db.Integer, nullable=False)
-    measurement = db.Column(db.String(255), nullable=False)
-    zet = db.Column(db.Float, nullable=False)
-
-    module = db.relationship('Module')
-    aup = db.relationship('AUP')
-
-    def __repr__(self):
-        return '<Workload %r>' % self.id_workload
-
-
-class Grouping(db.Model):
-    __tablename__ = 'tbl_group'
-
-    id_group = db.Column(db.Integer, primary_key=True)
-    name_group = db.Column(db.String(255), nullable=False)
-    color = db.Column(db.String(8), nullable=False)
-
-
 class SprVolumeDegreeZET(db.Model):
     __tablename__ = 'spr_volume_degree_zet'
 
@@ -220,7 +143,7 @@ class SprVolumeDegreeZET(db.Model):
     zet = db.Column(db.Integer, nullable=False)
     effective_date = db.Column(db.Date, nullable=True)
 
-    # standard = db.relationship('SprStandard')
+    progr_code = db.relationship('SprOKCO')
 
     @property
     def volume_degree_zet(self):
@@ -244,20 +167,114 @@ class SprStandard(db.Model):
         return '<SprStandardZET %r>' % self.standard_date
 
 
-class WorkMap(db.Model):
-    tablename = 'work_map'
+class D_Blocks(db.Model):
+    __tablename__ = 'd_blocks'
     id = db.Column(db.Integer, primary_key=True)
-    id_aup = db.Column(db.Integer, db.ForeignKey(
-        'tbl_aup.id_aup', ondelete='CASCADE'), nullable=False, )
-    id_group = db.Column(db.Integer, nullable=True)
-    id_module = db.Column(db.Integer, nullable=True)
-    discipline = db.Column(db.String(255), nullable=False)
-    zet = db.Column(db.Integer, nullable=False)
-    num_col = db.Column(db.Integer, nullable=False)
-    num_row = db.Column(db.Integer, nullable=False)
-    disc_color = db.Column(db.String(8), nullable=False)
-
-    aup = db.relationship('AUP')
+    title = db.Column(db.String(255), nullable=False)
 
     def __repr__(self):
-        return '<WORKMAP %r>' % self.id_aup
+        return '<D_Blocks %r>' % self.title
+
+
+class D_Period(db.Model):
+    __tablename__ = 'd_period'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+
+    def __repr__(self):
+        return '<D_Period %r>' % self.title
+
+
+class D_ControlType(db.Model):
+    __tablename__ = 'd_control_type'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+
+    def __repr__(self):
+        return '<D_ControlType %r>' % self.title
+
+
+class D_EdIzmereniya(db.Model):
+    __tablename__ = 'd_ed_izmereniya'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+
+    def __repr__(self):
+        return '<D_EdIzmereniya %r>' % self.title
+
+
+class D_Part(db.Model):
+    __tablename__ = 'd_part'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+
+    def __repr__(self):
+        return '<D_Part %r>' % self.title
+
+
+class D_TypeRecord(db.Model):
+    __tablename__ = 'd_type_record'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+
+    def __repr__(self):
+        return '<D_TypeRecord %r>' % self.title
+
+
+class D_Modules(db.Model):
+    __tablename__ = 'd_modules'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+
+    def __repr__(self):
+        return '<D_Modules %r>' % self.title
+
+
+class Groups(db.Model):
+    __tablename__ = 'groups'
+    id_group = db.Column(db.Integer, primary_key=True)
+    name_group = db.Column(db.String(255), nullable=False)
+    color = db.Column(db.String(8), nullable=False)
+    weight = db.Column(db.Integer, nullable=False, default=5)
+
+    def __repr__(self):
+        return '<Groups %r>' % self.name_group
+
+
+class AupData(db.Model):
+    __tablename__ = 'aup_data'
+    id = db.Column(db.Integer, primary_key=True)
+    id_aup = db.Column(db.Integer, db.ForeignKey(
+        'tbl_aup.id_aup', ondelete='CASCADE'), nullable=False)
+    id_block = db.Column(db.Integer, db.ForeignKey(
+        'd_blocks.id'), nullable=False)
+    shifr = db.Column(db.String(30), nullable=False)
+    id_part = db.Column(db.Integer, db.ForeignKey(
+        'd_part.id'), nullable=False)
+    id_module = db.Column(db.Integer, db.ForeignKey(
+        'd_modules.id'), nullable=False)
+    id_group = db.Column(db.Integer, db.ForeignKey(
+        'groups.id_group'), nullable=False)
+    id_type_record = db.Column(db.Integer, db.ForeignKey(
+        'd_type_record.id'), nullable=False)
+    discipline = db.Column(db.String(150), nullable=False)
+    id_period = db.Column(db.Integer, nullable=False)
+    num_row = db.Column(db.Integer, nullable=False)
+    id_type_control = db.Column(db.Integer, db.ForeignKey(
+        'd_control_type.id'), nullable=False)
+    amount = db.Column(db.Integer, nullable=False)
+    id_edizm = db.Column(db.Integer, db.ForeignKey(
+        'd_ed_izmereniya.id'), nullable=False)
+    zet = db.Column(db.Integer, nullable=False)
+
+    block = db.relationship('D_Blocks')
+    part = db.relationship('D_Part')
+    module = db.relationship('D_Modules')
+    type_record = db.relationship('D_TypeRecord')
+    type_control = db.relationship('D_ControlType')
+    group = db.relationship('Groups')
+    aup = db.relationship('AupInfo')
+    ed_izmereniya = db.relationship('D_EdIzmereniya')
+
+    def __repr__(self):
+        return '<AupData %r>' % self.aup_num
