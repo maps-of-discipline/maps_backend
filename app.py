@@ -21,9 +21,9 @@ from take_from_bd import (blocks, blocks_r, period, period_r, control_type, cont
 
 app = Flask(__name__)
 application = app
-cors = CORS(app)
+# cors = CORS(app)
 app.config.from_pyfile('config.py')
-app.config['CORS_HEADERS'] = 'Content-Type'
+# app.config['CORS_HEADERS'] = 'Content-Type'
 
 
 convention = {
