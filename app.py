@@ -420,3 +420,19 @@ def AddNewGroup():
     d["color"] = data.color
     return make_response(jsonify(d), 200)
 
+@app.route('/delete-group', methods=["POST"])
+def DeleteGroup():
+    request_data = request.get_json()
+    Groups.query.filter_by(id_group=request_data['id']).delete()
+    db.session.commit()
+    return make_response(jsonify('OK'), 200)
+
+@app.route('/update-group', methods=["POST"])
+def UpdateGroup():
+    request_data = request.get_json()
+    gr = Groups.query.filter_by(id_group=request_data['id']).first()
+    gr.name_group=request_data['name']
+    gr.color=request_data['color']
+    db.session.add(gr)
+    db.session.commit()
+    return make_response(jsonify('OK'), 200)
