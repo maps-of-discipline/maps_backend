@@ -7,7 +7,7 @@ from models import SprStandard, SprVolumeDegreeZET
 
 
 def check_smt1(file):  # проверка на целочисленность дисциплины №2
-    wb = load_workbook(file)
+    wb = load_workbook(file, read_only=True)
     ws = wb['Лист2']
     max_row = get_maximum_rows(sheet_object=ws)
     d = defaultdict(list)

@@ -1,6 +1,8 @@
 from models import db
 import io
 import os
+import warnings
+warnings.simplefilter("ignore")
 from flask_cors import CORS
 from flask import Flask, make_response, redirect, render_template, request, send_file, jsonify
 from flask_migrate import Migrate
@@ -117,45 +119,48 @@ def upload():
 
     if request.method == "POST":
         if form.validate_on_submit():
-            f = form.file.data
-            options_check = json.loads(request.form['options'])
-            # options_check = dict()
-            # options_check['enableCheckIntegrality'] = False
-            # options_check['enableCheckSumMap'] = False
-            
-            # aup = f.filename.split(' - ')[1].strip()
-            path = os.path.join(app.static_folder, 'temp', f.filename)
+            files = request.files.getlist("file")
+            res = list()
+            for f in files:
+                options_check = json.loads(request.form['options'])
+                # options_check = dict()
+                # options_check['enableCheckIntegrality'] = False
+                # options_check['enableCheckSumMap'] = False
+                
+                # aup = f.filename.split(' - ')[1].strip()
+                path = os.path.join(app.static_folder, 'temp', f.filename)
 
-            # сохранить временный файл с учебным планом
-            f.save(path)
+                # сохранить временный файл с учебным планом
+                f.save(path)
 
-            # Вытащить из файла номер аупа
-            aup = take_aup_from_excel_file(path)
+                # Вытащить из файла номер аупа
+                aup = take_aup_from_excel_file(path)
 
-            # одна функция, описанная в отдельном файле, которая будет выполнять все проверки
-            err_arr = excel_check(path, aup, options_check)
-            if err_arr != []:
+                # одна функция, описанная в отдельном файле, которая будет выполнять все проверки
+                err_arr = excel_check(path, aup, options_check)
+                if err_arr != []:
+                    os.remove(path)
+                    return error('\n'.join(err_arr))
+
+                # словарь с содержимым 1 листа
+                aupInfo = getAupInfo(path, f.filename)
+
+                # берём aupInfo["num"] и смотрим, есть ли в БД уже такая карта, если есть, то редиректим на страницу с этой картой ???
+                # Можно сделать всплывающее окно: "Хотите перезаписать существующий учебный план?" и ответы "Да" и "Нет".
+                # Если нет, то просто редиректим на карту, если да, то просто стираем все по номеру аупа в aupData
+                # (в SaveCard уже реализован этот функционал)
+
+                # массив с содержимым 2 листа
+                aupData = getAupData(path)
+                # json = create_json(aupData, aupInfo)
+                # сохранение карты
+                SaveCard(db, aupInfo, aupData)
+
+                # удалить временный файл
                 os.remove(path)
-                return error('\n'.join(err_arr))
+                res.append(aup)
 
-            # словарь с содержимым 1 листа
-            aupInfo = getAupInfo(path, f.filename)
-
-            # берём aupInfo["num"] и смотрим, есть ли в БД уже такая карта, если есть, то редиректим на страницу с этой картой ???
-            # Можно сделать всплывающее окно: "Хотите перезаписать существующий учебный план?" и ответы "Да" и "Нет".
-            # Если нет, то просто редиректим на карту, если да, то просто стираем все по номеру аупа в aupData
-            # (в SaveCard уже реализован этот функционал)
-
-            # массив с содержимым 2 листа
-            aupData = getAupData(path)
-            # json = create_json(aupData, aupInfo)
-            # сохранение карты
-            SaveCard(db, aupInfo, aupData)
-
-            # удалить временный файл
-            os.remove(path)
-
-            return make_response(jsonify(aup), 200)
+            return make_response(jsonify(res), 200)
     else:
         return render_template("upload.html", form=form)
 
