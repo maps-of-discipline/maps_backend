@@ -254,7 +254,7 @@ class AupData(db.Model):
     id_module = db.Column(db.Integer, db.ForeignKey(
         'd_modules.id'), nullable=False)
     id_group = db.Column(db.Integer, db.ForeignKey(
-        'groups.id_group'), nullable=False)
+        'groups.id_group', ondelete='CASCADE'), nullable=False)
     id_type_record = db.Column(db.Integer, db.ForeignKey(
         'd_type_record.id'), nullable=False)
     discipline = db.Column(db.String(150), nullable=False)
