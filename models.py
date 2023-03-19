@@ -253,8 +253,7 @@ class AupData(db.Model):
         'd_part.id'), nullable=False)
     id_module = db.Column(db.Integer, db.ForeignKey(
         'd_modules.id'), nullable=False)
-    id_group = db.Column(db.Integer, db.ForeignKey(
-        'groups.id_group', ondelete='CASCADE'), nullable=False)
+    id_group = db.Column(db.Integer, nullable=False)
     id_type_record = db.Column(db.Integer, db.ForeignKey(
         'd_type_record.id'), nullable=False)
     discipline = db.Column(db.String(150), nullable=False)
@@ -272,7 +271,6 @@ class AupData(db.Model):
     module = db.relationship('D_Modules')
     type_record = db.relationship('D_TypeRecord')
     type_control = db.relationship('D_ControlType')
-    group = db.relationship('Groups')
     aup = db.relationship('AupInfo')
     ed_izmereniya = db.relationship('D_EdIzmereniya')
 
