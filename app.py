@@ -423,6 +423,11 @@ def AddNewGroup():
 @app.route('/delete-group', methods=["POST"])
 def DeleteGroup():
     request_data = request.get_json()
+    d = AupData.query.filter_by(id_group=request_data['id']).all()
+    for row in d:
+        row.id_group = 1
+        db.session.add(row)
+    db.session.commit()
     Groups.query.filter_by(id_group=request_data['id']).delete()
     db.session.commit()
     return make_response(jsonify('OK'), 200)
