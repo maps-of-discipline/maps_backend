@@ -23,7 +23,8 @@ from take_from_bd import (blocks, blocks_r, period, period_r, control_type, cont
 
 app = Flask(__name__)
 application = app
-cors = CORS(app, resources={r"/api/*": {"origins": "*"}})
+cors = CORS(app, resources={r"/*": {"origins": "*"}})
+
 app.config.from_pyfile('config.py')
 app.config['CORS_HEADERS'] = 'Content-Type'
 
@@ -87,6 +88,7 @@ def check_sum_zet_in_type(data):
         for i in item['type']:
             sum_zet_type += i['zet']
         if sum_zet_type == 0: return False
+
 
 @app.route('/save/<string:aup>', methods=["POST"])
 def saveMap1(aup):
