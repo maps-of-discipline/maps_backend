@@ -448,3 +448,11 @@ def UpdateGroup():
     db.session.add(gr)
     db.session.commit()
     return make_response(jsonify('OK'), 200)
+
+
+@app.route("/getControlTypes")
+def getControlTypes():
+    control_type_arr = []
+    for k, v in control_type_r.items():
+        control_type_arr.append({"name": v, "id": k})
+    return make_response(jsonify(control_type_arr), 200)
