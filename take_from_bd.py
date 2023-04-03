@@ -43,6 +43,7 @@ def create_json(aup):
             zet["control"] = control_type_r[item.id_type_control]
             zet["zet"] = item.zet / 100
             zet["id"] = item.id
+            zet["controlTypeId"] = item.id_type_control
             d["type"].append(zet)
         else:
             d["id"] += str(item.id)
@@ -50,6 +51,7 @@ def create_json(aup):
             zet["control"] = control_type_r[item.id_type_control]
             zet["zet"] = item.zet / 100
             zet["id"] = item.id
+            zet["controlTypeId"] = item.id_type_control
             d["type"].append(zet)
             if i+1==len(aupData):
                 json['data'].append(d)
