@@ -13,7 +13,7 @@ from sqlalchemy.sql.expression import func
 from sqlalchemy import MetaData
 from flask_migrate import Migrate
 from flask import Flask, make_response, redirect, render_template, request, send_file, jsonify
-from flask_cors import CORS
+# from flask_cors import CORS
 from models import db
 import io
 import os
@@ -23,7 +23,7 @@ warnings.simplefilter("ignore")
 
 app = Flask(__name__)
 application = app
-cors = CORS(app, resources={r"/*": {"origins": "*"}})
+# cors = CORS(app, resources={r"*": {"origins": "*"}})
 
 app.config.from_pyfile('config.py')
 app.config['CORS_HEADERS'] = 'Content-Type'
