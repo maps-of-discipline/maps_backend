@@ -1,5 +1,5 @@
 from tools import check_skiplist
-from models import AupData, AupInfo
+from models import AupData, AupInfo, Groups
 blocks = {}
 blocks_r = {}
 period = {}
@@ -102,8 +102,9 @@ def create_json_print(aupData):
             flag = item.discipline + str(item.id_period)
             d = dict()
             d["discipline"] = item.discipline
-            d["color"] = item.group.color
-            d["id_group"] = item.id_group
+            group = Groups.query.filter(Groups.id_group == item.id_group).first()
+            d["color"] = group.color
+            d["id_group"] = group.id_group
             d["num_col"] = item.id_period
             d["num_row"] = item.num_row
             d["zet"] = item.zet / 100
