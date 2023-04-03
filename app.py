@@ -1,24 +1,24 @@
+from take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
+                          ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r, create_json, create_json_test)
+import json
+from print_excel import saveMap
+from tools import FileForm, take_aup_from_excel_file, error
+from save_into_bd import SaveCard
+from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
+from excel_check import excel_check
+from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, AupData, AupInfo, Groups, SprFaculty
+import pandas as pd
+from openpyxl import load_workbook
+from sqlalchemy.sql.expression import func
+from sqlalchemy import MetaData
+from flask_migrate import Migrate
+from flask import Flask, make_response, redirect, render_template, request, send_file, jsonify
+from flask_cors import CORS
 from models import db
 import io
 import os
 import warnings
 warnings.simplefilter("ignore")
-from flask_cors import CORS
-from flask import Flask, make_response, redirect, render_template, request, send_file, jsonify
-from flask_migrate import Migrate
-from sqlalchemy import MetaData
-from sqlalchemy.sql.expression import func
-from openpyxl import load_workbook
-import pandas as pd
-from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, AupData, AupInfo, Groups, SprFaculty
-from excel_check import excel_check
-from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
-from save_into_bd import SaveCard
-from tools import FileForm, take_aup_from_excel_file, error
-from print_excel import saveMap
-import json
-from take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
-                          ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r, create_json, create_json_test)
 
 
 app = Flask(__name__)
@@ -39,10 +39,10 @@ convention = {
 
 
 weith = {
-    'Проектная деятельность' : 10,
-    'Введение в проектную деятельность' : 10,
-    'Управление проектами' : 10,
-    'Иностранный язык' : 1
+    'Проектная деятельность': 10,
+    'Введение в проектную деятельность': 10,
+    'Управление проектами': 10,
+    'Иностранный язык': 1
 }
 
 
@@ -66,7 +66,7 @@ setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, contro
 def getMap(aup):
     # table, legend, max_zet = Table(aup, colorSet=1)
     # aup = AupInfo.query.filter_by(num_aup=aup).first()
-    
+
     # # Второй способ доставать постоянными запросами, долго достаточно
     # data = AupData.query.filter_by(id_aup=aup.id_aup)
     # max_column = db.session.query(func.max(AupData.id_period)).first()[0]
@@ -75,7 +75,6 @@ def getMap(aup):
 
     # data = AupData.query.filter_by(id_aup=aup.id_aup).all()
     json = create_json(aup)
-
 
     # if check_sum_zet_in_type(json['data']) == False:
     #     return make_response(jsonify('ERROR sum_zet=0'), 400)
@@ -87,7 +86,8 @@ def check_sum_zet_in_type(data):
         sum_zet_type = 0
         for i in item['type']:
             sum_zet_type += i['zet']
-        if sum_zet_type == 0: return False
+        if sum_zet_type == 0:
+            return False
 
 
 @app.route('/save/<string:aup>', methods=["POST"])
@@ -97,7 +97,8 @@ def saveMap1(aup):
         l = list()
         for i in range(0, len(request_data)):
             for j in range(0, len(request_data[i]['type'])):
-                row = AupData.query.filter_by(id=request_data[i]['type'][j]['id']).first()
+                row = AupData.query.filter_by(
+                    id=request_data[i]['type'][j]['id']).first()
                 row.discipline = request_data[i]['discipline']
                 row.zet = request_data[i]['type'][j]['zet']*100
                 row.id_period = request_data[i]['num_col']
@@ -128,7 +129,7 @@ def upload():
                 # options_check = dict()
                 # options_check['enableCheckIntegrality'] = False
                 # options_check['enableCheckSumMap'] = False
-                
+
                 # aup = f.filename.split(' - ')[1].strip()
                 path = os.path.join(app.static_folder, 'temp', f.filename)
 
@@ -240,7 +241,6 @@ def getAupData(file):
     # 12    Позиция в семестре
     # 13                   Вес
 
-
     allRow = []
     modules = {}
     groups = {}
@@ -332,10 +332,9 @@ def getAupData(file):
 
         row.append("позиция")
         row.append(weith.get(row[5], 5))
-        
 
         allRow.append(row)
-    allRow.sort(key = lambda x: (x[6], x[13], x[5]))
+    allRow.sort(key=lambda x: (x[6], x[13], x[5]))
 
     counter = 0
     semestr = allRow[0][6]
@@ -344,13 +343,12 @@ def getAupData(file):
         if allRow[i][6] != semestr:
             semestr = allRow[i][6]
             counter = -1
-    
+
         if allRow[i][5] != disc:
             disc = allRow[i][5]
             counter += 1
 
         allRow[i][12] = counter
-
 
     return allRow
 
@@ -427,6 +425,7 @@ def AddNewGroup():
     d["color"] = data.color
     return make_response(jsonify(d), 200)
 
+
 @app.route('/delete-group', methods=["POST"])
 def DeleteGroup():
     request_data = request.get_json()
@@ -439,14 +438,21 @@ def DeleteGroup():
     db.session.commit()
     return make_response(jsonify('OK'), 200)
 
+
 @app.route('/update-group', methods=["POST"])
 def UpdateGroup():
     request_data = request.get_json()
     gr = Groups.query.filter_by(id_group=request_data['id']).first()
-    gr.name_group=request_data['name']
-    gr.color=request_data['color']
+    gr.name_group = request_data['name']
+    gr.color = request_data['color']
     db.session.add(gr)
     db.session.commit()
     return make_response(jsonify('OK'), 200)
 
 
+@app.route("/getControlTypes")
+def getControlTypes():
+    control_type_arr = []
+    for k, v in control_type_r.items():
+        control_type_arr.append({"name": v, "id": k})
+    return make_response(jsonify(control_type_arr), 200)
