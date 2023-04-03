@@ -125,10 +125,10 @@ def upload():
             files = request.files.getlist("file")
             res = list()
             for f in files:
-                options_check = json.loads(request.form['options'])
-                # options_check = dict()
-                # options_check['enableCheckIntegrality'] = False
-                # options_check['enableCheckSumMap'] = False
+                # options_check = json.loads(request.form['options'])
+                options_check = dict()
+                options_check['enableCheckIntegrality'] = False
+                options_check['enableCheckSumMap'] = False
 
                 # aup = f.filename.split(' - ')[1].strip()
                 path = os.path.join(app.static_folder, 'temp', f.filename)
@@ -276,6 +276,9 @@ def getAupData(file):
             modules[val] = id
             row[3] = id
 
+        if 'Модуль' in val:
+            val = val.strip()
+            val = val[8:-1].strip()
         row.append(groups.get(val))
         if row[11] == None:
             id = getGroupId(db, val)
