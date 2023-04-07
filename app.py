@@ -441,6 +441,23 @@ def DeleteGroup():
     db.session.commit()
     return make_response(jsonify('OK'), 200)
 
+@app.route('/get-group-by-aup/<string:aup>', methods=["GET"])
+def GetGroupByAup(aup):
+    aupId = AupInfo.query.filter_by(num_aup=aup).first()
+    a = aupId.id_aup
+    aupData = AupData.query.filter_by(id_aup=a).all()
+    groups = set()
+    for elem in aupData:
+        groups.add(elem.id_group)
+    l = list()
+    for elem in groups:
+        d = dict()
+        g = Groups.query.filter_by(id_group=elem).first()
+        d["id"] = g.id_group
+        d["name"] = g.name_group
+        d["color"] = g.color
+        l.append(d)
+    return make_response(jsonify(l), 200)
 
 @app.route('/update-group', methods=["POST"])
 def UpdateGroup():
@@ -459,3 +476,5 @@ def getControlTypes():
     for k, v in control_type_r.items():
         control_type_arr.append({"name": v, "id": k})
     return make_response(jsonify(control_type_arr), 200)
+
+
