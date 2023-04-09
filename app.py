@@ -100,7 +100,7 @@ def saveMap1(aup):
                 row = AupData.query.filter_by(
                     id=request_data[i]['type'][j]['id']).first()
                 row.discipline = request_data[i]['discipline']
-                row.zet = request_data[i]['type'][j]['zet']*100
+                row.amount = request_data[i]['type'][j]['hours']*100
                 row.id_period = request_data[i]['num_col']
                 row.num_row = request_data[i]['num_row']
                 row.id_group = request_data[i]['id_group']
@@ -110,10 +110,6 @@ def saveMap1(aup):
         db.session.commit()
         json = create_json(aup)
         return make_response(jsonify(json), 200)
-
-# @app.route("/")
-# # def index():
-#     return make_response(jsonify(''), 200)
 
 
 @app.route('/upload', methods=["POST", "GET"])
@@ -166,21 +162,6 @@ def upload():
             return make_response(jsonify(res), 200)
     else:
         return render_template("upload.html", form=form)
-
-
-# @app.route("/api/aup/<string:aup>")
-# # def aupJSON(aup):
-#     table, legend, max_zet = Table(aup, colorSet=1)
-
-#     data = {
-#         'table':table,
-#         'max_zet':max_zet
-#     }
-
-#     return jsonify(data)
-
-# if __name__ == "__main__":
-#     app.run(debug=True)
 
 
 def getAupInfo(file, filename):
