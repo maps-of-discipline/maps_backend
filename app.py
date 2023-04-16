@@ -95,16 +95,37 @@ def saveMap1(aup):
     if request.method == "POST":
         request_data = request.get_json()
         l = list()
+        row = any
         for i in range(0, len(request_data)):
             for j in range(0, len(request_data[i]['type'])):
-                row = AupData.query.filter_by(
-                    id=request_data[i]['type'][j]['id']).first()
-                row.discipline = request_data[i]['discipline']
-                row.amount = request_data[i]['type'][j]['hours']*100
-                row.id_period = request_data[i]['num_col']
-                row.num_row = request_data[i]['num_row']
-                row.id_group = request_data[i]['id_group']
-                l.append(row)
+                try:
+                    row = AupData.query.filter_by(
+                        id=request_data[i]['type'][j]['id']).first()
+                    row.discipline = request_data[i]['discipline']
+                    row.amount = request_data[i]['type'][j]['hours']*100
+                    row.id_period = request_data[i]['num_col']
+                    row.num_row = request_data[i]['num_row']
+                    row.id_group = request_data[i]['id_group']
+                    l.append(row)
+                except:
+                    print(123)
+                    # row = AupData(
+                    #     id_aup = request_data[i]['id'],
+                    #     id_block = row.id_block
+                       
+                    #     # id_part =
+                    #     # id_module =
+                    #     # id_group =
+                    #     # id_type_record =
+                    #     # discipline =
+                    #     # id_period =
+                    #     # num_row =
+                    #     # id_type_control =
+                    #     # amount =
+                    #     # id_edizm =
+                    #     # zet =
+                    # )
+                    # l.append(row)
 
         db.session.bulk_save_objects(l)
         db.session.commit()

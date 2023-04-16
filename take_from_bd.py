@@ -34,6 +34,10 @@ def create_json(aup):
             d = dict()
             d["discipline"] = item.discipline
             d["id_group"] = item.id_group
+            d["id_block"] = item.id_block
+            d["shifr"] = item.shifr
+            d["id_part"] = item.id_part
+            d["id_module"] = item.id_module
             d["num_col"] = item.id_period
             d["num_row"] = item.num_row
             d["type"] = list()
