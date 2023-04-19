@@ -225,29 +225,26 @@ def getAupInfo(file, filename):
 
 
 def getAupData(file):
-    d = dict()
     data = pd.read_excel(file, sheet_name="Лист2")
     #             Наименование
-    # 0                   Блок
-    # 1                   Шифр
-    # 2                  Часть
-    # 3                 Модуль
-    # 4             Тип записи
-    # 5             Дисциплина
-    # 6        Период контроля
-    # 7               Нагрузка
-    # 8             Количество
-    # 9               Ед. изм.
-    # 10                   ЗЕТ
-    # 11              групп ID
-    # 12    Позиция в семестре
-    # 13                   Вес
+    # 0                   Блок.
+    # 1                   Шифр.
+    # 2                  Часть.
+    # 3                 Модуль.
+    # 4             Тип записи.
+    # 5             Дисциплина.
+    # 6        Период контроля.
+    # 7               Нагрузка----
+    # 8             Количество----
+    # 9               Ед. изм.----
+    # 10                   ЗЕТ----
+    # 11              групп ID.
+    # 12    Позиция в семестре.
+    # 13                   Вес.
 
     allRow = []
     modules = {}
     groups = {}
-    flag = ""
-    flag_val = 0
     for i in range(len(data)):
         row = []
         for column in data.columns:
@@ -339,6 +336,8 @@ def getAupData(file):
         row.append(weith.get(row[5], 5))
 
         allRow.append(row)
+
+
     allRow.sort(key=lambda x: (x[6], x[13], x[5]))
 
     counter = 0

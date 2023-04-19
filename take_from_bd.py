@@ -13,9 +13,15 @@ chast_r = {}
 type_record = {}
 type_record_r = {}
 
+def getType(id):
+    l = [1, 5, 9]
+    if id in l:
+        return "control"
+    return "load"
+
 def create_json(aup):
     aupInfo = AupInfo.query.filter_by(num_aup=aup).first()
-    aupData = AupData.query.filter_by(id_aup=aupInfo.id_aup).all()
+    aupData = AupData.query.filter_by(id_aup=aupInfo.id_aup).order_by(AupData.shifr).all()
 
     json = dict()
     json['header'] = [aupInfo.name_op.okco.program_code + '.' + aupInfo.name_op.num_profile,
@@ -38,23 +44,23 @@ def create_json(aup):
             d["shifr"] = item.shifr
             d["id_part"] = item.id_part
             d["id_module"] = item.id_module
-            d["num_col"] = item.id_period
+            d["num_col"] = item.id_period - 1 
             d["num_row"] = item.num_row
             d["type"] = list()
             d["id"] = str(item.id)
             zet = dict()
-            zet["control"] = control_type_r[item.id_type_control]
             zet["hours"] = item.amount / 100
             zet["id"] = item.id
-            zet["controlTypeId"] = item.id_type_control
+            zet["control_type_id"] = item.id_type_control
+            zet["type"] = getType(item.id_type_control)
             d["type"].append(zet)
         else:
             d["id"] += str(item.id)
             zet = dict()
-            zet["control"] = control_type_r[item.id_type_control]
             zet["hours"] = item.amount / 100
             zet["id"] = item.id
-            zet["controlTypeId"] = item.id_type_control
+            zet["control_type_id"] = item.id_type_control
+            zet["type"] = getType(item.id_type_control)
             d["type"].append(zet)
             if i+1==len(aupData):
                 json['data'].append(d)
