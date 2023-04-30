@@ -139,7 +139,7 @@ def get_id_edizm():
     d['id_edizm'] = 1
     d['kratn'] = 2
     d['value'] = 'Часы'
-    d['coef'] = 36.0
+    d['coef'] = 0.0625
     l.append(d)
     d = dict()
     d['id_edizm'] = 2
