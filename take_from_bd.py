@@ -29,12 +29,19 @@ def create_json(aup):
     json['year'] = aupInfo.year_beg
     json['data'] = list()
     flag = ""
-    for i, item in enumerate(aupData):
+    session = list()
+    value = list()
 
+    for i, item in enumerate(aupData):
+        
         if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
             continue
         if flag != item.discipline + str(item.id_period):
             if i != 0:
+                d['type']['session'] = session
+                d['type']['value'] = value
+                session = list()
+                value = list()
                 json['data'].append(d)
             flag = item.discipline + str(item.id_period)
             d = dict()
@@ -46,22 +53,30 @@ def create_json(aup):
             d["id_module"] = item.id_module
             d["num_col"] = item.id_period - 1 
             d["num_row"] = item.num_row
-            d["type"] = list()
+            d["type"] = dict()
             d["id"] = str(item.id)
             zet = dict()
-            zet["hours"] = item.amount / 100
+            zet["amount"] = item.amount / 100
+            zet["id_edizm"] = item.ed_izmereniya.id
             zet["id"] = item.id
             zet["control_type_id"] = item.id_type_control
             zet["type"] = getType(item.id_type_control)
-            d["type"].append(zet)
+            if item.id_type_control == control_type['Экзамен'] or item.id_type_control == control_type['Зачет'] or item.id_type_control == control_type['Дифференцированный зачет']:
+                session.append(zet)
+            else:
+                value.append(zet)
         else:
             d["id"] += str(item.id)
             zet = dict()
-            zet["hours"] = item.amount / 100
+            zet["amount"] = item.amount / 100
+            zet["id_edizm"] = item.ed_izmereniya.id
             zet["id"] = item.id
             zet["control_type_id"] = item.id_type_control
             zet["type"] = getType(item.id_type_control)
-            d["type"].append(zet)
+            if item.id_type_control == control_type['Экзамен'] or item.id_type_control == control_type['Зачет'] or item.id_type_control == control_type['Дифференцированный зачет']:
+                session.append(zet)
+            else:
+                value.append(zet)            
             if i+1==len(aupData):
                 json['data'].append(d)
 

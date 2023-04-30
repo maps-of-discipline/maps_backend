@@ -131,6 +131,22 @@ def saveMap1(aup):
         db.session.commit()
         json = create_json(aup)
         return make_response(jsonify(json), 200)
+    
+@app.route('/get_id_edizm', methods=["GET"])
+def get_id_edizm():
+    l = list()
+    d = dict()
+    d['id_edizm'] = 1
+    d['value'] = 'Часы'
+    d['coef'] = 36.0
+    l.append(d)
+    d = dict()
+    d['id_edizm'] = 2
+    d['value'] = 'Недели'
+    d['coef'] = 1.5
+    l.append(d)
+    return make_response(jsonify(l), 200)
+
 
 
 @app.route('/upload', methods=["POST", "GET"])
