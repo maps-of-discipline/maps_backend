@@ -493,7 +493,11 @@ def UpdateGroup():
 def getControlTypes():
     control_type_arr = []
     for k, v in control_type_r.items():
-        control_type_arr.append({"name": v, "id": k})
+        if v == 'Экзамен' or v == 'Зачет' or v == 'Дифференцированный зачет':
+            is_control = True
+        else:
+            is_control = False
+        control_type_arr.append({"name": v, "id": k, "is_control": is_control})
     return make_response(jsonify(control_type_arr), 200)
 
 
