@@ -97,41 +97,36 @@ def saveMap1(aup):
         l = list()
         row = any
         for i in range(0, len(request_data)):
-            for j in range(0, len(request_data[i]['type'])):
-                try:
-                    row = AupData.query.filter_by(
-                        id=request_data[i]['type'][j]['id']).first()
-                    row.discipline = request_data[i]['discipline']
-                    row.amount = request_data[i]['type'][j]['hours']*100
-                    row.id_period = request_data[i]['num_col']
-                    row.num_row = request_data[i]['num_row']
-                    row.id_group = request_data[i]['id_group']
-                    l.append(row)
-                except:
-                    print(123)
-                    # row = AupData(
-                    #     id_aup = request_data[i]['id'],
-                    #     id_block = row.id_block
-                       
-                    #     # id_part =
-                    #     # id_module =
-                    #     # id_group =
-                    #     # id_type_record =
-                    #     # discipline =
-                    #     # id_period =
-                    #     # num_row =
-                    #     # id_type_control =
-                    #     # amount =
-                    #     # id_edizm =
-                    #     # zet =
-                    # )
-                    # l.append(row)
+            save_loop(i, 'session', l, request_data)
+            save_loop(i, 'value', l, request_data)
 
         db.session.bulk_save_objects(l)
         db.session.commit()
         json = create_json(aup)
         return make_response(jsonify(json), 200)
     
+
+def save_loop(i, in_type, l, request_data):
+    for j in range(0, len(request_data[i]['type'][in_type])):
+        try:
+            row = AupData.query.filter_by(
+                id=request_data[i]['type'][in_type][j]['id']).first()
+            row.discipline = request_data[i]['discipline']
+            row.amount = request_data[i]['type'][in_type][j]['amount']*100
+            row.id_edizm = request_data[i]['type'][in_type][j]['id_edizm']
+            row.control_type_id = request_data[i]['type'][in_type][j]['control_type_id']
+            row.id_period = request_data[i]['num_col']
+            row.num_row = request_data[i]['num_row']
+            row.id_group = request_data[i]['id_group']
+            row.id_block = request_data[i]['id_block']
+            row.id_module = request_data[i]['id_module']
+            row.id_part = request_data[i]['id_part']
+            row.shifr = request_data[i]['shifr']
+            l.append(row)
+        except:
+            return make_response('Save error', 400)
+    
+
 @app.route('/get_id_edizm', methods=["GET"])
 def get_id_edizm():
     l = list()
