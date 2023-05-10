@@ -14,7 +14,7 @@ ROW_START_DISCIPLINES = 5
 QUANTITY_HEADER_ROWS = 3
 
 
-def makeLegend(wb, table, filename_map_down):
+def makeLegend(wb, table):
     ws = wb.create_sheet('Legend')
     ws['A1'].value = 'ЗЕТ'
     ws['A1'].style = 'standart'
@@ -110,12 +110,12 @@ def saveMap(aup, static, **kwargs):
             if el['zet'] < 1:
                 el['zet'] = 1.0
 
-            merge_range = f"{cell}:{column}{ROW_START_DISCIPLINES+merged + round(el['zet'])-1}"
+            merge_range = f"{cell}:{column}{ROW_START_DISCIPLINES+merged + round(el['zet']*2)-1}"
             ws.merge_cells(merge_range)
 
-            merged += round(el['zet'])
+            merged += round(el['zet']*2)
 
-    makeLegend(wb, table, filename_map_down)
+    makeLegend(wb, table)
 
     set_print_properties(table, ws, max_zet)
 
@@ -180,7 +180,7 @@ def set_print_properties(table, ws, max_zet):
         left=0.25, right=0.25, top=0, bottom=0, header=0, footer=0) #Dvorf
 
     for height_row in range(ROW_START_DISCIPLINES, max_zet + ROW_START_DISCIPLINES):
-        ws.row_dimensions[height_row].height = 35 #Dvorf #35
+        ws.row_dimensions[height_row].height = 17 #Dvorf #35
 
     ws.column_dimensions['A'].width = 5
 
@@ -221,9 +221,12 @@ def CreateMap(filename_map, max_zet, table_length):
     worksheet["A3"].style = 'standart'
     worksheet["A4"].style = 'standart'
 
-    for col in range(5, max_zet + 5):
-        worksheet["A" + str(col)] = col - 4
-        worksheet["A" + str(col)].style = 'standart'
+    for col in range(1, max_zet + 1):
+        merge_range = f"A{col*2+3}:A{col*2+4}"
+        worksheet.merge_cells(merge_range)
+        worksheet["A" + str(col*2+3)] = col
+        worksheet["A" + str(col*2+3)].style = 'standart'
+        worksheet["A" + str(col*2+4)].style = 'standart'
     for col in range(ord('B'), ord('C')):
         worksheet[chr(col) + str(5)].style = 'standart'
     return worksheet, workbook
@@ -249,47 +252,3 @@ def add_table_to_arr_and_sort(table):
                                                   1] = new_table[a][j+1], new_table[a][j]
     return (new_table)
 
-
-def legend_on_2nd_sheet(wb, legend, filename_map_down):
-    # Вывод легенды в КД excel
-    ws = wb.create_sheet('Legend')
-    ws['A1'] = 'З.Е'
-    ws['A1'].style = 'standart'
-    ws['B1'] = 'МОДУЛИ:'
-    ws['B1'].style = 'standart'
-    ws.merge_cells('B1:C1')
-
-    sum_zet = 0.0
-    for i, el in enumerate(legend):
-        cellA = f"A{2+i}"
-        cellB = f"B{2+i}"
-
-        sum_zet += el[1]
-
-        ws[cellA].style = ws[cellB].style = 'standart'
-        ws[cellA] = el[1]
-        ws[cellB] = el[0]
-        ws[cellB].alignment = Alignment(
-            horizontal='left', vertical='center', wrapText=True)
-
-        color = el[2].replace('#', '')
-        r, g, b = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
-        gray = (r + g + b)/3
-
-        if gray < 140:
-            ws[cellB].font = Font(color="FFFFFF", size=18)
-        else:
-            ws[cellB].font = Font(color="000000", size=18)
-
-        ws[cellB].fill = PatternFill(start_color=str(
-            color), end_color=str(color), fill_type='solid')
-        ws.merge_cells(cellB + ':' + cellB.replace('B', 'C'))
-
-    # сумма зет
-    cellA = 'A' + str(1+len(legend) + 1)
-    ws[cellA].style = 'standart'
-    ws[cellA] = f'Итого: {sum_zet}'
-
-    ws['A' + str(1+len(legend) + 5)
-       ] = f'Карта составлена из файла: {filename_map_down}'
-    ws.column_dimensions['C'].width = 75

@@ -143,6 +143,8 @@ def create_json_print(aupData):
             d["num_col"] = item.id_period
             d["num_row"] = item.num_row
             d["zet"] = item.zet / 100
+            if i+1==len(aupData):
+                json['data'].append(d)
         else:
             d["zet"] += item.zet / 100
             if i+1==len(aupData):
