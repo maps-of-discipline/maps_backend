@@ -33,8 +33,12 @@ def create_json(aup):
     value = list()
 
     for i, item in enumerate(aupData):
-        if 'Подготовка к процедуре защиты и защита выпускной квалификационной работы' in item.discipline:
+        if 'Выполнение и защита выпускной квалификационной работы' in item.discipline:
             print()
+        if i+1==len(aupData):
+            d['type']['session'] = session
+            d['type']['value'] = value
+            json['data'].append(d)
         if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
             continue
         if flag != item.discipline + str(item.id_period):
@@ -68,6 +72,10 @@ def create_json(aup):
                 session.append(zet)
             else:
                 value.append(zet)
+            if i+1==len(aupData):
+                d['type']['session'] = session
+                d['type']['value'] = value
+                json['data'].append(d)
         else:
             d["id"] += str(item.id)
             zet = dict()

@@ -238,10 +238,16 @@ def SaveCard(db, aupInfo, aupData):
         delete_from_aupdata(get_aup)
     
     l = list()
+    temp_i = 0
     for i in aupData:
+        temp_i += 1
+        # print(i[5])
         new_row = AupData(id_aup=get_aup.id_aup, id_block=i[0], shifr=i[1], id_part=i[2], id_module=i[3], id_group=i[11], id_type_record=i[4],
                           discipline=i[5], id_period=i[6], id_type_control=i[7], amount=int(i[8]), id_edizm=i[9], zet=int(i[10]), num_row=i[12])
+        # print(i[5], 'VALID')
         l.append(new_row)
+        # print(i[5], 'ADD')
+    if temp_i == len(aupData): print('VALID DATA')
     db.session.bulk_save_objects(l)
     db.session.commit()
 

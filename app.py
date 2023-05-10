@@ -264,6 +264,9 @@ def getAupData(file):
         for column in data.columns:
             row.append(data[column][i])
 
+        # if row[5]is None:
+        # print(i, row[5])
+
         val = row[0]
         row[0] = blocks.get(val)
         if row[0] == None:
