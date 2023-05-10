@@ -161,12 +161,15 @@ def layout_of_disciplines(file):  # Компоновка элективных д
                             ws['F'+str(i+(j-1))].value
                         ws['F'+str(i+(j-1))] = 'None'
                         ws['E'+str(i+(j-1))] = 'None'
-    for num in range(1, max_row + 1):
-        if ws['E'+str(num)].value == 'None':
-            ws.delete_rows(num)
-    for num in range(1, max_row + 1):
-        if ws['E'+str(num)].value == 'None':
-            ws.delete_rows(num)
+    i = 1
+    len = max_row + 1
+    while i != len:
+        if ws['E'+str(i)].value == 'None':
+            ws.delete_rows(i)
+            len = len - 1 
+            continue
+        i += 1
+
     wb.save(file)
 
 
