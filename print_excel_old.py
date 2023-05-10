@@ -129,9 +129,9 @@ def color_text_cell(ws, cell, color):
     gray = (r + g + b)/3
 
     if gray < 140:
-        ws[cell].font = Font(bold=True, size=14, color="FFFFFF")#Dvorf False 18
+        ws[cell].font = Font(bold=False, size=18, color="FFFFFF")
     else:
-        ws[cell].font = Font(bold=True, size=14, color="000000")#Dvorf False 18
+        ws[cell].font = Font(bold=False, size=18, color="000000")
 
     ws[cell].fill = PatternFill(start_color=str(
         color), end_color=str(color), fill_type='solid')
@@ -176,11 +176,10 @@ def set_print_properties(table, ws, max_zet):
     max_row = get_maximum_rows(sheet_object=ws)
     ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_row)
     ws.page_margins = openpyxl.worksheet.page.PageMargins(
-        #left=1/3.81, right=1/3.81, top=1/3.81, bottom=1/3.81, header=1/3.81, footer=1/3.81)
-        left=0.25, right=0.25, top=0, bottom=0, header=0, footer=0) #Dvorf
+        left=1/3.81, right=1/3.81, top=1/3.81, bottom=1/3.81, header=1/3.81, footer=1/3.81)
 
     for height_row in range(ROW_START_DISCIPLINES, max_zet + ROW_START_DISCIPLINES):
-        ws.row_dimensions[height_row].height = 35 #Dvorf #35
+        ws.row_dimensions[height_row].height = 35
 
     ws.column_dimensions['A'].width = 5
 
@@ -208,7 +207,7 @@ def CreateMap(filename_map, max_zet, table_length):
     workbook = openpyxl.load_workbook(filename_map)
     worksheet = workbook.active
     ns = NamedStyle(name='standart')
-    ns.font = Font(bold=True, size=14)
+    ns.font = Font(bold=False, size=14)
     border = Side(style='thick', color='000000')
     ns.border = Border(left=border, top=border, right=border, bottom=border)
     ns.alignment = Alignment(
@@ -216,7 +215,7 @@ def CreateMap(filename_map, max_zet, table_length):
     workbook.add_named_style(ns)
 
     for i in range(1, QUANTITY_HEADER_ROWS):
-        worksheet.row_dimensions[i].height = 40
+        worksheet.row_dimensions[i].height = 30
 
     worksheet["A3"].style = 'standart'
     worksheet["A4"].style = 'standart'
