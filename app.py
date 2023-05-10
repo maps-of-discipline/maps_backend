@@ -115,7 +115,7 @@ def save_loop(i, in_type, l, request_data):
             row.amount = request_data[i]['type'][in_type][j]['amount']*100
             row.id_edizm = request_data[i]['type'][in_type][j]['id_edizm']
             row.control_type_id = request_data[i]['type'][in_type][j]['control_type_id']
-            row.id_period = request_data[i]['num_col']
+            row.id_period = request_data[i]['num_col'] + 1
             row.num_row = request_data[i]['num_row']
             row.id_group = request_data[i]['id_group']
             row.id_block = request_data[i]['id_block']
