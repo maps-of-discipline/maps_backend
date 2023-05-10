@@ -144,11 +144,20 @@ def create_json_print(aupData):
             d["id_group"] = group.id_group
             d["num_col"] = item.id_period
             d["num_row"] = item.num_row
-            d["zet"] = item.zet / 100
+            if item.id_edizm == 2:
+                d["zet"] = item.amount / 100 * 54
+            else:
+                d["zet"] = item.amount / 100
             if i+1==len(aupData):
                 json['data'].append(d)
         else:
-            d["zet"] += item.zet / 100
+            if item.id_edizm == 2:
+                d["zet"] = item.amount / 100 * 54
+            else:
+                d["zet"] += item.amount / 100
             if i+1==len(aupData):
                 json['data'].append(d)
+    for disc in json['data']:
+        disc['zet'] /= 36
     return json
+

@@ -256,7 +256,7 @@ class AupData(db.Model):
     id_group = db.Column(db.Integer, nullable=False)
     id_type_record = db.Column(db.Integer, db.ForeignKey(
         'd_type_record.id'), nullable=False)
-    discipline = db.Column(db.String(250), nullable=False)
+    discipline = db.Column(db.String(350), nullable=False)
     id_period = db.Column(db.Integer, nullable=False)
     num_row = db.Column(db.Integer, nullable=False)
     id_type_control = db.Column(db.Integer, db.ForeignKey(
