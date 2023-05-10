@@ -155,10 +155,10 @@ def upload():
             files = request.files.getlist("file")
             res = list()
             for f in files:
-                # options_check = json.loads(request.form['options'])
-                options_check = dict()
-                options_check['enableCheckIntegrality'] = False
-                options_check['enableCheckSumMap'] = False
+                options_check = json.loads(request.form['options'])
+                # options_check = dict()
+                # options_check['enableCheckIntegrality'] = False
+                # options_check['enableCheckSumMap'] = False
 
                 # aup = f.filename.split(' - ')[1].strip()
                 path = os.path.join(app.static_folder, 'temp', f.filename)
