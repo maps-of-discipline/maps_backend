@@ -156,6 +156,7 @@ def upload():
             res = list()
             for f in files:
                 options_check = json.loads(request.form['options'])
+                print(options_check)
                 # options_check = dict()
                 # options_check['enableCheckIntegrality'] = False
                 # options_check['enableCheckSumMap'] = False

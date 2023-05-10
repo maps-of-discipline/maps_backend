@@ -33,11 +33,14 @@ def create_json(aup):
     value = list()
 
     for i, item in enumerate(aupData):
-        
+        if 'Подготовка к процедуре защиты и защита выпускной квалификационной работы' in item.discipline:
+            print()
         if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
             continue
         if flag != item.discipline + str(item.id_period):
-            if i != 0:
+            if i != 0 and 'd' in locals():
+                # print('!DEBUG!', i)
+                # if 'd' not in locals(): d = dict()
                 d['type']['session'] = session
                 d['type']['value'] = value
                 session = list()
