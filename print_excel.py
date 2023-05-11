@@ -1,4 +1,4 @@
-from math import ceil
+from math import floor
 import os
 from random import randint
 import openpyxl
@@ -72,11 +72,15 @@ def saveMap(aup, static, **kwargs):
         ws[f"{chr(ord('A') + width_border)}1"].style = 'standart'
         ws[f"{chr(ord('A') + width_border)}2"].style = 'standart'
 
-    for course in range(ceil(len(table)/2)):
+    for course in range(floor(len(table)/2)):
         ws[chr(ord("B")+course*2)+"3"] = str(course+1) + " курс"
         ws[chr(ord("B")+course*2)+"3"].style = 'standart'
         ws.merge_cells(
             f'{chr(ord("B")+course*2)}3:{chr(ord("B")+course*2+1)}3')
+    
+    if not (len(table)/2).is_integer():
+        ws[chr(ord("B")+floor(len(table)/2)*2)+"3"] = str(floor(len(table)/2)+1) + " курс"
+        ws[chr(ord("B")+floor(len(table)/2)*2)+"3"].style = 'standart'
 
     for semester in range(len(table)):
         ws[chr(ord("B")+semester)+"4"] = str(semester+1)
@@ -174,7 +178,7 @@ def set_print_properties(table, ws, max_zet):
     # ws.row_dimensions[1].height = 100
     ws.page_setup.scale = 60
     max_row = get_maximum_rows(sheet_object=ws)
-    ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_row)
+    ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_row*2)
     ws.page_margins = openpyxl.worksheet.page.PageMargins(
         #left=1/3.81, right=1/3.81, top=1/3.81, bottom=1/3.81, header=1/3.81, footer=1/3.81)
         left=0.25, right=0.25, top=0, bottom=0, header=0, footer=0) #Dvorf

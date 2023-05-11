@@ -134,7 +134,7 @@ def create_json_print(aupData):
         if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
             continue
         if flag != item.discipline + str(item.id_period):
-            if i != 0:
+            if i != 0 and 'd' in locals():
                 json['data'].append(d)
             flag = item.discipline + str(item.id_period)
             d = dict()
