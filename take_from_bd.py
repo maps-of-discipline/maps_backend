@@ -33,8 +33,6 @@ def create_json(aup):
     value = list()
 
     for i, item in enumerate(aupData):
-        if item.id == 42969:
-            print(123)
         if 'Выполнение и защита выпускной квалификационной работы' in item.discipline:
             print()
         # if i+1==len(aupData):
@@ -131,6 +129,8 @@ def create_json_print(aupData):
     json['data'] = list()
     flag = ""
     for i, item in enumerate(aupData):
+        if 'Выполнение и защита выпускной квалификационной работы' in item.discipline:
+            print()
         if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
             continue
         if flag != item.discipline + str(item.id_period):

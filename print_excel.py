@@ -12,7 +12,10 @@ from take_from_bd import create_json_print
 
 ROW_START_DISCIPLINES = 5
 QUANTITY_HEADER_ROWS = 3
-
+ROW_HEIGHT = 25
+COLUMN_WIDTH = 40
+SUM_ROW_HEIGHT = ROW_HEIGHT*30
+SUM_COLUMN_WIDTH = COLUMN_WIDTH*8
 
 def makeLegend(wb, table):
     ws = wb.create_sheet('Legend')
@@ -174,22 +177,24 @@ def set_print_properties(table, ws, max_zet):
     ws.page_setup.paperSize = ws.PAPERSIZE_A3
     ws.print_options.horizontalCentered = True
     ws.print_options.verticalCentered = True
-    # ws.page_setup.fitToPage = True
+
+    ws.page_setup.fitToPage = True
     # ws.row_dimensions[1].height = 100
     ws.page_setup.scale = 60
     max_row = get_maximum_rows(sheet_object=ws)
-    ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_row*2)
+    ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_zet*2+4)
     ws.page_margins = openpyxl.worksheet.page.PageMargins(
-        #left=1/3.81, right=1/3.81, top=1/3.81, bottom=1/3.81, header=1/3.81, footer=1/3.81)
-        left=0.25, right=0.25, top=0, bottom=0, header=0, footer=0) #Dvorf
+        #left=1/3.81, right=1/3.81, top=1/3.81, bottom=1/3.81, header=1/3.81, footer=1/3.81) # Изначальный вариант
+        #left=0.25, right=0.25, top=0, bottom=0, header=0, footer=0) # Прошлый вариант
+        left=1/5, right=1/5, top=1/5, bottom=1/5) # Правка на 0,5 см
 
     for height_row in range(ROW_START_DISCIPLINES, max_zet + ROW_START_DISCIPLINES):
-        ws.row_dimensions[height_row].height = 17 #Dvorf #35
+        ws.row_dimensions[height_row].height = SUM_ROW_HEIGHT/max_zet #Dvorf #35
 
     ws.column_dimensions['A'].width = 5
 
     for width_column in range(1, len(table)+1):
-        ws.column_dimensions[f'{chr(ord("A")+width_column)}'].width = 40
+        ws.column_dimensions[f'{chr(ord("A")+width_column)}'].width = SUM_COLUMN_WIDTH/len(table)
     ###
 
 
