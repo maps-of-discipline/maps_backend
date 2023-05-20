@@ -10,12 +10,15 @@ from tools import get_maximum_rows
 from models import (AupInfo, AupData, Groups, db)
 from take_from_bd import create_json_print
 
-ROW_START_DISCIPLINES = 5
-QUANTITY_HEADER_ROWS = 3
-ROW_HEIGHT = 25
-COLUMN_WIDTH = 40
+ROW_START_DISCIPLINES = 4
+ROW_HEIGHT = 23
+COLUMN_WIDTH = 46
 SUM_ROW_HEIGHT = ROW_HEIGHT*30
 SUM_COLUMN_WIDTH = COLUMN_WIDTH*8
+
+border_thin = Side(style='thin', color='000000')
+border_thick = Side(style='thick', color='000000')
+
 
 def makeLegend(wb, table):
     ws = wb.create_sheet('Legend')
@@ -23,7 +26,7 @@ def makeLegend(wb, table):
     ws['A1'].style = 'standart'
     ws['B1'].value = 'Группа'
     ws['B1'].style = 'standart'
-    ws.column_dimensions["B"].width = 60.0
+    # ws.column_dimensions["B"].width = 60.0
     groups = Groups.query.all()
     table_dict = {}
     group_dict = {}
@@ -60,34 +63,32 @@ def saveMap(aup, static, **kwargs):
     ws, wb = CreateMap(filename_map, max_zet, len(table))
 
     header = Header(aup)
-    header1 = f'''КАРТА ДИСЦИПЛИН УЧЕБНОГО ПЛАНА'''
-    header2 = f'''Направление подготовки: {header[0]}. Профиль: {header[1]}, {header[2]}. Год набора, {header[3]}. АУП: {aup.num_aup}'''
-    ws['A1'].style = 'standart'
+    header1 = f'''КАРТА ДИСЦИПЛИН УЧЕБНОГО ПЛАНА
+{header[0]}  
+Профиль "{header[1]}", {header[2]} год набора, {header[3]}'''
+    ws['A1'].style = 'header'
     ws['A1'] = header1
-    ws['A2'].style = 'standart'
-    ws['A2'] = header2
 
-    for row_header in range(1, 3):
-        ws.merge_cells(
-            f'A{row_header}:{chr(ord("A") + len(table))}{row_header}')
+    ws.merge_cells(
+        f'A1:{chr(ord("A") + len(table))}1')
 
     for width_border in range(1, len(table)+1):
-        ws[f"{chr(ord('A') + width_border)}1"].style = 'standart'
-        ws[f"{chr(ord('A') + width_border)}2"].style = 'standart'
+        ws[f"{chr(ord('A') + width_border)}1"].style = 'special'
+        ws[f"{chr(ord('A') + width_border)}2"].style = 'special'
 
     for course in range(floor(len(table)/2)):
-        ws[chr(ord("B")+course*2)+"3"] = str(course+1) + " курс"
-        ws[chr(ord("B")+course*2)+"3"].style = 'standart'
+        ws[chr(ord("B")+course*2)+f"{ROW_START_DISCIPLINES-2}"] = str(course+1) + " курс"
+        ws[chr(ord("B")+course*2)+f"{ROW_START_DISCIPLINES-2}"].style = 'special'
         ws.merge_cells(
-            f'{chr(ord("B")+course*2)}3:{chr(ord("B")+course*2+1)}3')
+            f'{chr(ord("B")+course*2)}{ROW_START_DISCIPLINES-2}:{chr(ord("B")+course*2+1)}{ROW_START_DISCIPLINES-2}')
     
     if not (len(table)/2).is_integer():
-        ws[chr(ord("B")+floor(len(table)/2)*2)+"3"] = str(floor(len(table)/2)+1) + " курс"
-        ws[chr(ord("B")+floor(len(table)/2)*2)+"3"].style = 'standart'
+        ws[chr(ord("B")+floor(len(table)/2)*2)+f"{ROW_START_DISCIPLINES-2}"] = str(floor(len(table)/2)+1) + " курс"
+        ws[chr(ord("B")+floor(len(table)/2)*2)+f"{ROW_START_DISCIPLINES-2}"].style = 'special'
 
     for semester in range(len(table)):
-        ws[chr(ord("B")+semester)+"4"] = str(semester+1)
-        ws[chr(ord("B")+semester)+"4"].style = 'standart'
+        ws[chr(ord("B")+semester)+f"{ROW_START_DISCIPLINES-1}"] = str(semester+1)
+        ws[chr(ord("B")+semester)+f"{ROW_START_DISCIPLINES-1}"].style = 'special'
 
     for i in range(len(table)):
         merged = 0
@@ -98,19 +99,6 @@ def saveMap(aup, static, **kwargs):
             ws[cell] = el['discipline']
 
             color = el['color'].replace('#', '')
-            
-            # ws[cell].style = 'standart'
-
-            # r, g, b = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
-            # gray = (r + g + b)/3
-
-            # if gray < 140:
-            #     ws[cell].font = Font(bold=False, size=18, color="FFFFFF")
-            # else:
-            #     ws[cell].font = Font(bold=False, size=18, color="000000")
-
-            # ws[cell].fill = PatternFill(start_color=str(
-            #     color), end_color=str(color), fill_type='solid')
 
             color_text_cell(ws, cell, color)
 
@@ -136,9 +124,9 @@ def color_text_cell(ws, cell, color):
     gray = (r + g + b)/3
 
     if gray < 140:
-        ws[cell].font = Font(bold=True, size=14, color="FFFFFF")#Dvorf False 18
+        ws[cell].font = Font(bold=True, size=16, name='Arial', color="FFFFFF")#Dvorf False 18
     else:
-        ws[cell].font = Font(bold=True, size=14, color="000000")#Dvorf False 18
+        ws[cell].font = Font(bold=True, size=16, name='Arial', color="000000")#Dvorf False 18
 
     ws[cell].fill = PatternFill(start_color=str(
         color), end_color=str(color), fill_type='solid')
@@ -181,20 +169,29 @@ def set_print_properties(table, ws, max_zet):
     ws.page_setup.fitToPage = True
     # ws.row_dimensions[1].height = 100
     ws.page_setup.scale = 60
-    max_row = get_maximum_rows(sheet_object=ws)
-    ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_zet*2+4)
+    max_row = get_maximum_rows(sheet_object=ws)*2
+    ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_zet*2+ROW_START_DISCIPLINES-1)
     ws.page_margins = openpyxl.worksheet.page.PageMargins(
         #left=1/3.81, right=1/3.81, top=1/3.81, bottom=1/3.81, header=1/3.81, footer=1/3.81) # Изначальный вариант
         #left=0.25, right=0.25, top=0, bottom=0, header=0, footer=0) # Прошлый вариант
         left=1/5, right=1/5, top=1/5, bottom=1/5) # Правка на 0,5 см
 
-    for height_row in range(ROW_START_DISCIPLINES, max_zet + ROW_START_DISCIPLINES):
-        ws.row_dimensions[height_row].height = SUM_ROW_HEIGHT/max_zet #Dvorf #35
+    for height_row in range(ROW_START_DISCIPLINES, max_zet*2 + ROW_START_DISCIPLINES): # Высота строк где дисциплины
+        ws.row_dimensions[height_row].height = SUM_ROW_HEIGHT/max_zet
 
-    ws.column_dimensions['A'].width = 5
-
-    for width_column in range(1, len(table)+1):
+    for width_column in range(1, len(table)+1): # Ширины столбцов где дисциплины
         ws.column_dimensions[f'{chr(ord("A")+width_column)}'].width = SUM_COLUMN_WIDTH/len(table)
+
+    for bottom_line in range(1, len(table)): # Сделать жирный бордюр по нижней линии
+        ws[f'{chr(ord("A")+bottom_line)}{max_row-ROW_START_DISCIPLINES+1}'].border = Border(bottom=border_thick)
+
+    for right_col in range(ROW_START_DISCIPLINES, max_row-2): # Сделать жирный бордюр по правой колонке
+        ws[f'{chr(ord("A")+len(table))}{right_col}'].border = Border(right=border_thick)
+
+    # Сделать жирный бордюр в правом нижнем углу
+    ws[f'{chr(ord("A")+len(table))}{max_row-ROW_START_DISCIPLINES+1}'].border = Border(right=border_thick, bottom=border_thick)
+
+    ws.column_dimensions['A'].width = 10 # Column ZET
     ###
 
 
@@ -208,6 +205,29 @@ def Header(aup):
     return [program, spec, year_begin, form]
 
 
+def addStyles(workbook):
+
+    ns_standart = NamedStyle(name='standart')
+    ns_standart.font = Font(bold=True, size=16, name='Arial')
+    ns_standart.border = Border(left=border_thin, top=border_thin, right=border_thin, bottom=border_thin)
+    ns_standart.alignment = Alignment(
+        horizontal='center', vertical='center', wrapText=True)
+    workbook.add_named_style(ns_standart)
+
+    ns_special = NamedStyle(name='special')
+    ns_special.font = Font(bold=True, size=16, name='Arial')
+    ns_special.border = Border(left=border_thick, top=border_thick, right=border_thick, bottom=border_thick)
+    ns_special.alignment = Alignment(
+        horizontal='center', vertical='center', wrapText=True)
+    workbook.add_named_style(ns_special)
+
+    ns_header = NamedStyle(name='header')
+    ns_header.font = Font(bold=True, size=22, name='Arial')
+    ns_header.border = Border(left=border_thick, top=border_thick, right=border_thick, bottom=border_thick)
+    ns_header.alignment = Alignment(
+        horizontal='center', vertical='center', wrapText=True)
+    workbook.add_named_style(ns_header)
+
 # функция создает карту и задаем все данные кроме предметов в семестрах, на вход требует имя карты
 def CreateMap(filename_map, max_zet, table_length):
     wk = xlsxwriter.Workbook(filename_map)
@@ -216,28 +236,26 @@ def CreateMap(filename_map, max_zet, table_length):
     wk.close()
     workbook = openpyxl.load_workbook(filename_map)
     worksheet = workbook.active
-    ns = NamedStyle(name='standart')
-    ns.font = Font(bold=True, size=14)
-    border = Side(style='thick', color='000000')
-    ns.border = Border(left=border, top=border, right=border, bottom=border)
-    ns.alignment = Alignment(
-        horizontal='center', vertical='center', wrapText=True)
-    workbook.add_named_style(ns)
+    
+    addStyles(workbook)
 
-    for i in range(1, QUANTITY_HEADER_ROWS):
-        worksheet.row_dimensions[i].height = 40
+    worksheet.row_dimensions[1].height = 90
+    worksheet.row_dimensions[2].height = 20
 
-    worksheet["A3"].style = 'standart'
-    worksheet["A4"].style = 'standart'
+    merge_range = f"A{ROW_START_DISCIPLINES-2}:A{ROW_START_DISCIPLINES-1}"
+    worksheet.merge_cells(merge_range)
+    worksheet[f"A{ROW_START_DISCIPLINES-2}"].style = 'special'
+    worksheet[f"A{ROW_START_DISCIPLINES-1}"].style = 'special'
+    worksheet[f"A{ROW_START_DISCIPLINES-2}"] = 'З.Е.'
 
     for col in range(1, max_zet + 1):
-        merge_range = f"A{col*2+3}:A{col*2+4}"
+        merge_range = f"A{col*2+ROW_START_DISCIPLINES-2}:A{col*2+ROW_START_DISCIPLINES-1}"
         worksheet.merge_cells(merge_range)
-        worksheet["A" + str(col*2+3)] = col
-        worksheet["A" + str(col*2+3)].style = 'standart'
-        worksheet["A" + str(col*2+4)].style = 'standart'
+        worksheet["A" + str(col*2+ROW_START_DISCIPLINES-2)] = col
+        worksheet["A" + str(col*2+ROW_START_DISCIPLINES-2)].style = 'special'
+        worksheet["A" + str(col*2+ROW_START_DISCIPLINES-1)].style = 'special'
     for col in range(ord('B'), ord('C')):
-        worksheet[chr(col) + str(5)].style = 'standart'
+        worksheet[chr(col) + str(5)].style = 'special'
     return worksheet, workbook
 
 
