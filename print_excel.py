@@ -26,7 +26,8 @@ def makeLegend(wb, table):
     ws['A1'].style = 'standart'
     ws['B1'].value = 'Группа'
     ws['B1'].style = 'standart'
-    # ws.column_dimensions["B"].width = 60.0
+    ws.column_dimensions["A"].width = 20.0
+    ws.column_dimensions["B"].width = 60.0
     groups = Groups.query.all()
     table_dict = {}
     group_dict = {}
@@ -40,19 +41,20 @@ def makeLegend(wb, table):
                 table_dict[item['id_group']] = item['zet']
     sum_zet = 0
     for i, key_value in enumerate(table_dict.items()):
+        ws.row_dimensions[i+2].height = 20
         ws['A' + str(i+2)].value = int(key_value[1])
         ws['A' + str(i+2)].style = 'standart'
         ws['B' + str(i+2)].value = group_dict[key_value[0]]['name']
         sum_zet += int(key_value[1])
         color_text_cell(ws, 'B' + str(i+2), group_dict[key_value[0]]['color'].replace('#', ''))
-        ws['A' + str(len(table_dict) + 2)].style = 'standart'
-        ws['A' + str(len(table_dict) + 2)].value = 'Итого: ' + str(sum_zet)
+    ws['A' + str(len(table_dict) + 2)].style = 'standart'
+    ws['A' + str(len(table_dict) + 2)].value = 'Итого: ' + str(sum_zet)
     # return legend
 
 
 def saveMap(aup, static, **kwargs):
     aup = AupInfo.query.filter_by(num_aup=aup).first()
-    data = AupData.query.filter_by(id_aup=aup.id_aup).all()
+    data = AupData.query.filter_by(id_aup=aup.id_aup).order_by(AupData.shifr).all()
     filename_map = aup.file
     filename_map_down = f"КД {filename_map}"
     filename_map = os.path.join(static, 'temp', f"КД {filename_map}")

@@ -32,19 +32,11 @@ def create_json(aup):
     session = list()
     value = list()
 
-    for i, item in enumerate(aupData):
-        if 'Выполнение и защита выпускной квалификационной работы' in item.discipline:
-            print()
-        # if i+1==len(aupData):
-        #     d['type']['session'] = session
-        #     d['type']['value'] = value
-        #     json['data'].append(d)
-        if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
-            continue
+    # if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
+    #     continue
+    for i, item in enumerate(aupData): 
         if flag != item.discipline + str(item.id_period):
             if i != 0 and 'd' in locals():
-                # print('!DEBUG!', i)
-                # if 'd' not in locals(): d = dict()
                 d['type']['session'] = session
                 d['type']['value'] = value
                 session = list()
@@ -62,6 +54,10 @@ def create_json(aup):
             d["num_row"] = item.num_row
             d["type"] = dict()
             d["id"] = str(item.id)
+            if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
+                d["is_skip"] = True
+            else:
+                d["is_skip"] = False
             zet = dict()
             zet["amount"] = item.amount / 100
             zet["id_edizm"] = item.ed_izmereniya.id
@@ -91,6 +87,9 @@ def create_json(aup):
             if i+1==len(aupData):
                 json['data'].append(d)
 
+    for num in range(len(json["data"])-1, -1, -1):
+        if json["data"][num]["is_skip"] == True:
+            del json["data"][num]
     return json
 
 
@@ -129,10 +128,10 @@ def create_json_print(aupData):
     json['data'] = list()
     flag = ""
     for i, item in enumerate(aupData):
-        if 'Выполнение и защита выпускной квалификационной работы' in item.discipline:
-            print()
-        if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
-            continue
+        # if 'Выполнение и защита выпускной квалификационной работы' in item.discipline:
+        #     print()
+        # if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
+        #     continue
         if flag != item.discipline + str(item.id_period):
             if i != 0 and 'd' in locals():
                 json['data'].append(d)
@@ -144,6 +143,10 @@ def create_json_print(aupData):
             d["id_group"] = group.id_group
             d["num_col"] = item.id_period
             d["num_row"] = item.num_row
+            if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
+                d["is_skip"] = True
+            else:
+                d["is_skip"] = False
             if item.id_edizm == 2:
                 d["zet"] = item.amount / 100 * 54
             else:
@@ -157,7 +160,14 @@ def create_json_print(aupData):
                 d["zet"] += item.amount / 100
             if i+1==len(aupData):
                 json['data'].append(d)
-    for disc in json['data']:
-        disc['zet'] /= 36
+    # for disc in json['data']:
+    #     disc['zet'] /= 36
+
+    for num in range(len(json["data"])-1, -1, -1):
+        if json["data"][num]["is_skip"] == True:
+            del json["data"][num]
+        else:
+            json["data"][num]['zet'] /= 36
+
     return json
 

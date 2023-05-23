@@ -53,4 +53,3 @@ def check_skiplist(zet_or_hours, value_discipline, value_record_type, value_bloc
         return True
     else:
         return False
-    
