@@ -185,7 +185,7 @@ def set_print_properties(table, ws, max_zet):
         ws.column_dimensions[f'{chr(ord("A")+width_column)}'].width = SUM_COLUMN_WIDTH/len(table)
 
     for bottom_line in range(1, len(table)): # Сделать жирный бордюр по нижней линии
-        ws[f'{chr(ord("A")+bottom_line)}{max_row-ROW_START_DISCIPLINES+1}'].border = Border(bottom=border_thick)
+        ws[f'{chr(ord("A")+bottom_line)}{max_row-ROW_START_DISCIPLINES+1}'].border = Border(bottom=border_thick, left=border_thin, right=border_thin)
 
     for right_col in range(ROW_START_DISCIPLINES, max_row-2): # Сделать жирный бордюр по правой колонке
         ws[f'{chr(ord("A")+len(table))}{right_col}'].border = Border(right=border_thick)
