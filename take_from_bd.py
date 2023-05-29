@@ -21,7 +21,7 @@ def getType(id):
 
 def create_json(aup):
     aupInfo = AupInfo.query.filter_by(num_aup=aup).first()
-    aupData = AupData.query.filter_by(id_aup=aupInfo.id_aup).order_by(AupData.shifr).all()
+    aupData = AupData.query.filter_by(id_aup=aupInfo.id_aup).order_by(AupData.shifr, AupData.discipline).all()
 
     json = dict()
     json['header'] = [aupInfo.name_op.okco.program_code + '.' + aupInfo.name_op.num_profile,
@@ -35,6 +35,8 @@ def create_json(aup):
     # if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
     #     continue
     for i, item in enumerate(aupData): 
+        # if 'Выполнение и защита выпускной квалификационной работы' in item.discipline:
+        #     pass
         if flag != item.discipline + str(item.id_period):
             if i != 0 and 'd' in locals():
                 d['type']['session'] = session
@@ -85,6 +87,8 @@ def create_json(aup):
             else:
                 value.append(zet)            
             if i+1==len(aupData):
+                d['type']['session'] = session
+                d['type']['value'] = value
                 json['data'].append(d)
 
     for num in range(len(json["data"])-1, -1, -1):
@@ -128,8 +132,8 @@ def create_json_print(aupData):
     json['data'] = list()
     flag = ""
     for i, item in enumerate(aupData):
-        # if 'Выполнение и защита выпускной квалификационной работы' in item.discipline:
-        #     print()
+        # if 'Дизайн-проектирование природоподобных объектов для новой мобильности' in item.discipline:
+        #     pass
         # if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
         #     continue
         if flag != item.discipline + str(item.id_period):
