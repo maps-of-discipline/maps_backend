@@ -54,7 +54,7 @@ def makeLegend(wb, table):
 
 def saveMap(aup, static, **kwargs):
     aup = AupInfo.query.filter_by(num_aup=aup).first()
-    data = AupData.query.filter_by(id_aup=aup.id_aup).order_by(AupData.shifr).all()
+    data = AupData.query.filter_by(id_aup=aup.id_aup).order_by(AupData.shifr, AupData.discipline, AupData.id_period).all()
     filename_map = aup.file
     filename_map_down = f"КД {filename_map}"
     filename_map = os.path.join(static, 'temp', f"КД {filename_map}")
@@ -98,7 +98,7 @@ def saveMap(aup, static, **kwargs):
             column = chr(ord("B") + i)
             cell = f"{column}{ROW_START_DISCIPLINES+merged}"
 
-            ws[cell] = el['discipline']
+            ws[cell] = el['discipline'] 
 
             color = el['color'].replace('#', '')
 
@@ -184,14 +184,26 @@ def set_print_properties(table, ws, max_zet):
     for width_column in range(1, len(table)+1): # Ширины столбцов где дисциплины
         ws.column_dimensions[f'{chr(ord("A")+width_column)}'].width = SUM_COLUMN_WIDTH/len(table)
 
-    for bottom_line in range(1, len(table)): # Сделать жирный бордюр по нижней линии
-        ws[f'{chr(ord("A")+bottom_line)}{max_row-ROW_START_DISCIPLINES+1}'].border = Border(bottom=border_thick, left=border_thin, right=border_thin)
-
-    for right_col in range(ROW_START_DISCIPLINES, max_row-2): # Сделать жирный бордюр по правой колонке
-        ws[f'{chr(ord("A")+len(table))}{right_col}'].border = Border(right=border_thick)
-
-    # Сделать жирный бордюр в правом нижнем углу
+    ### Сделать жирный бордюр по нижней линии
+    for bottom_line in range(1, len(table)):
+        if ws[f'{chr(ord("A")+bottom_line)}{max_row-ROW_START_DISCIPLINES+1}'].value is not None:
+            ws[f'{chr(ord("A")+bottom_line)}{max_row-ROW_START_DISCIPLINES+1}'].border = Border(bottom=border_thick, left=border_thin, right=border_thin)
+        else:
+            ws[f'{chr(ord("A")+bottom_line)}{max_row-ROW_START_DISCIPLINES+1}'].border = Border(bottom=border_thick)
+    ###
+    ### Сделать жирный бордюр по правой колонке
+    flag = ''
+    for right_col in range(ROW_START_DISCIPLINES, max_row-2):
+        cell_style = ws[f'{chr(ord("A")+len(table))}{right_col}'].style
+        if flag != ws[f'{chr(ord("A")+len(table))}{right_col}'] and cell_style != 'Normal':
+            ws[f'{chr(ord("A")+len(table))}{right_col}'].border = Border(right=border_thick, top=border_thin)
+            flag = ws[f'{chr(ord("A")+len(table))}{right_col}'].value
+        else:
+            ws[f'{chr(ord("A")+len(table))}{right_col}'].border = Border(right=border_thick)
+    ###
+    ### Сделать жирный бордюр в правом нижнем углу
     ws[f'{chr(ord("A")+len(table))}{max_row-ROW_START_DISCIPLINES+1}'].border = Border(right=border_thick, bottom=border_thick)
+    ###
 
     ws.column_dimensions['A'].width = 10 # Column ZET
     ###
@@ -229,6 +241,13 @@ def addStyles(workbook):
     ns_header.alignment = Alignment(
         horizontal='center', vertical='center', wrapText=True)
     workbook.add_named_style(ns_header)
+
+    ns_standart = NamedStyle(name='standart_last_right')
+    ns_standart.font = Font(bold=True, size=16, name='Arial')
+    ns_standart.border = Border(left=border_thin, top=border_thin, right=border_thick, bottom=border_thin)
+    ns_standart.alignment = Alignment(
+        horizontal='center', vertical='center', wrapText=True)
+    workbook.add_named_style(ns_standart)
 
 # функция создает карту и задаем все данные кроме предметов в семестрах, на вход требует имя карты
 def CreateMap(filename_map, max_zet, table_length):

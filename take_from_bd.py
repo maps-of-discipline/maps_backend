@@ -21,7 +21,7 @@ def getType(id):
 
 def create_json(aup):
     aupInfo = AupInfo.query.filter_by(num_aup=aup).first()
-    aupData = AupData.query.filter_by(id_aup=aupInfo.id_aup).order_by(AupData.shifr, AupData.discipline).all()
+    aupData = AupData.query.filter_by(id_aup=aupInfo.id_aup).order_by(AupData.shifr, AupData.discipline, AupData.id_period).all()
 
     json = dict()
     json['header'] = [aupInfo.name_op.okco.program_code + '.' + aupInfo.name_op.num_profile,
