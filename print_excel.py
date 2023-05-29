@@ -89,7 +89,7 @@ def saveMap(aup, static, **kwargs):
         ws[chr(ord("B")+floor(len(table)/2)*2)+f"{ROW_START_DISCIPLINES-2}"].style = 'special'
 
     for semester in range(len(table)):
-        ws[chr(ord("B")+semester)+f"{ROW_START_DISCIPLINES-1}"] = str(semester+1)
+        ws[chr(ord("B")+semester)+f"{ROW_START_DISCIPLINES-1}"] = str(semester+1) + ' семестр'
         ws[chr(ord("B")+semester)+f"{ROW_START_DISCIPLINES-1}"].style = 'special'
 
     for i in range(len(table)):
