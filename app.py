@@ -162,6 +162,7 @@ def upload():
                 # options_check['enableCheckSumMap'] = False
 
                 # aup = f.filename.split(' - ')[1].strip()
+                ### путь к файлу на диске
                 path = os.path.join(app.static_folder, 'temp', f.filename)
 
                 # сохранить временный файл с учебным планом

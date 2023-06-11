@@ -228,8 +228,16 @@ def check_actual(year_end):
 
 
 def SaveCard(db, aupInfo, aupData):
+    ### ПОСМОТРЕТЬ ЕСТЬ ЛИ В ТАБЛИЦЕ ФАКУЛЬТЕТОВ ТАКОЙ ФАКУЛЬТЕТ И ЕСЛИ НЕТ, ТО ДОБАВИТЬ
+    get_faculty = SprFaculty.query.filter_by(name_faculty=aupInfo["name_faculty"]).first() 
+    print(get_faculty.name_faculty)
+    if get_faculty is None:
+        get_faculty = SprFaculty(aupInfo["name_faculty"], 1, None)
+        db.session.add(get_faculty)
+        db.session.commit()
     # Перезапись карты, если есть уже в базе и мы обновляем ее
     get_aup = AupInfo.query.filter_by(num_aup=aupInfo["num"]).first()
+
     if get_aup is None:
         # Функция добавления информации по карте (АУП)
         get_aup = add_new_aup(aupInfo)

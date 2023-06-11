@@ -1,8 +1,8 @@
-"""initial commit
+"""init db
 
-Revision ID: 1fdb0cc3c62c
+Revision ID: 8a2ea2942f23
 Revises: 
-Create Date: 2023-02-26 13:34:15.933103
+Create Date: 2023-06-11 16:38:29.812334
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '1fdb0cc3c62c'
+revision = '8a2ea2942f23'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -57,6 +57,7 @@ def upgrade():
     sa.Column('id_group', sa.Integer(), nullable=False),
     sa.Column('name_group', sa.String(length=255), nullable=False),
     sa.Column('color', sa.String(length=8), nullable=False),
+    sa.Column('weight', sa.Integer(), nullable=False),
     sa.PrimaryKeyConstraint('id_group')
     )
     op.create_table('spr_branch',
@@ -155,8 +156,9 @@ def upgrade():
     sa.Column('id_module', sa.Integer(), nullable=False),
     sa.Column('id_group', sa.Integer(), nullable=False),
     sa.Column('id_type_record', sa.Integer(), nullable=False),
-    sa.Column('discipline', sa.String(length=150), nullable=False),
+    sa.Column('discipline', sa.String(length=350), nullable=False),
     sa.Column('id_period', sa.Integer(), nullable=False),
+    sa.Column('num_row', sa.Integer(), nullable=False),
     sa.Column('id_type_control', sa.Integer(), nullable=False),
     sa.Column('amount', sa.Integer(), nullable=False),
     sa.Column('id_edizm', sa.Integer(), nullable=False),
@@ -164,10 +166,8 @@ def upgrade():
     sa.ForeignKeyConstraint(['id_aup'], ['tbl_aup.id_aup'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['id_block'], ['d_blocks.id'], ),
     sa.ForeignKeyConstraint(['id_edizm'], ['d_ed_izmereniya.id'], ),
-    sa.ForeignKeyConstraint(['id_group'], ['groups.id_group'], ),
     sa.ForeignKeyConstraint(['id_module'], ['d_modules.id'], ),
     sa.ForeignKeyConstraint(['id_part'], ['d_part.id'], ),
-    sa.ForeignKeyConstraint(['id_period'], ['d_period.id'], ),
     sa.ForeignKeyConstraint(['id_type_control'], ['d_control_type.id'], ),
     sa.ForeignKeyConstraint(['id_type_record'], ['d_type_record.id'], ),
     sa.PrimaryKeyConstraint('id')
