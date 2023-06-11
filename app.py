@@ -429,6 +429,7 @@ def GetMaps(id):
         d["name"] = row.name_op.name_spec
         d["code"] = row.num_aup
         d["year"] = row.year_beg
+        d["form_educ"] = row.id_form
         l.append(d)
     return l
 
