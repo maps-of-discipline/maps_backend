@@ -62,7 +62,7 @@ setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, contro
                    ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
 
 
-@app.route("/map/<string:aup>")
+@app.route("/api/map/<string:aup>")
 def getMap(aup):
     # table, legend, max_zet = Table(aup, colorSet=1)
     # aup = AupInfo.query.filter_by(num_aup=aup).first()
@@ -90,7 +90,7 @@ def check_sum_zet_in_type(data):
             return False
 
 
-@app.route('/save/<string:aup>', methods=["POST"])
+@app.route('/api/save/<string:aup>', methods=["POST"])
 def saveMap1(aup):
     if request.method == "POST":
         request_data = request.get_json()
@@ -127,7 +127,7 @@ def save_loop(i, in_type, l, request_data):
             return make_response('Save error', 400)
     
 
-@app.route('/get_id_edizm', methods=["GET"])
+@app.route('/api/get_id_edizm', methods=["GET"])
 def get_id_edizm():
     l = list()
     d = dict()
@@ -146,7 +146,7 @@ def get_id_edizm():
 
 
 
-@app.route('/upload', methods=["POST", "GET"])
+@app.route('/api/upload', methods=["POST", "GET"])
 def upload():
     form = FileForm(meta={'csrf': False})
 
@@ -376,7 +376,7 @@ def getAupData(file):
 
 
 # путь для загрузки сформированной КД
-@app.route("/save_excel/<string:aup>", methods=["GET"])
+@app.route("/api/save_excel/<string:aup>", methods=["GET"])
 def save_excel(aup):
     filename = saveMap(aup, app.static_folder, expo=60)
     # Upload xlxs file in memory and delete file from storage -----
@@ -393,7 +393,7 @@ def save_excel(aup):
                      download_name=os.path.split(filename)[-1])
 
 
-@app.route("/getGroups", methods=["GET"])
+@app.route("/api/getGroups", methods=["GET"])
 def get_colors():
     q = Groups.query.all()
     l = list()
@@ -406,7 +406,7 @@ def get_colors():
     return l
 
 
-@app.route("/getAllMaps")
+@app.route("/api/getAllMaps")
 def getAllMaps():
     fac = SprFaculty.query.all()
     li = list()
@@ -434,7 +434,7 @@ def GetMaps(id):
     return l
 
 
-@app.route('/add-group', methods=["POST"])
+@app.route('/api/add-group', methods=["POST"])
 def AddNewGroup():
     request_data = request.get_json()
     if request_data['name'] == '':
@@ -449,7 +449,7 @@ def AddNewGroup():
     return make_response(jsonify(d), 200)
 
 
-@app.route('/delete-group', methods=["POST"])
+@app.route('/api/delete-group', methods=["POST"])
 def DeleteGroup():
     request_data = request.get_json()
     d = AupData.query.filter_by(id_group=request_data['id']).all()
@@ -461,7 +461,7 @@ def DeleteGroup():
     db.session.commit()
     return make_response(jsonify('OK'), 200)
 
-@app.route('/get-group-by-aup/<string:aup>', methods=["GET"])
+@app.route('/api/get-group-by-aup/<string:aup>', methods=["GET"])
 def GetGroupByAup(aup):
     aupId = AupInfo.query.filter_by(num_aup=aup).first()
     a = aupId.id_aup
@@ -479,7 +479,7 @@ def GetGroupByAup(aup):
         l.append(d)
     return make_response(jsonify(l), 200)
 
-@app.route('/update-group', methods=["POST"])
+@app.route('/api/update-group', methods=["POST"])
 def UpdateGroup():
     request_data = request.get_json()
     gr = Groups.query.filter_by(id_group=request_data['id']).first()
@@ -490,7 +490,7 @@ def UpdateGroup():
     return make_response(jsonify('OK'), 200)
 
 
-@app.route("/getControlTypes")
+@app.route("/api/getControlTypes")
 def getControlTypes():
     control_type_arr = []
     for k, v in control_type_r.items():
