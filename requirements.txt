@@ -1,8 +1,10 @@
 flask
 PyMySQL
+werkzeug
 flask-migrate
 flask-sqlalchemy
 flask-wtf
+flask_login
 xlsxwriter
 openpyxl==3.0.7
 pandas

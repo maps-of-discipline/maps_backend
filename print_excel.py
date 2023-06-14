@@ -115,6 +115,12 @@ def saveMap(aup, static, **kwargs):
     makeLegend(wb, table)
 
     set_print_properties(table, ws, max_zet)
+    
+    ### Установить нижний колонтитул
+    ws.oddFooter.right.text = f"АУП {aup.num_aup}"
+    ws.oddFooter.right.size = 14
+    ws.oddFooter.right.font = "Tahoma,Bold"
+    ws.oddFooter.right.color = "000000"
 
     wb.save(filename=filename_map)
     return filename_map
@@ -168,15 +174,14 @@ def set_print_properties(table, ws, max_zet):
     ws.print_options.horizontalCentered = True
     ws.print_options.verticalCentered = True
 
-    ws.page_setup.fitToPage = True
     # ws.row_dimensions[1].height = 100
-    ws.page_setup.scale = 60
+    # ws.page_setup.scale = 60
     max_row = get_maximum_rows(sheet_object=ws)*2
     ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_zet*2+ROW_START_DISCIPLINES-1)
     ws.page_margins = openpyxl.worksheet.page.PageMargins(
         #left=1/3.81, right=1/3.81, top=1/3.81, bottom=1/3.81, header=1/3.81, footer=1/3.81) # Изначальный вариант
         #left=0.25, right=0.25, top=0, bottom=0, header=0, footer=0) # Прошлый вариант
-        left=1/5, right=1/5, top=1/5, bottom=1/5) # Правка на 0,5 см
+        left=1/5, right=1/5, top=1/5, bottom=1/5, header=0.1, footer=0.1) # Правка на 0,5 см
 
     for height_row in range(ROW_START_DISCIPLINES, max_zet*2 + ROW_START_DISCIPLINES): # Высота строк где дисциплины
         ws.row_dimensions[height_row].height = SUM_ROW_HEIGHT/max_zet
@@ -204,9 +209,9 @@ def set_print_properties(table, ws, max_zet):
     ### Сделать жирный бордюр в правом нижнем углу
     ws[f'{chr(ord("A")+len(table))}{max_row-ROW_START_DISCIPLINES+1}'].border = Border(right=border_thick, bottom=border_thick)
     ###
-
     ws.column_dimensions['A'].width = 10 # Column ZET
-    ###
+    ### Установить открытие страницы полностью
+    ws.page_setup.fitToPage = True
 
 
 # Возвращает данные для шапка карты
