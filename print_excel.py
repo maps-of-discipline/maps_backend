@@ -1,5 +1,5 @@
 from math import floor
-import os
+import os, re
 from random import randint
 import openpyxl
 import xlsxwriter
@@ -119,7 +119,7 @@ def saveMap(aup, static, **kwargs):
     ### Установить нижний колонтитул
     ws.oddFooter.right.text = f"АУП {aup.num_aup}"
     ws.oddFooter.right.size = 14
-    ws.oddFooter.right.font = "Tahoma,Bold"
+    ws.oddFooter.right.font = "Arial,Bold"
     ws.oddFooter.right.color = "000000"
 
     wb.save(filename=filename_map)
@@ -138,10 +138,6 @@ def color_text_cell(ws, cell, color):
 
     ws[cell].fill = PatternFill(start_color=str(
         color), end_color=str(color), fill_type='solid')
-# def make_many_zet_to_one(table):
-#     for item in table:
-#         item['zet'] = take_sum_zet_in_discipline(item['type'])
-#         del item['type']
 
 
 def find_max_zet_excel(table):
@@ -179,8 +175,6 @@ def set_print_properties(table, ws, max_zet):
     max_row = get_maximum_rows(sheet_object=ws)*2
     ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_zet*2+ROW_START_DISCIPLINES-1)
     ws.page_margins = openpyxl.worksheet.page.PageMargins(
-        #left=1/3.81, right=1/3.81, top=1/3.81, bottom=1/3.81, header=1/3.81, footer=1/3.81) # Изначальный вариант
-        #left=0.25, right=0.25, top=0, bottom=0, header=0, footer=0) # Прошлый вариант
         left=1/5, right=1/5, top=1/5, bottom=1/5, header=0.1, footer=0.1) # Правка на 0,5 см
 
     for height_row in range(ROW_START_DISCIPLINES, max_zet*2 + ROW_START_DISCIPLINES): # Высота строк где дисциплины
@@ -191,27 +185,28 @@ def set_print_properties(table, ws, max_zet):
 
     ### Сделать жирный бордюр по нижней линии
     for bottom_line in range(1, len(table)):
-        if ws[f'{chr(ord("A")+bottom_line)}{max_row-ROW_START_DISCIPLINES+1}'].value is not None:
+        if ws[f'{chr(ord("A")+bottom_line)}{max_row-ROW_START_DISCIPLINES+1}'].style is not 'normal':
             ws[f'{chr(ord("A")+bottom_line)}{max_row-ROW_START_DISCIPLINES+1}'].border = Border(bottom=border_thick, left=border_thin, right=border_thin)
         else:
             ws[f'{chr(ord("A")+bottom_line)}{max_row-ROW_START_DISCIPLINES+1}'].border = Border(bottom=border_thick)
     ###
     ### Сделать жирный бордюр по правой колонке
-    flag = ''
-    for right_col in range(ROW_START_DISCIPLINES, max_row-2):
-        cell_style = ws[f'{chr(ord("A")+len(table))}{right_col}'].style
-        if flag != ws[f'{chr(ord("A")+len(table))}{right_col}'] and cell_style != 'Normal':
-            ws[f'{chr(ord("A")+len(table))}{right_col}'].border = Border(right=border_thick, top=border_thin)
-            flag = ws[f'{chr(ord("A")+len(table))}{right_col}'].value
-        else:
-            ws[f'{chr(ord("A")+len(table))}{right_col}'].border = Border(right=border_thick)
+    pattern = re.compile(f'{chr(ord("A")+len(table))}[0-9]+:{chr(ord("A")+len(table))}[0-9]+')
+    last_col_merged_cells = list(filter(lambda x: (pattern.match(x.coord)), ws.merged_cells.ranges))
+    for merged in last_col_merged_cells:
+        start_end_cell = merged.coord.split(':')
+        merged.start_cell.border = Border(left=border_thin, top=border_thin, right=border_thick, bottom=border_thin)
+        start_end_cell[0] = start_end_cell[0][0]+str(int(start_end_cell[0][1:])+1)
+        while start_end_cell[0] == start_end_cell[-1]:
+            ws[start_end_cell[0]].border = Border(left=border_thin, right=border_thick)
+            start_end_cell[0] = start_end_cell[0][0]+str(int(start_end_cell[0][1:])+1)
     ###
     ### Сделать жирный бордюр в правом нижнем углу
     ws[f'{chr(ord("A")+len(table))}{max_row-ROW_START_DISCIPLINES+1}'].border = Border(right=border_thick, bottom=border_thick)
     ###
     ws.column_dimensions['A'].width = 10 # Column ZET
     ### Установить открытие страницы полностью
-    ws.page_setup.fitToPage = True
+    # ws.page_setup.fitToPage = True
 
 
 # Возвращает данные для шапка карты
@@ -247,12 +242,12 @@ def addStyles(workbook):
         horizontal='center', vertical='center', wrapText=True)
     workbook.add_named_style(ns_header)
 
-    ns_standart = NamedStyle(name='standart_last_right')
-    ns_standart.font = Font(bold=True, size=16, name='Arial')
-    ns_standart.border = Border(left=border_thin, top=border_thin, right=border_thick, bottom=border_thin)
-    ns_standart.alignment = Alignment(
+    standart_last_right = NamedStyle(name='standart_last_right')
+    standart_last_right.font = Font(bold=True, size=16, name='Arial')
+    standart_last_right.border = Border(left=border_thin, top=border_thin, right=border_thick, bottom=border_thin)
+    standart_last_right.alignment = Alignment(
         horizontal='center', vertical='center', wrapText=True)
-    workbook.add_named_style(ns_standart)
+    workbook.add_named_style(standart_last_right)
 
 # функция создает карту и задаем все данные кроме предметов в семестрах, на вход требует имя карты
 def CreateMap(filename_map, max_zet, table_length):
