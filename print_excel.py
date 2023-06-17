@@ -206,7 +206,7 @@ def set_print_properties(table, ws, max_zet):
 
     ws.column_dimensions['A'].width = 10 # Column ZET
     ### Установить открытие страницы полностью
-    # ws.page_setup.fitToPage = True
+    ws.page_setup.fitToPage = True
 
 
 # Возвращает данные для шапка карты
