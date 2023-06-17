@@ -183,27 +183,27 @@ def set_print_properties(table, ws, max_zet):
     for width_column in range(1, len(table)+1): # Ширины столбцов где дисциплины
         ws.column_dimensions[f'{chr(ord("A")+width_column)}'].width = SUM_COLUMN_WIDTH/len(table)
 
-    ### Сделать жирный бордюр по нижней линии
-    for bottom_line in range(1, len(table)):
-        if ws[f'{chr(ord("A")+bottom_line)}{max_row-ROW_START_DISCIPLINES+1}'].style is not 'normal':
-            ws[f'{chr(ord("A")+bottom_line)}{max_row-ROW_START_DISCIPLINES+1}'].border = Border(bottom=border_thick, left=border_thin, right=border_thin)
-        else:
-            ws[f'{chr(ord("A")+bottom_line)}{max_row-ROW_START_DISCIPLINES+1}'].border = Border(bottom=border_thick)
-    ###
-    ### Сделать жирный бордюр по правой колонке
-    pattern = re.compile(f'{chr(ord("A")+len(table))}[0-9]+:{chr(ord("A")+len(table))}[0-9]+')
-    last_col_merged_cells = list(filter(lambda x: (pattern.match(x.coord)), ws.merged_cells.ranges))
-    for merged in last_col_merged_cells:
-        start_end_cell = merged.coord.split(':')
-        merged.start_cell.border = Border(left=border_thin, top=border_thin, right=border_thick, bottom=border_thin)
-        start_end_cell[0] = start_end_cell[0][0]+str(int(start_end_cell[0][1:])+1)
-        while start_end_cell[0] == start_end_cell[-1]:
-            ws[start_end_cell[0]].border = Border(left=border_thin, right=border_thick)
-            start_end_cell[0] = start_end_cell[0][0]+str(int(start_end_cell[0][1:])+1)
-    ###
-    ### Сделать жирный бордюр в правом нижнем углу
-    ws[f'{chr(ord("A")+len(table))}{max_row-ROW_START_DISCIPLINES+1}'].border = Border(right=border_thick, bottom=border_thick)
-    ###
+    # Определяем высоту наибольшего столбца(семестра) для избежания выхода за границы
+    col_max_height = max([sum(map(lambda cell: cell['zet'], col)) * 2 for col in table])
+    
+    cell = lambda x,y: f'{chr(ord("A")+x+1)}{ROW_START_DISCIPLINES+y}' # Перевод численных координат в координаты с буквой 
+    is_none = lambda x, y: cell(x, y) not in ws.merged_cells # Пустая ли ячейка
+
+    
+    for x in range(len(table)):
+        for y in range(int(col_max_height)):
+            border = Border()
+            if (not is_none(x,y)):
+                border = Border(left=border_thin, right=border_thin, bottom=border_thin) 
+
+            if (x + 1 == len(table)):
+                border.right = border_thick
+
+            if (y+1 == col_max_height):
+                border.bottom = border_thick
+
+            ws[cell(x,y)].border = border
+
     ws.column_dimensions['A'].width = 10 # Column ZET
     ### Установить открытие страницы полностью
     # ws.page_setup.fitToPage = True
