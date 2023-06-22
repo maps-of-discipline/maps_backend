@@ -1,0 +1,15 @@
+flask
+PyMySQL
+werkzeug
+flask-migrate
+flask-sqlalchemy
+flask-wtf
+flask_login
+xlsxwriter
+<<<<<<< HEAD:requirement.txt
+openpyxl==3.1.0
+=======
+openpyxl==3.0.7
+>>>>>>> dev:requirements.txt
+pandas
+flask-cors

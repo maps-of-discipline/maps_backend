@@ -52,5 +52,9 @@ def check_skiplist(zet_or_hours, value_discipline, value_record_type, value_bloc
             len(list(filter(lambda x: x in value_block, skiplist['record_type']))) == 0)):
         return True
     else:
+<<<<<<< HEAD
         return False
     
+=======
+        return False
+>>>>>>> dev

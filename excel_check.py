@@ -7,7 +7,7 @@ from models import SprStandard, SprVolumeDegreeZET
 
 
 def check_smt1(file):  # проверка на целочисленность дисциплины №2
-    wb = load_workbook(file)
+    wb = load_workbook(file, read_only=True)
     ws = wb['Лист2']
     max_row = get_maximum_rows(sheet_object=ws)
     d = defaultdict(list)
@@ -161,12 +161,15 @@ def layout_of_disciplines(file):  # Компоновка элективных д
                             ws['F'+str(i+(j-1))].value
                         ws['F'+str(i+(j-1))] = 'None'
                         ws['E'+str(i+(j-1))] = 'None'
-    for num in range(1, max_row + 1):
-        if ws['E'+str(num)].value == 'None':
-            ws.delete_rows(num)
-    for num in range(1, max_row + 1):
-        if ws['E'+str(num)].value == 'None':
-            ws.delete_rows(num)
+    i = 1
+    len = max_row + 1
+    while i != len:
+        if ws['E'+str(i)].value == 'None':
+            ws.delete_rows(i)
+            len = len - 1 
+            continue
+        i += 1
+
     wb.save(file)
 
 
@@ -242,7 +245,11 @@ def excel_check(path, aup, options_check):
     ### ------------------------------------ ###
 
     # ### Проверка на целочисленность ЗЕТ у каждой дисциплины ###
+<<<<<<< HEAD
     if options_check['enableCheckIntegrality'] == True:
+=======
+    if options_check['checkboxIntegralityModel'] == True:
+>>>>>>> dev
         err_arr = check_smt1(path)
         if err_arr != []:
             errors = 'АУП: ' + aup + ' Ошибка при подсчете ЗЕТ:\n' + '\n'.join(err_arr)
@@ -256,7 +263,11 @@ def excel_check(path, aup, options_check):
 
     # ### ------------------------------------ ###
     # ### Проверка, чтобы общая сумма ЗЕТ соответствовало норме (30 * кол-во семестров) ###
+<<<<<<< HEAD
     if options_check['enableCheckSumMap'] == True:
+=======
+    if options_check['checkboxSumModel'] == True:
+>>>>>>> dev
         sum_normal, sum_zet = check_full_zet_in_plan(path)
         print(sum_normal, sum_zet)
         if sum_normal != sum_zet:

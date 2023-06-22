@@ -1,6 +1,9 @@
 import sqlalchemy as sa
 import os
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import check_password_hash, generate_password_hash
+from flask_login import UserMixin 
+from flask import url_for
 # from app import db, app
 
 db = SQLAlchemy()
@@ -253,11 +256,18 @@ class AupData(db.Model):
         'd_part.id'), nullable=False)
     id_module = db.Column(db.Integer, db.ForeignKey(
         'd_modules.id'), nullable=False)
+<<<<<<< HEAD
     id_group = db.Column(db.Integer, db.ForeignKey(
         'groups.id_group'), nullable=False)
     id_type_record = db.Column(db.Integer, db.ForeignKey(
         'd_type_record.id'), nullable=False)
     discipline = db.Column(db.String(150), nullable=False)
+=======
+    id_group = db.Column(db.Integer, nullable=False)
+    id_type_record = db.Column(db.Integer, db.ForeignKey(
+        'd_type_record.id'), nullable=False)
+    discipline = db.Column(db.String(350), nullable=False)
+>>>>>>> dev
     id_period = db.Column(db.Integer, nullable=False)
     num_row = db.Column(db.Integer, nullable=False)
     id_type_control = db.Column(db.Integer, db.ForeignKey(
@@ -272,9 +282,34 @@ class AupData(db.Model):
     module = db.relationship('D_Modules')
     type_record = db.relationship('D_TypeRecord')
     type_control = db.relationship('D_ControlType')
+<<<<<<< HEAD
     group = db.relationship('Groups')
+=======
+>>>>>>> dev
     aup = db.relationship('AupInfo')
     ed_izmereniya = db.relationship('D_EdIzmereniya')
 
     def __repr__(self):
         return '<AupData %r>' % self.aup_num
+<<<<<<< HEAD
+=======
+
+
+class Users(db.Model, UserMixin):
+    __tablename__ = 'tbl_users'
+    id_user = db.Column(db.Integer, primary_key=True)
+    login = db.Column(db.String(100), unique=True, nullable=False)
+    password_hash = db.Column(db.String(200), unique=True, nullable=False)
+    id_faculty = db.Column(db.Integer, db.ForeignKey(
+        'spr_faculty.id_faculty'), nullable=False)
+
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+    
+    def __repr__(self):
+        return '<User %r>' % self.login
+>>>>>>> dev

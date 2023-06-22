@@ -1,9 +1,0 @@
-flask
-PyMySQL
-flask-migrate
-flask-sqlalchemy
-flask-wtf
-xlsxwriter
-openpyxl==3.1.0
-pandas
-flask-cors
