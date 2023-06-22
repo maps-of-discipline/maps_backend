@@ -256,18 +256,10 @@ class AupData(db.Model):
         'd_part.id'), nullable=False)
     id_module = db.Column(db.Integer, db.ForeignKey(
         'd_modules.id'), nullable=False)
-<<<<<<< HEAD
-    id_group = db.Column(db.Integer, db.ForeignKey(
-        'groups.id_group'), nullable=False)
-    id_type_record = db.Column(db.Integer, db.ForeignKey(
-        'd_type_record.id'), nullable=False)
-    discipline = db.Column(db.String(150), nullable=False)
-=======
     id_group = db.Column(db.Integer, nullable=False)
     id_type_record = db.Column(db.Integer, db.ForeignKey(
         'd_type_record.id'), nullable=False)
     discipline = db.Column(db.String(350), nullable=False)
->>>>>>> dev
     id_period = db.Column(db.Integer, nullable=False)
     num_row = db.Column(db.Integer, nullable=False)
     id_type_control = db.Column(db.Integer, db.ForeignKey(
@@ -282,17 +274,11 @@ class AupData(db.Model):
     module = db.relationship('D_Modules')
     type_record = db.relationship('D_TypeRecord')
     type_control = db.relationship('D_ControlType')
-<<<<<<< HEAD
-    group = db.relationship('Groups')
-=======
->>>>>>> dev
     aup = db.relationship('AupInfo')
     ed_izmereniya = db.relationship('D_EdIzmereniya')
 
     def __repr__(self):
         return '<AupData %r>' % self.aup_num
-<<<<<<< HEAD
-=======
 
 
 class Users(db.Model, UserMixin):
@@ -312,4 +298,3 @@ class Users(db.Model, UserMixin):
     
     def __repr__(self):
         return '<User %r>' % self.login
->>>>>>> dev

@@ -118,7 +118,6 @@ def _params(params_list, _PARAMS):
 #             department = None
 #         id_form = SprFormEducation.query.filter_by(
 #             form=form_educ).first().id_form
-<<<<<<< HEAD
 
 
 #         new_str_tbl_duration = DurationEducation(**_params([id_degree, id_form, years, months, id_spec, year_beg, year_end, is_actual], DURATION_EDUC_PARAMS))
@@ -200,95 +199,6 @@ def _params(params_list, _PARAMS):
 
 def delete_from_aupdata(aup):
     AupData.query.filter_by(id_aup=aup.id_aup).delete()
-    db.session.commit()
-
-
-def delete_from_workmap(aup):
-    id_aup = AUP.query.filter_by(num_aup=aup).first().id_aup
-    WorkMap.query.filter_by(id_aup=id_aup).delete()
-=======
-
-
-#         new_str_tbl_duration = DurationEducation(**_params([id_degree, id_form, years, months, id_spec, year_beg, year_end, is_actual], DURATION_EDUC_PARAMS))
-#         db.session.add(new_str_tbl_duration)
-#         db.session.commit()
-
-#         id_duration = new_str_tbl_duration.id_duration
-
-#         new_str_tbl_op = OP(**_params([id_duration, id_faculty, 1, type_education, qualification, type_standard, department, period_edication], OP_PARAMS)) # ЗАМЕСТО ВЕРХНЕЙ СТРОЧКИ
-#         db.session.add(new_str_tbl_op)
-#         db.session.commit()
-
-#         id_op = new_str_tbl_op.id_op
-
-#         new_str_tbl_aup = AUP(**_params([id_op, filename, aup_num, base], AUP_PARAMS))
-#         db.session.add(new_str_tbl_aup)
-
-#         # добавить модуль в tbl_module и получить id, заменить модуль на id
-#         # #   Column           Non-Null Count  Dtype
-#         # ---  ------           --------------  -----
-#         # 0   Блок             93 non-null     object
-#         # 1   Шифр             93 non-null     object
-#         # 2   Часть            93 non-null     object
-#         # 3   Модуль           0 non-null      float64
-#         # 4   Тип записи       93 non-null     object
-#         # 5   Дисциплина       93 non-null     object
-#         # 6   Период контроля  93 non-null     object
-#         # 7   Нагрузка         93 non-null     object
-#         # 8   Количество       62 non-null     object
-#         # 9   Ед. изм.         93 non-null     object
-#         # 10  ЗЕТ              62 non-null     object
-
-#         # ЛИСТ 2
-
-#         update_workload(file, aup_num) ### Закинуть файлы в бд
-
-#     db.session.commit()
-#     print("[+] Запись данных завершена. Отключение от БД")
-#     # path = os.path.join(static_folder, 'temp', filename)
-#     # os.remove(path)
-#     return aup_num
-
-
-# def update_workload(file, aup_num):
-#     data = pd.read_excel(file, sheet_name="Лист2")
-
-#     id_aup = AUP.query.filter_by(num_aup = aup_num).first().id_aup
-
-#     for i in range(len(data)):
-#         row = []
-#         for column in data.columns:
-#             row.append(data[column][i])
-
-
-#         if pd.isna(row[8]):
-#             row[8] = 0
-#         else:
-#             try:
-#                 row[8] = int(float(row[8].replace(',', '.')))
-#             except:
-#                 row[8] = int(float(row[8]))
-
-#         if pd.isna(row[10]):
-#             row[10] = 0
-#         else:
-#             try:
-#                 row[10] = float(row[10].replace(',', '.'))
-#             except:
-#                 row[10] = float(row[10])
-
-#         row.insert(0, id_aup)
-#         row = list(map(lambda x: None if pd.isna(x) else x, row))
-#         # print('+++++++++++++++++', row)
-#         row.insert(5, None)
-#         new_str_workload = Workload(**_params(row, WORKLOAD_PARAMS))
-#         db.session.add(new_str_workload)
-#     db.session.commit()
-
-
-def delete_from_aupdata(aup):
-    AupData.query.filter_by(id_aup=aup.id_aup).delete()
->>>>>>> dev
     db.session.commit()
 
 
@@ -318,10 +228,6 @@ def check_actual(year_end):
 
 
 def SaveCard(db, aupInfo, aupData):
-<<<<<<< HEAD
-    # Перезапись карты, если есть уже в базе и мы обновляем ее
-    get_aup = AupInfo.query.filter_by(num_aup=aupInfo["num"]).first()
-=======
     ### ПОСМОТРЕТЬ ЕСТЬ ЛИ В ТАБЛИЦЕ ФАКУЛЬТЕТОВ ТАКОЙ ФАКУЛЬТЕТ И ЕСЛИ НЕТ, ТО ДОБАВИТЬ
     get_faculty = SprFaculty.query.filter_by(name_faculty=aupInfo["name_faculty"]).first() 
     print(get_faculty.name_faculty)
@@ -332,7 +238,6 @@ def SaveCard(db, aupInfo, aupData):
     # Перезапись карты, если есть уже в базе и мы обновляем ее
     get_aup = AupInfo.query.filter_by(num_aup=aupInfo["num"]).first()
 
->>>>>>> dev
     if get_aup is None:
         # Функция добавления информации по карте (АУП)
         get_aup = add_new_aup(aupInfo)
@@ -341,12 +246,6 @@ def SaveCard(db, aupInfo, aupData):
         delete_from_aupdata(get_aup)
     
     l = list()
-<<<<<<< HEAD
-    for i in aupData:
-        new_row = AupData(id_aup=get_aup.id_aup, id_block=i[0], shifr=i[1], id_part=i[2], id_module=i[3], id_group=i[11], id_type_record=i[4],
-                          discipline=i[5], id_period=i[6], id_type_control=i[7], amount=int(i[8]), id_edizm=i[9], zet=int(i[10]), num_row=i[12])
-        l.append(new_row)
-=======
     temp_i = 0
     for i in aupData:
         temp_i += 1
@@ -357,7 +256,6 @@ def SaveCard(db, aupInfo, aupData):
         l.append(new_row)
         # print(i[5], 'ADD')
     if temp_i == len(aupData): print('VALID DATA')
->>>>>>> dev
     db.session.bulk_save_objects(l)
     db.session.commit()
 
