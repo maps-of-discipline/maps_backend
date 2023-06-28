@@ -61,6 +61,8 @@ ZET_HEIGHT = 90
 setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r,
                    ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
 
+if os.path.exists(app.static_folder + '/temp') == False: 
+    os.makedirs(app.static_folder + '/temp', exist_ok=True)
 
 @app.route("/api/map/<string:aup>")
 def getMap(aup):
@@ -163,6 +165,7 @@ def upload():
 
                 # aup = f.filename.split(' - ')[1].strip()
                 ### путь к файлу на диске
+
                 path = os.path.join(app.static_folder, 'temp', f.filename)
 
                 # сохранить временный файл с учебным планом
