@@ -38,7 +38,7 @@ class SprFaculty(db.Model):
     name_faculty = db.Column(db.String(255), nullable=False)
     id_branch = db.Column(db.Integer, db.ForeignKey(
         'spr_branch.id_branch'), nullable=False)
-    dean = db.Column(db.String(255), nullable=False)
+    dean = db.Column(db.String(255), nullable=True)
 
     branch = db.relationship('SprBranch')
 
