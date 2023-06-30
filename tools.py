@@ -38,8 +38,7 @@ def get_maximum_rows(*, sheet_object):  # Взять максимальное з
 def take_aup_from_excel_file(file):
     wb = load_workbook(file)
     # ws = wb['Лист1']
-    return wb['Лист1']['B2'].value
-
+    return str(wb['Лист1']['B2'].value)
 
 def error(errors):
     return make_response(jsonify(errors), 400)

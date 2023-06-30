@@ -6,7 +6,7 @@ from tools import FileForm, take_aup_from_excel_file, error
 from save_into_bd import SaveCard
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
 from excel_check import excel_check
-from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, AupData, AupInfo, Groups, SprFaculty
+from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, AupData, AupInfo, Groups, SprFaculty
 import pandas as pd
 from openpyxl import load_workbook
 from sqlalchemy.sql.expression import func
@@ -61,6 +61,8 @@ ZET_HEIGHT = 90
 setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r,
                    ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
 
+if os.path.exists(app.static_folder + '/temp') == False: 
+    os.makedirs(app.static_folder + '/temp', exist_ok=True)
 
 @app.route("/api/map/<string:aup>")
 def getMap(aup):
@@ -178,6 +180,7 @@ def upload():
 
                 # aup = f.filename.split(' - ')[1].strip()
                 ### путь к файлу на диске
+
                 path = os.path.join(app.static_folder, 'temp', f.filename)
 
                 # сохранить временный файл с учебным планом
@@ -490,6 +493,25 @@ def GetGroupByAup(aup):
         d["id"] = g.id_group
         d["name"] = g.name_group
         d["color"] = g.color
+        l.append(d)
+    return make_response(jsonify(l), 200)
+
+@app.route('/api/get-modules-by-aup/<string:aup>', methods=["GET"])
+def GetModulesByAup(aup):
+    aupId = AupInfo.query.filter_by(num_aup=aup).first()
+    a = aupId.id_aup
+    aupData = AupData.query.filter_by(id_aup=a).all()
+    modules = set()
+    for elem in aupData:
+        modules.add(elem.id_module)
+    l = list()
+    for elem in modules:
+        m = D_Modules.query.filter_by(id=elem).first()
+        if m.title == 'Без названия':
+            continue
+        d = dict()
+        d["id"] = m.id
+        d["title"] = m.title
         l.append(d)
     return make_response(jsonify(l), 200)
 
