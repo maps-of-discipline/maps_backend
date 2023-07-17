@@ -2,12 +2,18 @@ import sqlalchemy as sa
 import os
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import check_password_hash, generate_password_hash
-from flask_login import UserMixin 
+from flask_login import UserMixin
 from flask import url_for
 from user_policy import UsersPolicy
+from sqlalchemy.orm import declarative_base, relationship, DeclarativeBase
+
 # from app import db, app
 
 db = SQLAlchemy()
+
+
+class Base(DeclarativeBase):
+    pass
 
 
 class SprBranch(db.Model):
@@ -84,6 +90,17 @@ class SprRop(db.Model):
         return '<Rop %r>' % self.full_name
 
 
+aup_info_has_rule_table = db.Table(
+    "aup_info_has_rule",
+    # Base.metadata,
+    db.Column("rule_id", db.ForeignKey('tbl_rule.id')),
+    db.Column("aup_info_id", db.ForeignKey('tbl_aup.id_aup')),
+    db.Column("min", db.Float, nullable=True),
+    db.Column("max", db.Float, nullable=True),
+    db.Column("ed_izmereniya_id", db.ForeignKey('d_ed_izmereniya.id'))
+)
+
+
 class AupInfo(db.Model):
     __tablename__ = 'tbl_aup'
 
@@ -117,6 +134,12 @@ class AupInfo(db.Model):
     name_op = db.relationship('NameOP')
     faculty = db.relationship('SprFaculty')
     rop = db.relationship('SprRop')
+
+    rules = relationship(
+        "Rule",
+        secondary=aup_info_has_rule_table,
+        back_populates="aup_infos"
+    )
 
     def __repr__(self):
         return '<№ AUP %r>' % self.num_aup
@@ -296,7 +319,7 @@ class Users(db.Model, UserMixin):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
-    
+
     @property
     def full_name(self):
         return ' '.join([self.last_name, self.first_name, self.middle_name or ''])
@@ -308,7 +331,7 @@ class Users(db.Model, UserMixin):
     # @property
     # def is_moder(self):
     #     return app.config.get('MODER_ROLE_ID') == self.role_id
-    
+
     # @property
     # def is_user(self):
     #     return app.config.get('USER_ROLE_ID') == self.role_id
@@ -322,3 +345,201 @@ class Users(db.Model, UserMixin):
 
     def __repr__(self):
         return '<User %r>' % self.login
+
+
+# --------------checks---------------- #
+
+
+class DBase(db.Model):
+    __abstract__ = True
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+
+    def __repr__(self):
+        return f'<{self.__tablename__} {self.title}>'
+
+
+class DCompetencyCode(DBase):
+    __tablename__ = 'd_competency_code'
+
+
+class DSpecializationType(DBase):
+    __tablename__ = 'd_specialization_type'
+
+
+class DTypeStandard(DBase):
+    __tablename__ = 'd_type_standard'
+
+
+class DGeneration(DBase):
+    __tablename__ = 'd_generation'
+
+
+fgosvo_has_compulsory_discipline_table = db.Table(
+    'fgosvo_has_compulsory_discipline',
+    db.Column("fgosvo_id", db.ForeignKey('spr_fgos_vo.id')),
+    db.Column("compulsory_discipline_id", db.ForeignKey('spr_compulsory_discipline.id'))
+)
+
+fgosvo_has_competency_table = db.Table(
+    'fgosvo_has_competency',
+    db.Column("fgosvo_id", db.ForeignKey('spr_fgos_vo.id')),
+    db.Column("competency_id", db.ForeignKey('spr_competency.id'))
+)
+
+fgosvo_has_specialization_table = db.Table(
+    'fgosvo_has_specialization',
+    db.Column("fgosvo_id", db.ForeignKey('spr_fgos_vo.id')),
+    db.Column("specialization_id", db.ForeignKey('spr_specialization.id'))
+)
+
+specialization_has_additional_competency_table = db.Table(
+    'specialization_has_additional_competency',
+    db.Column('specialization_id', db.ForeignKey("spr_specialization.id")),
+    db.Column('additional_competency_id', db.ForeignKey("spr_additional_competency.id"))
+)
+
+
+class SprFgosVo(db.Model):
+    __tablename__ = 'spr_fgos_vo'
+
+    id = db.Column(db.Integer, primary_key=True)
+    realized_okso_id = db.Column(db.Integer, db.ForeignKey('tbl_realized_okso.id'), nullable=False)
+    IsActive = db.Column(db.Integer, nullable=False)
+    number = db.Column(db.Integer, nullable=False)
+    approval_date = db.Column(db.Date, nullable=False)
+    modification_date = db.Column(db.Date, nullable=False)
+    active_form = db.Column(db.Date, nullable=False)
+    type_standard_id = db.Column(db.Integer, db.ForeignKey('d_type_standard.id'), nullable=False)
+    generation_id = db.Column(db.Integer, db.ForeignKey('d_generation.id'), nullable=False)
+
+    specializations = db.relationship(
+        "SprSpecialization",
+        secondary=fgosvo_has_specialization_table,
+        back_populates="fgos_vo"
+    )
+    compulsory_disciplines = db.relationship(
+        "SprCompulsoryDiscipline",
+        secondary=fgosvo_has_compulsory_discipline_table,
+        back_populates="fgos_vo"
+    )
+    competencies = db.relationship(
+        "SprCompetency",
+        secondary=fgosvo_has_competency_table,
+        back_populates="fgos_vo"
+    )
+
+    def __repr__(self):
+        return '<SprFgosVo %r>' % self.id
+
+
+class SprSpecialization(db.Model):
+    __tablename__ = 'spr_specialization'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+    d_specialization_type_id = db.Column(db.Integer, db.ForeignKey('d_specialization_type.id'), nullable=False)
+
+    fgos_vo = relationship(
+        "SprFgosVo",
+        secondary=fgosvo_has_specialization_table,
+        back_populates="specializations"
+    )
+
+    additional_competencies = relationship(
+        "SprAdditionalCompetency",
+        secondary=specialization_has_additional_competency_table,
+        back_populates='specializations'
+    )
+
+    specialisation_type = db.relationship('DSpecializationType')
+
+    def __repr__(self):
+        return '<DegreeEducation %r>' % self.title
+
+
+class SprCompulsoryDiscipline(db.Model):
+    __tablename__ = 'spr_compulsory_discipline'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+
+    fgos_vo = relationship(
+        "SprFgosVo",
+        secondary=fgosvo_has_compulsory_discipline_table,
+        back_populates="compulsory_disciplines"
+    )
+
+    def __repr__(self):
+        return '<DegreeEducation %r>' % self.name
+
+
+class SprCompetency(db.Model):
+    __tablename__ = 'spr_competency'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+    d_competency_code_id = db.Column(db.Integer, db.ForeignKey('d_competency_code.id'), nullable=False)
+
+    competency_code = db.relationship('DCompetencyCode')
+
+    fgos_vo = db.relationship(
+        "SprFgosVo",
+        secondary=fgosvo_has_competency_table,
+        back_populates="competencies"
+    )
+
+    def __repr__(self):
+        return '<DegreeEducation %r>' % self.title
+
+
+class SprAdditionalCompetency(db.Model):
+    __tablename__ = 'spr_additional_competency'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.Text, nullable=False)
+    Code = db.Column(db.Float, nullable=False)
+    d_competency_code_id = db.Column(db.Integer, db.ForeignKey('d_competency_code.id'), nullable=False)
+
+    competency_code = db.relationship('DCompetencyCode')
+
+    specializations = relationship(
+        "SprSpecialization",
+        secondary=specialization_has_additional_competency_table,
+        back_populates='additional_competencies'
+    )
+
+    def __repr__(self):
+        return '<DegreeEducation %r>' % self.title
+
+
+class Rule(db.Model):
+    __tablename__ = 'tbl_rule'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(45), nullable=False)
+
+    aup_infos = relationship(
+        AupInfo,
+        secondary=aup_info_has_rule_table,
+        back_populates="rules"
+    )
+
+    def __repr__(self):
+        return '<DegreeEducation %r>' % self.title
+
+
+class RealizedOkso(db.Model):
+    __tablename__ = 'tbl_realized_okso'
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('spr_branch.id_branch'), nullable=False)
+    program_code = db.Column(db.String(255), db.ForeignKey('spr_okco.program_code'), primary_key=True)
+
+    branch = db.relationship('SprBranch')
+    okco = db.relationship('SprOKCO')
+
+    def __repr__(self):
+        return '<DegreeEducation %r>' % self.program_code
+
+

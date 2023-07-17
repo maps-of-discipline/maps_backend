@@ -18,6 +18,8 @@ from models import db
 import io
 import os
 import warnings
+from checker import AupChecker
+
 warnings.simplefilter("ignore")
 
 
@@ -98,6 +100,7 @@ def check_sum_zet_in_type(data):
             sum_zet_type += i['zet']
         if sum_zet_type == 0: return False
 
+
 def check_sum_zet_in_type(data):
     for item in data:
         sum_zet_type = 0
@@ -160,7 +163,6 @@ def get_id_edizm():
     d['coef'] = 1.5
     l.append(d)
     return make_response(jsonify(l), 200)
-
 
 
 @app.route('/api/upload', methods=["POST", "GET"])
@@ -536,5 +538,12 @@ def getControlTypes():
             is_control = False
         control_type_arr.append({"name": v, "id": k, "is_control": is_control})
     return make_response(jsonify(control_type_arr), 200)
+
+
+@app.route("/check/<string:aup>")
+def check_aup(aup: str):
+    checker = AupChecker()
+    return make_response(jsonify({"aup": aup}))
+
 
 
