@@ -8,6 +8,7 @@ class BaseTest:
     instance: Rule
 
     def __init__(self, db_instance: SQLAlchemy):
+        self.result = {}
         self.db = db_instance
         self.min = self.max = self.ed_izmereniya_id = None
 
@@ -16,6 +17,16 @@ class BaseTest:
         self.max = association.max
         self.ed_izmereniya_id = association.ed_izmereniya_id
         self.instance = association.rule
+
+        self.result = {
+            "id": self.instance.id,
+            "title": self.instance.title,
+            "min": self.min,
+            "max": self.max,
+            "value": None,
+            "result": False,
+            "detailed": None,
+        }
 
     @abstractmethod
     def assert_test(self, aup: AupInfo) -> object:
