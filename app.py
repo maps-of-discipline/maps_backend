@@ -6,7 +6,7 @@ from tools import FileForm, take_aup_from_excel_file, error
 from save_into_bd import SaveCard
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
 from excel_check import excel_check
-from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, AupData, AupInfo, Groups, SprFaculty
+from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, AupData, AupInfo, Groups, SprFaculty, SprFgosVo, SprCompetency
 import pandas as pd
 from openpyxl import load_workbook
 from sqlalchemy.sql.expression import func
@@ -19,6 +19,7 @@ import io
 import os
 import warnings
 from checker import AupChecker
+
 
 warnings.simplefilter("ignore")
 
@@ -51,6 +52,7 @@ weith = {
 metadata = MetaData(naming_convention=convention)
 db.init_app(app)
 migrate = Migrate(app, db)
+
 
 # from save_into_bd import bp as save_db_bp
 
@@ -542,8 +544,10 @@ def getControlTypes():
 
 @app.route("/check/<string:aup>")
 def check_aup(aup: str):
-    checker = AupChecker()
-    return make_response(jsonify({"aup": aup}))
+    aup = AupInfo.query.filter_by(num_aup=aup).first()
+    checker = AupChecker(aup, db_instance=db)
+
+    return make_response(checker.get_report())
 
 
 

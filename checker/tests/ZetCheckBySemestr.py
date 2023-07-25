@@ -7,6 +7,7 @@ class ZetCheckBySemester(BaseTest):
         super().__init__(aup_data)
         self.minimal_value = None
         self.maximum_value = None
+        print(f'[--LOG--] ZetCheckBySemestr test has inited')
 
     def fetch_test(self):
         self.id = 2

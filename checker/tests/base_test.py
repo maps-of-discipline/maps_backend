@@ -3,20 +3,19 @@ from abc import abstractmethod
 
 
 class BaseTest:
-    # test id according to db record
-    # test_id: int
-    title: str
-    id: int
 
-    def __init__(self, aup_data: AupData):
-        self._aup_data = aup_data
-        self.fetch_test()
+    instance: Rule
+
+    def __init__(self, db_instance: SQLAlchemy):
+        self.db = db_instance
+        self.min = self.max = self.ed_izmereniya_id = None
+
+    def fetch_test(self, association: AupInfoHasRuleTable):
+        self.min = association.min
+        self.max = association.max
+        self.ed_izmereniya_id = association.ed_izmereniya_id
+        self.instance = association.rule
 
     @abstractmethod
-    def fetch_test(self):
+    def assert_test(self, aup_object: AupInfo) -> str:
         pass
-
-    @abstractmethod
-    def assert_test(self,) -> str:
-        pass
-

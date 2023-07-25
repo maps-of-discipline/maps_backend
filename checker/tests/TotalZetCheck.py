@@ -1,36 +1,40 @@
-from typing import Dict
 from .base_test import BaseTest
 from models import *
+from tools import check_skiplist
 
 
 class TotalZetTest(BaseTest):
-    def __init__(self, aup_data):
-        super().__init__(aup_data)
-        self.minimal_value = None
-        self.maximum_value = None
-        self.fetch_test()
-
-    def fetch_test(self):
-        # query to db to get values
-        print("fetch test called")
-        self.title = "Объем учебной программы за весь период обучаения(зет)"
-        self.id = 1
-        self.minimal_value = 240
-        self.maximum_value = 240
-
-    def assert_test(self,) -> dict[str, str]:
-        zet_sum = 0
-        for row in self._aup_data:
-            print(f"{row.id} {row.id_aup} {row.discipline} {row.zet} {row.ed_izmereniya.title}")
-            zet_sum += row.zet // 100
-
-        return {
-            "test_id": self.id,
-            "test": self.title,
-            "min": self.minimal_value,
-            "max": self.maximum_value,
-            "value": zet_sum,
-            "resul": self.minimal_value <= zet_sum <= self.maximum_value
+    def assert_test(self, aup: AupInfo) -> dict:
+        result = {
+            "id": self.instance.id,
+            "title": self.instance.title,
         }
 
+        sum_zet = 0
+        for el in aup.aup_data:
+            el: AupData
 
+            # skip row if discipline in skip list
+            if not check_skiplist(el.zet, el.discipline, el.record_type.title, el.block.title):
+                continue
+
+            amount = el.amount
+            if el.id_edizm == 1:
+                amount = amount / 36
+            elif el.id_edizm == 2:
+                amount = amount * 1.5
+            sum_zet += amount / 100
+
+        result['min'] = self.min
+        result['value'] = sum_zet
+        result['max'] = self.max
+
+        res = True
+        if self.min:
+            res = sum_zet >= self.min
+
+        if self.max:
+            res = res and sum_zet <= self.max
+
+        result['result'] = res
+        return result

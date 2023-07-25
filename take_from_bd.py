@@ -56,7 +56,7 @@ def create_json(aup):
             d["num_row"] = item.num_row
             d["type"] = dict()
             d["id"] = str(item.id)
-            if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
+            if check_skiplist(item.zet, item.discipline, item.record_type.title, item.block.title) == False:
                 d["is_skip"] = True
             else:
                 d["is_skip"] = False
@@ -108,7 +108,7 @@ def create_json_test(aupInfo, aupData, max_column, max_row):
             print(i, j)
             disc = aupData.filter_by(num_row=j, id_period=i).all()
             if disc == []: continue
-            if check_skiplist(disc[0].zet, disc[0].discipline, disc[0].type_record.title, disc[0].block.title) == False:
+            if check_skiplist(disc[0].zet, disc[0].discipline, disc[0].record_type.title, disc[0].block.title) == False:
                 continue
             d = dict()
             d["discipline"] = disc[0].discipline
@@ -147,7 +147,7 @@ def create_json_print(aupData):
             d["id_group"] = group.id_group
             d["num_col"] = item.id_period
             d["num_row"] = item.num_row
-            if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
+            if check_skiplist(item.zet, item.discipline, item.record_type.title, item.block.title) == False:
                 d["is_skip"] = True
             else:
                 d["is_skip"] = False

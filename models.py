@@ -1,19 +1,18 @@
 import sqlalchemy as sa
 import os
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import ForeignKey
+from sqlalchemy.ext.associationproxy import association_proxy
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_login import UserMixin
 from flask import url_for
 from user_policy import UsersPolicy
-from sqlalchemy.orm import declarative_base, relationship, DeclarativeBase
+from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship
 
 # from app import db, app
 
 db = SQLAlchemy()
-
-
-class Base(DeclarativeBase):
-    pass
 
 
 class SprBranch(db.Model):
@@ -90,15 +89,30 @@ class SprRop(db.Model):
         return '<Rop %r>' % self.full_name
 
 
-aup_info_has_rule_table = db.Table(
-    "aup_info_has_rule",
-    # Base.metadata,
-    db.Column("rule_id", db.ForeignKey('tbl_rule.id')),
-    db.Column("aup_info_id", db.ForeignKey('tbl_aup.id_aup')),
-    db.Column("min", db.Float, nullable=True),
-    db.Column("max", db.Float, nullable=True),
-    db.Column("ed_izmereniya_id", db.ForeignKey('d_ed_izmereniya.id'))
-)
+class AupInfoHasRuleTable(db.Model):
+    __tablename__ = "aup_info_has_rule"
+
+    rule_id = db.Column(db.Integer, db.ForeignKey('tbl_rule.id'), primary_key=True)
+    aup_info_id = db.Column(db.Integer, db.ForeignKey('tbl_aup.id_aup'), primary_key=True)
+
+    min = db.Column(db.Float, nullable=True)
+    max = db.Column(db.Float, nullable=True)
+    ed_izmereniya_id = db.Column(db.ForeignKey('d_ed_izmereniya.id'))
+
+    rule = db.relationship("Rule", back_populates='aup_info')
+    aup_info = db.relationship("AupInfo", back_populates='rule_associations')
+
+
+class Rule(db.Model):
+    __tablename__ = 'tbl_rule'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(45), nullable=False)
+
+    aup_info = db.relationship("AupInfoHasRuleTable", back_populates='rule')
+
+    def __repr__(self):
+        return '<Rule %r>' % self.title
 
 
 class AupInfo(db.Model):
@@ -135,10 +149,12 @@ class AupInfo(db.Model):
     faculty = db.relationship('SprFaculty')
     rop = db.relationship('SprRop')
 
-    rules = relationship(
-        "Rule",
-        secondary=aup_info_has_rule_table,
-        back_populates="aup_infos"
+    rule_associations = db.relationship("AupInfoHasRuleTable", back_populates="aup_info")
+    rules = association_proxy('rule_associations', "rule")
+
+    aup_data = relationship(
+        "AupData",
+        back_populates="aup_info"
     )
 
     def __repr__(self):
@@ -296,13 +312,18 @@ class AupData(db.Model):
     block = db.relationship('D_Blocks')
     part = db.relationship('D_Part')
     module = db.relationship('D_Modules')
-    type_record = db.relationship('D_TypeRecord')
+    record_type = db.relationship('D_TypeRecord')
     type_control = db.relationship('D_ControlType')
     aup = db.relationship('AupInfo')
     ed_izmereniya = db.relationship('D_EdIzmereniya')
 
+    aup_info = relationship(
+        "AupInfo",
+        back_populates='aup_data'
+    )
+
     def __repr__(self):
-        return '<AupData %r>' % self.aup_num
+        return '<AupData %r>' % self.id_aup
 
 
 class Users(db.Model, UserMixin):
@@ -383,20 +404,20 @@ fgosvo_has_compulsory_discipline_table = db.Table(
 
 fgosvo_has_competency_table = db.Table(
     'fgosvo_has_competency',
-    db.Column("fgosvo_id", db.ForeignKey('spr_fgos_vo.id')),
-    db.Column("competency_id", db.ForeignKey('spr_competency.id'))
+    db.Column("fgosvo_id", db.ForeignKey('spr_fgos_vo.id'), nullable=False),
+    db.Column("competency_id", db.ForeignKey('spr_competency.id'), nullable=False)
 )
 
 fgosvo_has_specialization_table = db.Table(
     'fgosvo_has_specialization',
-    db.Column("fgosvo_id", db.ForeignKey('spr_fgos_vo.id')),
-    db.Column("specialization_id", db.ForeignKey('spr_specialization.id'))
+    db.Column("fgosvo_id", db.ForeignKey('spr_fgos_vo.id'), nullable=False),
+    db.Column("specialization_id", db.ForeignKey('spr_specialization.id'), nullable=False)
 )
 
 specialization_has_additional_competency_table = db.Table(
     'specialization_has_additional_competency',
-    db.Column('specialization_id', db.ForeignKey("spr_specialization.id")),
-    db.Column('additional_competency_id', db.ForeignKey("spr_additional_competency.id"))
+    db.Column('specialization_id', db.ForeignKey("spr_specialization.id"), nullable=False),
+    db.Column('additional_competency_id', db.ForeignKey("spr_additional_competency.id"), nullable=False)
 )
 
 
@@ -478,8 +499,9 @@ class SprCompetency(db.Model):
     __tablename__ = 'spr_competency'
 
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(255), nullable=False)
+    code_number = db.Column(db.Integer, nullable=False)
     d_competency_code_id = db.Column(db.Integer, db.ForeignKey('d_competency_code.id'), nullable=False)
+    title = db.Column(db.String(511), nullable=False)
 
     competency_code = db.relationship('DCompetencyCode')
 
@@ -513,20 +535,7 @@ class SprAdditionalCompetency(db.Model):
         return '<DegreeEducation %r>' % self.title
 
 
-class Rule(db.Model):
-    __tablename__ = 'tbl_rule'
 
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(45), nullable=False)
-
-    aup_infos = relationship(
-        AupInfo,
-        secondary=aup_info_has_rule_table,
-        back_populates="rules"
-    )
-
-    def __repr__(self):
-        return '<DegreeEducation %r>' % self.title
 
 
 class RealizedOkso(db.Model):

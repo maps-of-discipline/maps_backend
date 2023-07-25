@@ -1,21 +1,31 @@
-from .tests.base_test import BaseTest
+from flask_sqlalchemy import SQLAlchemy
+from models import AupInfo
+from .tests import *
+
 import json
 
 
 class AupChecker:
-    def __init__(self, aup: str, test_list: list[BaseTest] = None):
-        self._aup = aup
-        self._tests: list[BaseTest] = test_list if test_list else []
+    # index in db: associated python test
+    __test_dict = {
+        1: TotalZetTest,
+    }
 
-    def add_test(self, test: BaseTest) -> None:
-        self._tests.append(test)
+    def __init__(self, aup_object: AupInfo, db_instance: SQLAlchemy):
+        self.db = db_instance
+        self.aup = aup_object
 
     def get_report(self,) -> str:
         report = {
-            "aup": self._aup,
+            "aup": self.aup.num_aup,
             "tests": []
         }
-        for test in self._tests:
-            report["tests"].append(test.assert_test())
+
+        for el in self.aup.rule_associations:
+            test = self.__test_dict[el.rule_id](self.db)
+            test.fetch_test(el)
+            report["tests"].append(test.assert_test(self.aup))
 
         return json.dumps(report, ensure_ascii=False)
+
+
