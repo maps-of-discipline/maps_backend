@@ -6,9 +6,11 @@ import json
 
 
 class AupChecker:
+
     # index in db: associated python test
     __test_dict = {
         1: TotalZetTest,
+        2: ZetCheckBySemester
     }
 
     def __init__(self, aup_object: AupInfo, db_instance: SQLAlchemy):

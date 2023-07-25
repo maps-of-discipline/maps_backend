@@ -1,3 +1,3 @@
 from .base_test import BaseTest
-from .TotalZetCheck import TotalZetTest
-# from .ZetCheckBySemestr import ZetCheckBySemester
+from .total_zet_check import TotalZetTest
+from .zet_check_by_semester import ZetCheckBySemester
