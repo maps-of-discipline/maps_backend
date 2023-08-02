@@ -1,12 +1,14 @@
+
 from take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
-                          ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r, create_json, create_json_test)
+                          ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r, create_json,
+                          create_json_test)
 import json
 from print_excel import saveMap
 from tools import FileForm, take_aup_from_excel_file, error
 from save_into_bd import SaveCard
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
 from excel_check import excel_check
-from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, AupData, AupInfo, Groups, SprFaculty, SprFgosVo, SprCompetency
+from models import *
 import pandas as pd
 from openpyxl import load_workbook
 from sqlalchemy.sql.expression import func
@@ -20,9 +22,7 @@ import os
 import warnings
 from checker import AupChecker
 
-
 warnings.simplefilter("ignore")
-
 
 app = Flask(__name__)
 application = app
@@ -30,7 +30,6 @@ cors = CORS(app, resources={r"*": {"origins": "*"}})
 
 app.config.from_pyfile('config.py')
 app.config['CORS_HEADERS'] = 'Content-Type'
-
 
 convention = {
     "ix": 'ix_%(column_0_label)s',
@@ -40,7 +39,6 @@ convention = {
     "pk": "pk_%(table_name)s"
 }
 
-
 weith = {
     'Проектная деятельность': 10,
     'Введение в проектную деятельность': 10,
@@ -48,11 +46,9 @@ weith = {
     'Иностранный язык': 1
 }
 
-
 metadata = MetaData(naming_convention=convention)
 db.init_app(app)
 migrate = Migrate(app, db)
-
 
 # from save_into_bd import bp as save_db_bp
 
@@ -65,8 +61,9 @@ ZET_HEIGHT = 90
 setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r,
                    ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
 
-if os.path.exists(app.static_folder + '/temp') == False: 
+if os.path.exists(app.static_folder + '/temp') == False:
     os.makedirs(app.static_folder + '/temp', exist_ok=True)
+
 
 @app.route("/api/map/<string:aup>")
 def getMap(aup):
@@ -88,7 +85,6 @@ def getMap(aup):
 
     # data = AupData.query.filter_by(id_aup=aup.id_aup).all()
     json = create_json(aup)
-
 
     # if check_sum_zet_in_type(json['data']) == False:
     #     return make_response(jsonify('ERROR sum_zet=0'), 400)
@@ -126,7 +122,7 @@ def saveMap1(aup):
         db.session.commit()
         json = create_json(aup)
         return make_response(jsonify(json), 200)
-    
+
 
 def save_loop(i, in_type, l, request_data):
     for j in range(0, len(request_data[i]['type'][in_type])):
@@ -134,7 +130,7 @@ def save_loop(i, in_type, l, request_data):
             row = AupData.query.filter_by(
                 id=request_data[i]['type'][in_type][j]['id']).first()
             row.discipline = request_data[i]['discipline']
-            row.amount = request_data[i]['type'][in_type][j]['amount']*100
+            row.amount = request_data[i]['type'][in_type][j]['amount'] * 100
             row.id_edizm = request_data[i]['type'][in_type][j]['id_edizm']
             row.control_type_id = request_data[i]['type'][in_type][j]['control_type_id']
             row.id_period = request_data[i]['num_col'] + 1
@@ -147,7 +143,7 @@ def save_loop(i, in_type, l, request_data):
             l.append(row)
         except:
             return make_response('Save error', 400)
-    
+
 
 @app.route('/api/get_id_edizm', methods=["GET"])
 def get_id_edizm():
@@ -377,7 +373,6 @@ def getAupData(file):
 
         allRow.append(row)
 
-
     allRow.sort(key=lambda x: (x[6], x[13], x[5]))
 
     counter = 0
@@ -482,6 +477,7 @@ def DeleteGroup():
     db.session.commit()
     return make_response(jsonify('OK'), 200)
 
+
 @app.route('/api/get-group-by-aup/<string:aup>', methods=["GET"])
 def GetGroupByAup(aup):
     aupId = AupInfo.query.filter_by(num_aup=aup).first()
@@ -499,6 +495,7 @@ def GetGroupByAup(aup):
         d["color"] = g.color
         l.append(d)
     return make_response(jsonify(l), 200)
+
 
 @app.route('/api/get-modules-by-aup/<string:aup>', methods=["GET"])
 def GetModulesByAup(aup):
@@ -518,6 +515,7 @@ def GetModulesByAup(aup):
         d["title"] = m.title
         l.append(d)
     return make_response(jsonify(l), 200)
+
 
 @app.route('/api/update-group', methods=["POST"])
 def UpdateGroup():
@@ -544,10 +542,80 @@ def getControlTypes():
 
 @app.route("/check/<string:aup>")
 def check_aup(aup: str):
+
     aup = AupInfo.query.filter_by(num_aup=aup).first()
     checker = AupChecker(aup, db_instance=db)
 
     return make_response(checker.get_report())
 
+@app.route('/test')
+def test():
+
+    disc_set = set()
+
+    filter_conditions = {
+        "accept": [
+            'физи',
+            'спорт',
+        ],
+        "decline": {
+            'матем',
+            'метод',
+            'процес',
+            'неупруг',
+            "хими",
+            "ремонт",
+            "авто",
+            "анатом",
+            'транспорт',
+            "физик",
+            "физио",
+            "спортивный трек",
+            "физические основы",
+            "физическое моделирование",
+        }
+    }
+
+    for el in AupData.query.all():
+        if (any([condition in el.discipline.lower() for condition in filter_conditions['accept']]) and
+                all([condition not in el.discipline.lower() for condition in filter_conditions['decline']])):
+            disc_set.add((el.id_aup, el.discipline))
+    disc_set = list(disc_set)
+    disc_set = sorted(disc_set, key=lambda x: x[0])
+
+    res = []
+    element = {
+        'aup': -1
+    }
+    for el in disc_set:
+        if element['aup'] == el[0]:
+            element['discipline'].append(el[1])
+        elif element['aup'] != el[0]:
+            if element['aup'] != -1:
+                res.append(element)
+            element = {
+                "aup": el[0],
+                "discipline": [el[1]]
+            }
 
 
+
+    # res = []
+
+    # for el in disc_set:
+    #     comparison = {
+    #         'el': el,
+    #         'similars': []
+    #     }
+    #     similars = []
+    #     for comp in disc_set:
+    #         ratio = WRatio(el, comp)
+    #         if ratio > 75:
+    #             similars.append({
+    #                 "el": comp,
+    #                 "ratio": ratio
+    #             })
+    #     comparison["similars"].append(similars)
+    #     res.append(comparison)
+
+    return make_response(json.dumps(res, ensure_ascii=False))

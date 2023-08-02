@@ -5,12 +5,12 @@ from tools import check_skiplist
 
 
 class BaseTest:
-    instance: Rule
 
     def __init__(self, db_instance: SQLAlchemy):
         self.result = {}
         self.db = db_instance
         self.min = self.max = self.ed_izmereniya_id = None
+        self.instance: Rule
 
     def fetch_test(self, association: AupInfoHasRuleTable):
         self.min = association.min

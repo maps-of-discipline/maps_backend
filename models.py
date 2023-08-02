@@ -22,6 +22,8 @@ class SprBranch(db.Model):
     city = db.Column(db.String(255), nullable=False)
     location = db.Column(db.String(255), nullable=False)
 
+    realized_okso = db.relationship("RealizedOkso")
+
     def __repr__(self):
         return '<Branch %r>' % self.location
 
@@ -89,25 +91,26 @@ class SprRop(db.Model):
         return '<Rop %r>' % self.full_name
 
 
+# TODO: rename table
 class AupInfoHasRuleTable(db.Model):
     __tablename__ = "aup_info_has_rule"
 
     rule_id = db.Column(db.Integer, db.ForeignKey('tbl_rule.id'), primary_key=True)
-    aup_info_id = db.Column(db.Integer, db.ForeignKey('tbl_aup.id_aup'), primary_key=True)
+    realized_okso_id = db.Column(db.Integer, db.ForeignKey('tbl_realized_okso.id'), primary_key=True)
 
     min = db.Column(db.Float, nullable=True)
     max = db.Column(db.Float, nullable=True)
     ed_izmereniya_id = db.Column(db.ForeignKey('d_ed_izmereniya.id'))
 
     rule = db.relationship("Rule", back_populates='aup_info')
-    aup_info = db.relationship("AupInfo", back_populates='rule_associations')
+    realized_oksos = db.relationship("RealizedOkso", back_populates='rule_associations')
 
 
 class Rule(db.Model):
     __tablename__ = 'tbl_rule'
 
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(45), nullable=False)
+    title = db.Column(db.String(255), nullable=False)
 
     aup_info = db.relationship("AupInfoHasRuleTable", back_populates='rule')
 
@@ -148,9 +151,6 @@ class AupInfo(db.Model):
     name_op = db.relationship('NameOP')
     faculty = db.relationship('SprFaculty')
     rop = db.relationship('SprRop')
-
-    rule_associations = db.relationship("AupInfoHasRuleTable", back_populates="aup_info")
-    rules = association_proxy('rule_associations', "rule")
 
     aup_data = relationship(
         "AupData",
@@ -535,18 +535,18 @@ class SprAdditionalCompetency(db.Model):
         return '<DegreeEducation %r>' % self.title
 
 
-
-
-
 class RealizedOkso(db.Model):
     __tablename__ = 'tbl_realized_okso'
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     branch_id = db.Column(db.Integer, db.ForeignKey('spr_branch.id_branch'), nullable=False)
     program_code = db.Column(db.String(255), db.ForeignKey('spr_okco.program_code'), primary_key=True)
 
     branch = db.relationship('SprBranch')
     okco = db.relationship('SprOKCO')
+
+    rule_associations = db.relationship("AupInfoHasRuleTable", back_populates="realized_oksos")
+    rules = association_proxy('rule_associations', "rule")
 
     def __repr__(self):
         return '<DegreeEducation %r>' % self.program_code

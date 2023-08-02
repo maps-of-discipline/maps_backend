@@ -23,6 +23,7 @@ skiplist = {
 sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой",
             "Седьмой", "Восьмой", "Девятый", "Десятый", "Одиннадцатый", "Двенадцатый", 'Тринадцатый', 'Четырнадцатый']
 
+
 class FileForm(FlaskForm):
     file = FileField(validators=[FileRequired(), FileAllowed(["xlsx", "xls"], "xlsx only!")])
 
