@@ -450,6 +450,8 @@ class SprFgosVo(db.Model):
         back_populates="fgos_vo"
     )
 
+    realized_okso = db.relationship('RealizedOkso')
+
     def __repr__(self):
         return '<SprFgosVo %r>' % self.id
 
@@ -492,7 +494,7 @@ class SprCompulsoryDiscipline(db.Model):
     )
 
     def __repr__(self):
-        return '<DegreeEducation %r>' % self.name
+        return '<CompulsoryDiscipline %r>' % self.title
 
 
 class SprCompetency(db.Model):
@@ -547,6 +549,8 @@ class RealizedOkso(db.Model):
 
     rule_associations = db.relationship("AupInfoHasRuleTable", back_populates="realized_oksos")
     rules = association_proxy('rule_associations', "rule")
+
+    fgos_vo = db.relationship("SprFgosVo")
 
     def __repr__(self):
         return '<DegreeEducation %r>' % self.program_code

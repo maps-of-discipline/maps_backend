@@ -25,6 +25,7 @@ class AupChecker:
         6: PEAmountInFirstBlockTest,
         7: OptionalPEAmount,
         11: MinDisciplineZet,
+        12: CompulsoryDisciplinesCheck,
     }
 
     def __init__(self, aup_object: AupInfo, db_instance: SQLAlchemy):
