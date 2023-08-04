@@ -548,9 +548,8 @@ def check_aup(aup: str):
 
     return make_response(checker.get_report())
 
-@app.route('/test')
-def test():
 
+def all_pe_titles():
     disc_set = set()
 
     filter_conditions = {
@@ -598,24 +597,33 @@ def test():
                 "discipline": [el[1]]
             }
 
-
-
-    # res = []
-
-    # for el in disc_set:
-    #     comparison = {
-    #         'el': el,
-    #         'similars': []
-    #     }
-    #     similars = []
-    #     for comp in disc_set:
-    #         ratio = WRatio(el, comp)
-    #         if ratio > 75:
-    #             similars.append({
-    #                 "el": comp,
-    #                 "ratio": ratio
-    #             })
-    #     comparison["similars"].append(similars)
-    #     res.append(comparison)
-
     return make_response(json.dumps(res, ensure_ascii=False))
+
+
+@app.route('/test')
+def test():
+    # return all_pe_titles()
+
+    filter_conditions = {
+        "accept": [
+           # 'безопас',
+            'военн',
+            'ость жизнед'
+        ],
+        "decline": {
+
+        }
+    }
+
+    disc_set = set()
+
+    for el in AupData.query.all():
+        if (any([condition in el.discipline.lower() for condition in filter_conditions['accept']]) and
+                all([condition not in el.discipline.lower() for condition in filter_conditions['decline']])):
+            # disc_set.add((el.id_aup, el.discipline))
+            disc_set.add(el.discipline)
+    disc_set = list(disc_set)
+    disc_set = sorted(disc_set, key=lambda x: x)
+
+    return make_response(json.dumps(disc_set, ensure_ascii=False))
+
