@@ -545,11 +545,24 @@ def check_aup(aup: str):
 
     aup = AupInfo.query.filter_by(num_aup=aup).first()
     checker = AupChecker(aup, db_instance=db)
+    json_report = checker.get_report()
 
-    return make_response(checker.get_report())
+    return make_response(json_report)
+
+
+@app.route("/check/<string:aup>/save")
+def save_report(aup: str):
+
+    aup = AupInfo.query.filter_by(num_aup=aup).first()
+    checker = AupChecker(aup, db_instance=db)
+    json_report = checker.get_report()
+    checker.create_excel()
+
+    return make_response(json_report)
 
 
 def all_pe_titles():
+
     disc_set = set()
 
     filter_conditions = {
@@ -604,26 +617,29 @@ def all_pe_titles():
 def test():
     # return all_pe_titles()
 
-    filter_conditions = {
-        "accept": [
-           # 'безопас',
-            'военн',
-            'ость жизнед'
-        ],
-        "decline": {
 
-        }
-    }
 
-    disc_set = set()
 
-    for el in AupData.query.all():
-        if (any([condition in el.discipline.lower() for condition in filter_conditions['accept']]) and
-                all([condition not in el.discipline.lower() for condition in filter_conditions['decline']])):
-            # disc_set.add((el.id_aup, el.discipline))
-            disc_set.add(el.discipline)
-    disc_set = list(disc_set)
-    disc_set = sorted(disc_set, key=lambda x: x)
+    # filter_conditions = {
+    #     "accept": [
+    #        # 'безопас',
+    #         'военн',
+    #         'ость жизнед'
+    #     ],
+    #     "decline": {
+    #
+    #     }
+    # }
+    #
+    # disc_set = set()
+    #
+    # for el in AupData.query.all():
+    #     if (any([condition in el.discipline.lower() for condition in filter_conditions['accept']]) and
+    #             all([condition not in el.discipline.lower() for condition in filter_conditions['decline']])):
+    #         # disc_set.add((el.id_aup, el.discipline))
+    #         disc_set.add(el.discipline)
+    # disc_set = list(disc_set)
+    # disc_set = sorted(disc_set, key=lambda x: x)
 
-    return make_response(json.dumps(disc_set, ensure_ascii=False))
+    return make_response(json.dumps("disc_set", ensure_ascii=False))
 

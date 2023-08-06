@@ -1,16 +1,16 @@
 from models import *
 from abc import abstractmethod
-
 from tools import check_skiplist
+from ..data_classes import Test
 
 
 class BaseTest:
 
     def __init__(self, db_instance: SQLAlchemy):
-        self.result = {}
+        self.report = {}
         self.db = db_instance
         self.min = self.max = self.ed_izmereniya_id = None
-        self.instance: Rule
+        self.instance: Rule | None = None
 
     def fetch_test(self, association: AupInfoHasRuleTable):
         self.min = association.min
@@ -18,15 +18,16 @@ class BaseTest:
         self.ed_izmereniya_id = association.ed_izmereniya_id
         self.instance = association.rule
 
-        self.result = {
-            "id": self.instance.id,
-            "title": self.instance.title,
-            "min": self.min,
-            "max": self.max,
-            "value": None,
-            "result": False,
-            "detailed": None,
-        }
+        self.report = Test(
+            id=self.instance.id,
+            title=self.instance.title,
+            min=self.min,
+            max=self.max,
+            value=None,
+            measure_id=self.ed_izmereniya_id,
+            result=False,
+            detailed=None,
+        )
 
     @abstractmethod
     def assert_test(self, aup: AupInfo) -> object:

@@ -1,6 +1,7 @@
 from math import fsum
 from .base_test import BaseTest
 from models import *
+from ..data_classes import Detailed
 
 
 class CompulsoryDisciplinesCheck(BaseTest):
@@ -18,12 +19,13 @@ class CompulsoryDisciplinesCheck(BaseTest):
                     cd[1] = True
 
         result = True
-        self.result['detailed'] = []
+        self.report.detailed = []
         for discipline in compulsory_disciplines:
             result = result and discipline[1]
-            self.result['detailed'].append({
-                'discipline': discipline[0],
-                'result': discipline[1],
-            })
-        self.result['result'] = result
-        return self.result
+            self.report.detailed.append(
+                Detailed(
+                    discipline=discipline[0],
+                    result=discipline[1]
+                ))
+        self.report.result = result
+        return self.report

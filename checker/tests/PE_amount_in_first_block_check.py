@@ -11,4 +11,4 @@ class PEAmountInFirstBlockTest(BaseTest):
             el: AupData
             # if process.extractOne()
 
-        return self.result
+        return self.report

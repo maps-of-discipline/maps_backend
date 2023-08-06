@@ -3,6 +3,7 @@ from pprint import pprint
 
 from .base_test import BaseTest
 from models import *
+from ..data_classes import Detailed
 
 
 class MinDisciplineZet(BaseTest):
@@ -29,20 +30,21 @@ class MinDisciplineZet(BaseTest):
                 disciplines[(el.discipline, el.id_period)].append(amount)
 
         result = True
-        self.result['detailed'] = []
+        self.report.detailed = []
 
         for key in disciplines:
             disciplines[key] = fsum(disciplines[key]) / 100
 
             result = result and self._compare_value(disciplines[key])
 
-            self.result['detailed'].append({
-                "discipline": key[0],
-                'period_id': key[1],
-                "value": disciplines[key],
-                "result": self._compare_value(disciplines[key])
-            })
+            self.report.detailed.append(Detailed(
+                discipline=key[0],
+                period_id=key[1],
+                value=disciplines[key],
+                min=self.min,
+                result=self._compare_value(disciplines[key])
+            ))
 
-        self.result['result'] = result
+        self.report.result = result
 
-        return self.result
+        return self.report

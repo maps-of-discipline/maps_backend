@@ -16,9 +16,9 @@ class BaseZetCheckByBlock(BaseTest):
 
         zet_sum = fsum(zet_sum) // 100
 
-        self.result['value'] = zet_sum
-        self.result['result'] = self._compare_value(zet_sum)
-        return self.result
+        self.report.value = zet_sum
+        self.report.result = self._compare_value(zet_sum)
+        return self.report
 
 
 class ZetCheckByFirstBlock(BaseZetCheckByBlock):

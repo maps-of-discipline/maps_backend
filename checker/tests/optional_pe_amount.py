@@ -8,4 +8,4 @@ class OptionalPEAmount(BaseTest):
         for amount, el in self.processed_aup_data(aup):
             pass
 
-        return self.result
+        return self.report

@@ -12,6 +12,6 @@ class TotalZetTest(BaseTest):
 
         sum_zet = fsum(sum_zet) // 100
 
-        self.result['value'] = sum_zet
-        self.result['result'] = self._compare_value(sum_zet)
-        return self.result
+        self.report.value = sum_zet
+        self.report.result = self._compare_value(sum_zet)
+        return self.report
