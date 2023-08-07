@@ -1,10 +1,8 @@
-from tools import check_skiplist
-from .base_test import BaseTest
-from models import AupInfo, D_Period, AupData
 from math import fsum
 
+from models import AupInfo, D_Period
+from .base_test import BaseTest
 from ..data_classes import Detailed
-
 
 
 class ZetCheckByYear(BaseTest):
@@ -21,11 +19,11 @@ class ZetCheckByYear(BaseTest):
 
             if semesters[key] > 0 and key % 2 == 0:
                 self.report.detailed.append(Detailed(
-                    period_id=[key-1, key],
+                    period_id=[key - 1, key],
                     min=self.min,
                     max=self.max,
-                    value=[semesters[key-1], semesters[key]],
-                    result=self._compare_value(semesters[key-1] + semesters[key])
+                    value=[semesters[key - 1], semesters[key]],
+                    result=self._compare_value(semesters[key - 1] + semesters[key])
                 ))
 
         self.report.result = all([el.result for el in self.report.detailed])

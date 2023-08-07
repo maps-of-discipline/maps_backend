@@ -1,6 +1,7 @@
 from math import fsum
-from .base_test import BaseTest
+
 from models import *
+from .base_test import BaseTest
 
 
 class TotalZetTest(BaseTest):

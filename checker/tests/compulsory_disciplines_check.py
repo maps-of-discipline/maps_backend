@@ -1,11 +1,10 @@
-from math import fsum
-from .base_test import BaseTest
 from models import *
-from ..data_classes import Detailed
+from .base_test import BaseTest
+from ..data_classes import Detailed, Test
 
 
 class CompulsoryDisciplinesCheck(BaseTest):
-    def assert_test(self, aup: AupInfo) -> dict:
+    def assert_test(self, aup: AupInfo) -> Test:
 
         program_code = aup.name_op.program_code
         realized_okso: RealizedOkso = RealizedOkso.query.filter_by(program_code=program_code).one()

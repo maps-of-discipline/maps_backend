@@ -1,7 +1,5 @@
-from math import fsum
-from .base_test import BaseTest
 from models import *
-from fuzzywuzzy import process
+from .base_test import BaseTest
 
 
 class PEAmountInFirstBlockTest(BaseTest):

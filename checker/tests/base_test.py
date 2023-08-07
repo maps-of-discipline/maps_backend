@@ -1,5 +1,6 @@
-from models import *
 from abc import abstractmethod
+
+from models import *
 from tools import check_skiplist
 from ..data_classes import Test
 
@@ -30,7 +31,7 @@ class BaseTest:
         )
 
     @abstractmethod
-    def assert_test(self, aup: AupInfo) -> object:
+    def assert_test(self, aup: AupInfo) -> Test:
         pass
 
     def _compare_value(self, value: float):
@@ -60,5 +61,3 @@ class BaseTest:
                 amount = amount * 1.5
 
             yield amount, el
-
-

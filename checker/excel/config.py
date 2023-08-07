@@ -15,14 +15,13 @@ class Alignments:
 
 
 class Colors:
-    success = PatternFill(start_color='abdeb9',  fill_type='solid')
-    error = PatternFill(start_color='F9A4A4',  fill_type='solid')
-    info = PatternFill(start_color='A4ABF9',  fill_type='solid')
+    success = PatternFill(start_color='abdeb9', fill_type='solid')
+    error = PatternFill(start_color='F9A4A4', fill_type='solid')
+    info = PatternFill(start_color='A4ABF9', fill_type='solid')
 
-    detailed_success = PatternFill(start_color='C1F0C5',  fill_type='solid')
-    detailed_error = PatternFill(start_color='F0C1C1',  fill_type='solid')
-    detailed_info = PatternFill(start_color='BABFF8',  fill_type='solid')
-
+    detailed_success = PatternFill(start_color='C1F0C5', fill_type='solid')
+    detailed_error = PatternFill(start_color='F0C1C1', fill_type='solid')
+    detailed_info = PatternFill(start_color='BABFF8', fill_type='solid')
 
 
 class Styles:
@@ -52,12 +51,8 @@ class Styles:
     detailed_error.fill = Colors.detailed_error
 
 
-
 class Config:
-    delete_previous = False,
+    delete_previous = True,
     base_column_width = 25.0,
     base_row_height = 37.5,
     detailed_row_height = 18,
-
-
-

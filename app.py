@@ -1,26 +1,24 @@
-
-from take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
-                          ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r, create_json,
-                          create_json_test)
-import json
-from print_excel import saveMap
-from tools import FileForm, take_aup_from_excel_file, error
-from save_into_bd import SaveCard
-from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
-from excel_check import excel_check
-from models import *
-import pandas as pd
-from openpyxl import load_workbook
-from sqlalchemy.sql.expression import func
-from sqlalchemy import MetaData
-from flask_migrate import Migrate
-from flask import Flask, make_response, redirect, render_template, request, send_file, jsonify
-from flask_cors import CORS
-from models import db
 import io
+import json
 import os
 import warnings
+
+import pandas as pd
+from flask import Flask, make_response, render_template, request, send_file, jsonify
+from flask_cors import CORS
+from flask_migrate import Migrate
+from sqlalchemy import MetaData
+
 from checker import AupChecker
+from excel_check import excel_check
+from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
+from models import *
+from models import db
+from print_excel import saveMap
+from save_into_bd import SaveCard
+from take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
+                          ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r, create_json)
+from tools import FileForm, take_aup_from_excel_file, error
 
 warnings.simplefilter("ignore")
 
@@ -542,27 +540,30 @@ def getControlTypes():
 
 @app.route("/check/<string:aup>")
 def check_aup(aup: str):
-
-    aup = AupInfo.query.filter_by(num_aup=aup).first()
-    checker = AupChecker(aup, db_instance=db)
-    json_report = checker.get_report()
-
-    return make_response(json_report)
+    checker = AupChecker(db_instance=db)
+    return make_response(checker.get_json_report(aup))
 
 
 @app.route("/check/<string:aup>/save")
 def save_report(aup: str):
+    checker = AupChecker(db_instance=db)
+    path = checker.create_excel(aup)
+    return make_response(path)
 
-    aup = AupInfo.query.filter_by(num_aup=aup).first()
-    checker = AupChecker(aup, db_instance=db)
-    json_report = checker.get_report()
-    checker.create_excel()
 
-    return make_response(json_report)
+@app.route("/check/okso/<string:okso>")
+def check_okso(okso: str):
+    checker = AupChecker(db_instance=db)
+    return checker.get_json_reports_by_okso(okso)
+
+
+@app.route("/check/okso/<string:okso>/save")
+def save_okso(okso: str):
+    checker = AupChecker(db_instance=db)
+    return checker.make_excel_reports_by_okso(okso)
 
 
 def all_pe_titles():
-
     disc_set = set()
 
     filter_conditions = {
@@ -617,9 +618,6 @@ def all_pe_titles():
 def test():
     # return all_pe_titles()
 
-
-
-
     # filter_conditions = {
     #     "accept": [
     #        # 'безопас',
@@ -642,4 +640,3 @@ def test():
     # disc_set = sorted(disc_set, key=lambda x: x)
 
     return make_response(json.dumps("disc_set", ensure_ascii=False))
-

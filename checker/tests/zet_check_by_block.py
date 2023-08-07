@@ -1,6 +1,7 @@
 from math import fsum
-from .base_test import BaseTest
+
 from models import AupInfo
+from .base_test import BaseTest
 
 
 class BaseZetCheckByBlock(BaseTest):

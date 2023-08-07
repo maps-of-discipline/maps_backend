@@ -38,8 +38,6 @@ class Report:
     tests: list[Test]
 
 
-
-
 class DataclassJSONEncoder(json.JSONEncoder):
     def default(self, o):
         if dataclasses.is_dataclass(o):
