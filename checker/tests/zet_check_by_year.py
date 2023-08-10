@@ -3,9 +3,11 @@ from math import fsum
 from models import AupInfo, D_Period
 from .base_test import BaseTest
 from ..data_classes import Detailed
+from ..utils import method_time
 
 
 class ZetCheckByYear(BaseTest):
+    @method_time
     def assert_test(self, aup: AupInfo) -> object:
         semesters = {el.id: [] for el in self.db.session.query(D_Period).all()}
 

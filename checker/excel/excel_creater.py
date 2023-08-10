@@ -1,11 +1,9 @@
-from openpyxl import workbook
-from openpyxl.worksheet.worksheet import Worksheet
 from .config import *
 from .utils import *
 from ..data_classes import Detailed, Report, Test
 import os
 from openpyxl import Workbook, worksheet
-
+import shutil
 
 class ExcelCreator:
     DetailedColumnsWidth = Detailed(
@@ -43,9 +41,16 @@ class ExcelCreator:
         # If the delete_previous configuration option is set to True, delete all files in the given path.
         if Config.delete_previous[0]:
             for file in os.listdir(self.path):
-                os.remove(os.path.join(self.path, file))
+                if '.xlsx' not in file:
+                    continue
 
-    def save_report(self, report: Report) -> str:
+                try:
+                    os.remove(os.path.join(self.path, file))
+                except PermissionError as err:
+                    print('[---- Error ----\n', err)
+                    continue
+
+    def save_report(self, report: Report, folder: str = '') -> str:
         self.workbook = Workbook()
         self.sheet = self.workbook.worksheets[0]
         self.add_name_styles()
@@ -56,10 +61,18 @@ class ExcelCreator:
         self.__fill_report()
 
         from datetime import datetime
-        # Generate a unique filename for the Excel file using the report's aup and current timestamp.
-        path = self.path + f'{self.report.aup}_{datetime.today().strftime("%H_%M_%S")}_report.xlsx'
-        self.workbook.save(path)
-        return path
+        folder = self.path + folder
+        filename = f'{self.report.aup}_{datetime.today().strftime("%H_%M_%S")}_report.xlsx'
+
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
+
+        self.workbook.save(folder+filename)
+        return folder + filename
+
+    def save_reports(self, reports: list[Report], folder: str = ''):
+        return [self.save_report(el, folder) for el in reports]
 
     def __fill_report(self):
         row_index = 10

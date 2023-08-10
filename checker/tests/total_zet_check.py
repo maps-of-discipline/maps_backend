@@ -2,9 +2,11 @@ from math import fsum
 
 from models import *
 from .base_test import BaseTest
+from ..utils import method_time
 
 
 class TotalZetTest(BaseTest):
+    @method_time
     def assert_test(self, aup: AupInfo) -> dict:
         sum_zet = []
 

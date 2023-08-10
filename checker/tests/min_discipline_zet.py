@@ -3,6 +3,7 @@ from math import fsum
 from models import *
 from .base_test import BaseTest
 from ..data_classes import Detailed
+from ..utils import method_time
 
 
 class MinDisciplineZet(BaseTest):
@@ -17,6 +18,7 @@ class MinDisciplineZet(BaseTest):
         "Основы военной подготовки (Basic Military Training)"
     ]
 
+    @method_time
     def assert_test(self, aup: AupInfo) -> dict:
         disciplines = {}
         for amount, el in self.processed_aup_data(aup):

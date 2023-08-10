@@ -2,12 +2,14 @@ from math import fsum
 
 from models import AupInfo
 from .base_test import BaseTest
+from ..utils import method_time
 
 
 class BaseZetCheckByBlock(BaseTest):
     # because of different names of blocks in db. Contains d_block.id
     block_nums: list
 
+    @method_time
     def assert_test(self, aup: AupInfo) -> object:
         zet_sum = []
 

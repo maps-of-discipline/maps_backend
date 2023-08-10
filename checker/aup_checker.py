@@ -2,12 +2,15 @@ import json
 from models import *
 from .base_checker import BaseChecker
 from .data_classes import DataclassJSONEncoder
+from .excel import ExcelCreator
+from .utils import method_time
 
 
 class AupChecker(BaseChecker):
-    def create_excel(self, aup: str) -> str:
+
+    def create_excel(self, aup: str, folder: str = '') -> str:
         report = self._get_report(aup)
-        return self.creator.save_report(report=report)
+        return self.creator.save_report(report, folder)
 
     def get_json_report(self, aup: str) -> str:
         return json.dumps(self._get_report(aup), cls=DataclassJSONEncoder, ensure_ascii=False)
@@ -15,6 +18,7 @@ class AupChecker(BaseChecker):
     def get_json_reports(self, aups: list[str]) -> str:
         return json.dumps([self._get_report(el) for el in aups])
 
+    @method_time
     def get_json_reports_by_okso(self, okso: str) -> str:
         query = (
             self.db.session.query(
@@ -42,4 +46,4 @@ class AupChecker(BaseChecker):
             .filter(NameOP.program_code == okso)
         )
 
-        return json.dumps([self.create_excel(el[2]) for el in query.all()], ensure_ascii=False)
+        return json.dumps([self.create_excel(el[2], f'{okso}/') for el in query.all()], ensure_ascii=False)

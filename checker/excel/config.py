@@ -10,7 +10,7 @@ class Fonts:
 
 
 class Alignments:
-    center = Alignment(vertical='center', horizontal='center')
+    center = Alignment(vertical='center', horizontal='center', wrap_text=False, shrink_to_fit=True)
     left = Alignment(vertical='center', horizontal='left', indent=1)
 
 

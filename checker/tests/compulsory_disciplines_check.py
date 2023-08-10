@@ -1,6 +1,7 @@
 from models import *
 from .base_test import BaseTest
 from ..data_classes import Detailed, Test
+from ..utils import method_time
 
 
 class CompulsoryDisciplinesCheck(BaseTest):
