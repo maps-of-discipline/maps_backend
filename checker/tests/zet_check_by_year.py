@@ -1,17 +1,17 @@
 from math import fsum
 
-from models import AupInfo, D_Period
+from models import D_Period, AupInfoHasRuleTable
 from .base_test import BaseTest
-from ..data_classes import Detailed
+from ..data_classes import Detailed, Test
 from ..utils import method_time
 
 
 class ZetCheckByYear(BaseTest):
     @method_time
-    def assert_test(self, aup: AupInfo) -> object:
+    def assert_test(self) -> Test:
         semesters = {el.id: [] for el in self.db.session.query(D_Period).all()}
 
-        for amount, el in self.processed_aup_data(aup):
+        for amount, el in self.data_filter.with_measure(self.measure_id):
             semesters[el.id_period].append(amount)
 
         self.report.detailed = []
@@ -31,3 +31,12 @@ class ZetCheckByYear(BaseTest):
         self.report.result = all([el.result for el in self.report.detailed])
 
         return self.report
+
+    def default_rule_association(self, rule_id: int) -> AupInfoHasRuleTable | None:
+        return AupInfoHasRuleTable(
+            rule_id=rule_id,
+            aup_info_id=self.aup_info.id_aup,
+            min=None,
+            max=70,
+            ed_izmereniya_id=3,
+        )

@@ -1,8 +1,9 @@
 import json
+from datetime import datetime
+
 from models import *
 from .base_checker import BaseChecker
 from .data_classes import DataclassJSONEncoder
-from .excel import ExcelCreator
 from .utils import method_time
 
 
@@ -45,5 +46,5 @@ class AupChecker(BaseChecker):
             .join(AupInfo, NameOP.id_spec == AupInfo.id_spec)
             .filter(NameOP.program_code == okso)
         )
-
-        return json.dumps([self.create_excel(el[2], f'{okso}/') for el in query.all()], ensure_ascii=False)
+        folder = f'{okso}_{datetime.today().strftime("%H-%M")}/'
+        return json.dumps([self.create_excel(el[2], folder) for el in query.all()], ensure_ascii=False)

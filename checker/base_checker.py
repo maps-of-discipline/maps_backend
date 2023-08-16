@@ -28,7 +28,7 @@ class BaseChecker:
     @method_time
     def __init__(self, db_instance: SQLAlchemy):
         self.db = db_instance
-        self.aup = None
+        self.aup: AupInfo | None = None
         self.creator = ExcelCreator(path='checker/excel/reports(temporary)/')
         value = {el.id: el.title for el in self.db.session.query(D_Period).all()}
         self.creator.period_id_to_title = value
@@ -36,32 +36,37 @@ class BaseChecker:
     @method_time
     def _get_report(self, aup: str) -> Report:
         self.aup = db.session.query(AupInfo).filter_by(num_aup=aup).one()
-
-        realized_okso, header = self._get_header_data()
-
+        print(f"[_get_report] {aup=}")
         report = Report(
             aup=self.aup.num_aup,
-            **header,
+            **self._get_header_data(),
             result=False,
             tests=[]
         )
 
-        for association in realized_okso.rule_associations:
-            test = self.__test_dict[association.rule_id](self.db)
-            test.fetch_test(association)
+        if len(self.aup.rule_associations) == 0:
+            aup_rule_associations = []
+            for key, value in self.__test_dict.items():
+                test = value(self.db, self.aup)
+                aup_rule_associations.append(test.default_rule_association(key))
 
-            if test.compilable_with_aup(self.aup):
-                report.tests.append(test.assert_test(self.aup))
+            aup_rule_associations = list(filter(lambda x: x is not None, aup_rule_associations))
+
+            self.db.session.add_all(aup_rule_associations)
+            self.db.session.commit()
+
+        for association in self.aup.rule_associations:
+            test = self.__test_dict[association.rule_id](self.db, self.aup)
+            test.fetch_test(association)
+            report.tests.append(test.assert_test())
 
         report.result = all([el.result for el in report.tests])
-
         return report
 
     @method_time
     def _get_header_data(self):
         program_code = self.aup.name_op.program_code
         realized_okso: RealizedOkso = RealizedOkso.query.filter_by(program_code=program_code).one()
-
 
         okso = realized_okso.program_code,
 
@@ -76,12 +81,10 @@ class BaseChecker:
         from datetime import datetime
         date = datetime.today().strftime('%Y-%m-%d')
 
-        return realized_okso, {
+        return {
             "okso": okso[0],
             "program": program, "profile": profile,
             "faculty": faculty,
             "education_form": form,
             "check_date": date
         }
-
-

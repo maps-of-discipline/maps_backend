@@ -10,6 +10,8 @@ from flask_migrate import Migrate
 from sqlalchemy import MetaData
 
 from checker import AupChecker
+from checker.aup_data_filter import AupDataFilter
+from checker.utils import match_element
 from excel_check import excel_check
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
 from models import *
@@ -616,27 +618,34 @@ def all_pe_titles():
 
 @app.route('/test')
 def test():
-    # return all_pe_titles()
+    history = {
+        'accept': {
+            'discipline': [
+                'история'
+            ]
+        },
+        'decline': {
+            'discipline': []
+        }
+    }
 
-    # filter_conditions = {
-    #     "accept": [
-    #        # 'безопас',
-    #         'военн',
-    #         'ость жизнед'
-    #     ],
-    #     "decline": {
-    #
-    #     }
-    # }
-    #
-    # disc_set = set()
-    #
-    # for el in AupData.query.all():
-    #     if (any([condition in el.discipline.lower() for condition in filter_conditions['accept']]) and
-    #             all([condition not in el.discipline.lower() for condition in filter_conditions['decline']])):
-    #         # disc_set.add((el.id_aup, el.discipline))
-    #         disc_set.add(el.discipline)
-    # disc_set = list(disc_set)
-    # disc_set = sorted(disc_set, key=lambda x: x)
+    bjd = {
+        'accept': {
+            'discipline': [
+                # 'безопас',
+                'военн',
+                'ость жизнед'
+            ]
+        },
+        'decline': {
+            'discipline': []
+        }
+    }
 
-    return make_response(json.dumps("disc_set", ensure_ascii=False))
+    res = set()
+    for el in AupData.query.all():
+        if match_element(el, bjd):
+            res.add(el.discipline)
+
+    # return make_response(json.dumps(all_pe_titles(), ensure_ascii=False))
+    return all_pe_titles()

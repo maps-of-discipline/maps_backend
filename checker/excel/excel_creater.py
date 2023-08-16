@@ -1,9 +1,11 @@
+import os
+
+from openpyxl import Workbook, worksheet
+
 from .config import *
 from .utils import *
 from ..data_classes import Detailed, Report, Test
-import os
-from openpyxl import Workbook, worksheet
-import shutil
+
 
 class ExcelCreator:
     DetailedColumnsWidth = Detailed(
@@ -46,14 +48,13 @@ class ExcelCreator:
 
                 try:
                     os.remove(os.path.join(self.path, file))
-                except PermissionError as err:
-                    print('[---- Error ----\n', err)
+                except PermissionError:
                     continue
 
     def save_report(self, report: Report, folder: str = '') -> str:
         self.workbook = Workbook()
         self.sheet = self.workbook.worksheets[0]
-        self.add_name_styles()
+        self.add_named_styles()
 
         self.report = report
         self.__setup_dimensions()
@@ -67,8 +68,7 @@ class ExcelCreator:
         if not os.path.exists(folder):
             os.makedirs(folder)
 
-
-        self.workbook.save(folder+filename)
+        self.workbook.save(folder + filename)
         return folder + filename
 
     def save_reports(self, reports: list[Report], folder: str = ''):
@@ -96,7 +96,6 @@ class ExcelCreator:
         else:
             return value
 
-
     def __setup_dimensions(self):
         for i in range(10):
             letter = index_to_column_letter(i)
@@ -105,7 +104,7 @@ class ExcelCreator:
         for i in range(1000):
             self.sheet.row_dimensions[i].height = Config.base_row_height[0]
 
-    def add_name_styles(self):
+    def add_named_styles(self):
         for attr in Styles.__dict__:
             if "__" not in attr:
                 self.workbook.add_named_style(Styles.__getattribute__(Styles, attr))

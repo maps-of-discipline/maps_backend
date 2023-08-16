@@ -1,5 +1,7 @@
 from timeit import default_timer as timer
 
+from models import AupData
+
 
 def method_time(method):
     def wrapper(cls, *args, **kwargs):
@@ -12,6 +14,17 @@ def method_time(method):
     return wrapper
 
 
-def match_disciple(discipline: str, filter_conditions: dict):
-    return (any([condition in discipline.lower() for condition in filter_conditions['accept']]) and
-            all([condition not in discipline.lower() for condition in filter_conditions['decline']]))
+def match_element(el: AupData, filter_dict: dict):
+    accept = True
+    decline = True
+
+    for attr in el.__dict__:
+        if attr in filter_dict['accept']:
+            accept = accept and any(
+                [condition in el.__getattribute__(attr) for condition in filter_dict['accept'][attr]])
+
+        if attr in filter_dict['decline']:
+            decline = decline and all(
+                condition not in el.__getattribute__(attr) for condition in filter_dict['decline'][attr])
+
+    return accept and decline
