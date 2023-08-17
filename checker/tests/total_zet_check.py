@@ -1,5 +1,4 @@
 from math import fsum
-
 from models import *
 from .base_test import BaseTest
 from ..data_classes import Test

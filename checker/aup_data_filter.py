@@ -19,7 +19,7 @@ class AupDataFilter:
                 continue
             yield el
 
-    def with_measure(self, measure_id: int) -> (float, AupData):
+    def with_measure(self, measure_id: int) -> Generator[tuple[float, AupData], None, None]:
         transform_dict_coefficients = {
             # (from_id, to_id): coefficient
             (1, 1): 1,

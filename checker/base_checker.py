@@ -23,6 +23,7 @@ class BaseChecker:
         7: OptionalPEAmount,
         11: MinDisciplineZet,
         12: CompulsoryDisciplinesCheck,
+        13: OptionalDisciplinesCheck
     }
 
     @method_time
@@ -83,7 +84,8 @@ class BaseChecker:
 
         return {
             "okso": okso[0],
-            "program": program, "profile": profile,
+            "program": program,
+            "profile": profile,
             "faculty": faculty,
             "education_form": form,
             "check_date": date

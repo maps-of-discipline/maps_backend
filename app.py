@@ -642,10 +642,36 @@ def test():
         }
     }
 
+    foreign_language = {
+        'accept': {
+            'discipline': [
+                'й язык',
+                'fore'
+            ],
+
+            'id_type_record': [1, 2]
+        },
+        'decline': {
+            'discipline': [
+                'усский',
+            ]
+        }
+    }
+    
+    philosopy = {
+        'accept': {
+            'discipline': [
+                'философ'
+                ],
+            'id_type_record': [1, 2]
+        },
+        'decline': {}
+        }
+
     res = set()
     for el in AupData.query.all():
-        if match_element(el, bjd):
+        if match_element(el, fundamentals_of_information_security):
             res.add(el.discipline)
 
-    # return make_response(json.dumps(all_pe_titles(), ensure_ascii=False))
-    return all_pe_titles()
+    return make_response(json.dumps(list(res), ensure_ascii=False))
+    # return all_pe_titles()

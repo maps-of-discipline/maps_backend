@@ -6,3 +6,4 @@ from .pe_checks import PEAmountInFirstBlockTest, OptionalPEAmount
 from .total_zet_check import TotalZetTest
 from .zet_check_by_block import ZetCheckByFirstBlock, ZetCheckBySecondBlock, ZetCheckByThirdBlock
 from .zet_check_by_year import ZetCheckByYear
+from .optional_disciplines_check import OptionalDisciplinesCheck

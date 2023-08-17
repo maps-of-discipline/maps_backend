@@ -7,8 +7,8 @@ from dataclasses import dataclass
 class Detailed:
     period_id: int | list = None
     discipline: str = None
-    min: float = None
-    max: float = None
+    min: float | None = None
+    max: float | None = None
     value: float | str | list = None
     result: bool = None
 
