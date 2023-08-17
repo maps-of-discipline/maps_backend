@@ -23,7 +23,9 @@ class BaseChecker:
         7: OptionalPEAmount,
         11: MinDisciplineZet,
         12: CompulsoryDisciplinesCheck,
-        13: OptionalDisciplinesCheck
+        13: OptionalDisciplinesCheck,
+        14: ClassroomClassesCheck,
+        15: WorkloadControlCheck
     }
 
     @method_time

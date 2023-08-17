@@ -21,10 +21,12 @@ def match_element(el: AupData, filter_dict: dict):
     for attr in el.__dict__:
         if attr in filter_dict['accept']:
             accept = accept and any(
-                [str(condition).lower() in str(el.__getattribute__(attr)).lower() for condition in filter_dict['accept'][attr]])
+                [str(condition).lower() in str(el.__getattribute__(attr)).lower() for condition in
+                 filter_dict['accept'][attr]])
 
         if attr in filter_dict['decline']:
             decline = decline and all(
-                str(condition).lower() not in str(el.__getattribute__(attr)).lower() for condition in filter_dict['decline'][attr])
+                str(condition).lower() not in str(el.__getattribute__(attr)).lower() for condition in
+                filter_dict['decline'][attr])
 
     return accept and decline

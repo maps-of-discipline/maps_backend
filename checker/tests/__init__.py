@@ -1,9 +1,10 @@
 from .base_test import BaseTest
+from .workload_checks import ClassroomClassesCheck, WorkloadControlCheck
 from .compulsory_disciplines_check import CompulsoryDisciplinesCheck
 from .min_discipline_zet_check import MinDisciplineZet
+from .optional_disciplines_check import OptionalDisciplinesCheck
 from .pe_checks import OptionalPEAmount
 from .pe_checks import PEAmountInFirstBlockTest, OptionalPEAmount
 from .total_zet_check import TotalZetTest
 from .zet_check_by_block import ZetCheckByFirstBlock, ZetCheckBySecondBlock, ZetCheckByThirdBlock
 from .zet_check_by_year import ZetCheckByYear
-from .optional_disciplines_check import OptionalDisciplinesCheck

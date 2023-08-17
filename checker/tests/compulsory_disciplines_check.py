@@ -4,58 +4,57 @@ from ..data_classes import Detailed, Test
 from ..utils import match_element
 
 history_filter = {
-        'accept': {
-            'discipline': [
-                'история'
-            ]
-        },
-        'decline': {
-            'discipline': []
-        }
+    'accept': {
+        'discipline': [
+            'история'
+        ]
+    },
+    'decline': {
+        'discipline': []
     }
+}
 
 philosopy_filter = {
-        'accept': {
-            'discipline': [
-                'философ'
-                ],
-            'id_type_record': [1, 2]
-        },
-        'decline': {}
-        }
+    'accept': {
+        'discipline': [
+            'философ'
+        ],
+        'id_type_record': [1, 2]
+    },
+    'decline': {}
+}
 
 foreign_language_filter = {
-        'accept': {
-            'discipline': [
-                'й язык',
-                'fore'
-            ],
+    'accept': {
+        'discipline': [
+            'й язык',
+            'fore'
+        ],
 
-            'id_type_record': [1, 2]
-        },
-        'decline': {
-            'discipline': [
-                'усский',
-            ]
-        }
+        'id_type_record': [1, 2]
+    },
+    'decline': {
+        'discipline': [
+            'усский',
+        ]
     }
+}
 
 bjd_filter = {
-        'accept': {
-            'discipline': [
-                # 'безопас',
-                'военн',
-                'ость жизнед'
-            ]
-        },
-        'decline': {
-            'discipline': []
-        }
+    'accept': {
+        'discipline': [
+            # 'безопас',
+            'военн',
+            'ость жизнед'
+        ]
+    },
+    'decline': {
+        'discipline': []
     }
+}
 
 
 class CompulsoryDisciplinesCheck(BaseTest):
-
     discipline_variations = {
         'Философия': philosopy_filter,
         'История России': history_filter,
@@ -111,7 +110,5 @@ class CompulsoryDisciplinesCheck(BaseTest):
             aup_info_id=self.aup_info.id_aup,
             min=None,
             max=None,
-            ed_izmereniya_id=3
+            ed_izmereniya_id=None
         )
-
-

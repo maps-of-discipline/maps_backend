@@ -198,6 +198,7 @@ class ExcelCreator:
             2: 'Недели',
             3: 'Зет',
             4: 'шт',
+            None: ""
         }
 
         self.sheet[f'G{row_index}'] = measure[test.measure_id]
