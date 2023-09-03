@@ -1,13 +1,11 @@
 import sqlalchemy as sa
 import os
-from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_login import UserMixin 
 from flask import url_for
 from user_policy import UsersPolicy
-# from app import db, app
+from app import db, app
 
-db = SQLAlchemy()
 
 
 class SprBranch(db.Model):
@@ -98,7 +96,8 @@ class AupInfo(db.Model):
     type_educ = db.Column(db.String(255), nullable=False)
     qualification = db.Column(db.String(255), nullable=False)
     type_standard = db.Column(db.String(255), nullable=False)
-    department = db.Column(db.String(255), nullable=True)
+    id_department = db.Column(db.Integer, db.ForeignKey(
+        'tbl_department.id_department'), nullable=False)
     period_educ = db.Column(db.String(255), nullable=False)
     id_degree = db.Column(db.Integer, db.ForeignKey(
         'spr_degree_education.id_degree'), nullable=False)
@@ -117,9 +116,23 @@ class AupInfo(db.Model):
     name_op = db.relationship('NameOP')
     faculty = db.relationship('SprFaculty')
     rop = db.relationship('SprRop')
+    department = db.relationship('Department')
 
     def __repr__(self):
         return '<№ AUP %r>' % self.num_aup
+
+
+class Department(db.Model):
+    __tablename__ = 'tbl_department'
+
+    id_department = db.Column(db.Integer, primary_key=True)
+    name_department = db.Column(db.String(255), nullable=True)
+
+    def __repr__(self):
+        return '<Department %r>' % self.name_department
+
+
+class 
 
 
 class NameOP(db.Model):
@@ -287,9 +300,10 @@ class Users(db.Model, UserMixin):
     id_user = db.Column(db.Integer, primary_key=True)
     login = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), unique=True, nullable=False)
-    id_faculty = db.Column(db.Integer, db.ForeignKey(
-        'spr_faculty.id_faculty'), nullable=False)
+    id_role = db.Column(db.Integer, db.ForeignKey(
+        'roles.id_role'), nullable=False)
 
+    role = db.relationship('Roles')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -297,28 +311,38 @@ class Users(db.Model, UserMixin):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
     
+    # @property
+    # def full_name(self):
+    #     return ' '.join([self.last_name, self.first_name, self.middle_name or ''])
+
     @property
-    def full_name(self):
-        return ' '.join([self.last_name, self.first_name, self.middle_name or ''])
+    def is_admin(self):
+        return app.config.get('ADMIN_ROLE_ID') == self.role_id
 
-    # @property
-    # def is_admin(self):
-    #     return app.config.get('ADMIN_ROLE_ID') == self.role_id
-
-    # @property
-    # def is_moder(self):
-    #     return app.config.get('MODER_ROLE_ID') == self.role_id
+    @property
+    def is_facult(self):
+        return app.config.get('FACULTY_ROLE_ID') == self.role_id
     
-    # @property
-    # def is_user(self):
-    #     return app.config.get('USER_ROLE_ID') == self.role_id
+    @property
+    def is_depart(self):
+        return app.config.get('DEPARTMENT_ROLE_ID') == self.role_id
 
-    # def can(self, action):
-    #     users_policy = UsersPolicy()
-    #     method = getattr(users_policy, action)
-    #     if method is not None:
-    #         return method()
-    #     return False
+    def can(self, action):
+        users_policy = UsersPolicy()
+        method = getattr(users_policy, action)
+        if method is not None:
+            return method()
+        return False
 
     def __repr__(self):
         return '<User %r>' % self.login
+    
+
+class Roles(db.Model):
+    __tablename__ = 'roles'
+
+    id_role = db.Column(db.Integer, primary_key=True)
+    name_role = db.Column(db.String(100), nullable=False)
+
+    def __repr__(self):
+        return '<Role %r>' % self.name_role

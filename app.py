@@ -14,12 +14,14 @@ from sqlalchemy import MetaData
 from flask_migrate import Migrate
 from flask import Flask, make_response, redirect, render_template, request, send_file, jsonify
 from flask_cors import CORS
-from models import db
+from flask_sqlalchemy import SQLAlchemy
+# from models import db
 import io
 import os
 import warnings
 warnings.simplefilter("ignore")
 
+db = SQLAlchemy()
 
 app = Flask(__name__)
 application = app
