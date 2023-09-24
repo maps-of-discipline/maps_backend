@@ -1,11 +1,13 @@
 import sqlalchemy as sa
 import os
+
+from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_login import UserMixin 
 from flask import url_for
 from user_policy import UsersPolicy
-from app import db, app
 
+db = SQLAlchemy()
 
 
 class SprBranch(db.Model):
@@ -130,9 +132,6 @@ class Department(db.Model):
 
     def __repr__(self):
         return '<Department %r>' % self.name_department
-
-
-class 
 
 
 class NameOP(db.Model):
@@ -295,15 +294,31 @@ class AupData(db.Model):
         return '<AupData %r>' % self.aup_num
 
 
+users_faculty_table = db.Table(
+    'users_faculty',
+    db.Column("user_id", db.ForeignKey('tbl_users.id_user'), nullable=False),
+    db.Column('faculty_id', db.ForeignKey('spr_faculty.id_faculty'), nullable=False)
+)
+
+
 class Users(db.Model, UserMixin):
     __tablename__ = 'tbl_users'
+
     id_user = db.Column(db.Integer, primary_key=True)
     login = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), unique=True, nullable=False)
+
     id_role = db.Column(db.Integer, db.ForeignKey(
         'roles.id_role'), nullable=False)
 
     role = db.relationship('Roles')
+
+    department_id = db.Column(db.Integer, db.ForeignKey('tbl_department.id_department'), nullable=True)
+
+    faculties = db.Relationship(
+        'SprFaculty',
+        secondary=users_faculty_table,
+    )
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -317,14 +332,18 @@ class Users(db.Model, UserMixin):
 
     @property
     def is_admin(self):
+        from app import app
         return app.config.get('ADMIN_ROLE_ID') == self.role_id
+
 
     @property
     def is_facult(self):
+        from app import app
         return app.config.get('FACULTY_ROLE_ID') == self.role_id
-    
+
     @property
     def is_depart(self):
+        from app import app
         return app.config.get('DEPARTMENT_ROLE_ID') == self.role_id
 
     def can(self, action):
@@ -336,7 +355,7 @@ class Users(db.Model, UserMixin):
 
     def __repr__(self):
         return '<User %r>' % self.login
-    
+
 
 class Roles(db.Model):
     __tablename__ = 'roles'
@@ -346,3 +365,15 @@ class Roles(db.Model):
 
     def __repr__(self):
         return '<Role %r>' % self.name_role
+
+
+class Token(db.Model):
+    __tablename__ = 'tbl_token'
+
+    id = db.Column(db.Integer(), primary_key=True)
+    user_id = db.Column(db.Integer(), db.ForeignKey('tbl_users.id_user'), nullable=False)
+    refresh_token = db.Column(db.String(256), nullable=False)
+    user_agent = db.Column(db.String(256), nullable=False)
+    ttl = db.Column(db.Integer(), nullable=False)
+
+    user = db.relationship('Users')

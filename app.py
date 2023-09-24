@@ -6,7 +6,7 @@ from tools import FileForm, take_aup_from_excel_file, error
 from save_into_bd import SaveCard
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
 from excel_check import excel_check
-from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, AupData, AupInfo, Groups, SprFaculty
+from models import Users, D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, AupData, AupInfo, Groups, SprFaculty
 import pandas as pd
 from openpyxl import load_workbook
 from sqlalchemy.sql.expression import func
@@ -14,14 +14,14 @@ from sqlalchemy import MetaData
 from flask_migrate import Migrate
 from flask import Flask, make_response, redirect, render_template, request, send_file, jsonify
 from flask_cors import CORS
-from flask_sqlalchemy import SQLAlchemy
-# from models import db
+from models import db
 import io
 import os
 import warnings
+from auth import *
+
 warnings.simplefilter("ignore")
 
-db = SQLAlchemy()
 
 app = Flask(__name__)
 application = app
@@ -526,3 +526,62 @@ def getControlTypes():
     return make_response(jsonify(control_type_arr), 200)
 
 
+@app.route("/login", methods=['POST'])
+def login():
+
+    if 'Username' not in request.form:
+        return make_response("Username is required", 401)
+
+    if 'Password' not in request.form:
+        return make_response("Password is required", 401)
+
+    user = Users.query.filter_by(login=request.form['Username']).first()
+
+    if not user:
+        return make_response("No such user", 400)   # 400?
+
+    if not user.check_password(request.form['Password']):
+        return make_response('Incorrect password', 400)
+
+    response = {
+        'access': get_access_token(user.id_user),
+        'refresh': get_refresh_token(user.id_user, request.headers['User-Agent']),
+    }
+
+    return make_response(json.dumps(response, ensure_ascii=False), 200)
+
+
+@app.route('/refresh', methods=['POST'])
+def refresh_view():
+    import jwt
+
+    if "Access" not in request.form:
+        return make_response("Access token required", 401)
+
+    if "Refresh" not in request.form:
+        return make_response("Refresh token required", 401)
+
+    access = request.form['Access']
+
+    payload = verify_jwt_token(access)
+    if not payload:
+        return make_response("Invalid access token", 401)
+
+    if verify_refresh_token(request.form['Refresh']):
+        access_token = get_access_token(payload['user_id'])
+        refresh_token = get_refresh_token(payload['user_id'], request.headers['User-Agent'])
+    else:
+        return make_response('Refresh token lifetime expired', 401)
+
+    response = {
+        'access': get_access_token(payload['user_id']),
+        'refresh': get_refresh_token(payload['user_id'], request.headers['User-Agent']),
+    }
+
+    return make_response(json.dumps(response), 200)
+
+
+@app.route('/test/<string:aup>')
+@login_required(request)
+def test(aup):
+    return make_response('asdf', 200)
