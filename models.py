@@ -69,6 +69,8 @@ class SprOKCO(db.Model):
     program_code = db.Column(db.String(255), primary_key=True)
     name_okco = db.Column(db.String(255), nullable=False)
 
+    unifications = db.relationship('Unification', back_populates='okso')
+
     def __repr__(self):
         return '<OKCO %r>' % self.name_okco
 
@@ -555,3 +557,61 @@ class RealizedOkso(db.Model):
         return '<RealizedOkso %r>' % self.program_code
 
 
+# --------   Unification -----------
+
+
+# fgosvo_has_competency_table = db.Table(
+#     'fgosvo_has_competency',
+#     db.Column("fgosvo_id", db.ForeignKey('spr_fgos_vo.id'), nullable=False),
+#     db.Column("competency_id", db.ForeignKey('spr_competency.id'), nullable=False)
+# )
+
+
+unification_period_table = db.Table(
+    'unification_period_table',
+    db.Column('unification_id', db.ForeignKey('unification.id'), nullable=False),
+    db.Column('period_id', db.ForeignKey('d_period.id'))
+)
+
+class UniqueDiscipline(DBase):
+    __tablename__ = 'unique_discipline'
+
+
+class Unification(db.Model):
+    __tablename__ = "unification"
+
+    id = db.Column(db.Integer, primary_key=True)
+    course_num = db.Column(db.Integer)
+    amount = db.Column(db.Float)
+    program_code = db.Column(db.String(255), db.ForeignKey(
+        'spr_okco.program_code'), nullable=False)
+
+    discipline_id = db.Column(db.Integer, db.ForeignKey('unique_discipline.id'), nullable=False)
+    measure_id = db.Column(db.Integer, db.ForeignKey('d_ed_izmereniya.id'), nullable=False)
+    form_education = db.Column(db.Integer, db.ForeignKey('spr_form_education.id_form'), nullable=False)
+
+    okso = db.relationship('SprOKCO', back_populates='unifications')
+
+    periods = db.relationship(
+        'D_Period',
+        secondary=unification_period_table,
+    )
+
+    load_associations = db.relationship('UnificationLoad', back_populates='unification')
+    loads = association_proxy('load_associations', 'control_type')
+
+
+    def __repr__(self):
+        return f"<Unification {self.id}>"
+
+
+class UnificationLoad(db.Model):
+    unification_id = db.Column(db.Integer, db.ForeignKey('unification.id'), primary_key=True)
+    control_type_id = db.Column(db.Integer, db.ForeignKey('d_control_type.id'), primary_key=True)
+    amount = db.Column(db.Float, nullable=False) # in hours
+
+    unification = db.relationship('Unification')
+    control_type = db.relationship('D_ControlType')
+
+    def __repr__(self):
+        return f"<Unification_load {self.unification_id}, {self.control_type_id}>"
