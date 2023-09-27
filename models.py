@@ -69,8 +69,6 @@ class SprOKCO(db.Model):
     program_code = db.Column(db.String(255), primary_key=True)
     name_okco = db.Column(db.String(255), nullable=False)
 
-    unifications = db.relationship('Unification', back_populates='okso')
-
     def __repr__(self):
         return '<OKCO %r>' % self.name_okco
 
@@ -567,14 +565,20 @@ class RealizedOkso(db.Model):
 # )
 
 
+class UniqueDiscipline(DBase):
+    __tablename__ = 'unique_discipline'
+
 unification_period_table = db.Table(
     'unification_period_table',
     db.Column('unification_id', db.ForeignKey('unification.id'), nullable=False),
     db.Column('period_id', db.ForeignKey('d_period.id'))
 )
 
-class UniqueDiscipline(DBase):
-    __tablename__ = 'unique_discipline'
+unification_realized_okso_table = db.Table(
+    'unification_realized_okso',
+    db.Column('unification_id', db.ForeignKey('unification.id')),
+    db.Column('realized_okso_id', db.ForeignKey('tbl_realized_okso.id'))
+)
 
 
 class Unification(db.Model):
@@ -583,14 +587,20 @@ class Unification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     course_num = db.Column(db.Integer)
     amount = db.Column(db.Float)
-    program_code = db.Column(db.String(255), db.ForeignKey(
-        'spr_okco.program_code'), nullable=False)
 
     discipline_id = db.Column(db.Integer, db.ForeignKey('unique_discipline.id'), nullable=False)
-    measure_id = db.Column(db.Integer, db.ForeignKey('d_ed_izmereniya.id'), nullable=False)
-    form_education = db.Column(db.Integer, db.ForeignKey('spr_form_education.id_form'), nullable=False)
+    measure_id = db.Column(db.Integer, db.ForeignKey('d_ed_izmereniya.id'), nullable=False, default=3)
+    form_education_id = db.Column(db.Integer, db.ForeignKey('spr_form_education.id_form'), nullable=False)
 
-    okso = db.relationship('SprOKCO', back_populates='unifications')
+    discipline = db.relationship('UniqueDiscipline')
+    measure = db.relationship("D_EdIzmereniya")
+    form_education = db.relationship("SprFormEducation")
+
+
+    oksos = db.relationship(
+        "RealizedOkso",
+        secondary=unification_realized_okso_table,
+    )
 
     periods = db.relationship(
         'D_Period',

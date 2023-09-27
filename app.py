@@ -5,6 +5,8 @@ import warnings
 
 import pandas as pd
 from flask import Flask, make_response, render_template, request, send_file, jsonify
+from flask_admin import Admin
+from flask_admin.contrib.sqla import ModelView
 from flask_cors import CORS
 from flask_migrate import Migrate
 from sqlalchemy import MetaData
@@ -21,6 +23,7 @@ from save_into_bd import SaveCard
 from take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
                           ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r, create_json)
 from tools import FileForm, take_aup_from_excel_file, error
+from admin import init_admin
 
 warnings.simplefilter("ignore")
 
@@ -63,6 +66,9 @@ setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, contro
 
 if os.path.exists(app.static_folder + '/temp') == False:
     os.makedirs(app.static_folder + '/temp', exist_ok=True)
+
+
+init_admin(app, db.session)
 
 
 @app.route("/api/map/<string:aup>")
@@ -568,6 +574,68 @@ def save_okso(okso: str):
 @app.route('/test')
 def test():
 
-    
+    unifications = {
+        'education_form': 1,
+        'disciplines': [
+            {
+                "title": 'История России',
+                "amount": 4,
+                'workload': [
+                    {
+                        'course': 1,
+                        'semesters': [1],
+                        'amount': 1.5,
+                        'load': [
+                            {
+                                'id': 1,
+                                'amount': 1,
+                            },
+                            {
+                                'id': 2,
+                                'amount': 1,
+                            },
+                            {
+                                'id': 3,
+                                'amount': 1,
+                            },
+                            {
+                                'id': 4,
+                                'amount': 1,
+                            },
+                        ]
+
+                    },
+                    {
+                        'course': 1,
+                        'semesters': [2],
+                        'amount': 2.5,
+                        'workload': {
+                                'course': 1,
+                                'semesters': [1],
+                                'amount': 1.5,
+                                'load': [
+                                    {
+                                        'id': 1,
+                                        'amount': 1,
+                                    },
+                                    {
+                                        'id': 2,
+                                        'amount': 1,
+                                    },
+                                    {
+                                        'id': 3,
+                                        'amount': 1,
+                                    },
+                                    {
+                                        'id': 4,
+                                        'amount': 1,
+                                    },
+                                ]
+                        },
+                    },
+                ],
+            },
+        ]
+    }
 
     return make_response(json.dumps("asdf", ensure_ascii=False), 200)
