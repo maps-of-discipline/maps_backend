@@ -15,6 +15,18 @@ from sqlalchemy.orm import relationship
 db = SQLAlchemy()
 
 
+class DBase(db.Model):
+    __abstract__ = True
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+
+    def __repr__(self):
+        return f'<{self.__tablename__} {self.title}>'
+
+    def __str__(self):
+        return self.title
+
+
 class SprBranch(db.Model):
     __tablename__ = 'spr_branch'
 
@@ -61,6 +73,10 @@ class SprFormEducation(db.Model):
 
     def __repr__(self):
         return '<FormEducation %r>' % self.form
+
+
+    def __str__(self):
+        return self.form
 
 
 class SprOKCO(db.Model):
@@ -221,31 +237,16 @@ class D_Blocks(db.Model):
         return '<D_Blocks %r>' % self.title
 
 
-class D_Period(db.Model):
+class D_Period(DBase):
     __tablename__ = 'd_period'
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(255), nullable=False)
-
-    def __repr__(self):
-        return '<D_Period %r>' % self.title
 
 
-class D_ControlType(db.Model):
+class D_ControlType(DBase):
     __tablename__ = 'd_control_type'
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(255), nullable=False)
+    
 
-    def __repr__(self):
-        return '<D_ControlType %r>' % self.title
-
-
-class D_EdIzmereniya(db.Model):
+class D_EdIzmereniya(DBase):
     __tablename__ = 'd_ed_izmereniya'
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(255), nullable=False)
-
-    def __repr__(self):
-        return '<D_EdIzmereniya %r>' % self.title
 
 
 class D_Part(db.Model):
@@ -371,15 +372,6 @@ class Users(db.Model, UserMixin):
 
 
 # --------------checks---------------- #
-
-
-class DBase(db.Model):
-    __abstract__ = True
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(255), nullable=False)
-
-    def __repr__(self):
-        return f'<{self.__tablename__} {self.title}>'
 
 
 class DCompetencyCode(DBase):
@@ -554,6 +546,8 @@ class RealizedOkso(db.Model):
     def __repr__(self):
         return '<RealizedOkso %r>' % self.program_code
 
+    def __str__(self):
+        return self.program_code
 
 # --------   Unification -----------
 
@@ -567,6 +561,10 @@ class RealizedOkso(db.Model):
 
 class UniqueDiscipline(DBase):
     __tablename__ = 'unique_discipline'
+
+    def __str__(self):
+        return self.title
+        return self.title
 
 unification_period_table = db.Table(
     'unification_period_table',
@@ -607,8 +605,8 @@ class Unification(db.Model):
         secondary=unification_period_table,
     )
 
-    load_associations = db.relationship('UnificationLoad', back_populates='unification')
-    loads = association_proxy('load_associations', 'control_type')
+    load = db.relationship('UnificationLoad', back_populates='unification', cascade="all, delete-orphan")
+    # loads = association_proxy('load_associations', 'control_type')
 
 
     def __repr__(self):
@@ -616,8 +614,9 @@ class Unification(db.Model):
 
 
 class UnificationLoad(db.Model):
-    unification_id = db.Column(db.Integer, db.ForeignKey('unification.id'), primary_key=True)
-    control_type_id = db.Column(db.Integer, db.ForeignKey('d_control_type.id'), primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
+    unification_id = db.Column(db.Integer, db.ForeignKey('unification.id', ondelete='CASCADE'), nullable=False, )
+    control_type_id = db.Column(db.Integer, db.ForeignKey('d_control_type.id'), nullable=False)
     amount = db.Column(db.Float, nullable=False) # in hours
 
     unification = db.relationship('Unification')
