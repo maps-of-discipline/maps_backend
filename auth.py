@@ -1,8 +1,7 @@
 from flask import make_response
 
 from config import SECRET_KEY
-from models import Token, Users, AupInfo
-from app import db
+from models import Token, Users, AupInfo, db
 
 from time import time, sleep
 import jwt

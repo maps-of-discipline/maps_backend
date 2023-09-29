@@ -5,15 +5,15 @@ import pandas as pd
 # import re
 import datetime
 from sqlalchemy import desc
-from models import AupData, AupInfo, NameOP, SprDegreeEducation, SprFormEducation, SprFaculty, db
+from models import AupData, AupInfo, NameOP, SprDegreeEducation, SprFormEducation, SprFaculty, Department, db
 # # from app import static_folder
 
 # bp = Blueprint('upload_to_db', __name__, url_prefix='/upload_to_db')
 
 NAMEOP_PARAMS = ['program_code', 'num_profile', 'name_spec']
 AUP_PARAMS = ['file', 'num_aup', 'base', 'id_faculty', 'id_rop', 'type_educ',
-              'qualification', 'type_standard', 'department', 'period_educ',
-              'id_degree', 'id_form', 'years', 'months', 'id_spec', 'year_beg', 'year_end', 'is_actual']
+              'qualification', 'type_standard', 'period_educ',
+              'id_degree', 'id_form', 'years', 'months', 'id_spec', 'year_beg', 'year_end', 'is_actual', 'id_department']
 
 
 def _params(params_list, _PARAMS):
@@ -237,7 +237,16 @@ def SaveCard(db, aupInfo, aupData):
             id_branch = 1, 
             dean = None)
         db.session.add(new_faculty)
-        db.session.commit()
+
+    if pd.isna(aupInfo['department']):
+        aupInfo['department'] = None
+
+    get_department = Department.query.filter_by(name_department=aupInfo['department']).first()
+    if get_department is None:
+        new_department = Department(name_department=aupInfo['department'], )
+        db.session.add(new_department)
+
+    db.session.commit()
     # Перезапись карты, если есть уже в базе и мы обновляем ее
     get_aup = AupInfo.query.filter_by(num_aup=aupInfo["num"]).first()
 
@@ -297,15 +306,15 @@ def add_new_aup(aupInfo):
 
     id_spec = NameOP.query.filter_by(
         name_spec=aupInfo["name_spec"]).first().id_spec
-    if pd.isna(aupInfo["department"]):
-        aupInfo["department"] = None
+
+    id_department = Department.query.filter_by(name_department=aupInfo['department']).first().id_department
     id_form = SprFormEducation.query.filter_by(
         form=aupInfo["form_educ"]).first().id_form
 
     new_str_tbl_aup = AupInfo(**_params([
         aupInfo["filename"], aupInfo["num"], aupInfo["base"], id_faculty, 1, aupInfo["type_education"], aupInfo["qualification"],
-        aupInfo["type_standard"], aupInfo["department"], aupInfo["period_edication"], id_degree, id_form, years, months, id_spec, year_beg,
-        year_end, is_actual], AUP_PARAMS))
+        aupInfo["type_standard"], aupInfo["period_edication"], id_degree, id_form, years, months, id_spec, year_beg,
+        year_end, is_actual, id_department], AUP_PARAMS))
     db.session.add(new_str_tbl_aup)
     db.session.commit()
 
