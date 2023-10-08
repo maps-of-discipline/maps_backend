@@ -20,4 +20,5 @@ class UnificationLoadView(ModelView):
 def init_admin(app: Flask, session):
     admin = Admin(app, name='Title', template_mode='bootstrap3')
     admin.add_view(ModelView(UnificationLoad, session, category='Unification'))
+    admin.add_view(ModelView(UniqueDiscipline, session, category='Unification'))
     admin.add_view(UnificationModelView(Unification, session, category='Unification'))

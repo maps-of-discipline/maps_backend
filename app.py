@@ -548,26 +548,34 @@ def getControlTypes():
 
 @app.route("/check/<string:aup>")
 def check_aup(aup: str):
-    checker = AupChecker(db_instance=db)
+    hidetitle = bool(request.args.get('hide_title', default=False))
+    hidedetailed = bool(request.args.get('hide_detailed', default=False))
+    checker = AupChecker(db_instance=db, hide_title = hidetitle,hide_detailed = hidedetailed)
     return make_response(checker.get_json_report(aup))
 
 
 @app.route("/check/<string:aup>/save")
 def save_report(aup: str):
-    checker = AupChecker(db_instance=db)
+    hidetitle = bool(request.args.get('hide_title', default=False))
+    hidedetailed = bool(request.args.get('hide_detailed', default=False))
+    checker = AupChecker(db_instance=db, hide_title = hidetitle,hide_detailed = hidedetailed )
     path = checker.create_excel(aup)
     return make_response(path)
 
 
 @app.route("/check/okso/<string:okso>")
 def check_okso(okso: str):
-    checker = AupChecker(db_instance=db)
+    hidetitle = bool(request.args.get('hide_title', default=False))
+    hidedetailed = bool(request.args.get('hide_detailed', default=False))
+    checker = AupChecker(db_instance=db, hide_title = hidetitle,hide_detailed = hidedetailed)
     return checker.get_json_reports_by_okso(okso)
 
 
 @app.route("/check/okso/<string:okso>/save")
 def save_okso(okso: str):
-    checker = AupChecker(db_instance=db)
+    hidetitle = bool(request.args.get('hide_title', default=False))
+    hidedetailed = bool(request.args.get('hide_detailed', default=False))
+    checker = AupChecker(db_instance=db, hide_title = hidetitle,hide_detailed = hidedetailed)
     return checker.make_excel_reports_by_okso(okso)
 
 
