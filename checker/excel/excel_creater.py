@@ -28,13 +28,15 @@ class ExcelCreator:
 
     period_id_to_title = {}  # A dictionary to map period_id to titles.
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, hide_title=False, hide_detailed=False):
         """
         Initialize the ExcelCreator object.
 
         Parameters:
             path (str): The path where the Excel file will be saved.
         """
+        self.hide_title = hide_title
+        self.hide_detailed = hide_detailed
         self.path = path
         self.workbook = None
         self.sheet: worksheet | None = None
@@ -77,6 +79,8 @@ class ExcelCreator:
     def __fill_report(self):
         row_index = 10
         for test in self.report.tests:
+            if test.result == True and self.hide_title == True:
+                continue
             row_index = self.__write_test_header(test, row_index)
             row_index = self.__write_test_details(test, row_index)
 
@@ -254,6 +258,8 @@ class ExcelCreator:
 
         # Write details of the test
         for row in test.detailed:
+            if self.hide_detailed == True and row.result == True:
+                continue
             row_index += 1
             self.sheet.row_dimensions[row_index].height = Config.detailed_row_height[0]
             i = 0

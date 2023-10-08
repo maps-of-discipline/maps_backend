@@ -30,10 +30,10 @@ class BaseChecker:
     }
 
     @method_time
-    def __init__(self, db_instance: SQLAlchemy):
+    def __init__(self, db_instance: SQLAlchemy, hide_title=False, hide_detailed=False):
         self.db = db_instance
         self.aup: AupInfo | None = None
-        self.creator = ExcelCreator(path='checker/excel/reports(temporary)/')
+        self.creator = ExcelCreator(path='checker/excel/reports(temporary)/', hide_title=hide_title, hide_detailed = hide_detailed)
         value = {el.id: el.title for el in self.db.session.query(D_Period).all()}
         self.creator.period_id_to_title = value
 
