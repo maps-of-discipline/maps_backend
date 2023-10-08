@@ -27,6 +27,7 @@ class BaseChecker:
         14: ClassroomClassesCheck,
         15: WorkloadControlCheck,
         16: UnificationStructure,
+        17: UnificationAmountCheck,
     }
 
     @method_time

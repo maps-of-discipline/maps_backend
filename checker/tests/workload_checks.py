@@ -10,6 +10,7 @@ class WorkloadBaseCheck(BaseTest):
     @method_time
     def assert_test(self) -> Test:
         disciplines = {}
+
         for amount, el in self.data_filter.with_measure(3):
             if (el.discipline, el.id_period) not in disciplines.keys():
                 disciplines.update({(el.discipline, el.id_period): False})
@@ -20,13 +21,12 @@ class WorkloadBaseCheck(BaseTest):
         self.report.result = True
         self.report.detailed = []
         for key in disciplines:
-            if not disciplines[key]:
-                self.report.result = False
-                self.report.detailed.append(Detailed(
-                    period_id=key[1],
-                    discipline=key[0],
-                    result=False
-                ))
+            self.report.result = self.report.result and disciplines[key]
+            self.report.detailed.append(Detailed(
+                period_id=key[1],
+                discipline=key[0],
+                result=disciplines[key]
+            ))
 
         return self.report
 

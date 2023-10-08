@@ -9,3 +9,4 @@ from .total_zet_check import TotalZetTest
 from .zet_check_by_block import ZetCheckByFirstBlock, ZetCheckBySecondBlock, ZetCheckByThirdBlock
 from .zet_check_by_year import ZetCheckByYear
 from .unification_structure import UnificationStructure
+from .unification_amount_check import UnificationAmountCheck
