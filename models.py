@@ -543,6 +543,7 @@ class RealizedOkso(db.Model):
 
     fgos_vo = db.relationship("SprFgosVo")
 
+    unifications = db.relationship('Unification', secondary='unification_realized_okso')
     def __repr__(self):
         return '<RealizedOkso %r>' % self.program_code
 

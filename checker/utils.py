@@ -14,7 +14,7 @@ def method_time(method):
     return wrapper
 
 
-def match_element(el: AupData, filter_dict: dict):
+def match_element(el: AupData | str, filter_dict: dict, by_attr: str | None = None):
     accept = True
     decline = True
 
@@ -28,5 +28,21 @@ def match_element(el: AupData, filter_dict: dict):
             decline = decline and all(
                 str(condition).lower() not in str(el.__getattribute__(attr)).lower() for condition in
                 filter_dict['decline'][attr])
+
+    return accept and decline
+
+def match_attribute(el: str, attr: str, filter_dict: dict):
+    accept = True
+    decline = True
+
+    if attr in filter_dict['accept']:
+        accept = accept and any(
+            [str(condition).lower() in str(el).lower() for condition in
+             filter_dict['accept'][attr]])
+
+    if attr in filter_dict['decline']:
+        decline = decline and all(
+            str(condition).lower() not in str(el).lower() for condition in
+            filter_dict['decline'][attr])
 
     return accept and decline

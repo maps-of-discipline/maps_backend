@@ -573,69 +573,20 @@ def save_okso(okso: str):
 
 @app.route('/test')
 def test():
+    from checker.utils import match_element
 
-    unifications = {
-        'education_form': 1,
-        'disciplines': [
-            {
-                "title": 'История России',
-                "amount": 4,
-                'workload': [
-                    {
-                        'course': 1,
-                        'semesters': [1],
-                        'amount': 1.5,
-                        'load': [
-                            {
-                                'id': 1,
-                                'amount': 1,
-                            },
-                            {
-                                'id': 2,
-                                'amount': 1,
-                            },
-                            {
-                                'id': 3,
-                                'amount': 1,
-                            },
-                            {
-                                'id': 4,
-                                'amount': 1,
-                            },
-                        ]
+    filter_ = {
+        'accept': {
+            'discipline': ['физическая культ']
+        },
+        'decline': {}
 
-                    },
-                    {
-                        'course': 1,
-                        'semesters': [2],
-                        'amount': 2.5,
-                        'workload': {
-                                'course': 1,
-                                'semesters': [1],
-                                'amount': 1.5,
-                                'load': [
-                                    {
-                                        'id': 1,
-                                        'amount': 1,
-                                    },
-                                    {
-                                        'id': 2,
-                                        'amount': 1,
-                                    },
-                                    {
-                                        'id': 3,
-                                        'amount': 1,
-                                    },
-                                    {
-                                        'id': 4,
-                                        'amount': 1,
-                                    },
-                                ]
-                        },
-                    },
-                ],
-            },
-        ]
     }
 
-    return make_response(json.dumps("asdf", ensure_ascii=False), 200)
+    disciplines = set()
+
+    for el in AupData.query.all():
+        if match_element(el, filter_):
+            disciplines.add(el.discipline)
+
+    return make_response(json.dumps(list(disciplines), ensure_ascii=False), 200)

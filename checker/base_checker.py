@@ -25,7 +25,8 @@ class BaseChecker:
         12: CompulsoryDisciplinesCheck,
         13: OptionalDisciplinesCheck,
         14: ClassroomClassesCheck,
-        15: WorkloadControlCheck
+        15: WorkloadControlCheck,
+        16: UnificationStructure,
     }
 
     @method_time

@@ -2,66 +2,10 @@ from models import *
 from .base_test import BaseTest
 from ..data_classes import Detailed, Test
 from ..utils import match_element
-
-history_filter = {
-    'accept': {
-        'discipline': [
-            'история'
-        ]
-    },
-    'decline': {
-        'discipline': []
-    }
-}
-
-philosopy_filter = {
-    'accept': {
-        'discipline': [
-            'философ'
-        ],
-        'id_type_record': [1, 2]
-    },
-    'decline': {}
-}
-
-foreign_language_filter = {
-    'accept': {
-        'discipline': [
-            'й язык',
-            'fore'
-        ],
-
-        'id_type_record': [1, 2]
-    },
-    'decline': {
-        'discipline': [
-            'усский',
-        ]
-    }
-}
-
-bjd_filter = {
-    'accept': {
-        'discipline': [
-            # 'безопас',
-            'военн',
-            'ость жизнед'
-        ]
-    },
-    'decline': {
-        'discipline': []
-    }
-}
+from .discipline_variation_config import discipline_variations
 
 
 class CompulsoryDisciplinesCheck(BaseTest):
-    discipline_variations = {
-        'Философия': philosopy_filter,
-        'История России': history_filter,
-        'Иностранный язык': history_filter,
-        'Безопасность жизнедеятельности': bjd_filter
-    }
-
     def assert_test(self) -> Test:
 
         program_code = self.aup_info.name_op.program_code
@@ -72,7 +16,7 @@ class CompulsoryDisciplinesCheck(BaseTest):
 
         for el in self.data_filter.filtered():
             for cd in compulsory_disciplines:
-                filter_ = self.discipline_variations.get(cd[0], None)
+                filter_ = discipline_variations.get(cd[0], None)
 
                 if cd[0] in el.discipline or (filter_ and match_element(el, filter_)):
                     cd[1] = True
