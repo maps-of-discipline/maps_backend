@@ -53,14 +53,18 @@ def verify_jwt_token(jwt_token) -> dict | None:
             key=SECRET_KEY,
             algorithms=['HS256'],
             verify_exp=True,
-        )
+        ), True
 
     except jwt.exceptions.InvalidSignatureError:
-        return None
+        return None, False
     except jwt.exceptions.ExpiredSignatureError:
-        return None
+        return jwt.decode(
+            jwt=jwt_token,
+            key=SECRET_KEY,
+            algorithms=['HS256'],
+        ), False
     except jwt.exceptions.DecodeError:
-        return None
+        return None, False
 
 
 def verify_refresh_token(token: str) -> bool:
@@ -76,8 +80,8 @@ def login_required(request):
             if 'Authorization' not in request.headers or request.headers['Authorization'] is None:
                 return make_response('Authorization header is required', 401)
 
-            payload = verify_jwt_token(request.headers["Authorization"])
-            if not payload:
+            payload, verify_result = verify_jwt_token(request.headers["Authorization"])
+            if not payload or not verify_result:
                 return make_response('Authorization token is invalid', 401)
 
             user = Users.query.filter_by(id_user=payload['user_id']).one()
@@ -104,8 +108,8 @@ def admin_only(request):
             if 'Authorization' not in request.headers or request.headers['Authorization'] is None:
                 return make_response('Authorization header is required', 401)
 
-            payload = verify_jwt_token(request.headers["Authorization"])
-            if not payload:
+            payload, verify_result = verify_jwt_token(request.headers["Authorization"])
+            if not payload or not verify_result:
                 return make_response('Authorization token is invalid', 401)
 
             if payload['role_id'] != 1:

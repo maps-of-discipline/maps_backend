@@ -25,7 +25,7 @@ warnings.simplefilter("ignore")
 
 app = Flask(__name__)
 application = app
-cors = CORS(app, resources={r"*": {"origins": "*"}})
+cors = CORS(app, resources={r"*": {"origins": "*"}}, support_credentials=True)
 
 app.config.from_pyfile('config.py')
 app.config['CORS_HEADERS'] = 'Content-Type'
@@ -561,24 +561,24 @@ def refresh_view():
     if "Refresh" not in request.form:
         return make_response("Refresh token required", 401)
 
-    access = request.form['Access']
+    access = request.get_json()['Access']
 
-    payload = verify_jwt_token(access)
+    payload, verify_result = verify_jwt_token(access)
+
     if not payload:
         return make_response("Invalid access token", 401)
 
     if verify_refresh_token(request.form['Refresh']):
-        access_token = get_access_token(payload['user_id'])
-        refresh_token = get_refresh_token(payload['user_id'], request.headers['User-Agent'])
+        response = {
+            'access': get_access_token(payload['user_id']),
+            'refresh': get_refresh_token(payload['user_id'], request.headers['User-Agent']),
+        }
+
+        return make_response(json.dumps(response), 200)
     else:
         return make_response('Refresh token lifetime expired', 401)
 
-    response = {
-        'access': get_access_token(payload['user_id']),
-        'refresh': get_refresh_token(payload['user_id'], request.headers['User-Agent']),
-    }
 
-    return make_response(json.dumps(response), 200)
 
 
 @app.route('/test/<string:aup>')
