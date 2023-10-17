@@ -25,21 +25,19 @@ class BaseChecker:
         12: CompulsoryDisciplinesCheck,
         13: OptionalDisciplinesCheck,
         14: ClassroomClassesCheck,
-        15: WorkloadControlCheck,
-        16: UnificationStructure,
-        17: UnificationAmountCheck,
+        15: WorkloadControlCheck
     }
 
     @method_time
-    def __init__(self, db_instance: SQLAlchemy, hide_title=False, hide_detailed=False):
+    def __init__(self, db_instance: SQLAlchemy):
         self.db = db_instance
         self.aup: AupInfo | None = None
-        self.creator = ExcelCreator(path='checker/excel/reports(temporary)/', hide_title=hide_title, hide_detailed = hide_detailed)
+        self.creator = ExcelCreator(path='checker/excel/reports(temporary)/')
         value = {el.id: el.title for el in self.db.session.query(D_Period).all()}
         self.creator.period_id_to_title = value
 
     @method_time
-    def _get_report(self, aup: str) -> Report:
+    def _get_report(self, aup: str, hide_title=False, hide_detailed=False) -> Report:
         self.aup = db.session.query(AupInfo).filter_by(num_aup=aup).one()
         print(f"[_get_report] {aup=}")
         report = Report(
@@ -63,10 +61,29 @@ class BaseChecker:
         for association in self.aup.rule_associations:
             test = self.__test_dict[association.rule_id](self.db, self.aup)
             test.fetch_test(association)
-            report.tests.append(test.assert_test())
+            test_result = test.assert_test()
+            if hide_title == True and test_result.result == True:
+                continue
+            report.tests.append(test_result)
+            if hide_detailed == True and test_result.detailed is not None :
+                index = 0
+                while index < len(test_result.detailed):
+                    value = test_result.detailed[index]
+                    if value.result==True:
+                        test_result.detailed.pop(index)
+                    else:
+                        index+=1
+                
+             
+                report.tests.append(test_result)
 
         report.result = all([el.result for el in report.tests])
         return report
+    
+    def _remove_positive_detailed(self, detailed: list[Detailed] | None) -> list[Detailed] | None:
+        if detailed is None:
+            return None
+        return [d for d in detailed if not d.result]
 
     @method_time
     def _get_header_data(self):
