@@ -25,7 +25,7 @@ warnings.simplefilter("ignore")
 
 app = Flask(__name__)
 application = app
-cors = CORS(app, resources={r"*": {"origins": "*"}}, support_credentials=True)
+cors = CORS(app, resources={r"*": {"origins": "*"}}, supports_credentials=True)
 
 app.config.from_pyfile('config.py')
 app.config['CORS_HEADERS'] = 'Content-Type'
@@ -526,21 +526,22 @@ def getControlTypes():
     return make_response(jsonify(control_type_arr), 200)
 
 
-@app.route("/login", methods=['POST'])
+@app.route("/api/login", methods=['POST'])
 def login():
+    request_data = request.get_json()
 
-    if 'Username' not in request.form:
+    if 'username' not in request_data:
         return make_response("Username is required", 401)
 
-    if 'Password' not in request.form:
+    if 'password' not in request_data:
         return make_response("Password is required", 401)
 
-    user = Users.query.filter_by(login=request.form['Username']).first()
+    user = Users.query.filter_by(login=request_data['username']).first()
 
     if not user:
         return make_response("No such user", 400)   # 400?
 
-    if not user.check_password(request.form['Password']):
+    if not user.check_password(request_data['password']):
         return make_response('Incorrect password', 400)
 
     response = {
@@ -551,24 +552,24 @@ def login():
     return make_response(json.dumps(response, ensure_ascii=False), 200)
 
 
-@app.route('/refresh', methods=['POST'])
+@app.route('/api/refresh', methods=['POST'])
 def refresh_view():
-    import jwt
+    request_data = request.get_json()
 
-    if "Access" not in request.form:
+    if "access" not in request_data:
         return make_response("Access token required", 401)
 
-    if "Refresh" not in request.form:
+    if "refresh" not in request_data:
         return make_response("Refresh token required", 401)
 
-    access = request.get_json()['Access']
+    access = request_data['access']
 
     payload, verify_result = verify_jwt_token(access)
 
     if not payload:
         return make_response("Invalid access token", 401)
 
-    if verify_refresh_token(request.form['Refresh']):
+    if verify_refresh_token(request_data['refresh']):
         response = {
             'access': get_access_token(payload['user_id']),
             'refresh': get_refresh_token(payload['user_id'], request.headers['User-Agent']),
@@ -579,9 +580,7 @@ def refresh_view():
         return make_response('Refresh token lifetime expired', 401)
 
 
-
-
-@app.route('/test/<string:aup>')
+@app.route('/api/test/<string:aup>')
 @login_required(request)
 def test(aup):
     return make_response('asdf', 200)

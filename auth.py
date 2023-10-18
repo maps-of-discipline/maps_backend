@@ -9,7 +9,7 @@ import uuid
 from functools import wraps
 
 
-ACCESS_TOKEN_LIFETIME = 24*3600     # 24 hours in seconds
+ACCESS_TOKEN_LIFETIME = 3600    # 1 hour in seconds
 REFRESH_TOKEN_LIFETIME = 7*24*3600      # 7 days in seconds
 
 
@@ -52,17 +52,13 @@ def verify_jwt_token(jwt_token) -> dict | None:
             jwt=jwt_token,
             key=SECRET_KEY,
             algorithms=['HS256'],
-            verify_exp=True,
+            options = {
+                "verify_exp": False
+            }
         ), True
 
     except jwt.exceptions.InvalidSignatureError:
         return None, False
-    except jwt.exceptions.ExpiredSignatureError:
-        return jwt.decode(
-            jwt=jwt_token,
-            key=SECRET_KEY,
-            algorithms=['HS256'],
-        ), False
     except jwt.exceptions.DecodeError:
         return None, False
 
