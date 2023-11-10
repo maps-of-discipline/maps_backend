@@ -52,7 +52,7 @@ def makeLegend(wb, table):
     # return legend
 
 
-def saveMap(aup, static, **kwargs):
+def saveMap(aup, static, papper_size, orientation, **kwargs):
     aup = AupInfo.query.filter_by(num_aup=aup).first()
     data = AupData.query.filter_by(id_aup=aup.id_aup).order_by(AupData.shifr, AupData.discipline, AupData.id_period).all()
     filename_map = aup.file
@@ -121,6 +121,14 @@ def saveMap(aup, static, **kwargs):
     ws.oddFooter.right.size = 14
     ws.oddFooter.right.font = "Arial,Bold"
     ws.oddFooter.right.color = "000000"
+    if papper_size=="3":
+        ws.page_setup.papperSize = ws.PAPERSIZE_A3
+    elif papper_size=="4":
+        ws.page_setup.papperSize = ws.PAPERSIZE_A3
+    if orientation=="land":
+        ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    elif orientation=="port":
+        ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT    
 
     wb.save(filename=filename_map)
     return filename_map
