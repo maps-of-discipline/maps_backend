@@ -25,7 +25,10 @@ class BaseChecker:
         12: CompulsoryDisciplinesCheck,
         13: OptionalDisciplinesCheck,
         14: ClassroomClassesCheck,
-        15: WorkloadControlCheck
+        15: WorkloadControlCheck,
+        16: UnificationStructure,
+        17: UnificationAmountCheck,
+        18: UnificationLoadCheck,
     }
 
     @method_time
@@ -39,7 +42,6 @@ class BaseChecker:
     @method_time
     def _get_report(self, aup: str, hide_title=False, hide_detailed=False) -> Report:
         self.aup = db.session.query(AupInfo).filter_by(num_aup=aup).one()
-        print(f"[_get_report] {aup=}")
         report = Report(
             aup=self.aup.num_aup,
             **self._get_header_data(),
@@ -62,20 +64,14 @@ class BaseChecker:
             test = self.__test_dict[association.rule_id](self.db, self.aup)
             test.fetch_test(association)
             test_result = test.assert_test()
-            if hide_title == True and test_result.result == True:
+
+            if hide_title and test_result.result:
                 continue
+
+            if hide_detailed and test_result.detailed:
+                test_result.detailed = filter(lambda x: not x.result, test_result.detailed)
+
             report.tests.append(test_result)
-            if hide_detailed == True and test_result.detailed is not None :
-                index = 0
-                while index < len(test_result.detailed):
-                    value = test_result.detailed[index]
-                    if value.result==True:
-                        test_result.detailed.pop(index)
-                    else:
-                        index+=1
-                
-             
-                report.tests.append(test_result)
 
         report.result = all([el.result for el in report.tests])
         return report

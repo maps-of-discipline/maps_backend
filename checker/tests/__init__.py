@@ -10,3 +10,4 @@ from .zet_check_by_block import ZetCheckByFirstBlock, ZetCheckBySecondBlock, Zet
 from .zet_check_by_year import ZetCheckByYear
 from .unification_structure import UnificationStructure
 from .unification_amount_check import UnificationAmountCheck
+from .unification_load import UnificationLoadCheck

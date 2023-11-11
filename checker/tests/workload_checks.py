@@ -36,7 +36,7 @@ class WorkloadBaseCheck(BaseTest):
             aup_info_id=self.aup_info.id_aup,
             min=None,
             max=None,
-            ed_izmereniya_id=None,
+            ed_izmereniya_id=3,
         )
 
 

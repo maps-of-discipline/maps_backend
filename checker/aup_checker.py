@@ -22,7 +22,7 @@ class AupChecker(BaseChecker):
         return json.dumps(self._get_report(aup, self.hide_title, self.hide_detailed), cls=DataclassJSONEncoder, ensure_ascii=False)
 
     def get_json_reports(self, aups: list[str]) -> str:
-        return json.dumps([self._get_report(el, self.hide_title, self.hide_detailed) for el in aups])
+        return json.dumps([self._get_report(el, self.hide_title, self.hide_detailed) for el in aups], cls=DataclassJSONEncoder, ensure_ascii=False)
 
     @method_time
     def get_json_reports_by_okso(self, okso: str) -> str:

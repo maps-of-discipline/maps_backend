@@ -33,7 +33,7 @@ class AupDataFilter:
             (3, 2): 1 / 1.5
         }
 
-        if measure_id > 3:
+        if not measure_id or measure_id > 3:
             measure_id = 3
 
         for el in self.filtered():
