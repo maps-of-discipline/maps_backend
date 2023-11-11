@@ -130,6 +130,9 @@ def saveMap(aup, static, papper_size, orientation, **kwargs):
     elif orientation=="port":
         ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT    
 
+    for sheets in wb:
+        sheets.sheet_view.zoomScale = 70
+
     wb.save(filename=filename_map)
     return filename_map
 
