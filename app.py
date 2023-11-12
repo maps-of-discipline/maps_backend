@@ -95,6 +95,7 @@ def check_sum_zet_in_type(data):
 
 
 @app.route('/api/save/<string:aup>', methods=["POST"])
+@login_required(request)
 def saveMap1(aup):
     if request.method == "POST":
         request_data = request.get_json()
@@ -151,6 +152,7 @@ def get_id_edizm():
 
 
 @app.route('/api/upload', methods=["POST", "GET"])
+@login_required(request)
 def upload():
     form = FileForm(meta={'csrf': False})
 
@@ -441,6 +443,7 @@ def GetMaps(id):
 
 
 @app.route('/api/add-group', methods=["POST"])
+@login_required(request)
 def AddNewGroup():
     request_data = request.get_json()
     if request_data['name'] == '':
@@ -456,6 +459,7 @@ def AddNewGroup():
 
 
 @app.route('/api/delete-group', methods=["POST"])
+@login_required(request)
 def DeleteGroup():
     request_data = request.get_json()
     d = AupData.query.filter_by(id_group=request_data['id']).all()
@@ -505,6 +509,7 @@ def GetModulesByAup(aup):
     return make_response(jsonify(l), 200)
 
 @app.route('/api/update-group', methods=["POST"])
+@login_required(request)
 def UpdateGroup():
     request_data = request.get_json()
     gr = Groups.query.filter_by(id_group=request_data['id']).first()
@@ -581,7 +586,21 @@ def refresh_view():
         return make_response('Refresh token lifetime expired', 401)
 
 
+@app.route('/api/user/<int:user_id>')
+@login_required(request)
+def get_user_ingo(user_id):
+    user = Users.query.filter_by(id_user=user_id).first()
+    return make_response(json.dumps({
+        'id': user.id_user,
+        'login': user.login,
+        'role': user.id_role,
+        'department': user.department_id
+    }, sort_keys=False))
+
+
 @app.route('/api/test/<string:aup>')
 @login_required(request)
 def test(aup):
     return make_response('asdf', 200)
+
+

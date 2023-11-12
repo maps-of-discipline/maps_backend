@@ -81,7 +81,7 @@ def login_required(request):
                 return make_response('Authorization token is invalid', 401)
 
             user = Users.query.filter_by(id_user=payload['user_id']).one()
-            aup_info: AupInfo = AupInfo.query.filter_by(num_aup=kwargs['aup']).one()
+            aup_info: AupInfo = AupInfo.query.filter_by(num_aup=request.headers["Aup"]).one()
 
             if payload['role_id'] == 2:
                 if aup_info.id_faculty not in [faq.id_faculty for faq in user.faculties]:
