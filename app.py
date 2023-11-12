@@ -416,10 +416,11 @@ def getAllMaps():
     fac = SprFaculty.query.all()
     li = list()
     for i in fac:
-        simple_d = dict()
-        simple_d["faculty_name"] = i.name_faculty
-        simple_d["directions"] = GetMaps(id=i.id_faculty)
-        li.append(simple_d)
+        li.append({
+            "faculty_id": i.id_faculty,
+            "faculty_name": i.name_faculty,
+            "directions": GetMaps(id=i.id_faculty),
+        })
     return jsonify(li)
 
 
