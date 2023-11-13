@@ -8,6 +8,7 @@ from global_variables import setGlobalVariables, addGlobalVariable, getModuleId,
 from excel_check import excel_check
 from models import Users, D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, AupData, AupInfo, Groups, SprFaculty
 import pandas as pd
+from upload_xml import create_xml
 from openpyxl import load_workbook
 from sqlalchemy.sql.expression import func
 from sqlalchemy import MetaData
@@ -590,3 +591,9 @@ def refresh_view():
 @login_required(request)
 def test(aup):
     return make_response('asdf', 200)
+
+
+@app.route("/api/upload-xml/<string:aup>")
+def upload_xml(aup):
+    res = create_xml(aup)
+    return res
