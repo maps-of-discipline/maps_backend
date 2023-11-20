@@ -1,3 +1,4 @@
+import sqlalchemy.exc
 from flask import make_response
 
 from config import SECRET_KEY
@@ -69,7 +70,7 @@ def verify_refresh_token(token: str) -> bool:
     return current_token.refresh_token == token and current_token.ttl > time()
 
 
-def login_required(request):
+def login_required(request ):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
@@ -80,8 +81,25 @@ def login_required(request):
             if not payload or not verify_result:
                 return make_response('Authorization token is invalid', 401)
 
+            result = f(*args, **kwargs)
+            return result
+        return decorated_function
+    return decorator
+
+
+def aup_require(request):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            payload, verify_result = verify_jwt_token(request.headers["Authorization"])
+
             user = Users.query.filter_by(id_user=payload['user_id']).one()
-            aup_info: AupInfo = AupInfo.query.filter_by(num_aup=request.headers["Aup"]).one()
+            if not ('aup' in request.form and request.form['aup']):
+                return make_response('aup is required', 401)
+            try:
+                aup_info: AupInfo = AupInfo.query.filter_by(num_aup=request.form['aup']).one()
+            except sqlalchemy.exc.NoResultFound:
+                return make_response("No such aup found", 404)
 
             if payload['role_id'] == 2:
                 if aup_info.id_faculty not in [faq.id_faculty for faq in user.faculties]:

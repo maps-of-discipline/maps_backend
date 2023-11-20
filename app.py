@@ -587,8 +587,7 @@ def refresh_view():
 
 
 @app.route('/api/user/<int:user_id>')
-@login_required(request)
-def get_user_ingo(user_id):
+def get_user_info(user_id):
     user = Users.query.filter_by(id_user=user_id).first()
     return make_response(json.dumps({
         'id': user.id_user,
@@ -600,6 +599,7 @@ def get_user_ingo(user_id):
 
 @app.route('/api/test/<string:aup>')
 @login_required(request)
+@aup_require(request)
 def test(aup):
     return make_response('asdf', 200)
 
