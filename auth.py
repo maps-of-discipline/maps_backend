@@ -1,3 +1,4 @@
+import sqlalchemy.exc
 from flask import make_response
 
 from config import SECRET_KEY
@@ -9,7 +10,7 @@ import uuid
 from functools import wraps
 
 
-ACCESS_TOKEN_LIFETIME = 24*3600     # 24 hours in seconds
+ACCESS_TOKEN_LIFETIME = 3600    # 1 hour in seconds
 REFRESH_TOKEN_LIFETIME = 7*24*3600      # 7 days in seconds
 
 
@@ -52,15 +53,15 @@ def verify_jwt_token(jwt_token) -> dict | None:
             jwt=jwt_token,
             key=SECRET_KEY,
             algorithms=['HS256'],
-            verify_exp=True,
-        )
+            options = {
+                "verify_exp": False
+            }
+        ), True
 
     except jwt.exceptions.InvalidSignatureError:
-        return None
-    except jwt.exceptions.ExpiredSignatureError:
-        return None
+        return None, False
     except jwt.exceptions.DecodeError:
-        return None
+        return None, False
 
 
 def verify_refresh_token(token: str) -> bool:
@@ -69,19 +70,36 @@ def verify_refresh_token(token: str) -> bool:
     return current_token.refresh_token == token and current_token.ttl > time()
 
 
-def login_required(request):
+def login_required(request ):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
             if 'Authorization' not in request.headers or request.headers['Authorization'] is None:
                 return make_response('Authorization header is required', 401)
 
-            payload = verify_jwt_token(request.headers["Authorization"])
-            if not payload:
+            payload, verify_result = verify_jwt_token(request.headers["Authorization"])
+            if not payload or not verify_result:
                 return make_response('Authorization token is invalid', 401)
 
+            result = f(*args, **kwargs)
+            return result
+        return decorated_function
+    return decorator
+
+
+def aup_require(request):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            payload, verify_result = verify_jwt_token(request.headers["Authorization"])
+
             user = Users.query.filter_by(id_user=payload['user_id']).one()
-            aup_info: AupInfo = AupInfo.query.filter_by(num_aup=kwargs['aup']).one()
+            if not ('aup' in request.form and request.form['aup']):
+                return make_response('aup is required', 401)
+            try:
+                aup_info: AupInfo = AupInfo.query.filter_by(num_aup=request.form['aup']).one()
+            except sqlalchemy.exc.NoResultFound:
+                return make_response("No such aup found", 404)
 
             if payload['role_id'] == 2:
                 if aup_info.id_faculty not in [faq.id_faculty for faq in user.faculties]:
@@ -104,8 +122,8 @@ def admin_only(request):
             if 'Authorization' not in request.headers or request.headers['Authorization'] is None:
                 return make_response('Authorization header is required', 401)
 
-            payload = verify_jwt_token(request.headers["Authorization"])
-            if not payload:
+            payload, verify_result = verify_jwt_token(request.headers["Authorization"])
+            if not payload or not verify_result:
                 return make_response('Authorization token is invalid', 401)
 
             if payload['role_id'] != 1:

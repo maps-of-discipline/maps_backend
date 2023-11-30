@@ -25,7 +25,7 @@ warnings.simplefilter("ignore")
 
 app = Flask(__name__)
 application = app
-cors = CORS(app, resources={r"*": {"origins": "*"}})
+cors = CORS(app, resources={r"*": {"origins": "*"}}, supports_credentials=True)
 
 app.config.from_pyfile('config.py')
 app.config['CORS_HEADERS'] = 'Content-Type'
@@ -95,6 +95,7 @@ def check_sum_zet_in_type(data):
 
 
 @app.route('/api/save/<string:aup>', methods=["POST"])
+@login_required(request)
 def saveMap1(aup):
     if request.method == "POST":
         request_data = request.get_json()
@@ -151,6 +152,7 @@ def get_id_edizm():
 
 
 @app.route('/api/upload', methods=["POST", "GET"])
+@login_required(request)
 def upload():
     form = FileForm(meta={'csrf': False})
 
@@ -416,10 +418,11 @@ def getAllMaps():
     fac = SprFaculty.query.all()
     li = list()
     for i in fac:
-        simple_d = dict()
-        simple_d["faculty_name"] = i.name_faculty
-        simple_d["directions"] = GetMaps(id=i.id_faculty)
-        li.append(simple_d)
+        li.append({
+            "faculty_id": i.id_faculty,
+            "faculty_name": i.name_faculty,
+            "directions": GetMaps(id=i.id_faculty),
+        })
     return jsonify(li)
 
 
@@ -440,6 +443,7 @@ def GetMaps(id):
 
 
 @app.route('/api/add-group', methods=["POST"])
+@login_required(request)
 def AddNewGroup():
     request_data = request.get_json()
     if request_data['name'] == '':
@@ -455,6 +459,7 @@ def AddNewGroup():
 
 
 @app.route('/api/delete-group', methods=["POST"])
+@login_required(request)
 def DeleteGroup():
     request_data = request.get_json()
     d = AupData.query.filter_by(id_group=request_data['id']).all()
@@ -504,6 +509,7 @@ def GetModulesByAup(aup):
     return make_response(jsonify(l), 200)
 
 @app.route('/api/update-group', methods=["POST"])
+@login_required(request)
 def UpdateGroup():
     request_data = request.get_json()
     gr = Groups.query.filter_by(id_group=request_data['id']).first()
@@ -526,21 +532,22 @@ def getControlTypes():
     return make_response(jsonify(control_type_arr), 200)
 
 
-@app.route("/login", methods=['POST'])
+@app.route("/api/login", methods=['POST'])
 def login():
+    request_data = request.get_json()
 
-    if 'Username' not in request.form:
+    if 'username' not in request_data:
         return make_response("Username is required", 401)
 
-    if 'Password' not in request.form:
+    if 'password' not in request_data:
         return make_response("Password is required", 401)
 
-    user = Users.query.filter_by(login=request.form['Username']).first()
+    user = Users.query.filter_by(login=request_data['username']).first()
 
     if not user:
         return make_response("No such user", 400)   # 400?
 
-    if not user.check_password(request.form['Password']):
+    if not user.check_password(request_data['password']):
         return make_response('Incorrect password', 400)
 
     response = {
@@ -551,37 +558,49 @@ def login():
     return make_response(json.dumps(response, ensure_ascii=False), 200)
 
 
-@app.route('/refresh', methods=['POST'])
+@app.route('/api/refresh', methods=['POST'])
 def refresh_view():
-    import jwt
+    request_data = request.get_json()
 
-    if "Access" not in request.form:
+    if "access" not in request_data:
         return make_response("Access token required", 401)
 
-    if "Refresh" not in request.form:
+    if "refresh" not in request_data:
         return make_response("Refresh token required", 401)
 
-    access = request.form['Access']
+    access = request_data['access']
 
-    payload = verify_jwt_token(access)
+    payload, verify_result = verify_jwt_token(access)
+
     if not payload:
         return make_response("Invalid access token", 401)
 
-    if verify_refresh_token(request.form['Refresh']):
-        access_token = get_access_token(payload['user_id'])
-        refresh_token = get_refresh_token(payload['user_id'], request.headers['User-Agent'])
+    if verify_refresh_token(request_data['refresh']):
+        response = {
+            'access': get_access_token(payload['user_id']),
+            'refresh': get_refresh_token(payload['user_id'], request.headers['User-Agent']),
+        }
+
+        return make_response(json.dumps(response), 200)
     else:
         return make_response('Refresh token lifetime expired', 401)
 
-    response = {
-        'access': get_access_token(payload['user_id']),
-        'refresh': get_refresh_token(payload['user_id'], request.headers['User-Agent']),
-    }
 
-    return make_response(json.dumps(response), 200)
+@app.route('/api/user/<int:user_id>')
+def get_user_info(user_id):
+    user = Users.query.filter_by(id_user=user_id).first()
+    return make_response(json.dumps({
+        'id': user.id_user,
+        'login': user.login,
+        'role': user.id_role,
+        'department': user.department_id
+    }, sort_keys=False))
 
 
-@app.route('/test/<string:aup>')
+@app.route('/api/test/<string:aup>')
 @login_required(request)
+@aup_require(request)
 def test(aup):
     return make_response('asdf', 200)
+
+
