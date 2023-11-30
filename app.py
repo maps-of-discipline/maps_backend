@@ -8,6 +8,7 @@ from global_variables import setGlobalVariables, addGlobalVariable, getModuleId,
 from excel_check import excel_check
 from models import Users, D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, AupData, AupInfo, Groups, SprFaculty
 import pandas as pd
+from upload_xml import create_xml
 from openpyxl import load_workbook
 from sqlalchemy.sql.expression import func
 from sqlalchemy import MetaData
@@ -385,7 +386,13 @@ def getAupData(file):
 # путь для загрузки сформированной КД
 @app.route("/api/save_excel/<string:aup>", methods=["GET"])
 def save_excel(aup):
-    filename = saveMap(aup, app.static_folder, expo=60)
+    try:
+        paper_size = json.loads(request.form['paper_size'])
+        orientation = json.loads(request.form['orientation'])
+    except:
+        paper_size = "3"
+        orientation = "land"
+    filename = saveMap(aup, app.static_folder, paper_size, orientation, expo=60)
     # Upload xlxs file in memory and delete file from storage -----
     return_data = io.BytesIO()
     with open(filename, 'rb') as fo:
@@ -604,3 +611,7 @@ def test(aup):
     return make_response('asdf', 200)
 
 
+@app.route("/api/upload-xml/<string:aup>")
+def upload_xml(aup):
+    res = create_xml(aup)
+    return res
