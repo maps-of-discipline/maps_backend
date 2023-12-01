@@ -244,7 +244,7 @@ def excel_check(path, aup, options_check):
     err_arr = check_empty_ceils(path)
     if err_arr != []:
         message = {
-            "message": f'АУП: {aup} В документе не заполнены ячейки',
+            "message": f'В документе не заполнены ячейки',
             "cells": [el for el in err_arr]
         }
 
@@ -258,7 +258,7 @@ def excel_check(path, aup, options_check):
         err_arr = check_smt1(path)
         if err_arr != []:
             errors = {
-                'message': f'АУП: {aup}. Ошибка при подсчете ЗЕТ:\n' + '\n'.join(err_arr)
+                'message': f'Ошибка при подсчете ЗЕТ' + '\n'.join(err_arr)
             }
             return_err_arr.append(errors)
 

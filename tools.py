@@ -40,8 +40,8 @@ def timeit(func):
     return timeit_wrapper
 
 
-class FileForm(FlaskForm):
-    file = FileField(validators=[FileRequired(), FileAllowed(["xlsx", "xls"], "xlsx only!")])
+# class FileForm(FlaskForm):
+#     file = FileField(validators=[FileRequired(), FileAllowed(["xlsx", "xls"], "xlsx only!")])
 
 
 def get_maximum_rows(*, sheet_object):  # Взять максимальное значение строк в плане

@@ -2,7 +2,7 @@ from take_from_bd import (blocks, blocks_r, period, period_r, control_type, cont
                           ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r, create_json, create_json_test)
 import json
 from print_excel import saveMap
-from tools import FileForm, take_aup_from_excel_file, error, timeit
+from tools import take_aup_from_excel_file, error, timeit
 from save_into_bd import SaveCard
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
 from excel_check import excel_check
@@ -156,57 +156,64 @@ def get_id_edizm():
 @timeit
 # @login_required(request)
 def upload():
-    form = FileForm(meta={'csrf': False})
-
+    # form = FileForm(meta={'csrf': False})
+    print(request.files)
     if request.method == "POST":
-        if form.validate_on_submit():
-            files = request.files.getlist("file")
-            res = list()
-            for f in files:
-                options_check = json.loads(request.form['options'])
-                print(options_check)
-                # options_check = dict()
-                # options_check['enableCheckIntegrality'] = False
-                # options_check['enableCheckSumMap'] = False
+        files = request.files.getlist("file")
+        result_list = list()
+        for f in files:
+            options_check = json.loads(request.form['options'])
+            print(options_check)
+            # options_check = dict()
+            # options_check['enableCheckIntegrality'] = False
+            # options_check['enableCheckSumMap'] = False
 
-                # aup = f.filename.split(' - ')[1].strip()
-                ### путь к файлу на диске
+            # aup = f.filename.split(' - ')[1].strip()
+            ### путь к файлу на диске
 
-                path = os.path.join(app.static_folder, 'temp', f.filename)
+            path = os.path.join(app.static_folder, 'temp', f.filename)
 
-                # сохранить временный файл с учебным планом
-                f.save(path)
+            # сохранить временный файл с учебным планом
+            f.save(path)
 
-                # Вытащить из файла номер аупа
-                aup = take_aup_from_excel_file(path)
+            # Вытащить из файла номер аупа
+            aup = take_aup_from_excel_file(path)
 
-                # одна функция, описанная в отдельном файле, которая будет выполнять все проверки
-                err_arr = excel_check(path, aup, options_check)
-                if err_arr != []:
-                    os.remove(path)
-                    return error(err_arr)
+            # одна функция, описанная в отдельном файле, которая будет выполнять все проверки
 
-                # словарь с содержимым 1 листа
-                aupInfo = getAupInfo(path, f.filename)
+            result = {
+                'aup': aup,
+                'filename': f.filename,
+                'errors': excel_check(path, aup, options_check)
+            }
 
-                # берём aupInfo["num"] и смотрим, есть ли в БД уже такая карта, если есть, то редиректим на страницу с этой картой ???
-                # Можно сделать всплывающее окно: "Хотите перезаписать существующий учебный план?" и ответы "Да" и "Нет".
-                # Если нет, то просто редиректим на карту, если да, то просто стираем все по номеру аупа в aupData
-                # (в SaveCard уже реализован этот функционал)
+            result_list.append(result)
 
-                # массив с содержимым 2 листа
-                aupData = getAupData(path)
-                # json = create_json(aupData, aupInfo)
-                # сохранение карты
-                SaveCard(db, aupInfo, aupData)
-                f.close()
-                # удалить временный файл
+            if result['errors']:
                 os.remove(path)
-                res.append(aup)
+                continue
 
-            return make_response(jsonify(res), 200)
+            # словарь с содержимым 1 листа
+            aupInfo = getAupInfo(path, f.filename)
+
+            # берём aupInfo["num"] и смотрим, есть ли в БД уже такая карта, если есть, то редиректим на страницу с этой картой ???
+            # Можно сделать всплывающее окно: "Хотите перезаписать существующий учебный план?" и ответы "Да" и "Нет".
+            # Если нет, то просто редиректим на карту, если да, то просто стираем все по номеру аупа в aupData
+            # (в SaveCard уже реализован этот функционал)
+
+            # массив с содержимым 2 листа
+            aupData = getAupData(path)
+            # json = create_json(aupData, aupInfo)
+            # сохранение карты
+            SaveCard(db, aupInfo, aupData)
+            f.close()
+            # удалить временный файл
+            os.remove(path)
+
+
+        return make_response(jsonify(result_list), 200)
     else:
-        return render_template("upload.html", form=form)
+        return make_response(jsonify("Only post method"), 400)
 
 
 def getAupInfo(file, filename):
@@ -606,9 +613,11 @@ def get_user_info(user_id):
 
 
 @app.route('/api/test/<string:aup>')
-@login_required(request)
-@aup_require(request)
+# @login_required(request)
+# @aup_require(request)
 def test(aup):
+    aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
+    aup_info.copy()
     return make_response('asdf', 200)
 
 
