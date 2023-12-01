@@ -2,7 +2,7 @@ from take_from_bd import (blocks, blocks_r, period, period_r, control_type, cont
                           ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r, create_json, create_json_test)
 import json
 from print_excel import saveMap
-from tools import FileForm, take_aup_from_excel_file, error
+from tools import FileForm, take_aup_from_excel_file, error, timeit
 from save_into_bd import SaveCard
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
 from excel_check import excel_check
@@ -153,6 +153,7 @@ def get_id_edizm():
 
 
 @app.route('/api/upload', methods=["POST", "GET"])
+@timeit
 # @login_required(request)
 def upload():
     form = FileForm(meta={'csrf': False})
@@ -198,7 +199,7 @@ def upload():
                 # json = create_json(aupData, aupInfo)
                 # сохранение карты
                 SaveCard(db, aupInfo, aupData)
-
+                f.close()
                 # удалить временный файл
                 os.remove(path)
                 res.append(aup)

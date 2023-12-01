@@ -2,12 +2,12 @@ from collections import defaultdict
 from math import ceil
 import os
 from openpyxl import load_workbook
-from tools import get_maximum_rows, skiplist, sems
+from tools import get_maximum_rows, skiplist, sems, timeit
 from models import SprStandard, SprVolumeDegreeZET
 
 
 def check_smt1(file):  # проверка на целочисленность дисциплины №2
-    wb = load_workbook(file, read_only=True)
+    wb = load_workbook(file)
     ws = wb['Лист2']
     max_row = get_maximum_rows(sheet_object=ws)
     d = defaultdict(list)
@@ -54,6 +54,8 @@ def check_smt1(file):  # проверка на целочисленность д
         for key1, value1 in ddd.items():
             if not (value1 / 3600).is_integer():
                 ret_arr.append("{0}: {1} {2}".format(key, key1, value1 / 3600))
+
+    wb.save(file)
     return ret_arr
 
 
@@ -141,6 +143,7 @@ def check_empty_ceils(file):  # Проверка на пустые обязат�
     # if err_arr == []:
     #     return True, err_arr
     # else:
+    wb.save(file)
     return err_arr
 
 
@@ -174,6 +177,7 @@ def layout_of_disciplines(file):  # Компоновка элективных д
 
 
 # Проверка, чтобы общая сумма ЗЕТ соответствовало норме (30 * кол-во семестров)
+
 def check_full_zet_in_plan(file):
     wb = load_workbook(file)
     ws = wb['Лист2']
@@ -223,6 +227,7 @@ def check_full_zet_in_plan(file):
     # if sum_normal == sum_zet:
     #     return True, None, None
     # else:
+    wb.save(file)
     return sum_normal, sum_zet
 
 
