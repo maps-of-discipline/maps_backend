@@ -153,7 +153,7 @@ def get_id_edizm():
 
 
 @app.route('/api/upload', methods=["POST", "GET"])
-@login_required(request)
+# @login_required(request)
 def upload():
     form = FileForm(meta={'csrf': False})
 
@@ -183,7 +183,7 @@ def upload():
                 err_arr = excel_check(path, aup, options_check)
                 if err_arr != []:
                     os.remove(path)
-                    return error('\n'.join(err_arr))
+                    return error(err_arr)
 
                 # словарь с содержимым 1 листа
                 aupInfo = getAupInfo(path, f.filename)
@@ -615,3 +615,5 @@ def test(aup):
 def upload_xml(aup):
     res = create_xml(aup)
     return res
+
+

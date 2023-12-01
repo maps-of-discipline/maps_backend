@@ -1,3 +1,5 @@
+import json
+
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileRequired, FileAllowed
 from flask import make_response, jsonify
@@ -41,7 +43,7 @@ def take_aup_from_excel_file(file):
     return str(wb['Лист1']['B2'].value)
 
 def error(errors):
-    return make_response(jsonify(errors), 400)
+    return make_response(json.dumps(errors, ensure_ascii=False), 400)
 
 
 def check_skiplist(zet_or_hours, value_discipline, value_record_type, value_block):

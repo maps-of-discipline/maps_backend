@@ -242,6 +242,9 @@ def excel_check(path, aup, options_check):
         errors = 'АУП: ' + aup + ' В документе не заполнены ячейки:' + ', '.join(err_arr)
         print(errors)
         return_err_arr.append(errors)
+
+    if return_err_arr != []:
+        return return_err_arr
     ### ------------------------------------ ###
 
     # ### Проверка на целочисленность ЗЕТ у каждой дисциплины ###
@@ -251,11 +254,12 @@ def excel_check(path, aup, options_check):
             errors = 'АУП: ' + aup + ' Ошибка при подсчете ЗЕТ:\n' + '\n'.join(err_arr)
             print(errors)
             return_err_arr.append(errors)
+
+    if return_err_arr != []:
+        return return_err_arr
     # ### ------------------------------------ ###
 
-    ### Компановка элективных курсов ###
-    layout_of_disciplines(path)
-    ### ---------------------------- ###
+
 
     # ### ------------------------------------ ###
     # ### Проверка, чтобы общая сумма ЗЕТ соответствовало норме (30 * кол-во семестров) ###
@@ -266,5 +270,14 @@ def excel_check(path, aup, options_check):
             errors = 'АУП: ' + aup + ' В выгрузке общая сумма ЗЕТ не соответствует норме. Норма {} ЗЕТ. В карте {} ЗЕТ.'.format(sum_normal, sum_zet)
             print(errors)
             return_err_arr.append(errors)
+
+    if return_err_arr != []:
+        return return_err_arr
     # ### ------------------------------------ ###
+
+    ### Компановка элективных курсов ###
+        layout_of_disciplines(path)
+    ### ---------------------------- ###
+
+
     return return_err_arr
