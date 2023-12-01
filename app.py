@@ -615,5 +615,3 @@ def test(aup):
 def upload_xml(aup):
     res = create_xml(aup)
     return res
-
-
