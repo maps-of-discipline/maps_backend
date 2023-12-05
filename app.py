@@ -2,7 +2,7 @@ from take_from_bd import (blocks, blocks_r, period, period_r, control_type, cont
                           ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r, create_json, create_json_test)
 import json
 from print_excel import saveMap
-from tools import take_aup_from_excel_file, error, timeit
+from tools import take_aup_from_excel_file, error, timeit, prepare_shifr
 from save_into_bd import SaveCard
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
 from excel_check import excel_check
@@ -127,7 +127,7 @@ def save_loop(i, in_type, l, request_data):
             row.id_block = request_data[i]['id_block']
             row.id_module = request_data[i]['id_module']
             row.id_part = request_data[i]['id_part']
-            row.shifr = request_data[i]['shifr']
+            row.shifr = prepare_shifr(request_data[i]['shifr'])
             l.append(row)
         except:
             return make_response('Save error', 400)
@@ -283,6 +283,8 @@ def getAupData(file):
 
         # if row[5]is None:
         # print(i, row[5])
+
+        row[1] = prepare_shifr(row[1])
 
         val = row[0]
         row[0] = blocks.get(val)

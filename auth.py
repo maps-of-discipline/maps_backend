@@ -47,7 +47,7 @@ def get_refresh_token(user_id: int, user_agent: str) -> str:
     return refresh_token
 
 
-def verify_jwt_token(jwt_token) -> dict | None:
+def verify_jwt_token(jwt_token) -> dict:
     try:
         return jwt.decode(
             jwt=jwt_token,

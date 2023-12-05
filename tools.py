@@ -72,4 +72,10 @@ def check_skiplist(zet_or_hours, value_discipline, value_record_type, value_bloc
     else:
         return False
 
-
+def prepare_shifr(shifr):
+    if len(shifr) > 2 and shifr[1] == '.':
+        # Если второй символ - точка, удалить её
+        return shifr[:1] + shifr[2:]
+    else:
+        # В противном случае вернуть оригинальную строку
+        return shifr
