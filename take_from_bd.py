@@ -1,4 +1,4 @@
-from tools import check_skiplist
+from tools import check_skiplist, prepare_shifr
 from models import AupData, AupInfo, Groups
 blocks = {}
 blocks_r = {}
@@ -49,7 +49,9 @@ def create_json(aup):
             d["discipline"] = item.discipline
             d["id_group"] = item.id_group
             d["id_block"] = item.id_block
+            # TODO удалить после того, как фронт подстроится под shifr_new
             d["shifr"] = item.shifr
+            d["shifr_new"] = get_shifr(item.shifr)
             d["id_part"] = item.id_part
             d["id_module"] = item.id_module
             d["num_col"] = item.id_period - 1 
@@ -95,6 +97,42 @@ def create_json(aup):
         if json["data"][num]["is_skip"] == True:
             del json["data"][num]
     return json
+
+def get_shifr(shifr):
+    shifr = prepare_shifr(shifr)
+    shifr_array = str.split(shifr, ".")
+    if len(shifr_array) == 4:
+        return {
+            "shifr": shifr,
+            "block": shifr_array[0],
+            "part": shifr_array[1],
+            "module": shifr_array[2],
+            "discipline": shifr_array[3]
+        }
+    elif len(shifr_array) == 3:
+        return {
+            "shifr": shifr,
+            "block": shifr_array[0],
+            "part": shifr_array[1],
+            "module": None,
+            "discipline": shifr_array[2]
+        }
+    elif len(shifr_array) == 2:
+        return {
+            "shifr": shifr,
+            "block": shifr_array[0],
+            "part": None,
+            "module": None,
+            "discipline": shifr_array[1]
+        } 
+    else:
+        return {
+            "shifr": shifr,
+            "block": None,
+            "part": None,
+            "module": None,
+            "discipline": None
+        }
 
 
 def create_json_test(aupInfo, aupData, max_column, max_row):
