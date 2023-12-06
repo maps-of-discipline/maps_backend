@@ -120,8 +120,40 @@ class AupInfo(db.Model):
     rop = db.relationship('SprRop')
     department = db.relationship('Department')
 
+
     def __repr__(self):
         return '<№ AUP %r>' % self.num_aup
+
+    def copy(self, num=None, file=None):
+        new_aup: AupInfo = AupInfo(
+            file=file if file else "",
+            num_aup=num if num else self.num_aup,
+            base=self.base,
+            id_faculty=self.id_faculty,
+            id_rop=self.id_rop,
+            type_educ=self.type_educ,
+            qualification=self.qualification,
+            type_standard=self.type_standard,
+            id_department=self.id_department,
+            period_educ=self.period_educ,
+            id_degree=self.id_degree,
+            id_form=self.id_form,
+            years=self.years,
+            months=self.months,
+            id_spec=self.id_spec,
+            year_beg=self.year_beg,
+            year_end=self.year_end,
+            is_actual=False,
+        )
+        print(new_aup, '\n')
+
+        db.session.add(new_aup)
+
+        aup_data_queryset = AupData.query.filter_by(id_aup=self.id_aup).all()
+        db.session.add_all([el.copy(new_aup) for el in aup_data_queryset])
+
+        db.session.commit()
+
 
 
 class Department(db.Model):
@@ -291,7 +323,27 @@ class AupData(db.Model):
     ed_izmereniya = db.relationship('D_EdIzmereniya')
 
     def __repr__(self):
-        return '<AupData %r>' % self.aup_num
+        return '<AupData %r>' % self.aup.num_aup
+
+    def copy(self, parent: AupInfo):
+        print(f'coping of aup_data {self.id}')
+        return AupData(
+            id_aup=parent.id_aup,
+            id_block=self.id_block,
+            shifr=self.shifr,
+            id_part=self.id_part,
+            id_module=self.id_module,
+            id_group=self.id_group,
+            id_type_record=self.id_type_record,
+            discipline=self.discipline,
+            id_period=self.id_period,
+            num_row=self.num_row,
+            id_type_control=self.id_type_control,
+            amount=self.amount,
+            id_edizm=self.id_edizm,
+            zet=self.zet,
+        )
+
 
 
 users_faculty_table = db.Table(
