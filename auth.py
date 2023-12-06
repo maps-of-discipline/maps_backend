@@ -70,7 +70,7 @@ def verify_refresh_token(token: str) -> bool:
     return current_token.refresh_token == token and current_token.ttl > time()
 
 
-def login_required(request ):
+def login_required(request):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):

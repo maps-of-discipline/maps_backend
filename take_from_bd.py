@@ -64,7 +64,7 @@ def create_json(aup):
                 d["is_skip"] = False
             zet = dict()
             zet["amount"] = item.amount / 100
-            zet["id_edizm"] = item.ed_izmereniya.id
+            zet["in_hours"] = item.ed_izmereniya.id == 1
             zet["id"] = item.id
             zet["control_type_id"] = item.id_type_control
             zet["type"] = getType(item.id_type_control)
@@ -80,7 +80,7 @@ def create_json(aup):
             d["id"] += str(item.id)
             zet = dict()
             zet["amount"] = item.amount / 100
-            zet["id_edizm"] = item.ed_izmereniya.id
+            zet["in_hours"] = item.ed_izmereniya.id == 1
             zet["id"] = item.id
             zet["control_type_id"] = item.id_type_control
             zet["type"] = getType(item.id_type_control)
@@ -104,7 +104,7 @@ def get_shifr(shifr):
     if len(shifr_array) == 4:
         return {
             "shifr": shifr,
-            "block": shifr_array[0],
+            "block": shifr_array[0].replace("Б", ""),
             "part": shifr_array[1],
             "module": shifr_array[2],
             "discipline": shifr_array[3]
@@ -112,7 +112,7 @@ def get_shifr(shifr):
     elif len(shifr_array) == 3:
         return {
             "shifr": shifr,
-            "block": shifr_array[0],
+            "block": shifr_array[0].replace("Б", ""),
             "part": shifr_array[1],
             "module": None,
             "discipline": shifr_array[2]
@@ -120,7 +120,7 @@ def get_shifr(shifr):
     elif len(shifr_array) == 2:
         return {
             "shifr": shifr,
-            "block": shifr_array[0],
+            "block": shifr_array[0].replace("Б", ""),
             "part": None,
             "module": None,
             "discipline": shifr_array[1]
