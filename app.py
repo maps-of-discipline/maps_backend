@@ -119,7 +119,7 @@ def save_loop(i, in_type, l, request_data):
                 id=request_data[i]['type'][in_type][j]['id']).first()
             row.discipline = request_data[i]['discipline']
             row.amount = request_data[i]['type'][in_type][j]['amount']*100
-            row.id_edizm = request_data[i]['type'][in_type][j]['id_edizm']
+            row.id_edizm = 1 if request_data[i]['type'][in_type][j]['amount_type'] == 'hour' else 2
             row.control_type_id = request_data[i]['type'][in_type][j]['control_type_id']
             row.id_period = request_data[i]['num_col'] + 1
             row.num_row = request_data[i]['num_row']
