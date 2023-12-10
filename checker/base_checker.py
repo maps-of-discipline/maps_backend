@@ -69,7 +69,7 @@ class BaseChecker:
                 continue
 
             if hide_detailed and test_result.detailed:
-                test_result.detailed = filter(lambda x: not x.result, test_result.detailed)
+                test_result.detailed = list(filter(lambda x: not x.result, test_result.detailed))
 
             report.tests.append(test_result)
 
