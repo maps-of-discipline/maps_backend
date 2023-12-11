@@ -625,5 +625,11 @@ def test(aup):
 
 @app.route("/api/upload-xml/<string:aup>")
 def upload_xml(aup):
-    res = create_xml(aup)
-    return res
+    filename = create_xml(aup)
+
+    data = io.BytesIO()
+    with open(filename, 'rb') as res:
+        data.write(res.read())
+    data.seek(0)
+
+    return send_file(data, download_name="sample.txt")

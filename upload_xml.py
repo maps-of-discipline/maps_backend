@@ -238,4 +238,4 @@ def create_xml(aup):
     save.write("sample.txt", encoding='UTF-8')
     # save.save(filename=filename_xml)
     # return doc
-    return open("sample.txt", 'r')
+    return "sample.txt"
