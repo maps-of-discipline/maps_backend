@@ -29,7 +29,7 @@ warnings.simplefilter("ignore")
 
 app = Flask(__name__)
 application = app
-cors = CORS(app, resources={r"*": {"origins": "*"}})
+cors = CORS(app, resources={r"*": {"origins": "*"}}, supports_credentials=True)
 
 app.config.from_pyfile('config.py')
 app.config['CORS_HEADERS'] = 'Content-Type'
@@ -546,7 +546,7 @@ def getControlTypes():
     return make_response(jsonify(control_type_arr), 200)
 
 
-@app.route("/check/<string:aup>")
+@app.route("/api/check/<string:aup>", methods=["GET"])
 def check_aup(aup: str):
     hidetitle = bool(request.args.get('hide_title', default=False))
     hidedetailed = bool(request.args.get('hide_detailed', default=False))
