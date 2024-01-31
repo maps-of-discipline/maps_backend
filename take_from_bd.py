@@ -13,6 +13,10 @@ chast_r = {}
 type_record = {}
 type_record_r = {}
 
+allow_control_types_block1 = [1, 2, 3, 4, 5, 6, 7, 9, 17]
+allow_control_types_block2 = [10, 11, 13, 16, 19, 20, 21]
+allow_control_types_block3 = [12, 14, 15]
+
 def getType(id):
     l = [1, 5, 9]
     if id in l:
@@ -52,6 +56,7 @@ def create_json(aup):
             # TODO удалить после того, как фронт подстроится под shifr_new
             d["shifr"] = item.shifr
             d["shifr_new"] = get_shifr(item.shifr)
+            d["allow_control_types"] = get_allow_control_types(item.shifr)
             d["id_part"] = item.id_part
             d["id_module"] = item.id_module
             d["num_col"] = item.id_period - 1 
@@ -133,6 +138,17 @@ def get_shifr(shifr):
             "module": None,
             "discipline": None
         }
+    
+def get_allow_control_types(shifr):
+    shifr_array = str.split(shifr, ".")
+    part = shifr_array[0][1]
+    if part == '1':
+        return allow_control_types_block1
+    if part == '2':
+        return allow_control_types_block2
+    if part == '3':
+        return allow_control_types_block3
+    return None
 
 
 def create_json_test(aupInfo, aupData, max_column, max_row):
