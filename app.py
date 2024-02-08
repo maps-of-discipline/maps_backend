@@ -1,3 +1,4 @@
+
 from take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
                           ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r, create_json, create_json_test)
 import json
@@ -66,6 +67,32 @@ setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, contro
 
 if os.path.exists(app.static_folder + '/temp') == False: 
     os.makedirs(app.static_folder + '/temp', exist_ok=True)
+
+
+@app.cli.command('create-user')
+def create_user():
+    username = input('Username: ')
+    password = input('Password: ')
+
+    role_to_id = {'admin': 1, 'faculty': 2, 'department': 3}
+    role = input('User role (admin, faculty, department): ')
+
+    user = Users()
+    user.login = username
+    user.set_password(password)
+
+    try:
+        user.id_role = role_to_id[role]
+    except KeyError:
+        print('Incorrect role!')
+        return
+
+    db.session.add(user)
+    db.session.commit()
+
+    print(f"User {username} created!")
+
+
 
 @app.route("/api/map/<string:aup>")
 def getMap(aup):

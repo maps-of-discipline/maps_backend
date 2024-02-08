@@ -141,14 +141,16 @@ def get_shifr(shifr):
     
 def get_allow_control_types(shifr):
     shifr_array = str.split(shifr, ".")
-    part = shifr_array[0][1]
-    if part == '1':
-        return allow_control_types_block1
-    if part == '2':
-        return allow_control_types_block2
-    if part == '3':
-        return allow_control_types_block3
-    return None
+    try:
+        part = shifr_array[0][1]
+        if part == '1':
+            return allow_control_types_block1
+        if part == '2':
+            return allow_control_types_block2
+        if part == '3':
+            return allow_control_types_block3
+    except:
+        return None
 
 
 def create_json_test(aupInfo, aupData, max_column, max_row):
