@@ -94,10 +94,8 @@ def aup_require(request):
             payload, verify_result = verify_jwt_token(request.headers["Authorization"])
 
             user = Users.query.filter_by(id_user=payload['user_id']).one()
-            if not ('Aup' in request.headers and request.headers['Aup']):
-                return make_response('aup is required', 401)
             try:
-                aup_info: AupInfo = AupInfo.query.filter_by(num_aup=request.headers['Aup']).one()
+                aup_info: AupInfo = AupInfo.query.filter_by(num_aup=kwargs['aup']).one()
             except sqlalchemy.exc.NoResultFound:
                 return make_response("No such aup found", 404)
 
