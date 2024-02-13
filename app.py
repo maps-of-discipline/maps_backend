@@ -124,6 +124,7 @@ def check_sum_zet_in_type(data):
 
 @app.route('/api/save/<string:aup>', methods=["POST"])
 @login_required(request)
+@aup_require(request)
 def saveMap1(aup):
     if request.method == "POST":
         request_data = request.get_json()
@@ -181,7 +182,7 @@ def get_id_edizm():
 
 @app.route('/api/upload', methods=["POST", "GET"])
 @timeit
-# @login_required(request)
+@login_required(request)
 def upload():
     # form = FileForm(meta={'csrf': False})
     print(request.files)
@@ -488,6 +489,7 @@ def GetMaps(id):
 
 @app.route('/api/add-group', methods=["POST"])
 @login_required(request)
+@aup_require(request)
 def AddNewGroup():
     request_data = request.get_json()
     if request_data['name'] == '':
@@ -504,6 +506,7 @@ def AddNewGroup():
 
 @app.route('/api/delete-group', methods=["POST"])
 @login_required(request)
+@aup_require(request)
 def DeleteGroup():
     request_data = request.get_json()
     d = AupData.query.filter_by(id_group=request_data['id']).all()
@@ -554,6 +557,7 @@ def GetModulesByAup(aup):
 
 @app.route('/api/update-group', methods=["POST"])
 @login_required(request)
+@aup_require(request)
 def UpdateGroup():
     request_data = request.get_json()
     gr = Groups.query.filter_by(id_group=request_data['id']).first()
