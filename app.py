@@ -113,6 +113,21 @@ def getMap(aup):
     #     return make_response(jsonify('ERROR sum_zet=0'), 400)
     return make_response(jsonify(json), 200)
 
+    # data = AupData.query.filter_by(id_aup=aup.id_aup).all()
+    json = create_json(aup)
+
+
+    # if check_sum_zet_in_type(json['data']) == False:
+    #     return make_response(jsonify('ERROR sum_zet=0'), 400)
+    return make_response(jsonify(json), 200)
+
+
+def check_sum_zet_in_type(data):
+    for item in data:
+        sum_zet_type = 0
+        for i in item['type']:
+            sum_zet_type += i['zet']
+        if sum_zet_type == 0: return False
 
 def check_sum_zet_in_type(data):
     for item in data:
@@ -412,7 +427,6 @@ def getAupData(file):
         if allRow[i][6] != semestr:
             semestr = allRow[i][6]
             counter = -1
-
         if allRow[i][5] != disc:
             disc = allRow[i][5]
             counter += 1
