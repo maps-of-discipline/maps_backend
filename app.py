@@ -52,6 +52,7 @@ weith = {
 
 metadata = MetaData(naming_convention=convention)
 db.init_app(app)
+
 migrate = Migrate(app, db)
 
 # from save_into_bd import bp as save_db_bp
@@ -441,8 +442,10 @@ def save_excel(aup):
     # path = os.path.join(app.static_folder, 'temp', filename)
     os.remove(filename)
     # --------------
-    return send_file(return_data,
-                     download_name=os.path.split(filename)[-1])
+
+    response = make_response(send_file(return_data, download_name=filename))
+    response.headers['Access-Control-Expose-Headers'] = "Content-Disposition"
+    return response
 
 
 @app.route("/api/getGroups", methods=["GET"])
