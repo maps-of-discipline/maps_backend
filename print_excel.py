@@ -6,6 +6,7 @@ import xlsxwriter
 from openpyxl.styles import (Alignment, Border, Font, NamedStyle, PatternFill,
                              Side)
 from tools import get_maximum_rows
+from discipline_list import faculty_dis
 
 from models import (AupInfo, AupData, Groups, db)
 from take_from_bd import create_json_print
@@ -20,13 +21,13 @@ border_thin = Side(style='thin', color='000000')
 border_thick = Side(style='thick', color='000000')
 
 
-def makeLegend(wb, table):
+def makeLegend(wb, table, aup):
     ws = wb.create_sheet('Legend')
     ws['A1'].value = 'ЗЕТ'
     ws['A1'].style = 'standart'
     ws['B1'].value = 'Группа'
     ws['B1'].style = 'standart'
-    ws.column_dimensions["A"].width = 20.0
+    ws.column_dimensions["A"].width = 25.0
     ws.column_dimensions["B"].width = 60.0
     groups = Groups.query.all()
     table_dict = {}
@@ -50,9 +51,29 @@ def makeLegend(wb, table):
     ws['A' + str(len(table_dict) + 2)].style = 'standart'
     ws['A' + str(len(table_dict) + 2)].value = 'Итого: ' + str(sum_zet)
     # return legend
+    ws['A19'].style = 'standart'
+    ws['A19'].value = 'Факультативы:'
+    ws['A20'].style = 'standart'
+    ws['B20'].style = 'standart'
+    ws['A20'].value = 'Название'
+    ws['B20'].value = 'Часы'
+
+    # ws['A21'].value = str(aup)
+    aup2 = str(aup).split()[-1]
+    aup2 = aup2[1:len(aup2)-2]
+    # ws['A22'].value = str(aup2)
+
+    dis =  faculty_dis(aup2)
+    i=1
+    for key in dis.keys():
+        ws['A' + str(i+20)].style = 'standart'
+        ws['A' + str(i+20)].value = str(key)
+        ws['B' + str(i+20)].style = 'standart'
+        ws['B' + str(i+20)].value = str(dis[key])
+        i+=1
 
 
-def saveMap(aup, static, **kwargs):
+def saveMap(aup, static, papper_size, orientation, **kwargs):
     aup = AupInfo.query.filter_by(num_aup=aup).first()
     data = AupData.query.filter_by(id_aup=aup.id_aup).order_by(AupData.shifr, AupData.discipline, AupData.id_period).all()
     filename_map = aup.file
@@ -112,7 +133,7 @@ def saveMap(aup, static, **kwargs):
 
             merged += round(el['zet']*2)
 
-    makeLegend(wb, table)
+    makeLegend(wb, table, aup)
 
     set_print_properties(table, ws, max_zet)
     
@@ -121,6 +142,17 @@ def saveMap(aup, static, **kwargs):
     ws.oddFooter.right.size = 14
     ws.oddFooter.right.font = "Arial,Bold"
     ws.oddFooter.right.color = "000000"
+    if papper_size=="3":
+        ws.page_setup.papperSize = ws.PAPERSIZE_A3
+    elif papper_size=="4":
+        ws.page_setup.papperSize = ws.PAPERSIZE_A3
+    if orientation=="land":
+        ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    elif orientation=="port":
+        ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT    
+
+    for sheets in wb:
+        sheets.sheet_view.zoomScale = 45
 
     wb.save(filename=filename_map)
     return filename_map

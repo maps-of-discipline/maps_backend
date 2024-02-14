@@ -1,3 +1,7 @@
+import json
+import time
+from functools import wraps
+
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileRequired, FileAllowed
 from flask import make_response, jsonify
@@ -23,8 +27,21 @@ skiplist = {
 sems = ["Первый", "Второй", "Третий", "Четвертый", "Пятый", "Шестой",
             "Седьмой", "Восьмой", "Девятый", "Десятый", "Одиннадцатый", "Двенадцатый", 'Тринадцатый', 'Четырнадцатый']
 
-class FileForm(FlaskForm):
-    file = FileField(validators=[FileRequired(), FileAllowed(["xlsx", "xls"], "xlsx only!")])
+def timeit(func):
+    @wraps(func)
+    def timeit_wrapper(*args, **kwargs):
+        start_time = time.perf_counter()
+        result = func(*args, **kwargs)
+        end_time = time.perf_counter()
+        total_time = end_time - start_time
+        # first item in the args, ie `args[0]` is `self`
+        print(f'[TIME]Function {func.__name__}() Took {total_time:.4f} seconds')
+        return result
+    return timeit_wrapper
+
+
+# class FileForm(FlaskForm):
+#     file = FileField(validators=[FileRequired(), FileAllowed(["xlsx", "xls"], "xlsx only!")])
 
 
 def get_maximum_rows(*, sheet_object):  # Взять максимальное значение строк в плане
@@ -38,10 +55,12 @@ def get_maximum_rows(*, sheet_object):  # Взять максимальное з
 def take_aup_from_excel_file(file):
     wb = load_workbook(file)
     # ws = wb['Лист1']
-    return str(wb['Лист1']['B2'].value)
+    value = wb['Лист1']['B2'].value
+    wb.save(file)
+    return str(value)
 
 def error(errors):
-    return make_response(jsonify(errors), 400)
+    return make_response(json.dumps(errors, ensure_ascii=False), 400)
 
 
 def check_skiplist(zet_or_hours, value_discipline, value_record_type, value_block):
@@ -52,3 +71,11 @@ def check_skiplist(zet_or_hours, value_discipline, value_record_type, value_bloc
         return True
     else:
         return False
+
+def prepare_shifr(shifr):
+    if len(shifr) > 2 and shifr[1] == '.':
+        # Если второй символ - точка, удалить её
+        return shifr[:1] + shifr[2:]
+    else:
+        # В противном случае вернуть оригинальную строку
+        return shifr

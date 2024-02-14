@@ -1,4 +1,4 @@
-from tools import check_skiplist
+from tools import check_skiplist, prepare_shifr
 from models import AupData, AupInfo, Groups
 blocks = {}
 blocks_r = {}
@@ -12,6 +12,10 @@ chast = {}
 chast_r = {}
 type_record = {}
 type_record_r = {}
+
+allow_control_types_block1 = [1, 2, 3, 4, 5, 6, 7, 9, 17]
+allow_control_types_block2 = [10, 11, 13, 16, 19, 20, 21]
+allow_control_types_block3 = [12, 14, 15]
 
 def getType(id):
     l = [1, 5, 9]
@@ -49,7 +53,10 @@ def create_json(aup):
             d["discipline"] = item.discipline
             d["id_group"] = item.id_group
             d["id_block"] = item.id_block
+            # TODO удалить после того, как фронт подстроится под shifr_new
             d["shifr"] = item.shifr
+            d["shifr_new"] = get_shifr(item.shifr)
+            d["allow_control_types"] = get_allow_control_types(item.shifr)
             d["id_part"] = item.id_part
             d["id_module"] = item.id_module
             d["num_col"] = item.id_period - 1 
@@ -62,7 +69,7 @@ def create_json(aup):
                 d["is_skip"] = False
             zet = dict()
             zet["amount"] = item.amount / 100
-            zet["id_edizm"] = item.ed_izmereniya.id
+            zet["amount_type"] = 'hour' if item.ed_izmereniya.id == 1 else 'week' 
             zet["id"] = item.id
             zet["control_type_id"] = item.id_type_control
             zet["type"] = getType(item.id_type_control)
@@ -78,7 +85,7 @@ def create_json(aup):
             d["id"] += str(item.id)
             zet = dict()
             zet["amount"] = item.amount / 100
-            zet["id_edizm"] = item.ed_izmereniya.id
+            zet["amount_type"] = 'hour' if item.ed_izmereniya.id == 1 else 'week' 
             zet["id"] = item.id
             zet["control_type_id"] = item.id_type_control
             zet["type"] = getType(item.id_type_control)
@@ -95,6 +102,55 @@ def create_json(aup):
         if json["data"][num]["is_skip"] == True:
             del json["data"][num]
     return json
+
+def get_shifr(shifr):
+    shifr = prepare_shifr(shifr)
+    shifr_array = str.split(shifr, ".")
+    if len(shifr_array) == 4:
+        return {
+            "shifr": shifr,
+            "block": shifr_array[0].replace("Б", ""),
+            "part": shifr_array[1],
+            "module": shifr_array[2],
+            "discipline": shifr_array[3]
+        }
+    elif len(shifr_array) == 3:
+        return {
+            "shifr": shifr,
+            "block": shifr_array[0].replace("Б", ""),
+            "part": shifr_array[1],
+            "module": None,
+            "discipline": shifr_array[2]
+        }
+    elif len(shifr_array) == 2:
+        return {
+            "shifr": shifr,
+            "block": shifr_array[0].replace("Б", ""),
+            "part": None,
+            "module": None,
+            "discipline": shifr_array[1]
+        } 
+    else:
+        return {
+            "shifr": shifr,
+            "block": None,
+            "part": None,
+            "module": None,
+            "discipline": None
+        }
+    
+def get_allow_control_types(shifr):
+    shifr_array = str.split(shifr, ".")
+    try:
+        part = shifr_array[0][1]
+        if part == '1':
+            return allow_control_types_block1
+        if part == '2':
+            return allow_control_types_block2
+        if part == '3':
+            return allow_control_types_block3
+    except:
+        return None
 
 
 def create_json_test(aupInfo, aupData, max_column, max_row):

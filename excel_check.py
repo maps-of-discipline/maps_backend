@@ -2,35 +2,35 @@ from collections import defaultdict
 from math import ceil
 import os
 from openpyxl import load_workbook
-from tools import get_maximum_rows, skiplist, sems
+from tools import get_maximum_rows, skiplist, sems, timeit
 from models import SprStandard, SprVolumeDegreeZET
 
 
 def check_smt1(file):  # проверка на целочисленность дисциплины №2
-    wb = load_workbook(file, read_only=True)
+    wb = load_workbook(file)
     ws = wb['Лист2']
     max_row = get_maximum_rows(sheet_object=ws)
     d = defaultdict(list)
     for i in range(2, max_row):
-        sem = ws['G'+str(i)].value
-        disc = ws['F'+str(i)].value
-        hours = ws['I'+str(i)].value
-        ed_izm = ws['J'+str(i)].value
-        record_type = ws['E'+str(i)].value
-        block = ws['A'+str(i)].value
+        sem = ws['G' + str(i)].value
+        disc = ws['F' + str(i)].value
+        hours = ws['I' + str(i)].value
+        ed_izm = ws['J' + str(i)].value
+        record_type = ws['E' + str(i)].value
+        block = ws['A' + str(i)].value
 
         if (len(list(filter(lambda x: x in disc, skiplist['discipline']))) > 0 or
                 len(list(filter(lambda x: x in record_type, skiplist['record_type']))) > 0 or
                 len(list(filter(lambda x: x in block, skiplist['record_type']))) > 0):
             continue
         if hours:
-            
+
             try:
-                hours = int(float(hours)*100)
+                hours = int(float(hours) * 100)
             except:
-                hours = int(float(hours.replace(",", "."))*100)
-            if ed_izm == 'Недели': 
-                hours = hours*54 # 54 = 1 ZET * 1.5 = 36 * 1.5
+                hours = int(float(hours.replace(",", ".")) * 100)
+            if ed_izm == 'Недели':
+                hours = hours * 54  # 54 = 1 ZET * 1.5 = 36 * 1.5
 
             d[sem].append([disc, hours])
     # Print semesters
@@ -52,8 +52,10 @@ def check_smt1(file):  # проверка на целочисленность д
                 # except:
                 #     ddd[value[i][0]] = value[i][1]
         for key1, value1 in ddd.items():
-            if not (value1/3600).is_integer():
-                ret_arr.append("{0}: {1} {2}".format(key, key1, value1/3600))
+            if not (value1 / 3600).is_integer():
+                ret_arr.append("{0}: {1} {2}".format(key, key1, value1 / 3600))
+
+    wb.save(file)
     return ret_arr
 
 
@@ -65,11 +67,11 @@ def check_smt(file):  # проверка на целочисленность д�
     arr_err = []
     table = []
     for i in range(2, max_row):
-        period = ws['G'+str(i)].value
-        discipline = ws['F'+str(i)].value
-        zet = ws['K'+str(i)].value
-        record_type = ws['E'+str(i)].value
-        block = ws['A'+str(i)].value
+        period = ws['G' + str(i)].value
+        discipline = ws['F' + str(i)].value
+        zet = ws['K' + str(i)].value
+        record_type = ws['E' + str(i)].value
+        block = ws['A' + str(i)].value
 
         if (len(list(filter(lambda x: x in discipline, skiplist['discipline']))) > 0 or
                 len(list(filter(lambda x: x in record_type, skiplist['record_type']))) > 0 or
@@ -131,8 +133,8 @@ def check_empty_ceils(file):  # Проверка на пустые обязат�
     err_arr = []
     for letter in 'ABEFGHJ':
         for num in range(1, max_row + 1):
-            if ws[letter+str(num)].value == None:
-                err_arr.append(letter+str(num))
+            if ws[letter + str(num)].value == None:
+                err_arr.append(letter + str(num))
     # типа попытался реализовать проверку, чтобы если есть значение "Пустой элемент" или пустая ячейка и в "А" значение Факультатива, то пропускать дальше без ошибок
     # for num in range(1, max_row + 1): 
     #     # если в колонке 'C' пустое значение и в колонке 'A' с этим же номером это факультатиная дисциплина, то пропускать и добавлять в базу
@@ -141,6 +143,7 @@ def check_empty_ceils(file):  # Проверка на пустые обязат�
     # if err_arr == []:
     #     return True, err_arr
     # else:
+    wb.save(file)
     return err_arr
 
 
@@ -149,24 +152,24 @@ def layout_of_disciplines(file):  # Компоновка элективных д
     ws = wb['Лист2']
     max_row = get_maximum_rows(sheet_object=ws)
     for num in range(1, max_row + 1):
-        if 'Элективные дисциплины' in ws['E'+str(num)].value:
-            temp_num = ws['E'+str(num)].value
-            temp_value = ws['F'+str(num)].value
+        if 'Элективные дисциплины' in ws['E' + str(num)].value:
+            temp_num = ws['E' + str(num)].value
+            temp_value = ws['F' + str(num)].value
             count = 0
             for i in range(num, max_row + 1):
                 count += 1
-                if ws['E'+str(i)].value == temp_num and ws['F'+str(i)].value != temp_value:
+                if ws['E' + str(i)].value == temp_num and ws['F' + str(i)].value != temp_value:
                     for j in range(1, count):
-                        ws['F'+str(i-j)] = temp_value + ' / ' + \
-                            ws['F'+str(i+(j-1))].value
-                        ws['F'+str(i+(j-1))] = 'None'
-                        ws['E'+str(i+(j-1))] = 'None'
+                        ws['F' + str(i - j)] = temp_value + ' / ' + \
+                                               ws['F' + str(i + (j - 1))].value
+                        ws['F' + str(i + (j - 1))] = 'None'
+                        ws['E' + str(i + (j - 1))] = 'None'
     i = 1
     len = max_row + 1
     while i != len:
-        if ws['E'+str(i)].value == 'None':
+        if ws['E' + str(i)].value == 'None':
             ws.delete_rows(i)
-            len = len - 1 
+            len = len - 1
             continue
         i += 1
 
@@ -174,6 +177,7 @@ def layout_of_disciplines(file):  # Компоновка элективных д
 
 
 # Проверка, чтобы общая сумма ЗЕТ соответствовало норме (30 * кол-во семестров)
+
 def check_full_zet_in_plan(file):
     wb = load_workbook(file)
     ws = wb['Лист2']
@@ -204,12 +208,12 @@ def check_full_zet_in_plan(file):
                 len(list(filter(lambda x: x in column_discipline[i].value, skiplist['discipline']))) == 0 and
                 len(list(filter(lambda x: x in column_record_type[i].value, skiplist['record_type']))) == 0 and
                 len(list(filter(lambda x: x in column_block[i].value, skiplist['record_type']))) == 0)):
-            
+
             if column_edizm[i].value == 'Недели':
                 try:
-                    sum_zet += float(column_hours[i].value.replace(',', '.'))*54
+                    sum_zet += float(column_hours[i].value.replace(',', '.')) * 54
                 except:
-                    sum_zet += float(column_hours[i].value)*54
+                    sum_zet += float(column_hours[i].value) * 54
             else:
                 try:
                     sum_zet += float(column_hours[i].value.replace(',', '.'))
@@ -223,8 +227,8 @@ def check_full_zet_in_plan(file):
     # if sum_normal == sum_zet:
     #     return True, None, None
     # else:
+    wb.save(file)
     return sum_normal, sum_zet
-
 
 
 def format_standard(standard):
@@ -239,32 +243,43 @@ def excel_check(path, aup, options_check):
     ## Проверка на пустые ячейки ###
     err_arr = check_empty_ceils(path)
     if err_arr != []:
-        errors = 'АУП: ' + aup + ' В документе не заполнены ячейки:' + ', '.join(err_arr)
-        print(errors)
-        return_err_arr.append(errors)
+        message = {
+            "message": f'В документе не заполнены ячейки',
+            "cells": [el for el in err_arr]
+        }
+
+        return_err_arr.append(message)
+
+        return return_err_arr
     ### ------------------------------------ ###
 
     # ### Проверка на целочисленность ЗЕТ у каждой дисциплины ###
     if options_check['checkboxIntegralityModel'] == True:
         err_arr = check_smt1(path)
         if err_arr != []:
-            errors = 'АУП: ' + aup + ' Ошибка при подсчете ЗЕТ:\n' + '\n'.join(err_arr)
-            print(errors)
+            errors = {
+                'message': f'Ошибка при подсчете ЗЕТ' + '\n'.join(err_arr)
+            }
             return_err_arr.append(errors)
+
+        return return_err_arr
     # ### ------------------------------------ ###
 
-    ### Компановка элективных курсов ###
-    layout_of_disciplines(path)
-    ### ---------------------------- ###
-
-    # ### ------------------------------------ ###
     # ### Проверка, чтобы общая сумма ЗЕТ соответствовало норме (30 * кол-во семестров) ###
     if options_check['checkboxSumModel'] == True:
         sum_normal, sum_zet = check_full_zet_in_plan(path)
         print(sum_normal, sum_zet)
         if sum_normal != sum_zet:
-            errors = 'АУП: ' + aup + ' В выгрузке общая сумма ЗЕТ не соответствует норме. Норма {} ЗЕТ. В карте {} ЗЕТ.'.format(sum_normal, sum_zet)
-            print(errors)
+            errors = {
+                'message': f'АУП: {aup} В выгрузке общая сумма ЗЕТ не соответствует норме. ' +
+                           f'Норма {sum_normal} ЗЕТ. В карте {sum_zet} ЗЕТ.'
+            }
             return_err_arr.append(errors)
+
+            return return_err_arr
     # ### ------------------------------------ ###
+
+    # Компановка элективных курсов
+    layout_of_disciplines(path)
+
     return return_err_arr

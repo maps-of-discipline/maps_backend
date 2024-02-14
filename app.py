@@ -1,13 +1,15 @@
+
 from take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
                           ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r, create_json, create_json_test)
 import json
 from print_excel import saveMap
-from tools import FileForm, take_aup_from_excel_file, error
+from tools import take_aup_from_excel_file, error, timeit, prepare_shifr
 from save_into_bd import SaveCard
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
 from excel_check import excel_check
-from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, AupData, AupInfo, Groups, SprFaculty
+from models import Users, D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, AupData, AupInfo, Groups, SprFaculty
 import pandas as pd
+from upload_xml import create_xml
 from openpyxl import load_workbook
 from sqlalchemy.sql.expression import func
 from sqlalchemy import MetaData
@@ -18,12 +20,14 @@ from models import db
 import io
 import os
 import warnings
+from auth import *
+
 warnings.simplefilter("ignore")
 
 
 app = Flask(__name__)
 application = app
-cors = CORS(app, resources={r"*": {"origins": "*"}})
+cors = CORS(app, resources={r"*": {"origins": "*"}}, supports_credentials=True)
 
 app.config.from_pyfile('config.py')
 app.config['CORS_HEADERS'] = 'Content-Type'
@@ -48,6 +52,7 @@ weith = {
 
 metadata = MetaData(naming_convention=convention)
 db.init_app(app)
+
 migrate = Migrate(app, db)
 
 # from save_into_bd import bp as save_db_bp
@@ -63,6 +68,32 @@ setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, contro
 
 if os.path.exists(app.static_folder + '/temp') == False: 
     os.makedirs(app.static_folder + '/temp', exist_ok=True)
+
+
+@app.cli.command('create-user')
+def create_user():
+    username = input('Username: ')
+    password = input('Password: ')
+
+    role_to_id = {'admin': 1, 'faculty': 2, 'department': 3}
+    role = input('User role (admin, faculty, department): ')
+
+    user = Users()
+    user.login = username
+    user.set_password(password)
+
+    try:
+        user.id_role = role_to_id[role]
+    except KeyError:
+        print('Incorrect role!')
+        return
+
+    db.session.add(user)
+    db.session.commit()
+
+    print(f"User {username} created!")
+
+
 
 @app.route("/api/map/<string:aup>")
 def getMap(aup):
@@ -108,6 +139,8 @@ def check_sum_zet_in_type(data):
 
 
 @app.route('/api/save/<string:aup>', methods=["POST"])
+@login_required(request)
+@aup_require(request)
 def saveMap1(aup):
     if request.method == "POST":
         request_data = request.get_json()
@@ -130,7 +163,7 @@ def save_loop(i, in_type, l, request_data):
                 id=request_data[i]['type'][in_type][j]['id']).first()
             row.discipline = request_data[i]['discipline']
             row.amount = request_data[i]['type'][in_type][j]['amount']*100
-            row.id_edizm = request_data[i]['type'][in_type][j]['id_edizm']
+            row.id_edizm = 1 if request_data[i]['type'][in_type][j]['amount_type'] == 'hour' else 2
             row.control_type_id = request_data[i]['type'][in_type][j]['control_type_id']
             row.id_period = request_data[i]['num_col'] + 1
             row.num_row = request_data[i]['num_row']
@@ -138,7 +171,7 @@ def save_loop(i, in_type, l, request_data):
             row.id_block = request_data[i]['id_block']
             row.id_module = request_data[i]['id_module']
             row.id_part = request_data[i]['id_part']
-            row.shifr = request_data[i]['shifr']
+            row.shifr = prepare_shifr(request_data[i]['shifr'])
             l.append(row)
         except:
             return make_response('Save error', 400)
@@ -164,58 +197,67 @@ def get_id_edizm():
 
 
 @app.route('/api/upload', methods=["POST", "GET"])
+@timeit
+@login_required(request)
 def upload():
-    form = FileForm(meta={'csrf': False})
-
+    # form = FileForm(meta={'csrf': False})
+    print(request.files)
     if request.method == "POST":
-        if form.validate_on_submit():
-            files = request.files.getlist("file")
-            res = list()
-            for f in files:
-                options_check = json.loads(request.form['options'])
-                print(options_check)
-                # options_check = dict()
-                # options_check['enableCheckIntegrality'] = False
-                # options_check['enableCheckSumMap'] = False
+        files = request.files.getlist("file")
+        result_list = list()
+        for f in files:
+            options_check = json.loads(request.form['options'])
+            print(options_check)
+            # options_check = dict()
+            # options_check['enableCheckIntegrality'] = False
+            # options_check['enableCheckSumMap'] = False
 
-                # aup = f.filename.split(' - ')[1].strip()
-                ### путь к файлу на диске
+            # aup = f.filename.split(' - ')[1].strip()
+            ### путь к файлу на диске
 
-                path = os.path.join(app.static_folder, 'temp', f.filename)
+            path = os.path.join(app.static_folder, 'temp', f.filename)
 
-                # сохранить временный файл с учебным планом
-                f.save(path)
+            # сохранить временный файл с учебным планом
+            f.save(path)
 
-                # Вытащить из файла номер аупа
-                aup = take_aup_from_excel_file(path)
+            # Вытащить из файла номер аупа
+            aup = take_aup_from_excel_file(path)
 
-                # одна функция, описанная в отдельном файле, которая будет выполнять все проверки
-                err_arr = excel_check(path, aup, options_check)
-                if err_arr != []:
-                    os.remove(path)
-                    return error('\n'.join(err_arr))
+            # одна функция, описанная в отдельном файле, которая будет выполнять все проверки
 
-                # словарь с содержимым 1 листа
-                aupInfo = getAupInfo(path, f.filename)
+            result = {
+                'aup': aup,
+                'filename': f.filename,
+                'errors': excel_check(path, aup, options_check)
+            }
 
-                # берём aupInfo["num"] и смотрим, есть ли в БД уже такая карта, если есть, то редиректим на страницу с этой картой ???
-                # Можно сделать всплывающее окно: "Хотите перезаписать существующий учебный план?" и ответы "Да" и "Нет".
-                # Если нет, то просто редиректим на карту, если да, то просто стираем все по номеру аупа в aupData
-                # (в SaveCard уже реализован этот функционал)
+            result_list.append(result)
 
-                # массив с содержимым 2 листа
-                aupData = getAupData(path)
-                # json = create_json(aupData, aupInfo)
-                # сохранение карты
-                SaveCard(db, aupInfo, aupData)
-
-                # удалить временный файл
+            if result['errors']:
                 os.remove(path)
-                res.append(aup)
+                continue
 
-            return make_response(jsonify(res), 200)
+            # словарь с содержимым 1 листа
+            aupInfo = getAupInfo(path, f.filename)
+
+            # берём aupInfo["num"] и смотрим, есть ли в БД уже такая карта, если есть, то редиректим на страницу с этой картой ???
+            # Можно сделать всплывающее окно: "Хотите перезаписать существующий учебный план?" и ответы "Да" и "Нет".
+            # Если нет, то просто редиректим на карту, если да, то просто стираем все по номеру аупа в aupData
+            # (в SaveCard уже реализован этот функционал)
+
+            # массив с содержимым 2 листа
+            aupData = getAupData(path)
+            # json = create_json(aupData, aupInfo)
+            # сохранение карты
+            SaveCard(db, aupInfo, aupData)
+            f.close()
+            # удалить временный файл
+            os.remove(path)
+
+
+        return make_response(jsonify(result_list), 200)
     else:
-        return render_template("upload.html", form=form)
+        return make_response(jsonify("Only post method"), 400)
 
 
 def getAupInfo(file, filename):
@@ -285,6 +327,8 @@ def getAupData(file):
 
         # if row[5]is None:
         # print(i, row[5])
+
+        row[1] = prepare_shifr(row[1])
 
         val = row[0]
         row[0] = blocks.get(val)
@@ -395,7 +439,13 @@ def getAupData(file):
 # путь для загрузки сформированной КД
 @app.route("/api/save_excel/<string:aup>", methods=["GET"])
 def save_excel(aup):
-    filename = saveMap(aup, app.static_folder, expo=60)
+    try:
+        paper_size = json.loads(request.form['paper_size'])
+        orientation = json.loads(request.form['orientation'])
+    except:
+        paper_size = "3"
+        orientation = "land"
+    filename = saveMap(aup, app.static_folder, paper_size, orientation, expo=60)
     # Upload xlxs file in memory and delete file from storage -----
     return_data = io.BytesIO()
     with open(filename, 'rb') as fo:
@@ -406,8 +456,10 @@ def save_excel(aup):
     # path = os.path.join(app.static_folder, 'temp', filename)
     os.remove(filename)
     # --------------
-    return send_file(return_data,
-                     download_name=os.path.split(filename)[-1])
+
+    response = make_response(send_file(return_data, download_name=filename))
+    response.headers['Access-Control-Expose-Headers'] = "Content-Disposition"
+    return response
 
 
 @app.route("/api/getGroups", methods=["GET"])
@@ -428,10 +480,11 @@ def getAllMaps():
     fac = SprFaculty.query.all()
     li = list()
     for i in fac:
-        simple_d = dict()
-        simple_d["faculty_name"] = i.name_faculty
-        simple_d["directions"] = GetMaps(id=i.id_faculty)
-        li.append(simple_d)
+        li.append({
+            "faculty_id": i.id_faculty,
+            "faculty_name": i.name_faculty,
+            "directions": GetMaps(id=i.id_faculty),
+        })
     return jsonify(li)
 
 
@@ -452,6 +505,8 @@ def GetMaps(id):
 
 
 @app.route('/api/add-group', methods=["POST"])
+@login_required(request)
+@aup_require(request)
 def AddNewGroup():
     request_data = request.get_json()
     if request_data['name'] == '':
@@ -467,6 +522,8 @@ def AddNewGroup():
 
 
 @app.route('/api/delete-group', methods=["POST"])
+@login_required(request)
+@aup_require(request)
 def DeleteGroup():
     request_data = request.get_json()
     d = AupData.query.filter_by(id_group=request_data['id']).all()
@@ -516,6 +573,8 @@ def GetModulesByAup(aup):
     return make_response(jsonify(l), 200)
 
 @app.route('/api/update-group', methods=["POST"])
+@login_required(request)
+@aup_require(request)
 def UpdateGroup():
     request_data = request.get_json()
     gr = Groups.query.filter_by(id_group=request_data['id']).first()
@@ -538,3 +597,87 @@ def getControlTypes():
     return make_response(jsonify(control_type_arr), 200)
 
 
+@app.route("/api/login", methods=['POST'])
+def login():
+    request_data = request.get_json()
+
+    if 'username' not in request_data:
+        return make_response("Username is required", 401)
+
+    if 'password' not in request_data:
+        return make_response("Password is required", 401)
+
+    user = Users.query.filter_by(login=request_data['username']).first()
+
+    if not user:
+        return make_response("No such user", 400)   # 400?
+
+    if not user.check_password(request_data['password']):
+        return make_response('Incorrect password', 400)
+
+    response = {
+        'access': get_access_token(user.id_user),
+        'refresh': get_refresh_token(user.id_user, request.headers['User-Agent']),
+    }
+
+    return make_response(json.dumps(response, ensure_ascii=False), 200)
+
+
+@app.route('/api/refresh', methods=['POST'])
+def refresh_view():
+    request_data = request.get_json()
+
+    if "access" not in request_data:
+        return make_response("Access token required", 401)
+
+    if "refresh" not in request_data:
+        return make_response("Refresh token required", 401)
+
+    access = request_data['access']
+
+    payload, verify_result = verify_jwt_token(access)
+
+    if not payload:
+        return make_response("Invalid access token", 401)
+
+    if verify_refresh_token(request_data['refresh']):
+        response = {
+            'access': get_access_token(payload['user_id']),
+            'refresh': get_refresh_token(payload['user_id'], request.headers['User-Agent']),
+        }
+
+        return make_response(json.dumps(response), 200)
+    else:
+        return make_response('Refresh token lifetime expired', 401)
+
+
+@app.route('/api/user/<int:user_id>')
+def get_user_info(user_id):
+    user = Users.query.filter_by(id_user=user_id).first()
+    return make_response(json.dumps({
+        'id': user.id_user,
+        'login': user.login,
+        'role': user.id_role,
+        'department': user.department_id
+    }, sort_keys=False))
+
+
+@app.route('/api/test/<string:aup>')
+# @login_required(request)
+# @aup_require(request)
+def test(aup):
+    aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
+    aup_info.copy(file='asdf', num='100011111')
+    return make_response(str(aup_info), 200)
+
+
+@app.route("/api/upload-xml/<string:aup>")
+def upload_xml(aup):
+    filename = create_xml(aup)
+
+    data = io.BytesIO()
+    with open(filename, 'rb') as res:
+        data.write(res.read())
+    data.seek(0)
+
+    return send_file(data, download_name="sample.txt")

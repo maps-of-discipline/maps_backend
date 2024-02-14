@@ -1,11 +1,11 @@
 import sqlalchemy as sa
 import os
+
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_login import UserMixin 
 from flask import url_for
 from user_policy import UsersPolicy
-# from app import db, app
 
 db = SQLAlchemy()
 
@@ -98,7 +98,8 @@ class AupInfo(db.Model):
     type_educ = db.Column(db.String(255), nullable=False)
     qualification = db.Column(db.String(255), nullable=False)
     type_standard = db.Column(db.String(255), nullable=False)
-    department = db.Column(db.String(255), nullable=True)
+    id_department = db.Column(db.Integer, db.ForeignKey(
+        'tbl_department.id_department'), nullable=False)
     period_educ = db.Column(db.String(255), nullable=False)
     id_degree = db.Column(db.Integer, db.ForeignKey(
         'spr_degree_education.id_degree'), nullable=False)
@@ -117,9 +118,52 @@ class AupInfo(db.Model):
     name_op = db.relationship('NameOP')
     faculty = db.relationship('SprFaculty')
     rop = db.relationship('SprRop')
+    department = db.relationship('Department')
+
 
     def __repr__(self):
         return '<№ AUP %r>' % self.num_aup
+
+    def copy(self, num=None, file=None):
+        new_aup: AupInfo = AupInfo(
+            file=file if file else "",
+            num_aup=num if num else self.num_aup,
+            base=self.base,
+            id_faculty=self.id_faculty,
+            id_rop=self.id_rop,
+            type_educ=self.type_educ,
+            qualification=self.qualification,
+            type_standard=self.type_standard,
+            id_department=self.id_department,
+            period_educ=self.period_educ,
+            id_degree=self.id_degree,
+            id_form=self.id_form,
+            years=self.years,
+            months=self.months,
+            id_spec=self.id_spec,
+            year_beg=self.year_beg,
+            year_end=self.year_end,
+            is_actual=False,
+        )
+        print(new_aup, '\n')
+
+        db.session.add(new_aup)
+
+        aup_data_queryset = AupData.query.filter_by(id_aup=self.id_aup).all()
+        db.session.add_all([el.copy(new_aup) for el in aup_data_queryset])
+
+        db.session.commit()
+
+
+
+class Department(db.Model):
+    __tablename__ = 'tbl_department'
+
+    id_department = db.Column(db.Integer, primary_key=True)
+    name_department = db.Column(db.String(255), nullable=True)
+
+    def __repr__(self):
+        return '<Department %r>' % self.name_department
 
 
 class NameOP(db.Model):
@@ -279,17 +323,54 @@ class AupData(db.Model):
     ed_izmereniya = db.relationship('D_EdIzmereniya')
 
     def __repr__(self):
-        return '<AupData %r>' % self.aup_num
+        return '<AupData %r>' % self.aup.num_aup
+
+    def copy(self, parent: AupInfo):
+        print(f'coping of aup_data {self.id}')
+        return AupData(
+            id_aup=parent.id_aup,
+            id_block=self.id_block,
+            shifr=self.shifr,
+            id_part=self.id_part,
+            id_module=self.id_module,
+            id_group=self.id_group,
+            id_type_record=self.id_type_record,
+            discipline=self.discipline,
+            id_period=self.id_period,
+            num_row=self.num_row,
+            id_type_control=self.id_type_control,
+            amount=self.amount,
+            id_edizm=self.id_edizm,
+            zet=self.zet,
+        )
+
+
+
+users_faculty_table = db.Table(
+    'users_faculty',
+    db.Column("user_id", db.ForeignKey('tbl_users.id_user'), nullable=False),
+    db.Column('faculty_id', db.ForeignKey('spr_faculty.id_faculty'), nullable=False)
+)
 
 
 class Users(db.Model, UserMixin):
     __tablename__ = 'tbl_users'
+
     id_user = db.Column(db.Integer, primary_key=True)
     login = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), unique=True, nullable=False)
-    id_faculty = db.Column(db.Integer, db.ForeignKey(
-        'spr_faculty.id_faculty'), nullable=False)
 
+    id_role = db.Column(db.Integer, db.ForeignKey(
+        'roles.id_role'), nullable=False)
+
+    role = db.relationship('Roles')
+
+    department_id = db.Column(db.Integer, db.ForeignKey('tbl_department.id_department'), nullable=True)
+
+    faculties = db.Relationship(
+        'SprFaculty',
+        secondary=users_faculty_table,
+    )
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -297,28 +378,54 @@ class Users(db.Model, UserMixin):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
     
+    # @property
+    # def full_name(self):
+    #     return ' '.join([self.last_name, self.first_name, self.middle_name or ''])
+
     @property
-    def full_name(self):
-        return ' '.join([self.last_name, self.first_name, self.middle_name or ''])
+    def is_admin(self):
+        from app import app
+        return app.config.get('ADMIN_ROLE_ID') == self.role_id
 
-    # @property
-    # def is_admin(self):
-    #     return app.config.get('ADMIN_ROLE_ID') == self.role_id
 
-    # @property
-    # def is_moder(self):
-    #     return app.config.get('MODER_ROLE_ID') == self.role_id
-    
-    # @property
-    # def is_user(self):
-    #     return app.config.get('USER_ROLE_ID') == self.role_id
+    @property
+    def is_facult(self):
+        from app import app
+        return app.config.get('FACULTY_ROLE_ID') == self.role_id
 
-    # def can(self, action):
-    #     users_policy = UsersPolicy()
-    #     method = getattr(users_policy, action)
-    #     if method is not None:
-    #         return method()
-    #     return False
+    @property
+    def is_depart(self):
+        from app import app
+        return app.config.get('DEPARTMENT_ROLE_ID') == self.role_id
+
+    def can(self, action):
+        users_policy = UsersPolicy()
+        method = getattr(users_policy, action)
+        if method is not None:
+            return method()
+        return False
 
     def __repr__(self):
         return '<User %r>' % self.login
+
+
+class Roles(db.Model):
+    __tablename__ = 'roles'
+
+    id_role = db.Column(db.Integer, primary_key=True)
+    name_role = db.Column(db.String(100), nullable=False)
+
+    def __repr__(self):
+        return '<Role %r>' % self.name_role
+
+
+class Token(db.Model):
+    __tablename__ = 'tbl_token'
+
+    id = db.Column(db.Integer(), primary_key=True)
+    user_id = db.Column(db.Integer(), db.ForeignKey('tbl_users.id_user'), nullable=False)
+    refresh_token = db.Column(db.String(256), nullable=False)
+    user_agent = db.Column(db.String(256), nullable=False)
+    ttl = db.Column(db.Integer(), nullable=False)
+
+    user = db.relationship('Users')
