@@ -34,6 +34,7 @@ jobs:
           echo "USER: ${USER}"
           echo "UID: $(id -u)"
           echo "GID: $(id -g)"
+      - run: docker info
       - run: cp -r ./* /opt/apps_docker/apps/dev/back_dev
       - name: Rebuild docker-compose
         run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-dev
