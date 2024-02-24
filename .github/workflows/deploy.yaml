@@ -4,24 +4,21 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
+      - dev
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
+  deploy-prod:
+    if: github.ref_name == 'main'
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v2
-      # Setup key
-      - run: set -eu
-      - run: mkdir "$HOME/.ssh"
-      - run: echo "${{ secrets.DEPLOY_FOR_KD_MOSPOLYTECH_ROOT }}" > "$HOME/.ssh/key"
-      - run: chmod 600 "$HOME/.ssh/key"
+      - run: cp -r ./* /opt/apps_docker/apps/prod/back_prod
+      - run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-prod 
 
-      # send all files
-      - run: rsync -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" --archive --compress . root@158.160.22.208:/var/www/backend/
-
-      # install dependencies
-      - run: ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no root@158.160.22.208 "cd /var/www/backend && pip install -r requirements.txt"
-
-      # run gunicorn
-      - run: ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no root@158.160.22.208 "cd /var/www/backend && gunicorn --reload -c gunicorn_config.py app:app"
+  deploy-dev:
+    if: github.ref_name == 'dev'
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+      - run: cp -r ./* /opt/apps_docker/apps/dev/back_dev
+      - run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-dev 
