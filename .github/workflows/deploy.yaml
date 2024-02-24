@@ -36,8 +36,3 @@ jobs:
       - run: cp -r ./* /opt/apps_docker/apps/dev/back_dev
       - name: Rebuild docker-compose
         run: docker-compose -f /opt/apps_docker/docker-compose.yml -u root up -d --build back-dev
-        shell: bash -l {0}
-        working-directory: ${{ github.workspace }}
-        options: --user 1001:1002
-
-
