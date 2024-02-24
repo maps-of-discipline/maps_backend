@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - dev
+      - test_work
 
 jobs:
   deploy-prod:
@@ -21,4 +22,12 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: cp -r ./* /opt/apps_docker/apps/dev/back_dev
-      - run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-dev 
+      - run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-dev
+
+  deploy-test_work:
+    if: github.ref_name == 'test_work'
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+      - run: cp -r ./* /opt/apps_docker/apps/dev/back_dev
+      - run: docker-compose -f /opt/apps_docker/docker-compose.yml -u root up -d --build back-dev
