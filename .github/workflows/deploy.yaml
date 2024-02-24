@@ -5,7 +5,6 @@ on:
     branches:
       - main
       - dev
-      - test_work
 
 jobs:
   deploy-prod:
@@ -13,28 +12,17 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v2
-      - run: cp -r ./* /opt/apps_docker/apps/prod/back_prod
-      - run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-prod 
+      - name: Copy repo to production directory 
+        run: cp -r ./* /opt/apps_docker/apps/prod/back_prod
+      - name: Rebuild docker-compose
+        run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-prod 
 
   deploy-dev:
     if: github.ref_name == 'dev'
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v2
-      - run: cp -r ./* /opt/apps_docker/apps/dev/back_dev
-      - run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-dev
-
-  deploy-test_work:
-    if: github.ref_name == 'test_work'
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@v2
-      - name: Print UID and GID
-        run: |
-          echo "USER: ${USER}"
-          echo "UID: $(id -u)"
-          echo "GID: $(id -g)"
-      - run: docker info
-      - run: cp -r ./* /opt/apps_docker/apps/dev/back_dev
+      - name: Copy repo to development directory 
+        run: cp -r ./* /opt/apps_docker/apps/dev/back_dev
       - name: Rebuild docker-compose
         run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-dev
