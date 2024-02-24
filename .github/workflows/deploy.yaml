@@ -5,19 +5,20 @@ on:
     branches:
       - main
       - dev
-      - test_workflow
 
 jobs:
-  deploy-test:
-    if: github.ref_name == 'test_workflow'
+  deploy-prod:
+    if: github.ref_name == 'main'
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v2
-      - run: ls -la    
+      - run: cp -r ./* /opt/apps_docker/apps/prod/back_prod
+      - run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-prod 
 
-  # deploy-dev:
-  #   if: github.ref == 'dev'
-  #   runs-on: self-hosted
-  #   steps:
-  #     - uses: actions/checkout@v2
-  #     - run: ls -la
+  deploy-dev:
+    if: github.ref_name == 'dev'
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+      - run: cp -r ./* /opt/apps_docker/apps/dev/back_dev
+      - run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-dev 
