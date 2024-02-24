@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: cp -r ./* /opt/apps_docker/apps/prod/back_prod
-      - run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-prod 
+      - run: sudo docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-prod 
 
   deploy-dev:
     if: github.ref_name == 'dev'
@@ -21,4 +21,4 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: cp -r ./* /opt/apps_docker/apps/dev/back_dev
-      - run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-dev 
+      - run: sudo docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-dev 
