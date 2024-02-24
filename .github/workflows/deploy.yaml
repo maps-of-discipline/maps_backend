@@ -9,7 +9,7 @@ on:
 
 jobs:
   deploy-test:
-    # if: github.ref == 'test_workflow'
+    if: github.ref_name == 'test_workflow'
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v2
