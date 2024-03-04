@@ -2,6 +2,7 @@ import sqlalchemy as sa
 import os
 
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy_serializer import SerializerMixin
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_login import UserMixin 
 from flask import url_for
@@ -289,9 +290,29 @@ class Groups(db.Model):
     def __repr__(self):
         return '<Groups %r>' % self.name_group
 
-
-class AupData(db.Model):
+class AupData(db.Model, SerializerMixin):
     __tablename__ = 'aup_data'
+
+    serialize_only = (
+        'id', 
+        'id_aup', 
+        'id_block', 
+        'shifr', 
+        'id_part', 
+        'id_module', 
+        'id_group', 
+        'id_group', 
+        'id_type_record', 
+        'discipline', 
+        'id_period', 
+        'num_row', 
+        'id_type_control', 
+        'amount',
+        'id_edizm',
+        'zet',
+        'id_unique_discipline',
+    )
+
     id = db.Column(db.Integer, primary_key=True)
     id_aup = db.Column(db.Integer, db.ForeignKey(
         'tbl_aup.id_aup', ondelete='CASCADE'), nullable=False)
@@ -314,6 +335,7 @@ class AupData(db.Model):
     id_edizm = db.Column(db.Integer, db.ForeignKey(
         'd_ed_izmereniya.id'), nullable=False)
     zet = db.Column(db.Integer, nullable=False)
+    id_unique_discipline = db.Column(db.Integer(), db.ForeignKey('unique_discipline.id'), nullable=True)
 
     block = db.relationship('D_Blocks')
     part = db.relationship('D_Part')
@@ -322,6 +344,7 @@ class AupData(db.Model):
     type_control = db.relationship('D_ControlType')
     aup = db.relationship('AupInfo')
     ed_izmereniya = db.relationship('D_EdIzmereniya')
+    uniqueDiscipline = db.relationship('UniqueDiscipline')
 
     def __repr__(self):
         return '<AupData %r>' % self.aup.num_aup
@@ -431,26 +454,41 @@ class Token(db.Model):
 
     user = db.relationship('Users')
 
+class UniqueDiscipline(db.Model, SerializerMixin):
+    __tablename__ = 'unique_discipline'
+
+    serialize_only = ('id', 'title')
+
+    id: int = db.Column(db.Integer(), primary_key=True)
+    title: str = db.Column(db.String(400))
+
 # cabinet
-@dataclass
-class RPD(db.Model):
+
+class RPD(db.Model, SerializerMixin):
     __tablename__ = 'rpd'
+
+    serialize_only = ('id', 'id_aup', 'id_unique_discipline')
 
     id: int = db.Column(db.Integer(), primary_key=True)
     id_aup: int = db.Column(db.Integer(), db.ForeignKey('tbl_aup.id_aup'), nullable=False)
+    id_unique_discipline: int = db.Column(db.Integer(), db.ForeignKey('unique_discipline.id'), nullable=False)
     # ???
-    id_discipline: int = db.Column(db.Integer(), db.ForeignKey('aup_data.id'), nullable=False)
-    comments: str = db.Column(db.String(300), nullable=False)
+    comments: str = db.Column(db.String(300))
 
-    aup = db.relationship('AupInfo')
-    aupData = db.relationship('AupData')
+    aupData = db.relationship('AupInfo')
+    uniqueDiscipline = db.relationship('UniqueDiscipline')
 
-@dataclass
-class Topics(db.Model):
-    __tablename__ = 'theme'
+class Topics(db.Model, SerializerMixin):
+    __tablename__ = 'topic'
+
+    serialize_only = ('id', 'topic', 'chapter', 'id_type_control', 'task_link', 'id_rpd')
 
     id: int = db.Column(db.Integer(), primary_key=True)
-    topic: str = db.Column(db.String(400))
-    id_chapter: int = db.Column(db.Integer(), db.ForeignKey('chapter.id'))
-    id_type_control = db.Column(db.Integer(), db.ForeignKey('d_control_type.id'))
-    id_rpd = db.Column(db.Integer(), db.ForeignKey('rpd.id'))
+    topic: str = db.Column(db.String(400), nullable=True)
+    chapter: str = db.Column(db.String(400), nullable=True)
+    id_type_control = db.Column(db.Integer(), db.ForeignKey('d_control_type.id'), nullable=True)
+    task_link: str = db.Column(db.String(400), nullable=True)
+    id_rpd: int = db.Column(db.Integer(), db.ForeignKey('rpd.id'))
+
+    d_control_type = db.relationship('D_ControlType')
+    rpd = db.relationship('RPD')

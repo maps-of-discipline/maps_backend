@@ -1,5 +1,6 @@
 from flask import Blueprint, make_response, jsonify
-from models import RPD, Topics
+from models import RPD, Topics, AupData
+from cabinet.utils.serialize import serialize
 
 cabinet = Blueprint('cabinet', __name__)
 
@@ -11,14 +12,26 @@ def test():
 @cabinet.route('/rpd', methods=['GET'])
 def rpd():
     rpdList = RPD.query.all()
+    rpdList = serialize(rpdList)
     return jsonify(rpdList)
 
-@cabinet.route('/topics/<string:rpd_id>', methods=['GET'])
-def topics(rpd_id):
-    topics = Topics.query.filter(Topics.id_rpd == rpd_id).all()
+# Получение всех тем по РПД
+@cabinet.route('/topics/<string:id_rpd>', methods=['GET'])
+def topics(id_rpd):
+    topics = Topics.query.filter(Topics.id_rpd == id_rpd).all()
+    topics = serialize(topics)
 
     return jsonify(topics)
 
-@cabinet.route('/control_types/<string:rpd_id>', methods=['GET'])
-def controlTypesRPD():
-    pass
+# Получение всех нагрузок (дисциплин*) по РПД
+@cabinet.route('/control_types/<string:id_rpd>', methods=['GET'])
+def controlTypesRPD(id_rpd):
+    rpd = RPD.query.filter(RPD.id == id_rpd).first()
+
+    id_unique_discipline = rpd.id_unique_discipline
+    id_aup = rpd.id_aup
+
+    diciplines = AupData.query.filter(AupData.id_aup == id_aup, AupData.id_unique_discipline == id_unique_discipline).all()
+    diciplines = serialize(diciplines)
+
+    return jsonify(diciplines)
