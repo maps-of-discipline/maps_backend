@@ -6,6 +6,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from flask_login import UserMixin 
 from flask import url_for
 from user_policy import UsersPolicy
+from dataclasses import dataclass
 
 db = SQLAlchemy()
 
@@ -429,3 +430,27 @@ class Token(db.Model):
     ttl = db.Column(db.Integer(), nullable=False)
 
     user = db.relationship('Users')
+
+# cabinet
+@dataclass
+class RPD(db.Model):
+    __tablename__ = 'rpd'
+
+    id: int = db.Column(db.Integer(), primary_key=True)
+    id_aup: int = db.Column(db.Integer(), db.ForeignKey('tbl_aup.id_aup'), nullable=False)
+    # ???
+    id_discipline: int = db.Column(db.Integer(), db.ForeignKey('aup_data.id'), nullable=False)
+    comments: str = db.Column(db.String(300), nullable=False)
+
+    aup = db.relationship('AupInfo')
+    aupData = db.relationship('AupData')
+
+@dataclass
+class Topics(db.Model):
+    __tablename__ = 'theme'
+
+    id: int = db.Column(db.Integer(), primary_key=True)
+    topic: str = db.Column(db.String(400))
+    id_chapter: int = db.Column(db.Integer(), db.ForeignKey('chapter.id'))
+    id_type_control = db.Column(db.Integer(), db.ForeignKey('d_control_type.id'))
+    id_rpd = db.Column(db.Integer(), db.ForeignKey('rpd.id'))

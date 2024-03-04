@@ -21,17 +21,20 @@ import io
 import os
 import warnings
 from auth import *
+from cabinet.app import cabinet
 
 warnings.simplefilter("ignore")
 
 
 app = Flask(__name__)
 application = app
+
 cors = CORS(app, resources={r"*": {"origins": "*"}}, supports_credentials=True)
 
 app.config.from_pyfile('config.py')
 app.config['CORS_HEADERS'] = 'Content-Type'
 
+app.register_blueprint(cabinet, url_prefix=app.config['URL_PREFIX_CABINET'])
 
 convention = {
     "ix": 'ix_%(column_0_label)s',
