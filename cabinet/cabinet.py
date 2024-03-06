@@ -2,7 +2,10 @@ from flask import Blueprint, make_response, jsonify
 from models import RPD, Topics, AupData
 from cabinet.utils.serialize import serialize
 
+from take_from_bd import (control_type_r)
+
 cabinet = Blueprint('cabinet', __name__)
+
 
 @cabinet.route('/ping')
 def test():
@@ -23,7 +26,7 @@ def topics(id_rpd):
 
     return jsonify(topics)
 
-# Получение всех нагрузок (дисциплин*) по РПД
+# Получение всех нагрузок дисциплины
 @cabinet.route('/control_types/<string:id_rpd>', methods=['GET'])
 def controlTypesRPD(id_rpd):
     rpd = RPD.query.filter(RPD.id == id_rpd).first()
@@ -33,5 +36,29 @@ def controlTypesRPD(id_rpd):
 
     diciplines = AupData.query.filter(AupData.id_aup == id_aup, AupData.id_unique_discipline == id_unique_discipline).all()
     diciplines = serialize(diciplines)
+    
+    # Преобразует все строки из выгрузки в список нагрузок на дисциплине
+    def mapDisciplinesToControlType(dicipline):
+        id = dicipline['id_type_control']
 
-    return jsonify(diciplines)
+        return {
+            'id_type_control': id,
+            'name': control_type_r[id],
+            'id_edizm': dicipline['id_edizm'],
+            'amount': dicipline['amount'] / 100,
+        }
+    
+    controlTypes = list(map(mapDisciplinesToControlType, diciplines))
+
+    return jsonify(controlTypes)
+
+""" 
+{
+    loads: [
+        {
+            control_type: 1,
+            amount: 2
+        }
+    ]
+}
+ """

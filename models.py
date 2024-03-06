@@ -472,8 +472,6 @@ class RPD(db.Model, SerializerMixin):
     id: int = db.Column(db.Integer(), primary_key=True)
     id_aup: int = db.Column(db.Integer(), db.ForeignKey('tbl_aup.id_aup'), nullable=False)
     id_unique_discipline: int = db.Column(db.Integer(), db.ForeignKey('unique_discipline.id'), nullable=False)
-    # ???
-    comments: str = db.Column(db.String(300))
 
     aupData = db.relationship('AupInfo')
     uniqueDiscipline = db.relationship('UniqueDiscipline')

@@ -21,7 +21,7 @@ import io
 import os
 import warnings
 from auth import *
-from cabinet.app import cabinet
+from cabinet.cabinet import cabinet
 
 warnings.simplefilter("ignore")
 
