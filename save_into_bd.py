@@ -250,13 +250,12 @@ def SaveCard(db, aupInfo, aupData):
     # Перезапись карты, если есть уже в базе и мы обновляем ее
     get_aup = AupInfo.query.filter_by(num_aup=aupInfo["num"]).first()
 
-    if get_aup is None:
-        # Функция добавления информации по карте (АУП)
-        get_aup = add_new_aup(aupInfo)
-    else:
-        # Функция удаления из AupData
-        delete_from_aupdata(get_aup)
-    
+    if get_aup:
+        db.session.delete(get_aup)
+        db.session.commit()
+
+    get_aup = add_new_aup(aupInfo)
+
     l = list()
     temp_i = 0
     for i in aupData:

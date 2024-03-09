@@ -108,6 +108,8 @@ def getMap(aup):
 
     # data = AupData.query.filter_by(id_aup=aup.id_aup).all()
     json = create_json(aup)
+    if not json:
+        return make_response(jsonify({'error': "not found"}), 404)
 
     # if check_sum_zet_in_type(json['data']) == False:
     #     return make_response(jsonify('ERROR sum_zet=0'), 400)
@@ -662,9 +664,20 @@ def get_user_info(user_id):
     }, sort_keys=False))
 
 
-@app.route('/api/test/<string:aup>')
+@app.route("/api/delete-aup/<string:aup>")
 # @login_required(request)
 # @aup_require(request)
+def delete_aup(aup):
+    aup = AupInfo.query.filter_by(num_aup=aup).first()
+    if aup:
+        db.session.delete(aup)
+        db.session.commit()
+
+    return jsonify({'result': "successful"})
+
+@app.route('/api/test/<string:aup>')
+@login_required(request)
+@aup_require(request)
 def test(aup):
     aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
     aup_info.copy(file='asdf', num='100011111')
