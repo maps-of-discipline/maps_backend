@@ -39,6 +39,7 @@ class PEBaseTest(BaseTest):
     _type_records: list[int] = []
 
     def assert_test(self, ) -> Test:
+        self.report.headers = ['От', 'До', 'Значение', 'Результат']
         self.data_filter.filters = [
             lambda x: match_element(x, self.__filter_conditions),
             lambda x: x.id_type_record in self._type_records
@@ -60,7 +61,7 @@ class PEBaseTest(BaseTest):
 
         self.report.value = sums[list(sums)[0]]
         self.report.result = self._compare_value(sums[list(sums)[0]])
-
+        self.report.data.append([self.min, self.max, self.report.value, self.report.result])
         return self.report
 
 

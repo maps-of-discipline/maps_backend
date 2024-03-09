@@ -2,7 +2,7 @@ from math import fsum
 
 from models import D_Period, AupInfoHasRuleTable
 from .base_test import BaseTest
-from ..data_classes import Detailed, Test
+from ..data_classes import Test
 from ..utils import method_time
 
 
@@ -14,21 +14,21 @@ class ZetCheckByYear(BaseTest):
         for amount, el in self.data_filter.with_measure(self.measure_id):
             semesters[el.id_period].append(amount)
 
-        self.report.detailed = []
+        self.report.headers = ['Период', 'От', 'До', 'Значение', 'Результат']
 
         for key in semesters:
             semesters[key] = fsum(semesters[key]) / 100
 
             if semesters[key] > 0 and key % 2 == 0:
-                self.report.detailed.append(Detailed(
-                    period_id=[key - 1, key],
-                    min=self.min,
-                    max=self.max,
-                    value=[semesters[key - 1], semesters[key]],
-                    result=self._compare_value(semesters[key - 1] + semesters[key])
-                ))
+                self.report.data.append([
+                    [key - 1, key],
+                    self.min,
+                    self.max,
+                    [semesters[key - 1], semesters[key]],
+                    self._compare_value(semesters[key - 1] + semesters[key])]
+                )
 
-        self.report.result = all([el.result for el in self.report.detailed])
+        self.report.result = all([el[-1] for el in self.report.data])
 
         return self.report
 

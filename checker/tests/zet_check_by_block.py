@@ -28,6 +28,7 @@ class BaseZetCheckByBlock(BaseTest):
     @method_time
     def assert_test(self, ) -> Test:
         self.data_filter.filters.append(lambda x: x.id_block in self.block_nums)
+        self.report.headers = ['От', 'До', 'Значение', 'Результат']
         zet_sum = []
 
         for amount, el in self.data_filter.with_measure(self.measure_id):
@@ -37,6 +38,7 @@ class BaseZetCheckByBlock(BaseTest):
 
         self.report.value = zet_sum
         self.report.result = self._compare_value(zet_sum)
+        self.report.data.append([self.min, self.max, self.report.value, self.report.result])
         return self.report
 
     def default_rule_association(self, rule_id: int) -> AupInfoHasRuleTable | None:

@@ -2,7 +2,7 @@ from math import fsum
 
 from models import *
 from .base_test import BaseTest
-from ..data_classes import Test, Detailed
+from ..data_classes import Test
 from ..utils import method_time, match_element
 
 
@@ -18,7 +18,7 @@ class OptionalDisciplinesCheck(BaseTest):
     @method_time
     def assert_test(self) -> Test:
         self.data_filter.filters = [lambda x: match_element(x, self.optional_filter)]
-
+        self.report.headers = ['Период', 'Дисциплина', 'От', 'До', 'Значение', 'Результат']
         sum_zet = {}
         for amount, el in self.data_filter.with_measure(self.measure_id):
             if (el.discipline, el.id_period) not in sum_zet.keys():
@@ -26,20 +26,11 @@ class OptionalDisciplinesCheck(BaseTest):
             else:
                 sum_zet[(el.discipline, el.id_period)].append(amount)
 
-        self.report.detailed = []
         for key in sum_zet:
             sum_zet[key] = fsum(sum_zet[key]) / 100
+            self.report.data.append([key[1], key[0], None, None, sum_zet[key], self._compare_value(sum_zet[key])])
 
-            self.report.detailed.append(Detailed(
-                period_id=key[1],
-                discipline=key[0],
-                min=None,
-                max=None,
-                value=sum_zet[key],
-                result=self._compare_value(sum_zet[key])
-            ))
-
-        self.report.value = sum([el.value for el in self.report.detailed])
+        self.report.value = sum([el[4] for el in self.report.data])
         self.report.result = self._compare_value(self.report.value)
         return self.report
 

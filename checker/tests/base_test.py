@@ -27,12 +27,9 @@ class BaseTest:
         self.report = Test(
             id=self.instance.id,
             title=self.instance.title,
-            min=self.min,
-            max=self.max,
-            value=None,
-            measure_id=self.measure_id,
             result=False,
-            detailed=None,
+            headers=[],
+            data=[],
         )
 
     @abstractmethod

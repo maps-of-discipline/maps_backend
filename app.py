@@ -4,7 +4,7 @@ import os
 import warnings
 
 import pandas as pd
-from flask import Flask, make_response, render_template, request, send_file, jsonify
+from flask import Flask, make_response, render_template, request, send_file, jsonify, redirect
 from flask_admin import Admin
 from flask_admin.contrib.sqla import ModelView
 from flask_cors import CORS
@@ -550,33 +550,16 @@ def getControlTypes():
 def check_aup(aup: str):
     hidetitle = bool(request.args.get('hide_title', default=False))
     hidedetailed = bool(request.args.get('hide_detailed', default=False))
-    checker = AupChecker(db_instance=db, hide_title = hidetitle,hide_detailed = hidedetailed)
+    checker = AupChecker(db_instance=db, hide_title=hidetitle, hide_detailed=hidedetailed)
     return make_response(checker.get_json_report(aup))
 
 
-@app.route("/check/<string:aup>/save")
-def save_report(aup: str):
-    hidetitle = bool(request.args.get('hide_title', default=False))
-    hidedetailed = bool(request.args.get('hide_detailed', default=False))
-    checker = AupChecker(db_instance=db, hide_title = hidetitle,hide_detailed = hidedetailed )
-    path = checker.create_excel(aup)
-    return make_response(path)
-
-
-@app.route("/check/okso/<string:okso>")
+@app.route("/api/check/okso/<string:okso>")
 def check_okso(okso: str):
     hidetitle = bool(request.args.get('hide_title', default=False))
     hidedetailed = bool(request.args.get('hide_detailed', default=False))
-    checker = AupChecker(db_instance=db, hide_title = hidetitle,hide_detailed = hidedetailed)
+    checker = AupChecker(db_instance=db, hide_title=hidetitle, hide_detailed=hidedetailed)
     return checker.get_json_reports_by_okso(okso)
-
-
-@app.route("/check/okso/<string:okso>/save")
-def save_okso(okso: str):
-    hidetitle = bool(request.args.get('hide_title', default=False))
-    hidedetailed = bool(request.args.get('hide_detailed', default=False))
-    checker = AupChecker(db_instance=db, hide_title = hidetitle,hide_detailed = hidedetailed)
-    return checker.make_excel_reports_by_okso(okso)
 
 
 @app.route('/test')

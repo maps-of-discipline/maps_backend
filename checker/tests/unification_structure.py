@@ -3,7 +3,7 @@ from pprint import pprint
 
 from models import *
 from .base_test import BaseTest
-from ..data_classes import Test, Detailed
+from ..data_classes import Test
 from ..utils import method_time, match_attribute, match_element
 from .discipline_variation_config import discipline_variations
 
@@ -15,23 +15,22 @@ class UnificationStructure(BaseTest):
 
         program_code = self.aup_info.name_op.program_code
         realized_okso = RealizedOkso.query.filter_by(program_code=program_code).first()
-        self.report.detailed = []
+        self.report.headers = ['Период', 'Дисциплина', 'Значение', 'Результат']
 
         for unification in realized_okso.unifications:
-            detailed = Detailed(
-                discipline=unification.discipline.title,
-                period_id=[el.id for el in unification.periods],
-                result=False
-            )
+            detailed = [
+                [el.id for el in unification.periods],
+                unification.discipline.title,
+            ]
 
             for el in self.data_filter.filtered():
-                if (match_attribute(el.discipline, 'discipline', discipline_variations[detailed.discipline])
-                        and el.id_period in detailed.period_id):
+                if (match_attribute(el.discipline, 'discipline', discipline_variations[detailed[1]])
+                        and el.id_period in detailed[0]):
 
-                    detailed.value = el.id_period
-                    detailed.result = True
+                    detailed.append(el.id_period)
+                    detailed.append(True)
 
-            self.report.detailed.append(detailed)
+            self.report.data.append(detailed)
         
         return self.report
 

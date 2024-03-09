@@ -2,7 +2,7 @@ from math import fsum
 
 from models import AupInfoHasRuleTable
 from .base_test import BaseTest
-from ..data_classes import Detailed, Test
+from ..data_classes import Test
 from ..utils import method_time, match_element
 
 
@@ -25,6 +25,7 @@ class MinDisciplineZet(BaseTest):
 
     @method_time
     def assert_test(self) -> Test:
+        self.report.headers = ['Дисциплина', 'Период', 'значение', 'От', 'Результат']
         self.data_filter.add_filters([lambda x: match_element(x, self.__filter_list)])
         disciplines = {}
 
@@ -35,19 +36,11 @@ class MinDisciplineZet(BaseTest):
                 disciplines[(el.discipline, el.id_period)].append(amount)
 
         result = True
-        self.report.detailed = []
-
         for key in disciplines:
             disciplines[key] = round(fsum(disciplines[key]), 2) / 100
             result = result and self._compare_value(disciplines[key])
 
-            self.report.detailed.append(Detailed(
-                discipline=key[0],
-                period_id=key[1],
-                value=disciplines[key],
-                min=self.min,
-                result=self._compare_value(disciplines[key])
-            ))
+            self.report.data.append([key[0], key[1], disciplines[key], self.min, self._compare_value(disciplines[key])])
 
         self.report.result = result
 

@@ -3,7 +3,7 @@ from pprint import pprint
 
 from models import *
 from .base_test import BaseTest
-from ..data_classes import Test, Detailed
+from ..data_classes import Test
 from ..utils import method_time
 
 
@@ -29,7 +29,7 @@ class UnificationAmountCheck(BaseTest):
             disciplines[key] = round(fsum(disciplines[key])) / 100
 
         self.report.result = True
-        self.report.detailed = []
+        self.report.headers = ['Период', 'Дисциплина', 'От', 'До', 'Значение', 'Результат']
 
         for unification in realized_okso.unifications:
             keys = [(unification.discipline.title, el.id) for el in unification.periods]
@@ -40,15 +40,14 @@ class UnificationAmountCheck(BaseTest):
                     amount = value
                     break
 
-
-            self.report.detailed.append(Detailed(
-                period_id=[el.id for el in unification.periods],
-                discipline=unification.discipline.title,
-                value=amount,
-                min=unification.amount,
-                max=unification.amount,
-                result=amount == unification.amount
-            ))
+            self.report.data.append([
+                [el.id for el in unification.periods],
+                unification.discipline.title,
+                unification.amount,
+                unification.amount,
+                amount,
+                amount == unification.amount
+            ])
 
         return self.report
 

@@ -1,12 +1,13 @@
 from models import *
 from .base_test import BaseTest
-from ..data_classes import Detailed, Test
+from ..data_classes import Test
 from ..utils import match_element
 from .discipline_variation_config import discipline_variations
 
 
 class CompulsoryDisciplinesCheck(BaseTest):
     def assert_test(self) -> Test:
+        self.report.headers = ["Дисциплина", "Результат", "Значение"]
 
         program_code = self.aup_info.name_op.program_code
         realized_okso: RealizedOkso = RealizedOkso.query.filter_by(program_code=program_code).one()
@@ -23,15 +24,9 @@ class CompulsoryDisciplinesCheck(BaseTest):
                     cd.append(el.discipline)
 
         result = True
-        self.report.detailed = []
         for discipline in compulsory_disciplines:
             result = result and discipline[1]
-            self.report.detailed.append(
-                Detailed(
-                    discipline=discipline[0],
-                    result=discipline[1],
-                    value=discipline[2]
-                ))
+            self.report.data.append([discipline[0], discipline[1], discipline[2]])
         self.report.result = result
         return self.report
 

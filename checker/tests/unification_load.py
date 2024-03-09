@@ -3,7 +3,7 @@ from pprint import pprint
 
 from models import *
 from .base_test import BaseTest
-from ..data_classes import Test, Detailed
+from ..data_classes import Test
 from ..utils import method_time
 
 
@@ -23,7 +23,7 @@ class UnificationLoadCheck(BaseTest):
             else:
                 disciplines[key].update({**value})
 
-        self.report.detailed = []
+        self.report.headers = ['Период', 'Дисциплина', 'От', 'До', 'Значение', 'Результат']
 
         for unification in realized_okso.unifications:
             unification: Unification
@@ -40,15 +40,15 @@ class UnificationLoadCheck(BaseTest):
 
             for el in unification.load:
                 el: UnificationLoad
-                self.report.detailed.append(Detailed(
-                    period_id=period_id,
-                    discipline=', '.join([el.unification.discipline.title, el.control_type.title]),
-                    min=el.amount,
-                    max=el.amount,
-                    value=discipline.get(el.control_type.title),
-                    result=(discipline.get(el.control_type.title) is not None and
+                self.report.data.append([
+                    period_id,
+                    ', '.join([el.unification.discipline.title, el.control_type.title]),
+                    el.amount,
+                    el.amount,
+                    discipline.get(el.control_type.title),
+                    (discipline.get(el.control_type.title) is not None and
                             discipline.get(el.control_type.title) == el.amount)
-                ))
+                ])
 
         return self.report
 

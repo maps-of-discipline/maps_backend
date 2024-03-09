@@ -1,29 +1,16 @@
 import dataclasses
 import json
 from dataclasses import dataclass
-
-
-@dataclass
-class Detailed:
-    period_id: int | list = None
-    discipline: str = None
-    min: float | None = None
-    max: float | None = None
-    value: float | str | list = None
-    result: bool = None
+from typing import Any
 
 
 @dataclass
 class Test:
     id: int
     title: str
-    min: float
-    max: float
-    measure_id: int
-    value: float | None
     result: bool
-    detailed: list[Detailed] | None
-
+    headers: list[str] | None
+    data: list[list[Any]]
 
 @dataclass
 class Report:

@@ -1,6 +1,6 @@
 from models import *
 from .base_test import BaseTest
-from ..data_classes import Test, Detailed
+from ..data_classes import Test
 from ..utils import method_time
 
 
@@ -19,14 +19,14 @@ class WorkloadBaseCheck(BaseTest):
                 disciplines[(el.discipline, el.id_period)] = True
 
         self.report.result = True
-        self.report.detailed = []
+        self.report.headers = ['Период', 'Дисциплина', 'Результат']
         for key in disciplines:
             self.report.result = self.report.result and disciplines[key]
-            self.report.detailed.append(Detailed(
-                period_id=key[1],
-                discipline=key[0],
-                result=disciplines[key]
-            ))
+            self.report.data.append([
+                key[1],
+                key[0],
+                disciplines[key]
+            ])
 
         return self.report
 

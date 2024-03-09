@@ -1,6 +1,5 @@
 from models import *
 from .data_classes import *
-from .excel import ExcelCreator
 from .tests import *
 from .utils import method_time
 
@@ -35,9 +34,7 @@ class BaseChecker:
     def __init__(self, db_instance: SQLAlchemy):
         self.db = db_instance
         self.aup: AupInfo | None = None
-        self.creator = ExcelCreator(path='checker/excel/reports(temporary)/')
         value = {el.id: el.title for el in self.db.session.query(D_Period).all()}
-        self.creator.period_id_to_title = value
 
     @method_time
     def _get_report(self, aup: str, hide_title=False, hide_detailed=False) -> Report:
@@ -76,10 +73,10 @@ class BaseChecker:
         report.result = all([el.result for el in report.tests])
         return report
     
-    def _remove_positive_detailed(self, detailed: list[Detailed] | None) -> list[Detailed] | None:
-        if detailed is None:
-            return None
-        return [d for d in detailed if not d.result]
+    # def _remove_positive_detailed(self, detailed: list[Detailed] | None) -> list[Detailed] | None:
+    #     if detailed is None:
+    #         return None
+    #     return [d for d in detailed if not d.result]
 
     @method_time
     def _get_header_data(self):

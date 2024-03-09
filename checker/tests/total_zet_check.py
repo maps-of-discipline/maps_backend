@@ -10,6 +10,7 @@ class TotalZetTest(BaseTest):
     @method_time
     def assert_test(self) -> Test:
         sum_zet = []
+        self.report.headers = ['От', 'До', 'Значение', 'Результат']
 
         for amount, el in self.data_filter.with_measure(self.measure_id):
             sum_zet.append(amount)
@@ -18,6 +19,7 @@ class TotalZetTest(BaseTest):
 
         self.report.value = sum_zet
         self.report.result = self._compare_value(sum_zet)
+        self.report.data.append([self.min, self.max, self.report.value, self.report.result])
         return self.report
 
     def default_rule_association(self, rule_id: int) -> AupInfoHasRuleTable | None:
