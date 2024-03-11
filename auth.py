@@ -9,18 +9,33 @@ import jwt
 import uuid
 from functools import wraps
 
-
 ACCESS_TOKEN_LIFETIME = 3600    # 1 hour in seconds
 REFRESH_TOKEN_LIFETIME = 7*24*3600      # 7 days in seconds
 
 
 def get_access_token(user_id) -> str:
-    user = Users.query.filter_by(id_user=user_id).first()
+    user: Users = Users.query.filter_by(id_user=user_id).first()
+
+    can_edit = []
+
+    if user.id_role == 2:   # faculty
+        for faq in user.faculties:
+            aup_infos = AupInfo.query.filter_by(id_faculty=faq.id_faculty).all()
+            for aup in aup_infos:
+                can_edit.append(aup.num_aup)
+
+    elif user.id_role == 3:     # department
+        aup_infos = AupInfo.query.filter_by(id_department=user.department_id)
+        for aup in aup_infos:
+            can_edit.append(aup.num_aup)
+
     payload = {
         "user_id": user.id_user,
         'role_id': user.id_role,
+        'department_id': user.department_id,
         'faculties': [faq.id_faculty for faq in user.faculties],
-        'exp': round(time()) + ACCESS_TOKEN_LIFETIME
+        'exp': round(time()) + ACCESS_TOKEN_LIFETIME,
+        'can_edit': can_edit
     }
 
     return str(jwt.encode(payload, SECRET_KEY, algorithm='HS256'))
