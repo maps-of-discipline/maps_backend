@@ -30,7 +30,8 @@ def get_access_token(user_id) -> str:
             can_edit.append(aup.num_aup)
 
     payload = {
-        "user_id": user.id_user,
+        'user_id': user.id_user,
+        'login': user.login,
         'role_id': user.id_role,
         'department_id': user.department_id,
         'faculties': [faq.id_faculty for faq in user.faculties],
