@@ -39,7 +39,7 @@ class SprFaculty(db.Model):
     id_branch = db.Column(db.Integer, db.ForeignKey(
         'spr_branch.id_branch'), nullable=False)
     dean = db.Column(db.String(255), nullable=True)
-
+    admin_only = db.Column(db.Boolean, default=0)
     branch = db.relationship('SprBranch')
 
     def __repr__(self):
