@@ -482,9 +482,11 @@ def getAllMaps():
     fac = SprFaculty.query.all()
     li = list()
     for i in fac:
+        i: SprFaculty
         li.append({
             "faculty_id": i.id_faculty,
             "faculty_name": i.name_faculty,
+            "admin_only": i.admin_only == 1,
             "directions": GetMaps(id=i.id_faculty),
         })
     return jsonify(li)
