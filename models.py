@@ -413,16 +413,6 @@ class Users(db.Model, UserMixin):
         return '<User %r>' % self.login
 
 
-class Roles(db.Model):
-    __tablename__ = 'roles'
-
-    id_role = db.Column(db.Integer, primary_key=True)
-    name_role = db.Column(db.String(100), nullable=False)
-
-    def __repr__(self):
-        return '<Role %r>' % self.name_role
-
-
 class Token(db.Model):
     __tablename__ = 'tbl_token'
 
@@ -433,3 +423,41 @@ class Token(db.Model):
     ttl = db.Column(db.Integer(), nullable=False)
 
     user = db.relationship('Users')
+
+
+class Roles(db.Model):
+    __tablename__ = 'roles'
+
+    id_role = db.Column(db.Integer, primary_key=True)
+    name_role = db.Column(db.String(100), nullable=False)
+
+    modes = db.Realtionship(
+        "Mode",
+        secondary="permissions_table",
+    )
+
+    def __repr__(self):
+        return '<Role %r>' % self.name_role
+
+
+permissions_table = db.Table(
+    "Permissions",
+    db.Column(db.Integer, db.ForeignKey("roles.id_role", nullable=False)),
+    db.Column(db.Integer, db.ForeignKey("Mode.id", nullable=False))
+)
+
+
+class Mode(db.Modle):
+    __tablename__ = "Mode"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+    action = db.Column(db.String(255), nullable=False)
+
+    roles = db.Relationship(
+        "Role",
+        secondary=permissions_table
+    )
+
+    def __repr__(self):
+        return f'{self.title}.{self.action}'
