@@ -1,4 +1,4 @@
-
+from admin import init_admin
 from take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
                           ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r, create_json, create_json_test)
 import json
@@ -7,7 +7,8 @@ from tools import take_aup_from_excel_file, error, timeit, prepare_shifr
 from save_into_bd import SaveCard
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
 from excel_check import excel_check
-from models import Users, D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, AupData, AupInfo, Groups, SprFaculty
+from models import Users, D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, AupData, \
+    AupInfo, Groups, SprFaculty, Mode
 import pandas as pd
 from upload_xml import create_xml
 from openpyxl import load_workbook
@@ -35,6 +36,8 @@ app.config.from_pyfile('config.py')
 app.config['CORS_HEADERS'] = 'Content-Type'
 
 app.register_blueprint(cabinet, url_prefix=app.config['URL_PREFIX_CABINET'])
+
+app.json.sort_keys = False
 
 convention = {
     "ix": 'ix_%(column_0_label)s',
@@ -72,6 +75,8 @@ setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, contro
 if os.path.exists(app.static_folder + '/temp') == False: 
     os.makedirs(app.static_folder + '/temp', exist_ok=True)
 
+
+init_admin(app, db.session)
 
 @app.cli.command('create-user')
 def create_user():
@@ -111,6 +116,8 @@ def getMap(aup):
 
     # data = AupData.query.filter_by(id_aup=aup.id_aup).all()
     json = create_json(aup)
+    if not json:
+        return make_response(jsonify({'error': "not found"}), 404)
 
     # if check_sum_zet_in_type(json['data']) == False:
     #     return make_response(jsonify('ERROR sum_zet=0'), 400)
@@ -180,22 +187,42 @@ def save_loop(i, in_type, l, request_data):
             return make_response('Save error', 400)
     
 
-@app.route('/api/get_id_edizm', methods=["GET"])
+@app.route('/api/meta-info', methods=["GET"])
 def get_id_edizm():
-    l = list()
-    d = dict()
-    d['id_edizm'] = 1
-    d['kratn'] = 2
-    d['value'] = 'Часы'
-    d['coef'] = 0.0625
-    l.append(d)
-    d = dict()
-    d['id_edizm'] = 2
-    d['kratn'] = 1
-    d['value'] = 'Недели'
-    d['coef'] = 1.5
-    l.append(d)
-    return make_response(jsonify(l), 200)
+    measure_coefs = [
+        {
+            "id_edizm": 1,
+            "kratn": 2,
+            "value": 'Часы',
+            "coef": 0.0625
+        },
+        {
+            'id_edizm': 2,
+            'kratn': 1,
+            'value': 'Недели',
+            'coef': 1.5,
+        }
+    ]
+
+    modes = []
+    for mode in Mode.query.all():
+        mode: Mode
+        roles = [{
+            "id": role.id_role,
+            "title": role.name_role,
+        } for role in mode.roles]
+
+        modes.append({
+            "id": mode.id,
+            "title": mode.title,
+            "action": mode.action,
+            "roles": roles
+        })
+
+    return make_response(jsonify({
+        "measure_coefs": measure_coefs,
+        "modes": modes,
+    }), 200)
 
 
 
@@ -483,9 +510,11 @@ def getAllMaps():
     fac = SprFaculty.query.all()
     li = list()
     for i in fac:
+        i: SprFaculty
         li.append({
             "faculty_id": i.id_faculty,
             "faculty_name": i.name_faculty,
+            "admin_only": i.admin_only == 1,
             "directions": GetMaps(id=i.id_faculty),
         })
     return jsonify(li)
@@ -665,9 +694,20 @@ def get_user_info(user_id):
     }, sort_keys=False))
 
 
-@app.route('/api/test/<string:aup>')
+@app.route("/api/delete-aup/<string:aup>")
 # @login_required(request)
 # @aup_require(request)
+def delete_aup(aup):
+    aup = AupInfo.query.filter_by(num_aup=aup).first()
+    if aup:
+        db.session.delete(aup)
+        db.session.commit()
+
+    return jsonify({'result': "successful"})
+
+@app.route('/api/test/<string:aup>')
+@login_required(request)
+@aup_require(request)
 def test(aup):
     aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
     aup_info.copy(file='asdf', num='100011111')

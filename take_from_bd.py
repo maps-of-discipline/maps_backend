@@ -25,6 +25,9 @@ def getType(id):
 
 def create_json(aup):
     aupInfo = AupInfo.query.filter_by(num_aup=aup).first()
+    if not aupInfo:
+        return None
+
     aupData = AupData.query.filter_by(id_aup=aupInfo.id_aup).order_by(AupData.shifr, AupData.discipline, AupData.id_period).all()
 
     json = dict()

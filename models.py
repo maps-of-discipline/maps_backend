@@ -4,7 +4,7 @@ import os
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy_serializer import SerializerMixin
 from werkzeug.security import check_password_hash, generate_password_hash
-from flask_login import UserMixin 
+from flask_login import UserMixin
 from flask import url_for
 from user_policy import UsersPolicy
 from dataclasses import dataclass
@@ -41,7 +41,7 @@ class SprFaculty(db.Model):
     id_branch = db.Column(db.Integer, db.ForeignKey(
         'spr_branch.id_branch'), nullable=False)
     dean = db.Column(db.String(255), nullable=True)
-
+    admin_only = db.Column(db.Boolean, default=0)
     branch = db.relationship('SprBranch')
 
     def __repr__(self):
@@ -122,7 +122,6 @@ class AupInfo(db.Model):
     rop = db.relationship('SprRop')
     department = db.relationship('Department')
 
-
     def __repr__(self):
         return '<№ AUP %r>' % self.num_aup
 
@@ -155,7 +154,6 @@ class AupInfo(db.Model):
         db.session.add_all([el.copy(new_aup) for el in aup_data_queryset])
 
         db.session.commit()
-
 
 
 class Department(db.Model):
@@ -197,7 +195,11 @@ class SprVolumeDegreeZET(db.Model):
 
     @property
     def volume_degree_zet(self):
-        return 'id: {}, program_code: {}, type_standard: {}, ZET: {}, effective date: {}'.format(self.id_volume_deg, self.program_code, self.id_standard, self.zet, self.effective_date)
+        return 'id: {}, program_code: {}, type_standard: {}, ZET: {}, effective date: {}'.format(self.id_volume_deg,
+                                                                                                 self.program_code,
+                                                                                                 self.id_standard,
+                                                                                                 self.zet,
+                                                                                                 self.effective_date)
 
     def __repr__(self):
         return '<SprVolumeDegreeZET %r>' % self.volume_degree_zet
@@ -369,7 +371,6 @@ class AupData(db.Model, SerializerMixin):
         )
 
 
-
 users_faculty_table = db.Table(
     'users_faculty',
     db.Column("user_id", db.ForeignKey('tbl_users.id_user'), nullable=False),
@@ -396,12 +397,16 @@ class Users(db.Model, UserMixin):
         secondary=users_faculty_table,
     )
 
+    department = db.Relationship(
+        'Department',
+    )
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
-    
+
     # @property
     # def full_name(self):
     #     return ' '.join([self.last_name, self.first_name, self.middle_name or ''])
@@ -410,7 +415,6 @@ class Users(db.Model, UserMixin):
     def is_admin(self):
         from app import app
         return app.config.get('ADMIN_ROLE_ID') == self.role_id
-
 
     @property
     def is_facult(self):
@@ -431,16 +435,6 @@ class Users(db.Model, UserMixin):
 
     def __repr__(self):
         return '<User %r>' % self.login
-
-
-class Roles(db.Model):
-    __tablename__ = 'roles'
-
-    id_role = db.Column(db.Integer, primary_key=True)
-    name_role = db.Column(db.String(100), nullable=False)
-
-    def __repr__(self):
-        return '<Role %r>' % self.name_role
 
 
 class Token(db.Model):
@@ -490,3 +484,41 @@ class Topics(db.Model, SerializerMixin):
 
     d_control_type = db.relationship('D_ControlType')
     rpd = db.relationship('RPD')
+
+
+permissions_table = db.Table(
+    "Permissions",
+    db.Column("role_id", db.ForeignKey("roles.id_role"), nullable=False),
+    db.Column("mode_id", db.ForeignKey("Mode.id"), nullable=False)
+)
+
+class Roles(db.Model):
+    __tablename__ = 'roles'
+
+    id_role = db.Column(db.Integer, primary_key=True)
+    name_role = db.Column(db.String(100), nullable=False)
+
+    modes = db.relationship(
+        "Mode",
+        secondary=permissions_table,
+    )
+
+    def __repr__(self):
+        return '<Role %r>' % self.name_role
+
+
+class Mode(db.Model):
+    __tablename__ = "Mode"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+    action = db.Column(db.String(255), nullable=False)
+
+    roles = db.relationship(
+        "Roles",
+        secondary=permissions_table
+    )
+
+    def __repr__(self):
+        return f'{self.title}.{self.action}'
+
