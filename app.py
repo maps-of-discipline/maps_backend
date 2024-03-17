@@ -705,8 +705,7 @@ def delete_aup(aup):
 @aup_require(request)
 def test(aup):
     aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
-    aup_info.copy(file='asdf', num='100011111')
-    return make_response(str(aup_info), 200)
+    return make_response(str(aup_info.id_aup), 200)
 
 
 @app.route("/api/upload-xml/<string:aup>")
