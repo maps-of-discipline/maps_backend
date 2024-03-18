@@ -1,6 +1,6 @@
-from flask import Blueprint, make_response, jsonify
 from models.maps import AupData, AupInfo
 from models.cabinet import RPD, Topics
+from flask import Blueprint, make_response, jsonify
 from cabinet.utils.serialize import serialize
 
 from take_from_bd import (control_type_r)

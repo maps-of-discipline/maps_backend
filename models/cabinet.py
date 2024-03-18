@@ -1,9 +1,6 @@
 from .maps import db
 from sqlalchemy_serializer import SerializerMixin
 
-
-# cabinet
-
 class RPD(db.Model, SerializerMixin):
     __tablename__ = 'rpd'
 
