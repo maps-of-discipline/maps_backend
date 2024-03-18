@@ -1,5 +1,5 @@
 from flask import Blueprint, make_response, jsonify
-from models import RPD, Topics, AupData
+from models import RPD, Topics, AupData, AupInfo
 from cabinet.utils.serialize import serialize
 
 from take_from_bd import (control_type_r)
@@ -19,9 +19,18 @@ def rpd():
     return jsonify(rpdList)
 
 # Получение всех тем по РПД
-@cabinet.route('/topics/<string:id_rpd>', methods=['GET'])
-def topics(id_rpd):
-    topics = Topics.query.filter(Topics.id_rpd == id_rpd).all()
+# TODO Обработать ошибки и ненаход данных
+@cabinet.route('/lessons/<string:aupCode>', methods=['GET'])
+def topics(aupCode):
+    aup: AupInfo = AupInfo.query.filter(AupInfo.num_aup == aupCode).first()
+
+    if not aup:
+        return jsonify([])
+
+
+    rpd: RPD = RPD.query.filter(RPD.id_aup == aup.id_aup).first()
+
+    topics: Topics = Topics.query.filter(Topics.id_rpd == rpd.id).all()
     topics = serialize(topics)
 
     return jsonify(topics)
@@ -51,14 +60,3 @@ def controlTypesRPD(id_rpd):
     controlTypes = list(map(mapDisciplinesToControlType, diciplines))
 
     return jsonify(controlTypes)
-
-""" 
-{
-    loads: [
-        {
-            control_type: 1,
-            amount: 2
-        }
-    ]
-}
- """
