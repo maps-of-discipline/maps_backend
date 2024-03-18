@@ -1,0 +1,22 @@
+{
+	// Используйте IntelliSense, чтобы узнать о возможных атрибутах.
+	// Наведите указатель мыши, чтобы просмотреть описания существующих атрибутов.
+	// Для получения дополнительной информации посетите: https://go.microsoft.com/fwlink/?linkid=830387
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Отладчик Python: Flask",
+			"type": "debugpy",
+			"request": "launch",
+			"module": "flask",
+			"python": "C:\\projects\\PD_EP_spring2022\\venv\\Scripts\\python.exe",
+			"env": {
+				"FLASK_APP": "app.py",
+				"FLASK_DEBUG": "1"
+			},
+			"args": ["run", "--debug"],
+			"jinja": true,
+			"autoStartBrowser": false
+		}
+	]
+}
