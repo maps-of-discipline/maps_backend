@@ -17,7 +17,6 @@ from sqlalchemy import MetaData
 from flask_migrate import Migrate
 from flask import Flask, make_response, redirect, render_template, request, send_file, jsonify
 from flask_cors import CORS
-from models import db
 import io
 import os
 import warnings
@@ -72,6 +71,7 @@ if os.path.exists(app.static_folder + '/temp') == False:
 
 
 init_admin(app, db.session)
+
 
 @app.cli.command('create-user')
 def create_user():
