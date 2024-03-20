@@ -8,10 +8,10 @@ class RPD(db.Model, SerializerMixin):
 
     id: int = db.Column(db.Integer(), primary_key=True)
     id_aup: int = db.Column(db.Integer(), db.ForeignKey('tbl_aup.id_aup'), nullable=False)
-    id_unique_discipline: int = db.Column(db.Integer(), db.ForeignKey('unique_discipline.id'), nullable=False)
+    id_unique_discipline: int = db.Column(db.Integer(), db.ForeignKey('spr_discipline.id'), nullable=False)
 
     aupData = db.relationship('AupInfo')
-    uniqueDiscipline = db.relationship('UniqueDiscipline')
+    sprDiscipline = db.relationship('SprDiscipline')
 
 class Topics(db.Model, SerializerMixin):
     __tablename__ = 'topic'

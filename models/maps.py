@@ -328,13 +328,14 @@ class AupData(db.Model):
 
     @discipline.setter
     def discipline(self, value):
-        if not SprDiscipline.query.filter_by(title=value).first():
+        discipline = SprDiscipline.query.filter_by(title=value).first() 
+        if discipline is None:
             discipline = SprDiscipline()
             discipline.title = value
-            self._discipline = discipline
             db.session.add(discipline)
             db.session.commit()
             self.id_discipline = discipline.id
+        self._discipline = value
 
     def __repr__(self):
         return '<AupData %r>' % self.aup.num_aup
