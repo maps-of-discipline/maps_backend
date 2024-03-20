@@ -300,7 +300,10 @@ class AupData(db.Model):
     id_group = db.Column(db.Integer, nullable=False)
     id_type_record = db.Column(db.Integer, db.ForeignKey(
         'd_type_record.id'), nullable=False)
-    discipline = db.Column(db.String(350), nullable=False)
+    _discipline = db.Column(db.String(350), nullable=False)
+    id_discipline = db.Column(db.Integer, db.ForeignKey(
+        "spr_discipline.id", ondelete='SET NULL'
+    ))
     id_period = db.Column(db.Integer, nullable=False)
     num_row = db.Column(db.Integer, nullable=False)
     id_type_control = db.Column(db.Integer, db.ForeignKey(
@@ -317,6 +320,21 @@ class AupData(db.Model):
     type_control = db.relationship('D_ControlType')
     aup = db.relationship('AupInfo')
     ed_izmereniya = db.relationship('D_EdIzmereniya')
+    unique_discipline = db.relationship("SprDiscipline")
+
+    @property
+    def discipline(self):
+        return self._discipline
+
+    @discipline.setter
+    def discipline(self, value):
+        if not SprDiscipline.query.filter_by(title=value).first():
+            discipline = SprDiscipline()
+            discipline.title = value
+            self._discipline = discipline
+            db.session.add(discipline)
+            db.session.commit()
+            self.id_discipline = discipline.id
 
     def __repr__(self):
         return '<AupData %r>' % self.aup.num_aup
@@ -339,9 +357,10 @@ class AupData(db.Model):
             id_edizm=self.id_edizm,
             zet=self.zet,
         )
-    
-class UniqueDiscipline(db.Model, SerializerMixin):
-    __tablename__ = 'unique_discipline'
+
+
+class SprDiscipline(db.Model, SerializerMixin):
+    __tablename__ = 'spr_discipline'
 
     serialize_only = ('id', 'title')
 

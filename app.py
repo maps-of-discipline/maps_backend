@@ -8,7 +8,7 @@ from save_into_bd import SaveCard
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
 from excel_check import excel_check
 from models import Users, D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, AupData, \
-    AupInfo, Groups, SprFaculty, Mode
+    AupInfo, Groups, SprFaculty, Mode, SprDiscipline
 import pandas as pd
 from upload_xml import create_xml
 from openpyxl import load_workbook
@@ -22,7 +22,7 @@ import io
 import os
 import warnings
 from auth import *
-from cabinet.cabinet import cabinet
+# from cabinet.cabinet import cabinet
 
 warnings.simplefilter("ignore")
 
@@ -35,7 +35,7 @@ cors = CORS(app, resources={r"*": {"origins": "*"}}, supports_credentials=True)
 app.config.from_pyfile('config.py')
 app.config['CORS_HEADERS'] = 'Content-Type'
 
-app.register_blueprint(cabinet, url_prefix=app.config['URL_PREFIX_CABINET'])
+# app.register_blueprint(cabinet, url_prefix=app.config['URL_PREFIX_CABINET'])
 
 app.json.sort_keys = False
 
@@ -706,11 +706,10 @@ def delete_aup(aup):
     return jsonify({'result': "successful"})
 
 @app.route('/api/test/<string:aup>')
-@login_required(request)
-@aup_require(request)
+# @login_required(request)
+# @aup_require(request)
 def test(aup):
-    aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
-    return make_response(str(aup_info.id_aup), 200)
+    return make_response(str('asdf'), 200)
 
 
 @app.route("/api/upload-xml/<string:aup>")
