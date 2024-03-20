@@ -54,6 +54,7 @@ def create_json(aup):
             flag = item.discipline + str(item.id_period)
             d = dict()
             d["discipline"] = item.discipline
+            d["id_discipline"] = item.id_discipline
             d["id_group"] = item.id_group
             d["id_block"] = item.id_block
             # TODO удалить после того, как фронт подстроится под shifr_new
