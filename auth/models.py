@@ -1,8 +1,7 @@
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from .maps import db
-from user_policy import UsersPolicy
+from maps.models import db
 
 users_faculty_table = db.Table(
     'users_faculty',
@@ -40,32 +39,6 @@ class Users(db.Model, UserMixin):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
-
-    # @property
-    # def full_name(self):
-    #     return ' '.join([self.last_name, self.first_name, self.middle_name or ''])
-
-    @property
-    def is_admin(self):
-        from app import app
-        return app.config.get('ADMIN_ROLE_ID') == self.role_id
-
-    @property
-    def is_facult(self):
-        from app import app
-        return app.config.get('FACULTY_ROLE_ID') == self.role_id
-
-    @property
-    def is_depart(self):
-        from app import app
-        return app.config.get('DEPARTMENT_ROLE_ID') == self.role_id
-
-    def can(self, action):
-        users_policy = UsersPolicy()
-        method = getattr(users_policy, action)
-        if method is not None:
-            return method()
-        return False
 
     def __repr__(self):
         return '<User %r>' % self.login

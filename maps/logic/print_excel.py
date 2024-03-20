@@ -1,15 +1,15 @@
+import os
 from math import floor
-import os, re
-from random import randint
+
 import openpyxl
 import xlsxwriter
 from openpyxl.styles import (Alignment, Border, Font, NamedStyle, PatternFill,
                              Side)
-from tools import get_maximum_rows
-from discipline_list import faculty_dis
 
-from models import (AupInfo, AupData, Groups, db)
-from take_from_bd import create_json_print
+from maps.logic.discipline_list import faculty_dis
+from maps.models import (AupInfo, AupData, Groups)
+from maps.logic.take_from_bd import create_json_print
+from maps.logic.tools import get_maximum_rows
 
 ROW_START_DISCIPLINES = 4
 ROW_HEIGHT = 23
@@ -63,7 +63,7 @@ def makeLegend(wb, table, aup):
     aup2 = aup2[1:len(aup2)-2]
     # ws['A22'].value = str(aup2)
 
-    dis =  faculty_dis(aup2)
+    dis = faculty_dis(aup2)
     i=1
     for key in dis.keys():
         ws['A' + str(i+20)].style = 'standart'
@@ -104,7 +104,7 @@ def saveMap(aup, static, papper_size, orientation, **kwargs):
         ws[chr(ord("B")+course*2)+f"{ROW_START_DISCIPLINES-2}"].style = 'special'
         ws.merge_cells(
             f'{chr(ord("B")+course*2)}{ROW_START_DISCIPLINES-2}:{chr(ord("B")+course*2+1)}{ROW_START_DISCIPLINES-2}')
-    
+
     if not (len(table)/2).is_integer():
         ws[chr(ord("B")+floor(len(table)/2)*2)+f"{ROW_START_DISCIPLINES-2}"] = str(floor(len(table)/2)+1) + " курс"
         ws[chr(ord("B")+floor(len(table)/2)*2)+f"{ROW_START_DISCIPLINES-2}"].style = 'special'
@@ -119,7 +119,7 @@ def saveMap(aup, static, papper_size, orientation, **kwargs):
             column = chr(ord("B") + i)
             cell = f"{column}{ROW_START_DISCIPLINES+merged}"
 
-            ws[cell] = el['discipline'] 
+            ws[cell] = el['discipline']
 
             color = el['color'].replace('#', '')
 
@@ -136,7 +136,7 @@ def saveMap(aup, static, papper_size, orientation, **kwargs):
     makeLegend(wb, table, aup)
 
     set_print_properties(table, ws, max_zet)
-    
+
     ### Установить нижний колонтитул
     ws.oddFooter.right.text = f"АУП {aup.num_aup}"
     ws.oddFooter.right.size = 14
@@ -149,7 +149,7 @@ def saveMap(aup, static, papper_size, orientation, **kwargs):
     if orientation=="land":
         ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
     elif orientation=="port":
-        ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT    
+        ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
 
     for sheets in wb:
         sheets.sheet_view.zoomScale = 45
@@ -217,16 +217,16 @@ def set_print_properties(table, ws, max_zet):
 
     # Определяем высоту наибольшего столбца(семестра) для избежания выхода за границы
     col_max_height = max([sum(map(lambda cell: cell['zet'], col)) * 2 for col in table])
-    
-    cell = lambda x,y: f'{chr(ord("A")+x+1)}{ROW_START_DISCIPLINES+y}' # Перевод численных координат в координаты с буквой 
+
+    cell = lambda x,y: f'{chr(ord("A")+x+1)}{ROW_START_DISCIPLINES+y}' # Перевод численных координат в координаты с буквой
     is_none = lambda x, y: cell(x, y) not in ws.merged_cells # Пустая ли ячейка
 
-    
+
     for x in range(len(table)):
         for y in range(int(col_max_height)):
             border = Border()
             if (not is_none(x,y)):
-                border = Border(left=border_thin, right=border_thin, bottom=border_thin) 
+                border = Border(left=border_thin, right=border_thin, bottom=border_thin)
 
             if (x + 1 == len(table)):
                 border.right = border_thick
@@ -289,7 +289,7 @@ def CreateMap(filename_map, max_zet, table_length):
     wk.close()
     workbook = openpyxl.load_workbook(filename_map)
     worksheet = workbook.active
-    
+
     addStyles(workbook)
 
     worksheet.row_dimensions[1].height = 90

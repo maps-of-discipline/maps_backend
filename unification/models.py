@@ -1,5 +1,4 @@
-from sqlite3 import Date
-from .maps import db
+from maps.models import db
 
 
 class Unification(db.Model):

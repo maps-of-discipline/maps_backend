@@ -1,5 +1,6 @@
-from tools import check_skiplist, prepare_shifr
-from models import AupData, AupInfo, Groups
+from maps.models import AupData, AupInfo, Groups
+from maps.logic.tools import check_skiplist, prepare_shifr
+
 blocks = {}
 blocks_r = {}
 period = {}

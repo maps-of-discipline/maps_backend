@@ -1,14 +1,14 @@
-from math import ceil
 import os
-from random import randint
+from math import ceil
+
 import openpyxl
 import xlsxwriter
 from openpyxl.styles import (Alignment, Border, Font, NamedStyle, PatternFill,
                              Side)
-from tools import get_maximum_rows
 
-from models import (AupInfo, AupData, Groups, db)
+from maps.models import (AupInfo, AupData, Groups)
 from take_from_bd import create_json_print
+from tools import get_maximum_rows
 
 ROW_START_DISCIPLINES = 5
 QUANTITY_HEADER_ROWS = 3

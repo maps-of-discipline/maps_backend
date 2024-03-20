@@ -1,16 +1,20 @@
+import uuid
+from functools import wraps
+from time import time
+from typing import Any
+
+import jwt
 import sqlalchemy.exc
 from flask import make_response
 
+from auth.models import Users, Token
+from maps.models import db, AupInfo
+
 from config import SECRET_KEY
-from models import Token, Users, AupInfo, db
 
-from time import time, sleep
-import jwt
-import uuid
-from functools import wraps
 
-ACCESS_TOKEN_LIFETIME = 3600    # 1 hour in seconds
-REFRESH_TOKEN_LIFETIME = 7*24*3600      # 7 days in seconds
+ACCESS_TOKEN_LIFETIME = 3600  # 1 hour in seconds
+REFRESH_TOKEN_LIFETIME = 7 * 24 * 3600  # 7 days in seconds
 
 
 def get_access_token(user_id) -> str:
@@ -18,13 +22,13 @@ def get_access_token(user_id) -> str:
 
     can_edit = []
 
-    if user.id_role == 2:   # faculty
+    if user.id_role == 2:  # faculty
         for faq in user.faculties:
             aup_infos = AupInfo.query.filter_by(id_faculty=faq.id_faculty).all()
             for aup in aup_infos:
                 can_edit.append(aup.num_aup)
 
-    elif user.id_role == 3:     # department
+    elif user.id_role == 3:  # department
         aup_infos = AupInfo.query.filter_by(id_department=user.department_id)
         for aup in aup_infos:
             can_edit.append(aup.num_aup)
@@ -63,15 +67,13 @@ def get_refresh_token(user_id: int, user_agent: str) -> str:
     return refresh_token
 
 
-def verify_jwt_token(jwt_token) -> dict:
+def verify_jwt_token(jwt_token) -> tuple[Any, bool] | tuple[None, bool]:
     try:
         return jwt.decode(
             jwt=jwt_token,
             key=SECRET_KEY,
             algorithms=['HS256'],
-            options = {
-                "verify_exp": False
-            }
+            options={"verify_exp": False}
         ), True
 
     except jwt.exceptions.InvalidSignatureError:
@@ -99,7 +101,9 @@ def login_required(request):
 
             result = f(*args, **kwargs)
             return result
+
         return decorated_function
+
     return decorator
 
 
@@ -127,7 +131,9 @@ def aup_require(request):
 
             result = f(*args, **kwargs)
             return result
+
         return decorated_function
+
     return decorator
 
 
@@ -147,8 +153,7 @@ def admin_only(request):
 
             result = f(*args, **kwargs)
             return result
+
         return decorated_function
+
     return decorator
-
-
-

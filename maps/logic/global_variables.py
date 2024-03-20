@@ -1,13 +1,14 @@
-from models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, Groups
+from maps.models import D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, Groups
 
-def setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r, ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r):
+
+def setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r, ed_izmereniya,
+                       ed_izmereniya_r, chast, chast_r, type_record, type_record_r):
     with app.app_context():
 
         blocks_q = D_Blocks.query.all()
         for row in blocks_q:
             blocks[row.title] = row.id
             blocks_r[row.id] = row.title
-            
 
         chast_q = D_Part.query.all()
         for row in chast_q:
@@ -23,7 +24,7 @@ def setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, co
         for row in control_type_q:
             control_type[row.title] = row.id
             control_type_r[row.id] = row.title
-        
+
         ed_izmereniya_q = D_EdIzmereniya.query.all()
         for row in ed_izmereniya_q:
             ed_izmereniya[row.title] = row.id
@@ -34,13 +35,14 @@ def setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, co
             type_record[row.title] = row.id
             type_record_r[row.id] = row.title
 
+
 def addGlobalVariable(db, type, value):
-    
     row = type(title=value)
     db.session.add(row)
     db.session.commit()
-    
+
     return row.id
+
 
 def getModuleId(db, value):
     module = D_Modules.query.filter(D_Modules.title == value).first()
@@ -51,6 +53,7 @@ def getModuleId(db, value):
 
         return row.id
     return module.id
+
 
 def getGroupId(db, value):
     group = Groups.query.filter(Groups.name_group == value).first()

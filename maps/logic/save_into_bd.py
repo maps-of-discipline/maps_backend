@@ -1,11 +1,13 @@
-import os
-import pandas as pd
 # from random import randint
 # from flask import Blueprint, request
 # import re
 import datetime
+
+import pandas as pd
 from sqlalchemy import desc
-from models import AupData, AupInfo, NameOP, SprDegreeEducation, SprFormEducation, SprFaculty, Department, db
+
+from maps.models import AupData, AupInfo, NameOP, SprDegreeEducation, SprFormEducation, SprFaculty, Department, db
+
 # # from app import static_folder
 
 # bp = Blueprint('upload_to_db', __name__, url_prefix='/upload_to_db')

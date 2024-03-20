@@ -2,9 +2,7 @@ import json
 import time
 from functools import wraps
 
-from flask_wtf import FlaskForm
-from flask_wtf.file import FileField, FileRequired, FileAllowed
-from flask import make_response, jsonify
+from flask import make_response
 from openpyxl import load_workbook
 
 # # Условия фильтра, если добавлять категорию, то нужно исправить if

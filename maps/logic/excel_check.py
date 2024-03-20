@@ -1,9 +1,9 @@
 from collections import defaultdict
-from math import ceil
-import os
+
 from openpyxl import load_workbook
-from tools import get_maximum_rows, skiplist, sems, timeit
-from models import SprStandard, SprVolumeDegreeZET
+
+from maps.models import SprStandard, SprVolumeDegreeZET
+from maps.logic.tools import get_maximum_rows, skiplist, sems
 
 
 def check_smt1(file):  # проверка на целочисленность дисциплины №2
