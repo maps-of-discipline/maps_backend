@@ -22,7 +22,7 @@ import io
 import os
 import warnings
 from auth import *
-# from cabinet.cabinet import cabinet
+from cabinet.cabinet import cabinet
 
 warnings.simplefilter("ignore")
 
@@ -35,7 +35,7 @@ cors = CORS(app, resources={r"*": {"origins": "*"}}, supports_credentials=True)
 app.config.from_pyfile('config.py')
 app.config['CORS_HEADERS'] = 'Content-Type'
 
-# app.register_blueprint(cabinet, url_prefix=app.config['URL_PREFIX_CABINET'])
+app.register_blueprint(cabinet, url_prefix=app.config['URL_PREFIX_CABINET'])
 
 app.json.sort_keys = False
 

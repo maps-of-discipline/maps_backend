@@ -1,7 +1,8 @@
-from models.maps import db, AupData, AupInfo
+from models.maps import SprDiscipline, db, AupData, AupInfo
 from models.cabinet import RPD, Topics
 from flask import Blueprint, make_response, jsonify, request
 from cabinet.utils.serialize import serialize
+from cabinet.lib.generate_empty_rpd import generate_empty_rpd
 
 from take_from_bd import (control_type_r)
 
@@ -19,26 +20,72 @@ def rpd():
     rpdList = serialize(rpdList)
     return jsonify(rpdList)
 
-# Получение всех тем по РПД
-# TODO Обработать ошибки и ненаход данных
-@cabinet.route('/lessons/<string:aupCode>', methods=['GET'])
-def topics(aupCode):
-    # Добавить сюда поиск по id_unique_dicipline, т.к.
-    # сейчас возвращаются все темы по всем дисциплинам
-    aup: AupInfo = AupInfo.query.filter(AupInfo.num_aup == aupCode).first()
+# Получение тем занятий по номеру АУП и айди дисциплины
+@cabinet.route('/lessons', methods=['GET'])
+def getLessons():
+    if 'aup' not in request.args:
+        return make_response('Отсутствует параметр "aup"', 400)
+    
+    if 'id' not in request.args:
+        return make_response('Отсутствует параметр "id"', 400)
 
-    if not aup:
-        return jsonify([])
+    num_aup = request.args.get('aup')
+    id_discipline = request.args.get('id')
 
-    rpd: RPD = RPD.query.filter(RPD.id_aup == aup.id_aup).first()
+    response_data = {
+        'topics': [],
+        'rpd_id': None,
+        'title': None
+    }
+
+    aup_info: AupInfo = AupInfo.query.filter(AupInfo.num_aup == num_aup).first()
+    if not aup_info:
+        return jsonify({ 'error': 'Данный АУП отсутствует.' })
+    
+    discipline_is_exist = AupData.query.filter(AupData.id_discipline == id_discipline).first()
+    if not discipline_is_exist:
+        return jsonify({ 'error': 'Дисциплина отсутствует в АУП.' })
+
+    rpd = RPD.query.filter(RPD.id_aup == aup_info.id_aup, RPD.id_unique_discipline == id_discipline).first()
+    if not rpd:
+        res = generate_empty_rpd(aup_info.id_aup, id_discipline)
+
+        if 'error' in res:
+            return jsonify(res)
+        else:
+            rpd = res['data']
+
+    response_data['rpd_id'] = rpd.id
+
+    spr_discipline = SprDiscipline.query.filter(SprDiscipline.id == id_discipline).first()
+    response_data['title'] = spr_discipline.title
 
     topics: Topics = Topics.query.filter(Topics.id_rpd == rpd.id).all()
-    topics = serialize(topics)
+    response_data['topics'] = serialize(topics)
 
-    return jsonify(topics)
+    return jsonify(response_data)
+
+# Роут для генерации несуществующей таблицы
+@cabinet.route('/lessons', methods=['POST'])
+def postLessons():
+    if 'aup' not in request.args:
+        return make_response('Отсутствует параметр "aup"', 401)
+    
+    if 'id' not in request.args:
+        return make_response('Отсутствует параметр "id"', 401)
+    
+    aup = request.args.get('aup')
+    id_discipline = request.args.get('id')
+
+    success, data = generate_empty_rpd(aup, id_discipline)
+
+    return jsonify({
+        'success': success,
+        'data': data
+    })
 
 @cabinet.route('/save-topic', methods=['POST'])
-def saveTopic():
+def save_topic():
     data = request.get_json()
     print(data)
 
