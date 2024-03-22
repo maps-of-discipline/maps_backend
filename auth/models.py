@@ -21,10 +21,10 @@ class Users(db.Model, UserMixin):
     id_role = db.Column(db.Integer, db.ForeignKey(
         'roles.id_role'), nullable=False)
 
-    role = db.relationship('Roles')
-
     department_id = db.Column(db.Integer, db.ForeignKey('tbl_department.id_department'), nullable=True)
 
+    role = db.relationship('Roles')
+    #
     faculties = db.Relationship(
         'SprFaculty',
         secondary=users_faculty_table,
@@ -42,6 +42,10 @@ class Users(db.Model, UserMixin):
 
     def __repr__(self):
         return '<User %r>' % self.login
+
+    def __str__(self):
+        return self.login
+
 
 
 class Token(db.Model):
@@ -72,10 +76,14 @@ class Roles(db.Model):
     modes = db.relationship(
         "Mode",
         secondary=permissions_table,
+
     )
 
     def __repr__(self):
         return '<Role %r>' % self.name_role
+
+    def __str__(self):
+        return self.name_role
 
 
 class Mode(db.Model):
@@ -87,7 +95,8 @@ class Mode(db.Model):
 
     roles = db.relationship(
         "Roles",
-        secondary=permissions_table
+        secondary=permissions_table,
+        back_populates='modes'
     )
 
     def __repr__(self):

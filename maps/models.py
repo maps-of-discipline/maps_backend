@@ -38,6 +38,9 @@ class SprFaculty(db.Model):
     def __repr__(self):
         return '<Faculty %r>' % self.name_faculty
 
+    def __str__(self):
+        return self.name_faculty
+
 
 class SprFormEducation(db.Model):
     __tablename__ = 'spr_form_education'
@@ -156,6 +159,8 @@ class Department(db.Model):
     def __repr__(self):
         return '<Department %r>' % self.name_department
 
+    def __str__(self):
+        return f"{self.name_department}"
 
 class NameOP(db.Model):
     __tablename__ = 'spr_name_op'

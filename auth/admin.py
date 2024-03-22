@@ -1,7 +1,11 @@
-from flask_admin import Admin
+from flask_admin.actions import action
 from flask_admin.contrib.sqla import ModelView
 
-from models import *
+from auth.models import Mode, Roles, Users
+from maps.models import db, AupData
+
+
+category = __package__.capitalize()
 
 
 class ModeAdminView(ModelView):
@@ -12,12 +16,24 @@ class ModeAdminView(ModelView):
         ]
     }
 
+    column_details_list = column_list = ['title', 'action', 'roles']
+
 
 class RoleAdminView(ModelView):
-    ...
+    column_details_list = ['name_role', ]
 
 
-def init_admin(app, session):
-    admin = Admin(app, name="Maps of Disciplines", template_mode="bootstrap3")
-    admin.add_view(ModeAdminView(Mode, session, category="Auth"))
-    admin.add_view(RoleAdminView(Roles, session, category="Auth"))
+class UserAdminView(ModelView):
+    can_create = False
+    column_list = ['login', 'role', 'email', 'faculties', 'department']
+    column_details_list = ['login', 'role', 'email', 'faculties', 'department']
+        
+
+
+auth_admin_views = [
+    ModeAdminView(Mode, db.session, category=category),
+    RoleAdminView(Roles, db.session, category=category),
+    UserAdminView(Users, db.session, category=category),
+]
+
+

@@ -57,9 +57,6 @@ def take_aup_from_excel_file(file):
     wb.save(file)
     return str(value)
 
-def error(errors):
-    return make_response(json.dumps(errors, ensure_ascii=False), 400)
-
 
 def check_skiplist(zet_or_hours, value_discipline, value_record_type, value_block):
     if (zet_or_hours is not None and (
