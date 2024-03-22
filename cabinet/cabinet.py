@@ -6,6 +6,8 @@ from cabinet.lib.generate_empty_rpd import generate_empty_rpd
 
 from take_from_bd import (control_type_r)
 
+from itertools import groupby
+
 cabinet = Blueprint('cabinet', __name__)
 
 
@@ -84,18 +86,14 @@ def postLessons():
         'data': data
     })
 
-@cabinet.route('/save-topic', methods=['POST'])
-def save_topic():
+@cabinet.route('/edit-lesson', methods=['POST'])
+def edit_lesson():
     data = request.get_json()
-    print(data)
-
-    if 'id' not in data:
-        return make_response('Отсутствует поле "id"', 401)
     
     if 'lesson' not in data:
         return make_response('Отсутствует поле "lesson"', 401)
     
-    topic = Topics.query.filter(Topics.id == data['id']).first()
+    topic = Topics.query.filter(Topics.id == data['lesson']['id']).first()
 
     topic.chapter = data['lesson']['chapter']
     topic.topic = data['lesson']['topic']
@@ -107,6 +105,43 @@ def save_topic():
 
     return make_response(jsonify(res))
 
+@cabinet.route('/create-lesson', methods=['POST'])
+def create_lesson():   
+    data = request.get_json()
+
+    if not data:
+        return make_response('Отсутствует поле "lesson"', 400)
+
+    new_lesson = Topics(
+        topic=data['topic'], 
+        chapter=data['chapter'], 
+        id_type_control=data['id_type_control'], 
+        task_link=data['task_link'], 
+        id_rpd=data['id_rpd']
+    )
+
+    db.session.add(new_lesson)   
+    db.session.commit()
+
+    res = serialize(new_lesson)
+    return make_response(jsonify(res))
+
+@cabinet.route('/delete-lesson', methods=['POST'])
+def delete_lesson():
+    data = request.get_json()
+
+    if not data['id']:
+        return make_response('Отсутствует "id"', 400)
+    
+    lesson = Topics.query.filter_by(id=data['id']).first()
+
+    res = serialize(lesson)
+
+    db.session.delete(lesson)
+    db.session.commit()
+
+    return make_response(jsonify(res), 200)
+
 # Получение всех нагрузок дисциплины
 @cabinet.route('/control_types/<string:id_rpd>', methods=['GET'])
 def controlTypesRPD(id_rpd):
@@ -115,8 +150,9 @@ def controlTypesRPD(id_rpd):
     id_unique_discipline = rpd.id_unique_discipline
     id_aup = rpd.id_aup
 
-    diciplines = AupData.query.filter(AupData.id_aup == id_aup, AupData.id_unique_discipline == id_unique_discipline).all()
-    diciplines = serialize(diciplines)
+    diciplines = AupData.query.filter(AupData.id_aup == id_aup, AupData.id_discipline == id_unique_discipline).all()
+    serialized_diciplines = serialize(diciplines)
+
     
     # Преобразует все строки из выгрузки в список нагрузок на дисциплине
     def mapDisciplinesToControlType(dicipline):
@@ -127,8 +163,15 @@ def controlTypesRPD(id_rpd):
             'name': control_type_r[id],
             'id_edizm': dicipline['id_edizm'],
             'amount': dicipline['amount'] / 100,
+            'id_period': dicipline['id_period'] + 1
         }
     
-    controlTypes = list(map(mapDisciplinesToControlType, diciplines))
+    control_types = list(map(mapDisciplinesToControlType, serialized_diciplines))
 
-    return jsonify(controlTypes)
+    grouped_control_types = groupby(sorted(control_types, key=lambda x: x['id_period']), key=lambda x: x['id_period'])
+
+    result = {}
+    for key, group in grouped_control_types:
+        result[key] = list(group)
+
+    return jsonify(result)
