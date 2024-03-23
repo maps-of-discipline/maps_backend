@@ -46,12 +46,6 @@ def getMap(aup):
     #     return make_response(jsonify('ERROR sum_zet=0'), 400)
     return make_response(jsonify(json), 200)
 
-    # data = AupData.query.filter_by(id_aup=aup.id_aup).all()
-    json = create_json(aup)
-
-    # if check_sum_zet_in_type(json['data']) == False:
-    #     return make_response(jsonify('ERROR sum_zet=0'), 400)
-    return make_response(jsonify(json), 200)
 
 
 def check_sum_zet_in_type(data):
@@ -152,21 +146,14 @@ def get_id_edizm():
 @timeit
 @login_required(request)
 def upload():
-    # form = FileForm(meta={'csrf': False})
-    print(request.files)
     if request.method == "POST":
         files = request.files.getlist("file")
         result_list = list()
         for f in files:
             options_check = json.loads(request.form['options'])
             print(options_check)
-            # options_check = dict()
-            # options_check['enableCheckIntegrality'] = False
-            # options_check['enableCheckSumMap'] = False
 
-            # aup = f.filename.split(' - ')[1].strip()
             ### путь к файлу на диске
-
             path = os.path.join(maps.static_folder, 'temp', f.filename)
 
             # сохранить временный файл с учебным планом
@@ -176,7 +163,6 @@ def upload():
             aup = take_aup_from_excel_file(path)
 
             # одна функция, описанная в отдельном файле, которая будет выполнять все проверки
-
             result = {
                 'aup': aup,
                 'filename': f.filename,
@@ -435,33 +421,33 @@ def get_colors():
 
 @maps.route("/getAllMaps")
 def getAllMaps():
-    fac = SprFaculty.query.all()
-    li = list()
-    for i in fac:
-        i: SprFaculty
+    specialization_names = {}
+    for el in NameOP.query.all():
+        el: NameOP
+        specialization_names.update({el.id_spec: el.name_spec})
+
+    faculties = SprFaculty.query.all()
+    li = []
+
+    for fac in faculties:
+        fac: SprFaculty
+        maps = []
+        for row in fac.aup_infos:
+            row: AupInfo
+            maps.append({
+                "name": specialization_names[row.id_spec],
+                "code": row.num_aup,
+                "year": row.year_beg,
+                "form_educ": row.id_form,
+            })
+
         li.append({
-            "faculty_id": i.id_faculty,
-            "faculty_name": i.name_faculty,
-            "admin_only": i.admin_only == 1,
-            "directions": GetMaps(id=i.id_faculty),
+            "faculty_id": fac.id_faculty,
+            "faculty_name": fac.name_faculty,
+            "admin_only": fac.admin_only == 1,
+            "directions": maps,
         })
     return jsonify(li)
-
-
-def GetMaps(id):
-    q = AupInfo.query.filter(AupInfo.id_faculty == id).all()
-    l = list()
-    for row in q:
-        d = dict()
-        name = str(row.file).split(" ")
-        # d["name"] = " ".join(name[5:len(name)-4])
-        # d["code"] = str(row.num_aup).split(" ")[0]
-        d["name"] = row.name_op.name_spec
-        d["code"] = row.num_aup
-        d["year"] = row.year_beg
-        d["form_educ"] = row.id_form
-        l.append(d)
-    return l
 
 
 @maps.route('/add-group', methods=["POST"])
@@ -572,12 +558,10 @@ def delete_aup(aup):
     return jsonify({'result': "successful"})
 
 
-@maps.route('/test/<string:aup>')
-@login_required(request)
-@aup_require(request)
-def test(aup):
-    aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
-    return make_response(str(aup_info.id_aup), 200)
+@maps.route('/test')
+def test():
+    db.session.query(SprFaculty).all()
+    return jsonify("faculties")
 
 
 @maps.route("/upload-xml/<string:aup>")

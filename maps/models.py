@@ -35,6 +35,8 @@ class SprFaculty(db.Model):
     admin_only = db.Column(db.Boolean, default=0)
     branch = db.relationship('SprBranch')
 
+    aup_infos = db.relationship("AupInfo", back_populates="faculty")
+
     def __repr__(self):
         return '<Faculty %r>' % self.name_faculty
 
