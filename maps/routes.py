@@ -2,21 +2,18 @@ import io
 import json
 import os
 
-import pandas as pd
 from flask import Blueprint, make_response, jsonify, request, send_file
 
+from auth.logic import login_required, aup_require
 from auth.models import Mode
 from maps.logic.excel_check import excel_check
-from maps.logic.global_variables import addGlobalVariable, getModuleId, getGroupId
 from maps.logic.print_excel import saveMap
 from maps.logic.save_into_bd import SaveCard
-from maps.logic.take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
-                                     ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r,
-                                     create_json)
-from maps.logic.tools import prepare_shifr, take_aup_from_excel_file, timeit
+from maps.logic.take_from_bd import (control_type_r,
+                                     create_json, getAupData)
+from maps.logic.tools import take_aup_from_excel_file, timeit, getAupInfo, save_loop
 from maps.logic.upload_xml import create_xml
 from maps.models import *
-from auth.logic import login_required, aup_require
 
 maps = Blueprint("maps", __name__, url_prefix='/api', static_folder='static')
 
@@ -24,45 +21,13 @@ if not os.path.exists(maps.static_folder + '/temp'):
     os.makedirs(maps.static_folder + '/temp', exist_ok=True)
 
 
-
-
 @maps.route("/map/<string:aup>")
 def getMap(aup):
-    # table, legend, max_zet = Table(aup, colorSet=1)
-    # aup = AupInfo.query.filter_by(num_aup=aup).first()
-
-    # # Второй способ доставать постоянными запросами, долго достаточно
-    # data = AupData.query.filter_by(id_aup=aup.id_aup)
-    # max_column = db.session.query(func.max(AupData.id_period)).first()[0]
-    # max_row = db.session.query(func.max(AupData.num_row)).first()[0]
-    # json = create_json_test(aup, data, max_column, max_row)
-
-    # data = AupData.query.filter_by(id_aup=aup.id_aup).all()
     json = create_json(aup)
     if not json:
         return make_response(jsonify({'error': "not found"}), 404)
 
-    # if check_sum_zet_in_type(json['data']) == False:
-    #     return make_response(jsonify('ERROR sum_zet=0'), 400)
     return make_response(jsonify(json), 200)
-
-
-
-def check_sum_zet_in_type(data):
-    for item in data:
-        sum_zet_type = 0
-        for i in item['type']:
-            sum_zet_type += i['zet']
-        if sum_zet_type == 0: return False
-
-
-def check_sum_zet_in_type(data):
-    for item in data:
-        sum_zet_type = 0
-        for i in item['type']:
-            sum_zet_type += i['zet']
-        if sum_zet_type == 0:
-            return False
 
 
 @maps.route('/save/<string:aup>', methods=["POST"])
@@ -72,7 +37,6 @@ def saveMap1(aup):
     if request.method == "POST":
         request_data = request.get_json()
         l = list()
-        row = any
         for i in range(0, len(request_data)):
             save_loop(i, 'session', l, request_data)
             save_loop(i, 'value', l, request_data)
@@ -81,27 +45,6 @@ def saveMap1(aup):
         db.session.commit()
         json = create_json(aup)
         return make_response(jsonify(json), 200)
-
-
-def save_loop(i, in_type, l, request_data):
-    for j in range(0, len(request_data[i]['type'][in_type])):
-        try:
-            row = AupData.query.filter_by(
-                id=request_data[i]['type'][in_type][j]['id']).first()
-            row.discipline = request_data[i]['discipline']
-            row.amount = request_data[i]['type'][in_type][j]['amount'] * 100
-            row.id_edizm = 1 if request_data[i]['type'][in_type][j]['amount_type'] == 'hour' else 2
-            row.control_type_id = request_data[i]['type'][in_type][j]['control_type_id']
-            row.id_period = request_data[i]['num_col'] + 1
-            row.num_row = request_data[i]['num_row']
-            row.id_group = request_data[i]['id_group']
-            row.id_block = request_data[i]['id_block']
-            row.id_module = request_data[i]['id_module']
-            row.id_part = request_data[i]['id_part']
-            row.shifr = prepare_shifr(request_data[i]['shifr'])
-            l.append(row)
-        except:
-            return make_response('Save error', 400)
 
 
 @maps.route('/meta-info', methods=["GET"])
@@ -195,189 +138,6 @@ def upload():
         return make_response(jsonify(result_list), 200)
     else:
         return make_response(jsonify("Only post method"), 400)
-
-
-def getAupInfo(file, filename):
-    data = pd.read_excel(file, sheet_name='Лист1')
-    aupInfo = dict()
-    data = data['Содержание']
-    #                     Наименование
-    # 0                     Номер АУП
-    # 1               Вид образования
-    # 2           Уровень образования
-    # 3   Направление (специальность)
-    # 4             Код специальности
-    # 5                  Квалификация
-    # 6       Профиль (специализация)
-    # 7                 Тип стандарта
-    # 8                     Факультет
-    # 9           Выпускающая кафедра
-    # 10               Форма обучения
-    # 11                   Год набора
-    # 12              Период обучения
-    # 13                      На базе
-    # 14    Фактический срок обучения
-    aupInfo["num"] = data[0]
-    aupInfo["type_education"] = data[1]
-    aupInfo["degree"] = data[2]
-    aupInfo["direction"] = data[3]
-    aupInfo["program_code"] = data[4]
-    aupInfo["qualification"] = data[5]
-    aupInfo["name_spec"] = data[6]
-    aupInfo["type_standard"] = data[7]
-    aupInfo["name_faculty"] = data[8]
-    aupInfo["department"] = data[9]
-    aupInfo["form_educ"] = data[10]
-    aupInfo["years_begin"] = data[11]
-    aupInfo["period_edication"] = data[12]
-    aupInfo["base"] = data[13]
-    aupInfo["full_years"] = data[14]
-    aupInfo["filename"] = filename
-    return aupInfo
-
-
-weight = {
-    'Проектная деятельность': 10,
-    'Введение в проектную деятельность': 10,
-    'Управление проектами': 10,
-    'Иностранный язык': 1
-}
-
-
-def getAupData(file):
-    data = pd.read_excel(file, sheet_name="Лист2")
-    #             Наименование
-    # 0                   Блок.
-    # 1                   Шифр.
-    # 2                  Часть.
-    # 3                 Модуль.
-    # 4             Тип записи.
-    # 5             Дисциплина.
-    # 6        Период контроля.
-    # 7               Нагрузка----
-    # 8             Количество----
-    # 9               Ед. изм.----
-    # 10                   ЗЕТ----
-    # 11              групп ID.
-    # 12    Позиция в семестре.
-    # 13                   Вес.
-
-    allRow = []
-    modules = {}
-    groups = {}
-    for i in range(len(data)):
-        row = []
-        for column in data.columns:
-            row.append(data[column][i])
-
-        # if row[5]is None:
-        # print(i, row[5])
-
-        row[1] = prepare_shifr(row[1])
-
-        val = row[0]
-        row[0] = blocks.get(val)
-        if row[0] == None:
-            id = addGlobalVariable(db, D_Blocks, val)
-            blocks[val] = id
-            blocks_r[id] = val
-            row[0] = id
-
-        val = row[2]
-        row[2] = chast.get(val)
-        if row[2] == None:
-            id = addGlobalVariable(db, D_Part, val)
-            chast[val] = id
-            chast_r[id] = val
-            row[2] = id
-
-        if pd.isna(row[3]):
-            row[3] = "Без названия"
-        val = row[3]
-        row[3] = modules.get(val)
-        if row[3] == None:
-            id = getModuleId(db, val)
-            modules[val] = id
-            row[3] = id
-
-        if 'Модуль' in val:
-            val = val.strip()
-            val = val[8:-1].strip()
-        row.append(groups.get(val))
-        if row[11] == None:
-            id = getGroupId(db, val)
-            groups[val] = id
-            row[11] = id
-
-        val = row[4]
-        row[4] = type_record.get(val)
-        if row[4] == None:
-            id = addGlobalVariable(db, D_TypeRecord, val)
-            type_record[val] = id
-            type_record_r[id] = val
-            row[4] = id
-
-        val = row[6]
-        row[6] = period.get(val)
-        if row[6] == None:
-            id = addGlobalVariable(db, D_Period, val)
-            period[val] = id
-            period_r[id] = val
-            row[6] = id
-
-        val = row[7]
-        row[7] = control_type.get(val)
-        if row[7] == None:
-            id = addGlobalVariable(db, D_ControlType, val)
-            control_type[val] = id
-            control_type_r[id] = val
-            row[7] = id
-
-        val = row[9]
-        row[9] = ed_izmereniya.get(val)
-        if row[9] == None:
-            id = addGlobalVariable(db, D_EdIzmereniya, val)
-            ed_izmereniya[val] = id
-            ed_izmereniya_r[id] = val
-            row[9] = id
-
-        if pd.isna(row[8]):
-            row[8] = 0
-        else:
-            try:
-                row[8] = int(float(row[8].replace(',', '.')) * 100)
-            except:
-                row[8] = int(float(row[8]) * 100)
-
-        if pd.isna(row[10]):
-            row[10] = 0
-        else:
-            try:
-                row[10] = int(float(row[10].replace(',', '.')) * 100)
-            except:
-                row[10] = int(float(row[10]) * 100)
-
-        row.append("позиция")
-        row.append(weight.get(row[5], 5))
-
-        allRow.append(row)
-
-    allRow.sort(key=lambda x: (x[6], x[13], x[5]))
-
-    counter = 0
-    semestr = allRow[0][6]
-    disc = allRow[0][5]
-    for i in range(len(allRow)):
-        if allRow[i][6] != semestr:
-            semestr = allRow[i][6]
-            counter = -1
-        if allRow[i][5] != disc:
-            disc = allRow[i][5]
-            counter += 1
-
-        allRow[i][12] = counter
-
-    return allRow
 
 
 # путь для загрузки сформированной КД
@@ -536,14 +296,12 @@ def UpdateGroup():
 
 @maps.route("/getControlTypes")
 def getControlTypes():
-    control_type_arr = []
+    control_types = []
     for k, v in control_type_r.items():
-        if v == 'Экзамен' or v == 'Зачет' or v == 'Дифференцированный зачет':
-            is_control = True
-        else:
-            is_control = False
-        control_type_arr.append({"name": v, "id": k, "is_control": is_control})
-    return make_response(jsonify(control_type_arr), 200)
+        is_control = v == 'Экзамен' or v == 'Зачет' or v == 'Дифференцированный зачет'
+        control_types.append({"id": k, "name": v, "is_control": is_control})
+
+    return make_response(jsonify(control_types), 200)
 
 
 @maps.route("/delete-aup/<string:aup>")
@@ -560,7 +318,8 @@ def delete_aup(aup):
 
 @maps.route('/test')
 def test():
-    db.session.query(SprFaculty).all()
+    faculties = db.session.query(SprFaculty).all()
+    print(faculties)
     return jsonify("faculties")
 
 
