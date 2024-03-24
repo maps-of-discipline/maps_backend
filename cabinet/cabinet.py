@@ -1,4 +1,4 @@
-from models.maps import SprDiscipline, db, AupData, AupInfo
+from models.maps import D_ControlType, SprDiscipline, db, AupData, AupInfo
 from models.cabinet import RPD, Topics
 from flask import Blueprint, make_response, jsonify, request
 from cabinet.utils.serialize import serialize
@@ -157,6 +157,13 @@ def controlTypesRPD():
     diciplines = AupData.query.filter(AupData.id_aup == id_aup, AupData.id_discipline == id_unique_discipline).all()
     serialized_diciplines = serialize(diciplines)
 
+    control_types = {}
+    control_type_q = D_ControlType.query.all()
+    for row in control_type_q:
+        control_types[row.id] = {
+            'title': row.title,
+            'shortname': row.shortname
+        }
     
     # Преобразует все строки из выгрузки в список нагрузок на дисциплине
     def mapDisciplinesToControlType(dicipline):
@@ -164,7 +171,8 @@ def controlTypesRPD():
 
         return {
             'id_type_control': id,
-            'name': control_type_r[id],
+            'name': control_types[id]['title'],
+            'shortname': control_types[id]['shortname'],
             'id_edizm': dicipline['id_edizm'],
             'amount': dicipline['amount'] / 100,
             'id_period': dicipline['id_period'] + 1

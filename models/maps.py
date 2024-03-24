@@ -233,6 +233,7 @@ class D_ControlType(db.Model, SerializerMixin):
     __tablename__ = 'd_control_type'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
+    shortname = db.Column(db.String(255), nullable=True)
 
     def __repr__(self):
         return '<D_ControlType %r>' % self.title
