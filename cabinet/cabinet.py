@@ -176,7 +176,7 @@ def controlTypesRPD():
             'shortname': control_types[id]['shortname'],
             'id_edizm': dicipline['id_edizm'],
             'amount': dicipline['amount'] / 100,
-            'id_period': dicipline['id_period'] + 1
+            'id_period': dicipline['id_period']
         }
     
     control_types = list(map(mapDisciplinesToControlType, serialized_diciplines))
