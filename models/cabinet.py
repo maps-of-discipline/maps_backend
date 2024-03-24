@@ -16,7 +16,7 @@ class RPD(db.Model, SerializerMixin):
 class Topics(db.Model, SerializerMixin):
     __tablename__ = 'topic'
 
-    serialize_only = ('id', 'topic', 'chapter', 'id_type_control', 'task_link', 'id_rpd')
+    serialize_only = ('id', 'topic', 'chapter', 'id_type_control', 'task_link', 'id_rpd', 'semester')
 
     id: int = db.Column(db.Integer(), primary_key=True)
     topic: str = db.Column(db.String(400), nullable=True)
@@ -24,6 +24,7 @@ class Topics(db.Model, SerializerMixin):
     id_type_control = db.Column(db.Integer(), db.ForeignKey('d_control_type.id'), nullable=True)
     task_link: str = db.Column(db.String(400), nullable=True)
     id_rpd: int = db.Column(db.Integer(), db.ForeignKey('rpd.id'))
+    semester: int = db.Column(db.Integer())
 
     d_control_type = db.relationship('D_ControlType')
     rpd = db.relationship('RPD')

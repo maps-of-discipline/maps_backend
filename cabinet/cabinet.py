@@ -97,6 +97,7 @@ def edit_lesson():
 
     topic.chapter = data['lesson']['chapter']
     topic.topic = data['lesson']['topic']
+    topic.task_link = data['lesson']['task_link']
 
     db.session.add(topic)
     db.session.commit()
@@ -117,7 +118,8 @@ def create_lesson():
         chapter=data['chapter'], 
         id_type_control=data['id_type_control'], 
         task_link=data['task_link'], 
-        id_rpd=data['id_rpd']
+        id_rpd=data['id_rpd'],
+        semester=data['semester'],
     )
 
     db.session.add(new_lesson)   
@@ -143,8 +145,10 @@ def delete_lesson():
     return make_response(jsonify(res), 200)
 
 # Получение всех нагрузок дисциплины
-@cabinet.route('/control_types/<string:id_rpd>', methods=['GET'])
-def controlTypesRPD(id_rpd):
+@cabinet.route('/control_types', methods=['GET'])
+def controlTypesRPD():
+    id_rpd = request.args.get('rpd')
+
     rpd = RPD.query.filter(RPD.id == id_rpd).first()
 
     id_unique_discipline = rpd.id_unique_discipline
@@ -174,4 +178,6 @@ def controlTypesRPD(id_rpd):
     for key, group in grouped_control_types:
         result[key] = list(group)
 
-    return jsonify(result)
+    return jsonify({
+        'control_types': result
+    })
