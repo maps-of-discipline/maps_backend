@@ -98,6 +98,7 @@ def edit_lesson():
     topic.chapter = data['lesson']['chapter']
     topic.topic = data['lesson']['topic']
     topic.task_link = data['lesson']['task_link']
+    topic.id_type_control = data['lesson']['id_type_control']
 
     db.session.add(topic)
     db.session.commit()
