@@ -98,6 +98,7 @@ def edit_lesson():
     topic.chapter = data['lesson']['chapter']
     topic.topic = data['lesson']['topic']
     topic.task_link = data['lesson']['task_link']
+    topic.task_link_name = data['lesson']['task_link_name']
     topic.id_type_control = data['lesson']['id_type_control']
 
     db.session.add(topic)
@@ -119,6 +120,7 @@ def create_lesson():
         chapter=data['chapter'], 
         id_type_control=data['id_type_control'], 
         task_link=data['task_link'], 
+        task_link_name=data['task_link_name'], 
         id_rpd=data['id_rpd'],
         semester=data['semester'],
     )
