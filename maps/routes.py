@@ -244,41 +244,39 @@ def DeleteGroup():
 
 @maps.route('/get-group-by-aup/<string:aup>', methods=["GET"])
 def GetGroupByAup(aup):
-    aupId = AupInfo.query.filter_by(num_aup=aup).first()
-    a = aupId.id_aup
-    aupData = AupData.query.filter_by(id_aup=a).all()
-    groups = set()
+    aupId = AupInfo.query.filter_by(num_aup=aup).first().id_aup
+    aupData = AupData.query.filter_by(id_aup=aupId).all()
+
+    groups_id = set()
     for elem in aupData:
-        groups.add(elem.id_group)
-    l = list()
-    for elem in groups:
-        d = dict()
-        g = Groups.query.filter_by(id_group=elem).first()
-        d["id"] = g.id_group
-        d["name"] = g.name_group
-        d["color"] = g.color
-        l.append(d)
-    return make_response(jsonify(l), 200)
+        groups_id.add(elem.id_group)
+
+    groups = []
+    for g in Groups.query.filter(Groups.id_group.in_(groups_id)).all():
+        groups.append({
+            "id": g.id_group,
+            "name": g.name_group,
+            "color": g.color,
+        })
+    return make_response(jsonify(groups), 200)
 
 
 @maps.route('/get-modules-by-aup/<string:aup>', methods=["GET"])
 def GetModulesByAup(aup):
-    aupId = AupInfo.query.filter_by(num_aup=aup).first()
-    a = aupId.id_aup
-    aupData = AupData.query.filter_by(id_aup=a).all()
-    modules = set()
-    for elem in aupData:
-        modules.add(elem.id_module)
-    l = list()
-    for elem in modules:
-        m = D_Modules.query.filter_by(id=elem).first()
-        if m.title == 'Без названия':
-            continue
-        d = dict()
-        d["id"] = m.id
-        d["title"] = m.title
-        l.append(d)
-    return make_response(jsonify(l), 200)
+    aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
+
+    modules_set = set()
+    for elem in aup_info.aup_data:
+        modules_set.add(elem.module)
+
+    modules = []
+    for m in modules_set:
+        if m.title != 'Без названия':
+            modules.append({
+                "id": m.id,
+                "title": m.title,
+            })
+    return make_response(jsonify(modules), 200)
 
 
 @maps.route('/update-group', methods=["POST"])
@@ -318,8 +316,7 @@ def delete_aup(aup):
 
 @maps.route('/test')
 def test():
-    faculties = db.session.query(SprFaculty).all()
-    print(faculties)
+    print(dict(request.form))
     return jsonify("faculties")
 
 

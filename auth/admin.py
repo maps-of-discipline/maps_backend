@@ -1,9 +1,7 @@
-from flask_admin.actions import action
 from flask_admin.contrib.sqla import ModelView
 
 from auth.models import Mode, Roles, Users
-from maps.models import db, AupData
-
+from maps.models import db
 
 category = __package__.capitalize()
 
@@ -27,7 +25,7 @@ class UserAdminView(ModelView):
     can_create = False
     column_list = ['login', 'role', 'email', 'faculties', 'department']
     column_details_list = ['login', 'role', 'email', 'faculties', 'department']
-        
+
 
 
 auth_admin_views = [

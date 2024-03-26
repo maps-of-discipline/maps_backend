@@ -117,6 +117,7 @@ class AupInfo(db.Model):
     faculty = db.relationship('SprFaculty')
     rop = db.relationship('SprRop')
     department = db.relationship('Department')
+    aup_data = db.relationship('AupData')
 
     def __repr__(self):
         return '<№ AUP %r>' % self.num_aup
@@ -316,13 +317,13 @@ class AupData(db.Model):
         'd_ed_izmereniya.id'), nullable=False)
     zet = db.Column(db.Integer, nullable=False)
 
-    block = db.relationship('D_Blocks')
+    block = db.relationship('D_Blocks', lazy='joined')
     part = db.relationship('D_Part')
-    module = db.relationship('D_Modules')
-    type_record = db.relationship('D_TypeRecord')
-    type_control = db.relationship('D_ControlType')
+    module = db.relationship('D_Modules', lazy='joined')
+    type_record = db.relationship('D_TypeRecord', lazy='joined')
+    type_control = db.relationship('D_ControlType', lazy='joined')
     aup = db.relationship('AupInfo')
-    ed_izmereniya = db.relationship('D_EdIzmereniya')
+    ed_izmereniya = db.relationship('D_EdIzmereniya', lazy='joined')
 
     def __repr__(self):
         return '<AupData %r>' % self.aup.num_aup
