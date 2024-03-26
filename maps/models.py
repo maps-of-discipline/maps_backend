@@ -1,11 +1,4 @@
-import sqlalchemy as sa
-import os
-
 from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import check_password_hash, generate_password_hash
-from flask_login import UserMixin 
-from flask import url_for
-from user_policy import UsersPolicy
 
 db = SQLAlchemy()
 
@@ -42,8 +35,13 @@ class SprFaculty(db.Model):
     admin_only = db.Column(db.Boolean, default=0)
     branch = db.relationship('SprBranch')
 
+    aup_infos = db.relationship("AupInfo", back_populates="faculty", lazy='joined')
+
     def __repr__(self):
         return '<Faculty %r>' % self.name_faculty
+
+    def __str__(self):
+        return self.name_faculty
 
 
 class SprFormEducation(db.Model):
@@ -119,7 +117,7 @@ class AupInfo(db.Model):
     faculty = db.relationship('SprFaculty')
     rop = db.relationship('SprRop')
     department = db.relationship('Department')
-
+    aup_data = db.relationship('AupData', back_populates='aup')
 
     def __repr__(self):
         return '<№ AUP %r>' % self.num_aup
@@ -155,7 +153,6 @@ class AupInfo(db.Model):
         db.session.commit()
 
 
-
 class Department(db.Model):
     __tablename__ = 'tbl_department'
 
@@ -165,6 +162,8 @@ class Department(db.Model):
     def __repr__(self):
         return '<Department %r>' % self.name_department
 
+    def __str__(self):
+        return f"{self.name_department}"
 
 class NameOP(db.Model):
     __tablename__ = 'spr_name_op'
@@ -195,7 +194,11 @@ class SprVolumeDegreeZET(db.Model):
 
     @property
     def volume_degree_zet(self):
-        return 'id: {}, program_code: {}, type_standard: {}, ZET: {}, effective date: {}'.format(self.id_volume_deg, self.program_code, self.id_standard, self.zet, self.effective_date)
+        return 'id: {}, program_code: {}, type_standard: {}, ZET: {}, effective date: {}'.format(self.id_volume_deg,
+                                                                                                 self.program_code,
+                                                                                                 self.id_standard,
+                                                                                                 self.zet,
+                                                                                                 self.effective_date)
 
     def __repr__(self):
         return '<SprVolumeDegreeZET %r>' % self.volume_degree_zet
@@ -314,13 +317,13 @@ class AupData(db.Model):
         'd_ed_izmereniya.id'), nullable=False)
     zet = db.Column(db.Integer, nullable=False)
 
-    block = db.relationship('D_Blocks')
+    block = db.relationship('D_Blocks', lazy='joined')
     part = db.relationship('D_Part')
-    module = db.relationship('D_Modules')
-    type_record = db.relationship('D_TypeRecord')
-    type_control = db.relationship('D_ControlType')
-    aup = db.relationship('AupInfo')
-    ed_izmereniya = db.relationship('D_EdIzmereniya')
+    module = db.relationship('D_Modules', lazy='joined')
+    type_record = db.relationship('D_TypeRecord', lazy='joined')
+    type_control = db.relationship('D_ControlType', lazy='joined')
+    aup = db.relationship('AupInfo', back_populates='aup_data')
+    ed_izmereniya = db.relationship('D_EdIzmereniya', lazy='joined')
 
     def __repr__(self):
         return '<AupData %r>' % self.aup.num_aup
@@ -343,93 +346,3 @@ class AupData(db.Model):
             id_edizm=self.id_edizm,
             zet=self.zet,
         )
-
-
-
-users_faculty_table = db.Table(
-    'users_faculty',
-    db.Column("user_id", db.ForeignKey('tbl_users.id_user'), nullable=False),
-    db.Column('faculty_id', db.ForeignKey('spr_faculty.id_faculty'), nullable=False)
-)
-
-
-class Users(db.Model, UserMixin):
-    __tablename__ = 'tbl_users'
-
-    id_user = db.Column(db.Integer, primary_key=True)
-    login = db.Column(db.String(100), unique=True, nullable=False)
-    password_hash = db.Column(db.String(200), unique=True, nullable=False)
-
-    id_role = db.Column(db.Integer, db.ForeignKey(
-        'roles.id_role'), nullable=False)
-
-    role = db.relationship('Roles')
-
-    department_id = db.Column(db.Integer, db.ForeignKey('tbl_department.id_department'), nullable=True)
-
-    faculties = db.Relationship(
-        'SprFaculty',
-        secondary=users_faculty_table,
-    )
-
-    department = db.Relationship(
-        'Department',
-    )
-
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-    
-    # @property
-    # def full_name(self):
-    #     return ' '.join([self.last_name, self.first_name, self.middle_name or ''])
-
-    @property
-    def is_admin(self):
-        from app import app
-        return app.config.get('ADMIN_ROLE_ID') == self.role_id
-
-
-    @property
-    def is_facult(self):
-        from app import app
-        return app.config.get('FACULTY_ROLE_ID') == self.role_id
-
-    @property
-    def is_depart(self):
-        from app import app
-        return app.config.get('DEPARTMENT_ROLE_ID') == self.role_id
-
-    def can(self, action):
-        users_policy = UsersPolicy()
-        method = getattr(users_policy, action)
-        if method is not None:
-            return method()
-        return False
-
-    def __repr__(self):
-        return '<User %r>' % self.login
-
-
-class Roles(db.Model):
-    __tablename__ = 'roles'
-
-    id_role = db.Column(db.Integer, primary_key=True)
-    name_role = db.Column(db.String(100), nullable=False)
-
-    def __repr__(self):
-        return '<Role %r>' % self.name_role
-
-
-class Token(db.Model):
-    __tablename__ = 'tbl_token'
-
-    id = db.Column(db.Integer(), primary_key=True)
-    user_id = db.Column(db.Integer(), db.ForeignKey('tbl_users.id_user'), nullable=False)
-    refresh_token = db.Column(db.String(256), nullable=False)
-    user_agent = db.Column(db.String(256), nullable=False)
-    ttl = db.Column(db.Integer(), nullable=False)
-
-    user = db.relationship('Users')
