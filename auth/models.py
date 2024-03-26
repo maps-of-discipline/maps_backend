@@ -96,7 +96,8 @@ class Mode(db.Model):
     roles = db.relationship(
         "Roles",
         secondary=permissions_table,
-        back_populates='modes'
+        back_populates='modes',
+        lazy='joined'
     )
 
     def __repr__(self):

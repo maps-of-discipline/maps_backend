@@ -35,7 +35,7 @@ class SprFaculty(db.Model):
     admin_only = db.Column(db.Boolean, default=0)
     branch = db.relationship('SprBranch')
 
-    aup_infos = db.relationship("AupInfo", back_populates="faculty")
+    aup_infos = db.relationship("AupInfo", back_populates="faculty", lazy='joined')
 
     def __repr__(self):
         return '<Faculty %r>' % self.name_faculty
@@ -117,7 +117,7 @@ class AupInfo(db.Model):
     faculty = db.relationship('SprFaculty')
     rop = db.relationship('SprRop')
     department = db.relationship('Department')
-    aup_data = db.relationship('AupData')
+    aup_data = db.relationship('AupData', back_populates='aup')
 
     def __repr__(self):
         return '<№ AUP %r>' % self.num_aup
@@ -322,7 +322,7 @@ class AupData(db.Model):
     module = db.relationship('D_Modules', lazy='joined')
     type_record = db.relationship('D_TypeRecord', lazy='joined')
     type_control = db.relationship('D_ControlType', lazy='joined')
-    aup = db.relationship('AupInfo')
+    aup = db.relationship('AupInfo', back_populates='aup_data')
     ed_izmereniya = db.relationship('D_EdIzmereniya', lazy='joined')
 
     def __repr__(self):
