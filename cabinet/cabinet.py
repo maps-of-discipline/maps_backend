@@ -99,6 +99,8 @@ def edit_lesson():
     topic.topic = data['lesson']['topic']
     topic.task_link = data['lesson']['task_link']
     topic.task_link_name = data['lesson']['task_link_name']
+    topic.completed_task_link = data['lesson']['completed_task_link']
+    topic.completed_task_link_name = data['lesson']['completed_task_link_name']
     topic.id_type_control = data['lesson']['id_type_control']
 
     db.session.add(topic)
@@ -121,6 +123,8 @@ def create_lesson():
         id_type_control=data['id_type_control'], 
         task_link=data['task_link'], 
         task_link_name=data['task_link_name'], 
+        completed_task_link=data['completed_task_link'], 
+        completed_task_link_name=data['completed_task_link_name'], 
         id_rpd=data['id_rpd'],
         semester=data['semester'],
     )
