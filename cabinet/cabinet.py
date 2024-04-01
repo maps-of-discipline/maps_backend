@@ -1,5 +1,5 @@
 from models.maps import D_ControlType, SprDiscipline, db, AupData, AupInfo
-from models.cabinet import RPD, Topics
+from models.cabinet import RPD, StudyGroups, Topics
 from flask import Blueprint, make_response, jsonify, request
 from cabinet.utils.serialize import serialize
 from cabinet.lib.generate_empty_rpd import generate_empty_rpd
@@ -65,6 +65,9 @@ def getLessons():
     topics: Topics = Topics.query.filter(Topics.id_rpd == rpd.id).all()
     response_data['topics'] = serialize(topics)
 
+    groups = StudyGroups.query.filter(StudyGroups.id_aup == aup_info.id_aup).all()
+    response_data['groups'] = serialize(groups)
+
     return jsonify(response_data)
 
 # Роут для генерации несуществующей таблицы
@@ -127,6 +130,7 @@ def create_lesson():
         completed_task_link_name=data['completed_task_link_name'], 
         id_rpd=data['id_rpd'],
         semester=data['semester'],
+        study_group_id=data['study_group_id'],
     )
 
     db.session.add(new_lesson)   
