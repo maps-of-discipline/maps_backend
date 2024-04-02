@@ -3,3 +3,4 @@ from .maps import (AupData, AupInfo, db, D_Part, D_ControlType, D_EdIzmereniya, 
                    Department, D_Blocks, Groups, SprFaculty, SprRop, SprOKCO, SprBranch, SprStandard, SprFormEducation,
                    SprDegreeEducation, SprVolumeDegreeZET, NameOP, SprDiscipline)
 from .cabinet import (RPD, Topics)
+from .unification import Unification, Okso_discipline, DisciplineFacultyRelation, Specification
