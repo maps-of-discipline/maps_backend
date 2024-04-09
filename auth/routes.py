@@ -10,14 +10,14 @@ from maps.models import db
 from .cli import register_commands
 from pprint import pprint
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
-#from app import mail
+from app import mail
+
 auth = Blueprint("auth", __name__, url_prefix='/api')
 register_commands(auth)
+
+
+# время жизни токена
 PASSWORD_RESET_TOKEN_EXPIRATION = 3600 * 24
-
-
-def register_mail(mail1):
-    mail = mail1
 
 
 @auth.route('/user/<int:user_id>')
@@ -137,6 +137,7 @@ def request_reset():
     reset_url = url_for('auth.reset_with_token', token=reset_token, _external=True)
     msg = Message("Password Reset", recipients=[email])
     msg.body = f"To reset your password, visit the following link: {reset_url}"
+
     mail.send(msg)
 
     return jsonify({"message": "Instructions to reset your password have been sent to your email."}), 200
@@ -163,8 +164,6 @@ def reset_with_token(token):
     else:
         return jsonify({"error": "An error occurred"}), 400
 
-
-    return jsonify({"message": "Your password has been updated."}), 200
 
 def restore(token):
     data = request.get_json()
