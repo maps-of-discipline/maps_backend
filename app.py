@@ -15,11 +15,15 @@ from auth import auth_blueprint
 from auth.admin import auth_admin_views
 from unification import unification_blueprint
 from unification.admin import unification_admin_views
+from auth.routes import register_mail
+from flask_mail import Mail
 
 warnings.simplefilter("ignore")
 
 app = Flask(__name__)
+mail = Mail(app)
 
+register_mail(mail)
 
 # Register admin views
 admin = Admin(app, name="Maps of Disciplines", template_mode="bootstrap3")
@@ -46,6 +50,8 @@ convention = {
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s"
 }
+#время жизни токена
+PASSWORD_RESET_TOKEN_EXPIRATION = 3600 * 24
 
 metadata = MetaData(naming_convention=convention)
 db.init_app(app)
@@ -54,7 +60,5 @@ migrate = Migrate(app, db)
 
 setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r,
                    ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
-
-
 
 
