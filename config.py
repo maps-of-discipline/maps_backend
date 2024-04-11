@@ -8,3 +8,7 @@ FACULTY_ROLE_ID = 2
 DEPARTMENT_ROLE_ID = 3
 
 URL_PREFIX_CABINET = '/api/cabinet'
+
+LK_ACCOUNT_LOGIN = 'd.p.kirillov'
+LK_ACCOUNT_PASSWORD = '012825'
+LK_URL = 'https://e.mospolytech.ru/old/lk_api.php/'

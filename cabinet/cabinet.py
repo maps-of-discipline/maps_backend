@@ -5,6 +5,7 @@ from cabinet.utils.serialize import serialize
 from cabinet.lib.generate_empty_rpd import generate_empty_rpd
 
 from take_from_bd import (control_type_r)
+import requests
 
 from itertools import groupby
 
@@ -200,3 +201,42 @@ def controlTypesRPD():
     return jsonify({
         'control_types': result
     })
+
+
+@cabinet.route('/auth', methods=['POST'])
+def auth():
+    data = request.get_json()
+
+    if not data['login']:
+        return make_response('Отсутствует "login"', 400)
+    
+    if not data['password']:
+        return make_response('Отсутствует "password"', 400)
+    
+
+    payload = {
+        'ulogin': data['login'],
+        'upassword': data['password'],
+    }
+
+
+    from app import app
+    res = requests.post(app.config.get('LK_URL'), data = payload)
+
+    return jsonify(res.json())
+
+@cabinet.route('getUser', methods=['POST'])
+def getUser():
+    data = request.get_json()
+
+    if not data['token']:
+        return make_response('Отсутствует "token"', 400)
+    
+    payload = { 'getUser': '', 'token': data['token'] }
+
+    from app import app
+    res = requests.get(app.config.get('LK_URL'), params = payload)
+
+    print(res.url)
+
+    return jsonify(res.json())
