@@ -223,6 +223,7 @@ def AddNewGroup():
     d = dict()
     d["id"] = data.id_group
     d["name"] = data.name_group
+    d["name"] = data.name_group
     d["color"] = data.color
     return make_response(jsonify(d), 200)
 
@@ -302,18 +303,6 @@ def getControlTypes():
     return make_response(jsonify(control_types), 200)
 
 
-@maps.route("/delete-aup/<string:aup>")
-@login_required(request)
-@aup_require(request)
-def delete_aup(aup):
-    aup = AupInfo.query.filter_by(num_aup=aup).first()
-    if aup:
-        db.session.delete(aup)
-        db.session.commit()
-
-    return jsonify({'result': "successful"})
-
-
 @maps.route('/test')
 def test():
     print(dict(request.form))
@@ -330,3 +319,47 @@ def upload_xml(aup):
     data.seek(0)
 
     return send_file(data, download_name="sample.txt")
+
+
+@maps.route('/aup/<int:aup>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def aup_crud(aup: str | None):
+    aup: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
+    if not aup:
+        return jsonify({'status': 'not found'}), 404
+
+    if request.method == "GET":
+        return jsonify(aup.as_dict()), 200
+
+    if request.method == "DELETE":
+        db.session.delete(aup)
+        db.session.commit()
+        return jsonify({'status': 'ok'})
+
+    if request.method == "POST":
+        match dict(request.args):
+            case {'copy_with_num': new_aup_num}:
+                if AupInfo.query.filter_by(num_aup= new_aup_num).first():
+                    return jsonify({'status': 'already exists'})
+
+                aup.copy(new_aup_num)
+                return jsonify({'status': 'ok', 'aup_num': new_aup_num})
+            case _:
+                return jsonify({"result": "failed"}), 400
+
+    if request.method == "PUT":
+        data = request.get_json()
+
+        for field, value in data.items():
+            if field in AupInfo.__dict__:
+                aup.__setattr__(field, value)
+
+        db.session.add(aup)
+
+        try:
+            db.session.commit()
+        except Exception as ex:
+            print(ex)
+            db.session.rollback()
+            return jsonify({'status': 'failed', 'aup_num': aup.num_aup}), 403
+
+        return jsonify({'status': 'ok', 'aup_num': aup.num_aup})

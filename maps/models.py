@@ -3,6 +3,11 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 
+class SerializationMixin:
+    def as_dict(self):
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
+
 class SprBranch(db.Model):
     __tablename__ = 'spr_branch'
 
@@ -82,7 +87,7 @@ class SprRop(db.Model):
         return '<Rop %r>' % self.full_name
 
 
-class AupInfo(db.Model):
+class AupInfo(db.Model, SerializationMixin):
     __tablename__ = 'tbl_aup'
 
     id_aup = db.Column(db.Integer, primary_key=True)
@@ -122,10 +127,10 @@ class AupInfo(db.Model):
     def __repr__(self):
         return '<№ AUP %r>' % self.num_aup
 
-    def copy(self, num=None, file=None):
+    def copy(self, num, file=None):
         new_aup: AupInfo = AupInfo(
             file=file if file else "",
-            num_aup=num if num else self.num_aup,
+            num_aup=num,
             base=self.base,
             id_faculty=self.id_faculty,
             id_rop=self.id_rop,
@@ -164,6 +169,7 @@ class Department(db.Model):
 
     def __str__(self):
         return f"{self.name_department}"
+
 
 class NameOP(db.Model):
     __tablename__ = 'spr_name_op'
@@ -329,7 +335,6 @@ class AupData(db.Model):
         return '<AupData %r>' % self.aup.num_aup
 
     def copy(self, parent: AupInfo):
-        print(f'coping of aup_data {self.id}')
         return AupData(
             id_aup=parent.id_aup,
             id_block=self.id_block,

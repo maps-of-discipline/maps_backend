@@ -10,7 +10,7 @@ from maps.logic.global_variables import setGlobalVariables
 from maps.logic.take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
                                      ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
 from maps.models import db
-from maps import maps_blueprint
+from maps.routes import maps as maps_blueprint
 from auth import auth_blueprint
 from auth.admin import auth_admin_views
 from unification import unification_blueprint
