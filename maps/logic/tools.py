@@ -37,15 +37,10 @@ def timeit(func):
         result = func(*args, **kwargs)
         end_time = time.perf_counter()
         total_time = end_time - start_time
-        # first item in the args, ie `args[0]` is `self`
-        print(f'[TIME]Function {func.__name__}() Took {total_time:.4f} seconds')
+        print(f'\033[94m[TIME]\033[0m Function \033[96m{func.__name__: <32}()\033[0m Took {total_time:.4f} seconds')
         return result
 
     return timeit_wrapper
-
-
-# class FileForm(FlaskForm):
-#     file = FileField(validators=[FileRequired(), FileAllowed(["xlsx", "xls"], "xlsx only!")])
 
 
 def get_maximum_rows(*, sheet_object):  # Взять максимальное значение строк в плане
@@ -65,13 +60,10 @@ def take_aup_from_excel_file(file):
 
 
 def check_skiplist(zet_or_hours, value_discipline, value_record_type, value_block):
-    if (zet_or_hours is not None and (
+    return zet_or_hours is not None and (
             len(list(filter(lambda x: x in value_discipline, skiplist['discipline']))) == 0 and
             len(list(filter(lambda x: x in value_record_type, skiplist['record_type']))) == 0 and
-            len(list(filter(lambda x: x in value_block, skiplist['record_type']))) == 0)):
-        return True
-    else:
-        return False
+            len(list(filter(lambda x: x in value_block, skiplist['record_type']))) == 0)
 
 
 def prepare_shifr(shifr):
@@ -90,7 +82,7 @@ def check_sum_zet_in_type(data):
             sum_zet_type += i['zet']
         if sum_zet_type == 0: return False
 
-
+@timeit
 def getAupInfo(file, filename):
     data = pd.read_excel(file, sheet_name='Лист1')
     aupInfo = dict()
@@ -135,6 +127,7 @@ def save_loop(i, in_type, l, request_data):
         try:
             row = AupData.query.filter_by(
                 id=request_data[i]['type'][in_type][j]['id']).first()
+
             row.discipline = request_data[i]['discipline']
             row.amount = request_data[i]['type'][in_type][j]['amount'] * 100
             row.id_edizm = 1 if request_data[i]['type'][in_type][j]['amount_type'] == 'hour' else 2

@@ -1,7 +1,7 @@
 import pandas as pd
 
 from maps.logic.global_variables import addGlobalVariable, getGroupId, getModuleId
-from maps.logic.tools import check_skiplist, prepare_shifr
+from maps.logic.tools import check_skiplist, prepare_shifr, timeit
 from maps.models import AupData, AupInfo, Groups, db, D_Blocks, D_Part, D_TypeRecord, D_Period, D_ControlType, \
     D_EdIzmereniya
 
@@ -47,11 +47,7 @@ def create_json(aup):
     session = list()
     value = list()
 
-    # if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
-    #     continue
     for i, item in enumerate(aupData):
-        # if 'Выполнение и защита выпускной квалификационной работы' in item.discipline:
-        #     pass
         if flag != item.discipline + str(item.id_period):
             if i != 0 and 'd' in locals():
                 d['type']['session'] = session
@@ -59,14 +55,17 @@ def create_json(aup):
                 session = list()
                 value = list()
                 json['data'].append(d)
-            flag = item.discipline + str(item.id_period)
+
             d = dict()
+            flag = item.discipline + str(item.id_period)
             d["discipline"] = item.discipline
             d["id_group"] = item.id_group
             d["id_block"] = item.id_block
             # TODO удалить после того, как фронт подстроится под shifr_new
             d["shifr"] = item.shifr
             d["shifr_new"] = get_shifr(item.shifr)
+
+
             d["allow_control_types"] = get_allow_control_types(item.shifr)
             d["id_part"] = item.id_part
             d["id_module"] = item.id_module
@@ -119,39 +118,23 @@ def create_json(aup):
 
 def get_shifr(shifr):
     shifr = prepare_shifr(shifr)
-    shifr_array = str.split(shifr, ".")
-    if len(shifr_array) == 4:
-        return {
-            "shifr": shifr,
-            "block": shifr_array[0].replace("Б", ""),
-            "part": shifr_array[1],
-            "module": shifr_array[2],
-            "discipline": shifr_array[3]
-        }
-    elif len(shifr_array) == 3:
-        return {
-            "shifr": shifr,
-            "block": shifr_array[0].replace("Б", ""),
-            "part": shifr_array[1],
-            "module": None,
-            "discipline": shifr_array[2]
-        }
-    elif len(shifr_array) == 2:
-        return {
-            "shifr": shifr,
-            "block": shifr_array[0].replace("Б", ""),
-            "part": None,
-            "module": None,
-            "discipline": shifr_array[1]
-        }
-    else:
-        return {
-            "shifr": shifr,
-            "block": None,
-            "part": None,
-            "module": None,
-            "discipline": None
-        }
+    match shifr.split("."):
+        case block, part, module, discipline:
+            ...
+        case block, part, discipline:
+            module = None
+        case block, discipline:
+            part = module = None
+        case _:
+            block = part = module = discipline = None
+
+    return {
+        "shifr": shifr,
+        "block": block.replace("Б", "") if block else block,
+        "part": part,
+        "module": module,
+        "discipline": discipline
+    }
 
 
 def get_allow_control_types(shifr):
@@ -173,10 +156,7 @@ def create_json_print(aupData):
     json['data'] = list()
     flag = ""
     for i, item in enumerate(aupData):
-        # if 'Дизайн-проектирование природоподобных объектов для новой мобильности' in item.discipline:
-        #     pass
-        # if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
-        #     continue
+
         if flag != item.discipline + str(item.id_period):
             if i != 0 and 'd' in locals():
                 json['data'].append(d)
@@ -216,7 +196,7 @@ def create_json_print(aupData):
 
     return json
 
-
+@timeit
 def getAupData(file):
     weight = {
         'Проектная деятельность': 10,
@@ -249,9 +229,6 @@ def getAupData(file):
         row = []
         for column in data.columns:
             row.append(data[column][i])
-
-        # if row[5]is None:
-        # print(i, row[5])
 
         row[1] = prepare_shifr(row[1])
 

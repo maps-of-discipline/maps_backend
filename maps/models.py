@@ -158,6 +158,7 @@ class AupInfo(db.Model, SerializationMixin):
         db.session.commit()
 
 
+
 class Department(db.Model):
     __tablename__ = 'tbl_department'
 

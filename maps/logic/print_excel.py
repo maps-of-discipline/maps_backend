@@ -6,16 +6,16 @@ import xlsxwriter
 from openpyxl.styles import (Alignment, Border, Font, NamedStyle, PatternFill,
                              Side)
 
-from maps.logic.discipline_list import faculty_dis
-from maps.models import (AupInfo, AupData, Groups)
+from maps.logic.discipline_list import elective_disciplines
 from maps.logic.take_from_bd import create_json_print
 from maps.logic.tools import get_maximum_rows
+from maps.models import (AupInfo, AupData, Groups)
 
 ROW_START_DISCIPLINES = 4
 ROW_HEIGHT = 23
 COLUMN_WIDTH = 46
-SUM_ROW_HEIGHT = ROW_HEIGHT*30
-SUM_COLUMN_WIDTH = COLUMN_WIDTH*8
+SUM_ROW_HEIGHT = ROW_HEIGHT * 30
+SUM_COLUMN_WIDTH = COLUMN_WIDTH * 8
 
 border_thin = Side(style='thin', color='000000')
 border_thick = Side(style='thick', color='000000')
@@ -42,12 +42,12 @@ def makeLegend(wb, table, aup):
                 table_dict[item['id_group']] = item['zet']
     sum_zet = 0
     for i, key_value in enumerate(table_dict.items()):
-        ws.row_dimensions[i+2].height = 20
-        ws['A' + str(i+2)].value = int(key_value[1])
-        ws['A' + str(i+2)].style = 'standart'
-        ws['B' + str(i+2)].value = group_dict[key_value[0]]['name']
+        ws.row_dimensions[i + 2].height = 20
+        ws['A' + str(i + 2)].value = int(key_value[1])
+        ws['A' + str(i + 2)].style = 'standart'
+        ws['B' + str(i + 2)].value = group_dict[key_value[0]]['name']
         sum_zet += int(key_value[1])
-        color_text_cell(ws, 'B' + str(i+2), group_dict[key_value[0]]['color'].replace('#', ''))
+        color_text_cell(ws, 'B' + str(i + 2), group_dict[key_value[0]]['color'].replace('#', ''))
     ws['A' + str(len(table_dict) + 2)].style = 'standart'
     ws['A' + str(len(table_dict) + 2)].value = 'Итого: ' + str(sum_zet)
     # return legend
@@ -60,22 +60,23 @@ def makeLegend(wb, table, aup):
 
     # ws['A21'].value = str(aup)
     aup2 = str(aup).split()[-1]
-    aup2 = aup2[1:len(aup2)-2]
+    aup2 = aup2[1:len(aup2) - 2]
     # ws['A22'].value = str(aup2)
 
-    dis = faculty_dis(aup2)
-    i=1
+    dis = elective_disciplines(aup2)
+    i = 1
     for key in dis.keys():
-        ws['A' + str(i+20)].style = 'standart'
-        ws['A' + str(i+20)].value = str(key)
-        ws['B' + str(i+20)].style = 'standart'
-        ws['B' + str(i+20)].value = str(dis[key])
-        i+=1
+        ws['A' + str(i + 20)].style = 'standart'
+        ws['A' + str(i + 20)].value = str(key)
+        ws['B' + str(i + 20)].style = 'standart'
+        ws['B' + str(i + 20)].value = str(dis[key])
+        i += 1
 
 
 def saveMap(aup, static, papper_size, orientation, **kwargs):
     aup = AupInfo.query.filter_by(num_aup=aup).first()
-    data = AupData.query.filter_by(id_aup=aup.id_aup).order_by(AupData.shifr, AupData.discipline, AupData.id_period).all()
+    data = AupData.query.filter_by(id_aup=aup.id_aup).order_by(AupData.shifr, AupData.discipline,
+                                                               AupData.id_period).all()
     filename_map = aup.file
     filename_map_down = f"КД {filename_map}"
     filename_map = os.path.join(static, 'temp', f"КД {filename_map}")
@@ -95,29 +96,30 @@ def saveMap(aup, static, papper_size, orientation, **kwargs):
     ws.merge_cells(
         f'A1:{chr(ord("A") + len(table))}1')
 
-    for width_border in range(1, len(table)+1):
+    for width_border in range(1, len(table) + 1):
         ws[f"{chr(ord('A') + width_border)}1"].style = 'special'
         ws[f"{chr(ord('A') + width_border)}2"].style = 'special'
 
-    for course in range(floor(len(table)/2)):
-        ws[chr(ord("B")+course*2)+f"{ROW_START_DISCIPLINES-2}"] = str(course+1) + " курс"
-        ws[chr(ord("B")+course*2)+f"{ROW_START_DISCIPLINES-2}"].style = 'special'
+    for course in range(floor(len(table) / 2)):
+        ws[chr(ord("B") + course * 2) + f"{ROW_START_DISCIPLINES - 2}"] = str(course + 1) + " курс"
+        ws[chr(ord("B") + course * 2) + f"{ROW_START_DISCIPLINES - 2}"].style = 'special'
         ws.merge_cells(
-            f'{chr(ord("B")+course*2)}{ROW_START_DISCIPLINES-2}:{chr(ord("B")+course*2+1)}{ROW_START_DISCIPLINES-2}')
+            f'{chr(ord("B") + course * 2)}{ROW_START_DISCIPLINES - 2}:{chr(ord("B") + course * 2 + 1)}{ROW_START_DISCIPLINES - 2}')
 
-    if not (len(table)/2).is_integer():
-        ws[chr(ord("B")+floor(len(table)/2)*2)+f"{ROW_START_DISCIPLINES-2}"] = str(floor(len(table)/2)+1) + " курс"
-        ws[chr(ord("B")+floor(len(table)/2)*2)+f"{ROW_START_DISCIPLINES-2}"].style = 'special'
+    if not (len(table) / 2).is_integer():
+        ws[chr(ord("B") + floor(len(table) / 2) * 2) + f"{ROW_START_DISCIPLINES - 2}"] = str(
+            floor(len(table) / 2) + 1) + " курс"
+        ws[chr(ord("B") + floor(len(table) / 2) * 2) + f"{ROW_START_DISCIPLINES - 2}"].style = 'special'
 
     for semester in range(len(table)):
-        ws[chr(ord("B")+semester)+f"{ROW_START_DISCIPLINES-1}"] = str(semester+1) + ' семестр'
-        ws[chr(ord("B")+semester)+f"{ROW_START_DISCIPLINES-1}"].style = 'special'
+        ws[chr(ord("B") + semester) + f"{ROW_START_DISCIPLINES - 1}"] = str(semester + 1) + ' семестр'
+        ws[chr(ord("B") + semester) + f"{ROW_START_DISCIPLINES - 1}"].style = 'special'
 
     for i in range(len(table)):
         merged = 0
         for el in table[i]:
             column = chr(ord("B") + i)
-            cell = f"{column}{ROW_START_DISCIPLINES+merged}"
+            cell = f"{column}{ROW_START_DISCIPLINES + merged}"
 
             ws[cell] = el['discipline']
 
@@ -128,10 +130,10 @@ def saveMap(aup, static, papper_size, orientation, **kwargs):
             if el['zet'] < 1:
                 el['zet'] = 1.0
 
-            merge_range = f"{cell}:{column}{ROW_START_DISCIPLINES+merged + round(el['zet']*2)-1}"
+            merge_range = f"{cell}:{column}{ROW_START_DISCIPLINES + merged + round(el['zet'] * 2) - 1}"
             ws.merge_cells(merge_range)
 
-            merged += round(el['zet']*2)
+            merged += round(el['zet'] * 2)
 
     makeLegend(wb, table, aup)
 
@@ -142,13 +144,13 @@ def saveMap(aup, static, papper_size, orientation, **kwargs):
     ws.oddFooter.right.size = 14
     ws.oddFooter.right.font = "Arial,Bold"
     ws.oddFooter.right.color = "000000"
-    if papper_size=="3":
+    if papper_size == "3":
         ws.page_setup.papperSize = ws.PAPERSIZE_A3
-    elif papper_size=="4":
+    elif papper_size == "4":
         ws.page_setup.papperSize = ws.PAPERSIZE_A3
-    if orientation=="land":
+    if orientation == "land":
         ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
-    elif orientation=="port":
+    elif orientation == "port":
         ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
 
     for sheets in wb:
@@ -160,13 +162,13 @@ def saveMap(aup, static, papper_size, orientation, **kwargs):
 
 def color_text_cell(ws, cell, color):
     ws[cell].style = 'standart'
-    r, g, b = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
-    gray = (r + g + b)/3
+    r, g, b = tuple(int(color[i:i + 2], 16) for i in (0, 2, 4))
+    gray = (r + g + b) / 3
 
     if gray < 140:
-        ws[cell].font = Font(bold=True, size=16, name='Arial', color="FFFFFF")#Dvorf False 18
+        ws[cell].font = Font(bold=True, size=16, name='Arial', color="FFFFFF")  # Dvorf False 18
     else:
-        ws[cell].font = Font(bold=True, size=16, name='Arial', color="000000")#Dvorf False 18
+        ws[cell].font = Font(bold=True, size=16, name='Arial', color="000000")  # Dvorf False 18
 
     ws[cell].fill = PatternFill(start_color=str(
         color), end_color=str(color), fill_type='solid')
@@ -186,13 +188,6 @@ def find_max_zet_excel(table):
     return int(max_zet)
 
 
-def take_sum_zet_in_discipline(item):
-    value = 0.0
-    for i in item:
-        value += i['zet']
-    return value
-
-
 def set_print_properties(table, ws, max_zet):
     # Set properties
     alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -202,47 +197,52 @@ def set_print_properties(table, ws, max_zet):
     ws.print_options.horizontalCentered = True
     ws.print_options.verticalCentered = True
 
-    # ws.row_dimensions[1].height = 100
-    # ws.page_setup.scale = 60
-    max_row = get_maximum_rows(sheet_object=ws)*2
-    ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_zet*2+ROW_START_DISCIPLINES-1)
+
+    max_row = get_maximum_rows(sheet_object=ws) * 2
+    ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_zet * 2 + ROW_START_DISCIPLINES - 1)
     ws.page_margins = openpyxl.worksheet.page.PageMargins(
-        left=1/5, right=1/5, top=1/5, bottom=1/5, header=0.1, footer=0.1) # Правка на 0,5 см
+        left=1 / 5, right=1 / 5, top=1 / 5, bottom=1 / 5, header=0.1, footer=0.1)  # Правка на 0,5 см
 
-    for height_row in range(ROW_START_DISCIPLINES, max_zet*2 + ROW_START_DISCIPLINES): # Высота строк где дисциплины
-        ws.row_dimensions[height_row].height = SUM_ROW_HEIGHT/max_zet
+    # Высота строк где дисциплины
+    for height_row in range(ROW_START_DISCIPLINES, max_zet * 2 + ROW_START_DISCIPLINES):
+        ws.row_dimensions[height_row].height = SUM_ROW_HEIGHT / max_zet
 
-    for width_column in range(1, len(table)+1): # Ширины столбцов где дисциплины
-        ws.column_dimensions[f'{chr(ord("A")+width_column)}'].width = SUM_COLUMN_WIDTH/len(table)
+    # Ширины столбцов где дисциплины
+    for width_column in range(1, len(table) + 1):
+        ws.column_dimensions[f'{chr(ord("A") + width_column)}'].width = SUM_COLUMN_WIDTH / len(table)
 
     # Определяем высоту наибольшего столбца(семестра) для избежания выхода за границы
     col_max_height = max([sum(map(lambda cell: cell['zet'], col)) * 2 for col in table])
 
-    cell = lambda x,y: f'{chr(ord("A")+x+1)}{ROW_START_DISCIPLINES+y}' # Перевод численных координат в координаты с буквой
-    is_none = lambda x, y: cell(x, y) not in ws.merged_cells # Пустая ли ячейка
+    # Перевод численных координат в координаты с буквой
+    cell = lambda x, y: f'{chr(ord("A") + x + 1)}{ROW_START_DISCIPLINES + y}'
 
+    # Пустая ли ячейка
+    is_none = lambda x, y: cell(x, y) not in ws.merged_cells
 
     for x in range(len(table)):
         for y in range(int(col_max_height)):
             border = Border()
-            if (not is_none(x,y)):
+            if (not is_none(x, y)):
                 border = Border(left=border_thin, right=border_thin, bottom=border_thin)
 
             if (x + 1 == len(table)):
                 border.right = border_thick
 
-            if (y+1 == col_max_height):
+            if (y + 1 == col_max_height):
                 border.bottom = border_thick
 
-            ws[cell(x,y)].border = border
+            ws[cell(x, y)].border = border
 
-    ws.column_dimensions['A'].width = 10 # Column ZET
+    ws.column_dimensions['A'].width = 10  # Column ZET
     ### Установить открытие страницы полностью
     ws.page_setup.fitToPage = True
 
 
-# Возвращает данные для шапка карты
 def Header(aup):
+    """
+        Возвращает данные для шапки карты
+    """
     year_begin = aup.year_beg
     program = aup.name_op.program_code + ' ' + aup.name_op.okco.name_okco
     form = aup.form.form + " форма обучения"
@@ -252,6 +252,9 @@ def Header(aup):
 
 
 def addStyles(workbook):
+    """
+        Создает и добавляет стили к файлу Excel
+    """
 
     ns_standart = NamedStyle(name='standart')
     ns_standart.font = Font(bold=True, size=16, name='Arial')
@@ -281,8 +284,12 @@ def addStyles(workbook):
         horizontal='center', vertical='center', wrapText=True)
     workbook.add_named_style(standart_last_right)
 
-# функция создает карту и задаем все данные кроме предметов в семестрах, на вход требует имя карты
+
 def CreateMap(filename_map, max_zet, table_length):
+    """
+        Функция создает карту и задает все данные кроме предметов в семестрах, на вход требует имя карты
+    """
+
     wk = xlsxwriter.Workbook(filename_map)
     ws = wk.add_worksheet()
     ws.set_column(1, 40, 40)
@@ -295,25 +302,24 @@ def CreateMap(filename_map, max_zet, table_length):
     worksheet.row_dimensions[1].height = 90
     worksheet.row_dimensions[2].height = 20
 
-    merge_range = f"A{ROW_START_DISCIPLINES-2}:A{ROW_START_DISCIPLINES-1}"
+    merge_range = f"A{ROW_START_DISCIPLINES - 2}:A{ROW_START_DISCIPLINES - 1}"
     worksheet.merge_cells(merge_range)
-    worksheet[f"A{ROW_START_DISCIPLINES-2}"].style = 'special'
-    worksheet[f"A{ROW_START_DISCIPLINES-1}"].style = 'special'
-    worksheet[f"A{ROW_START_DISCIPLINES-2}"] = 'З.Е.'
+    worksheet[f"A{ROW_START_DISCIPLINES - 2}"].style = 'special'
+    worksheet[f"A{ROW_START_DISCIPLINES - 1}"].style = 'special'
+    worksheet[f"A{ROW_START_DISCIPLINES - 2}"] = 'З.Е.'
 
     for col in range(1, max_zet + 1):
-        merge_range = f"A{col*2+ROW_START_DISCIPLINES-2}:A{col*2+ROW_START_DISCIPLINES-1}"
+        merge_range = f"A{col * 2 + ROW_START_DISCIPLINES - 2}:A{col * 2 + ROW_START_DISCIPLINES - 1}"
         worksheet.merge_cells(merge_range)
-        worksheet["A" + str(col*2+ROW_START_DISCIPLINES-2)] = col
-        worksheet["A" + str(col*2+ROW_START_DISCIPLINES-2)].style = 'special'
-        worksheet["A" + str(col*2+ROW_START_DISCIPLINES-1)].style = 'special'
+        worksheet["A" + str(col * 2 + ROW_START_DISCIPLINES - 2)] = col
+        worksheet["A" + str(col * 2 + ROW_START_DISCIPLINES - 2)].style = 'special'
+        worksheet["A" + str(col * 2 + ROW_START_DISCIPLINES - 1)].style = 'special'
     for col in range(ord('B'), ord('C')):
         worksheet[chr(col) + str(5)].style = 'special'
     return worksheet, workbook
 
 
 def add_table_to_arr_and_sort(table):
-    print(table)
     count_columns = 0
     for item in table:
         if item['num_col'] > count_columns:
@@ -325,10 +331,8 @@ def add_table_to_arr_and_sort(table):
         new_table[item['num_col'] - 1].append(item)
 
     for a in range(len(new_table)):
-        for i in range(len(new_table[a])-1):
-            for j in range(len(new_table[a])-i-1):
-                if new_table[a][j]['num_row'] > new_table[a][j+1]['num_row']:
-                    new_table[a][j], new_table[a][j +
-                                                  1] = new_table[a][j+1], new_table[a][j]
+        for i in range(len(new_table[a]) - 1):
+            for j in range(len(new_table[a]) - i - 1):
+                if new_table[a][j]['num_row'] > new_table[a][j + 1]['num_row']:
+                    new_table[a][j], new_table[a][j + 1] = new_table[a][j + 1], new_table[a][j]
     return (new_table)
-

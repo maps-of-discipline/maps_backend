@@ -3,6 +3,7 @@ import datetime
 import pandas as pd
 from sqlalchemy import desc
 
+from maps.logic.tools import timeit
 from maps.models import AupData, AupInfo, NameOP, SprDegreeEducation, SprFormEducation, SprFaculty, Department, db
 
 NAMEOP_PARAMS = ['program_code', 'num_profile', 'name_spec']
@@ -49,10 +50,11 @@ def check_actual(year_end):
         return True
 
 
+
 def SaveCard(db, aupInfo, aupData):
-    ### ПОСМОТРЕТЬ ЕСТЬ ЛИ В ТАБЛИЦЕ ФАКУЛЬТЕТОВ ТАКОЙ ФАКУЛЬТЕТ И ЕСЛИ НЕТ, ТО ДОБАВИТЬ
+    # посмотреть есть ли в таблице факультетов такой факультет и если нет, то добавить
     get_faculty = SprFaculty.query.filter_by(name_faculty=aupInfo["name_faculty"]).first()
-    # print(get_faculty.name_faculty)
+
     if get_faculty is None:
         new_faculty = SprFaculty(
             name_faculty=aupInfo["name_faculty"],
@@ -69,6 +71,7 @@ def SaveCard(db, aupInfo, aupData):
         db.session.add(new_department)
 
     db.session.commit()
+
     # Перезапись карты, если есть уже в базе и мы обновляем ее
     get_aup = AupInfo.query.filter_by(num_aup=aupInfo["num"]).first()
 
@@ -82,14 +85,13 @@ def SaveCard(db, aupInfo, aupData):
     temp_i = 0
     for i in aupData:
         temp_i += 1
-        # print(i[5])
+
         new_row = AupData(id_aup=get_aup.id_aup, id_block=i[0], shifr=i[1], id_part=i[2], id_module=i[3],
                           id_group=i[11], id_type_record=i[4],
                           discipline=i[5], id_period=i[6], id_type_control=i[7], amount=int(i[8]), id_edizm=i[9],
                           zet=int(i[10]), num_row=i[12])
-        # print(i[5], 'VALID')
         l.append(new_row)
-        # print(i[5], 'ADD')
+
     if temp_i == len(aupData): print('VALID DATA')
     db.session.bulk_save_objects(l)
     db.session.commit()

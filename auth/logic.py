@@ -83,9 +83,8 @@ def verify_jwt_token(jwt_token) -> tuple[Any, bool] | tuple[None, bool]:
 
 
 def verify_refresh_token(token: str) -> bool:
-    current_token = Token.query.filter_by(refresh_token=token).one()
-    print(f'{current_token=}')
-    return current_token.refresh_token == token and current_token.ttl > time()
+    current_token = Token.query.filter_by(refresh_token=token).first()
+    return current_token and current_token.refresh_token == token and current_token.ttl > time()
 
 
 def login_required(request):

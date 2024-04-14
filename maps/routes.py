@@ -150,16 +150,16 @@ def save_excel(aup):
         paper_size = "3"
         orientation = "land"
     filename = saveMap(aup, maps.static_folder, paper_size, orientation, expo=60)
+
     # Upload xlxs file in memory and delete file from storage -----
     return_data = io.BytesIO()
     with open(filename, 'rb') as fo:
         return_data.write(fo.read())
+
     # (after writing, cursor will be at last byte, so move it to start)
     return_data.seek(0)
 
-    # path = os.path.join(app.static_folder, 'temp', filename)
     os.remove(filename)
-    # --------------
 
     response = make_response(send_file(return_data, download_name=filename))
     response.headers['Access-Control-Expose-Headers'] = "Content-Disposition"
@@ -305,8 +305,9 @@ def getControlTypes():
 
 @maps.route('/test')
 def test():
-    print(dict(request.form))
-    return jsonify("faculties")
+    from maps.logic.discipline_list import elective_disciplines
+    res = elective_disciplines("000017921")
+    return jsonify(res)
 
 
 @maps.route("/upload-xml/<string:aup>")
@@ -321,7 +322,9 @@ def upload_xml(aup):
     return send_file(data, download_name="sample.txt")
 
 
-@maps.route('/aup/<int:aup>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@maps.route('/aup-info/<int:aup>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@login_required(request)
+@aup_require(request)
 def aup_crud(aup: str | None):
     aup: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
     if not aup:
@@ -339,7 +342,7 @@ def aup_crud(aup: str | None):
         match dict(request.args):
             case {'copy_with_num': new_aup_num}:
                 if AupInfo.query.filter_by(num_aup= new_aup_num).first():
-                    return jsonify({'status': 'already exists'})
+                    return jsonify({'status': 'already exists'}), 400
 
                 aup.copy(new_aup_num)
                 return jsonify({'status': 'ok', 'aup_num': new_aup_num})
