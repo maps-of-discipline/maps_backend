@@ -23,6 +23,7 @@ border_thick = Side(style='thick', color='000000')
 
 def makeLegend(wb, table, aup):
     ws = wb.create_sheet('Legend')
+
     ws['A1'].value = 'ЗЕТ'
     ws['A1'].style = 'standart'
     ws['B1'].value = 'Группа'
@@ -30,10 +31,17 @@ def makeLegend(wb, table, aup):
     ws.column_dimensions["A"].width = 25.0
     ws.column_dimensions["B"].width = 60.0
     groups = Groups.query.all()
+
+    # Словарь с ключом id группировки и значением - сумма зет в карте для группировки
     table_dict = {}
+
+    # Словарь для хранения всех группировок
     group_dict = {}
+
     for group in groups:
         group_dict[group.id_group] = {'name': group.name_group, 'color': group.color}
+
+    # Считаем сумму зет для каждой группировки
     for column in table:
         for item in column:
             if item['id_group'] in table_dict:
@@ -41,16 +49,21 @@ def makeLegend(wb, table, aup):
             else:
                 table_dict[item['id_group']] = item['zet']
     sum_zet = 0
+
     for i, key_value in enumerate(table_dict.items()):
         ws.row_dimensions[i + 2].height = 20
         ws['A' + str(i + 2)].value = int(key_value[1])
         ws['A' + str(i + 2)].style = 'standart'
         ws['B' + str(i + 2)].value = group_dict[key_value[0]]['name']
         sum_zet += int(key_value[1])
+
         color_text_cell(ws, 'B' + str(i + 2), group_dict[key_value[0]]['color'].replace('#', ''))
+
     ws['A' + str(len(table_dict) + 2)].style = 'standart'
     ws['A' + str(len(table_dict) + 2)].value = 'Итого: ' + str(sum_zet)
-    # return legend
+
+    # --- часть легенды с факультативами ---
+
     ws['A19'].style = 'standart'
     ws['A19'].value = 'Факультативы:'
     ws['A20'].style = 'standart'
@@ -58,12 +71,11 @@ def makeLegend(wb, table, aup):
     ws['A20'].value = 'Название'
     ws['B20'].value = 'Часы'
 
-    # ws['A21'].value = str(aup)
+
     aup2 = str(aup).split()[-1]
-    aup2 = aup2[1:len(aup2) - 2]
-    # ws['A22'].value = str(aup2)
 
     dis = elective_disciplines(aup2)
+
     i = 1
     for key in dis.keys():
         ws['A' + str(i + 20)].style = 'standart'
