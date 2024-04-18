@@ -15,7 +15,6 @@ from maps.logic.tools import take_aup_from_excel_file, timeit, getAupInfo, save_
 from maps.logic.upload_xml import create_xml
 from maps.models import *
 
-
 maps = Blueprint("maps", __name__, url_prefix='/api', static_folder='static')
 
 if not os.path.exists(maps.static_folder + '/temp'):
@@ -304,11 +303,9 @@ def getControlTypes():
     return make_response(jsonify(control_types), 200)
 
 
-@maps.route('/test')
+@maps.route("/test")
 def test():
-    from maps.logic.discipline_list import elective_disciplines
-    res = elective_disciplines("000017921")
-    return jsonify(res)
+    return make_response(jsonify('OK'), 200)
 
 
 @maps.route("/upload-xml/<string:aup>")
@@ -342,7 +339,7 @@ def aup_crud(aup: str | None):
     if request.method == "POST":
         match dict(request.args):
             case {'copy_with_num': new_aup_num}:
-                if AupInfo.query.filter_by(num_aup= new_aup_num).first():
+                if AupInfo.query.filter_by(num_aup=new_aup_num).first():
                     return jsonify({'status': 'already exists'}), 400
 
                 aup.copy(new_aup_num)
@@ -367,3 +364,7 @@ def aup_crud(aup: str | None):
             return jsonify({'status': 'failed', 'aup_num': aup.num_aup}), 403
 
         return jsonify({'status': 'ok', 'aup_num': aup.num_aup})
+
+
+
+

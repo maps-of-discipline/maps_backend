@@ -30,7 +30,6 @@ def makeLegend(wb, table, aup):
     ws['B1'].style = 'standart'
     ws.column_dimensions["A"].width = 25.0
     ws.column_dimensions["B"].width = 60.0
-    groups = Groups.query.all()
 
     # Словарь с ключом id группировки и значением - сумма зет в карте для группировки
     table_dict = {}
@@ -38,7 +37,7 @@ def makeLegend(wb, table, aup):
     # Словарь для хранения всех группировок
     group_dict = {}
 
-    for group in groups:
+    for group in Groups.query.all():
         group_dict[group.id_group] = {'name': group.name_group, 'color': group.color}
 
     # Считаем сумму зет для каждой группировки
@@ -71,10 +70,7 @@ def makeLegend(wb, table, aup):
     ws['A20'].value = 'Название'
     ws['B20'].value = 'Часы'
 
-
-    aup2 = str(aup).split()[-1]
-
-    dis = elective_disciplines(aup2)
+    dis = elective_disciplines(aup)
 
     i = 1
     for key in dis.keys():
@@ -86,6 +82,7 @@ def makeLegend(wb, table, aup):
 
 
 def saveMap(aup, static, papper_size, orientation, **kwargs):
+
     aup = AupInfo.query.filter_by(num_aup=aup).first()
     data = AupData.query.filter_by(id_aup=aup.id_aup).order_by(AupData.shifr, AupData.discipline,
                                                                AupData.id_period).all()
@@ -94,6 +91,7 @@ def saveMap(aup, static, papper_size, orientation, **kwargs):
     filename_map = os.path.join(static, 'temp', f"КД {filename_map}")
 
     table = create_json_print(data)
+
     max_zet = find_max_zet_excel(table)
     table = add_table_to_arr_and_sort(table['data'])
     ws, wb = CreateMap(filename_map, max_zet, len(table))

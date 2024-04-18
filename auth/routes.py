@@ -83,9 +83,7 @@ def login():
     return make_response(json.dumps(response, ensure_ascii=False), 200)
 
 
-password_reset_tokens = {
-
-}
+password_reset_tokens = {}
 
 
 @auth.route('/request-reset', methods=['POST'])
@@ -96,7 +94,7 @@ def request_reset():
             password_reset_tokens.pop(token)
 
     data = request.get_json()
-    email = data.get('EMAIL')
+    email = data.get('email')
     if not email:
         return jsonify({"error": "Invalid email"}), 400
 
@@ -117,7 +115,6 @@ def request_reset():
 
     mail.send(msg)
     print(password_reset_tokens)
-
     return jsonify({"message": "Instructions to reset your password have been sent to your email."}), 200
 
 
@@ -138,3 +135,5 @@ def reset_with_token(token):
     db.session.commit()
 
     return jsonify({'result': 'ok'}), 200
+
+

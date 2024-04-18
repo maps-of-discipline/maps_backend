@@ -1,3 +1,4 @@
+
 import pandas as pd
 
 from maps.logic.global_variables import addGlobalVariable, getGroupId, getModuleId
@@ -23,100 +24,79 @@ allow_control_types_block2 = [10, 11, 13, 16, 19, 20, 21]
 allow_control_types_block3 = [12, 14, 15]
 
 
-def getType(id):
-    l = [1, 5, 9]
-    if id in l:
-        return "control"
-    return "load"
+def create_json(aup: str) -> dict | None:
+    """
+        Функция для преобразования данных из БД для формирования веб-версии карты дисциплин
+    """
 
-
-def create_json(aup):
-    aupInfo = AupInfo.query.filter_by(num_aup=aup).first()
-    if not aupInfo:
+    aup_info = AupInfo.query.filter_by(num_aup=aup).first()
+    if not aup_info:
         return None
 
-    aupData = AupData.query.filter_by(id_aup=aupInfo.id_aup).order_by(AupData.shifr, AupData.discipline,
-                                                                      AupData.id_period).all()
+    aup_data = AupData.query.filter_by(id_aup=aup_info.id_aup).order_by(AupData.discipline, AupData.id_period).all()
+    result = {
+        "header": [aup_info.name_op.okco.program_code + '.' + aup_info.name_op.num_profile,
+                   aup_info.name_op.okco.name_okco, aup_info.name_op.name_spec, aup_info.faculty.name_faculty],
+        "year": aup_info.year_beg,
+    }
 
-    json = dict()
-    json['header'] = [aupInfo.name_op.okco.program_code + '.' + aupInfo.name_op.num_profile,
-                      aupInfo.name_op.okco.name_okco, aupInfo.name_op.name_spec, aupInfo.faculty.name_faculty]
-    json['year'] = aupInfo.year_beg
-    json['data'] = list()
-    flag = ""
-    session = list()
-    value = list()
+    grouped_disciplines = {}
 
-    for i, item in enumerate(aupData):
-        if flag != item.discipline + str(item.id_period):
-            if i != 0 and 'd' in locals():
-                d['type']['session'] = session
-                d['type']['value'] = value
-                session = list()
-                value = list()
-                json['data'].append(d)
+    for el in aup_data:
+        el: AupData
 
-            d = dict()
-            flag = item.discipline + str(item.id_period)
-            d["discipline"] = item.discipline
-            d["id_group"] = item.id_group
-            d["id_block"] = item.id_block
-            # TODO удалить после того, как фронт подстроится под shifr_new
-            d["shifr"] = item.shifr
-            d["shifr_new"] = get_shifr(item.shifr)
-
-
-            d["allow_control_types"] = get_allow_control_types(item.shifr)
-            d["id_part"] = item.id_part
-            d["id_module"] = item.id_module
-            d["num_col"] = item.id_period - 1
-            d["num_row"] = item.num_row
-            d["type"] = dict()
-            d["id"] = str(item.id)
-            if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
-                d["is_skip"] = True
-            else:
-                d["is_skip"] = False
-            zet = dict()
-            zet["amount"] = item.amount / 100
-            zet["amount_type"] = 'hour' if item.ed_izmereniya.id == 1 else 'week'
-            zet["id"] = item.id
-            zet["control_type_id"] = item.id_type_control
-            zet["type"] = getType(item.id_type_control)
-            if item.id_type_control == control_type['Экзамен'] or item.id_type_control == control_type[
-                'Зачет'] or item.id_type_control == control_type['Дифференцированный зачет']:
-                session.append(zet)
-            else:
-                value.append(zet)
-            if i + 1 == len(aupData):
-                d['type']['session'] = session
-                d['type']['value'] = value
-                json['data'].append(d)
+        key = (el.discipline, el.id_period)
+        if key not in grouped_disciplines:
+            grouped_disciplines.update({key: [el]})
         else:
-            d["id"] += str(item.id)
-            zet = dict()
-            zet["amount"] = item.amount / 100
-            zet["amount_type"] = 'hour' if item.ed_izmereniya.id == 1 else 'week'
-            zet["id"] = item.id
-            zet["control_type_id"] = item.id_type_control
-            zet["type"] = getType(item.id_type_control)
-            if item.id_type_control == control_type['Экзамен'] or item.id_type_control == control_type[
-                'Зачет'] or item.id_type_control == control_type['Дифференцированный зачет']:
-                session.append(zet)
+            grouped_disciplines[key].append(el)
+
+    data = []
+    for (discipline, id_period), loads in grouped_disciplines.items():
+        el = loads[0]
+        data_element = {
+            "discipline": discipline,
+            "id_group": el.id_group,
+            "id_block": el.id_block,
+            "shifr": el.shifr,
+            "shifr_new": get_shifr(el.shifr),
+            "allow_control_types": get_allow_control_types(el.shifr),
+            "id_part": el.id_part,
+            "id_module": el.id_module,
+            "num_col": id_period - 1,
+            "num_row": el.num_row,
+            "id": el.id,
+            "is_skip": not check_skiplist(el.zet, el.discipline, el.type_record.title, el.block.title),
+            'type': {
+                'session': [],
+                'value': [],
+            }
+        }
+
+        if data_element['is_skip']:
+            continue
+
+        for load in loads:
+            load = {
+                "amount": load.amount / 100,
+                "amount_type": 'hour' if load.ed_izmereniya.id == 1 else 'week',
+                "id": load.id,
+                "control_type_id": load.id_type_control,
+                "type": "control" if load.id_type_control in [1, 5, 9] else 'load'
+            }
+            if load['type'] == 'control':
+                data_element['type']['session'].append(load)
             else:
-                value.append(zet)
-            if i + 1 == len(aupData):
-                d['type']['session'] = session
-                d['type']['value'] = value
-                json['data'].append(d)
-
-    for num in range(len(json["data"]) - 1, -1, -1):
-        if json["data"][num]["is_skip"] == True:
-            del json["data"][num]
-    return json
+                data_element['type']['value'].append(load)
+        data.append(data_element)
+    result['data'] = data
+    return result
 
 
-def get_shifr(shifr):
+def get_shifr(shifr: str) -> dict:
+    """
+        Функция для разложения шифра на составляющие
+    """
     shifr = prepare_shifr(shifr)
     match shifr.split("."):
         case block, part, module, discipline:
@@ -138,6 +118,9 @@ def get_shifr(shifr):
 
 
 def get_allow_control_types(shifr):
+    """
+        Функция для получения возможных типов контроля для Части (составляющая шифра)
+    """
     shifr_array = str.split(shifr, ".")
     try:
         part = shifr_array[0][1]
@@ -151,50 +134,48 @@ def get_allow_control_types(shifr):
         return None
 
 
-def create_json_print(aupData):
-    json = dict()
-    json['data'] = list()
-    flag = ""
-    for i, item in enumerate(aupData):
+def create_json_print(aup_data):
+    """
+        Функция для преобразования данных из БД для дальнейшего формирования печатной карты дисциплин
+    """
+    group_id_to_color = {el.id_group: el.color for el in Groups.query.all()}
 
-        if flag != item.discipline + str(item.id_period):
-            if i != 0 and 'd' in locals():
-                json['data'].append(d)
-            flag = item.discipline + str(item.id_period)
-            d = dict()
-            d["discipline"] = item.discipline
-            group = Groups.query.filter(Groups.id_group == item.id_group).first()
-            d["color"] = group.color
-            d["id_group"] = group.id_group
-            d["num_col"] = item.id_period
-            d["num_row"] = item.num_row
-            if check_skiplist(item.zet, item.discipline, item.type_record.title, item.block.title) == False:
-                d["is_skip"] = True
-            else:
-                d["is_skip"] = False
-            if item.id_edizm == 2:
-                d["zet"] = item.amount / 100 * 54
-            else:
-                d["zet"] = item.amount / 100
-            if i + 1 == len(aupData):
-                json['data'].append(d)
+    grouped_disciplines = {}
+
+    for el in aup_data:
+        el: AupData
+
+        key = (el.discipline, el.id_period)
+        if key not in grouped_disciplines:
+            grouped_disciplines.update({key: [el]})
         else:
-            if item.id_edizm == 2:
-                d["zet"] = item.amount / 100 * 54
-            else:
-                d["zet"] += item.amount / 100
-            if i + 1 == len(aupData):
-                json['data'].append(d)
-    # for disc in json['data']:
-    #     disc['zet'] /= 36
+            grouped_disciplines[key].append(el)
 
-    for num in range(len(json["data"]) - 1, -1, -1):
-        if json["data"][num]["is_skip"] == True:
-            del json["data"][num]
-        else:
-            json["data"][num]['zet'] /= 36
+    data = []
+    for (discipline, id_period), loads in grouped_disciplines.items():
+        el: AupData = loads[0]
+        zet = 0
+        for load in loads:
+            zet += load.amount / 100 * (54 if load.id_edizm == 2 else 1)
 
-    return json
+        data_element = {
+            "discipline": discipline,
+            "color": group_id_to_color[el.id_group],
+            "id_group": el.id_group,
+            "num_col": id_period,
+            "num_row": el.num_row,
+            "is_skip": not check_skiplist(el.zet, el.discipline, el.type_record.title, el.block.title),
+            "zet": zet / 36
+        }
+
+        if data_element['is_skip']:
+            continue
+
+        data.append(data_element)
+
+    return {"data": data}
+
+
 
 @timeit
 def getAupData(file):

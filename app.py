@@ -20,12 +20,10 @@ warnings.simplefilter("ignore")
 
 app = Flask(__name__)
 
-
 # Register admin views
 admin = Admin(app, name="Maps of Disciplines", template_mode="bootstrap3")
 for view in [*auth_admin_views, *unification_admin_views]:
     admin.add_view(view)
-
 
 application = app
 cors = CORS(app, resources={r"*": {"origins": "*"}}, supports_credentials=True)
@@ -34,14 +32,13 @@ app.config.from_pyfile('config.py')
 mail = Mail(app)
 app.json.sort_keys = False
 
-
 from maps.routes import maps as maps_blueprint
 from auth.routes import auth as auth_blueprint
+
 # Register blueprints
 app.register_blueprint(maps_blueprint)
 app.register_blueprint(auth_blueprint)
 app.register_blueprint(unification_blueprint)
-
 
 convention = {
     "ix": 'ix_%(column_0_label)s',
@@ -51,8 +48,6 @@ convention = {
     "pk": "pk_%(table_name)s"
 }
 
-
-
 metadata = MetaData(naming_convention=convention)
 db.init_app(app)
 
@@ -60,5 +55,3 @@ migrate = Migrate(app, db)
 
 setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r,
                    ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
-
-
