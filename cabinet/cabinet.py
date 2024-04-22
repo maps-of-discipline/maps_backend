@@ -237,6 +237,32 @@ def getUser():
     from app import app
     res = requests.get(app.config.get('LK_URL'), params = payload)
 
-    print(res.url)
 
     return jsonify(res.json())
+
+@cabinet.route('aup', methods=['GET'])
+def getAup():
+    search = request.args.get('search')
+
+    found = AupInfo.query.filter(AupInfo.file.like("%"+search+"%")).all()
+
+    res = serialize(found)
+
+    return jsonify(res)
+
+@cabinet.route('disciplines', methods=['GET'])
+def disciplines():
+    q_num_aup = request.args.get('aup')
+
+    aup = AupInfo.query.filter(AupInfo.num_aup == q_num_aup).first()
+
+    disciplines = AupData.query.filter(AupData.id_aup == aup.id_aup).all()
+    disciplines = serialize(disciplines)
+
+    unique_disciplines_map = {}
+
+    for discipline in disciplines:
+        if not discipline['unique_discipline']['id'] in unique_disciplines_map:
+            unique_disciplines_map[discipline['unique_discipline']['id']] = discipline['unique_discipline']
+
+    return jsonify(list(unique_disciplines_map.values()))
