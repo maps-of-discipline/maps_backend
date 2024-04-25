@@ -11,10 +11,10 @@ from itertools import groupby
 
 cabinet = Blueprint('cabinet', __name__)
 
-
 @cabinet.route('/ping')
 def test():
     return make_response('pong', 200)
+
 
 # Получение списка РПД
 @cabinet.route('/rpd', methods=['GET'])
@@ -23,12 +23,13 @@ def rpd():
     rpdList = serialize(rpdList)
     return jsonify(rpdList)
 
+
 # Получение тем занятий по номеру АУП и айди дисциплины
 @cabinet.route('/lessons', methods=['GET'])
 def getLessons():
     if 'aup' not in request.args:
         return make_response('Отсутствует параметр "aup"', 400)
-    
+
     if 'id' not in request.args:
         return make_response('Отсутствует параметр "id"', 400)
 
@@ -43,11 +44,11 @@ def getLessons():
 
     aup_info: AupInfo = AupInfo.query.filter(AupInfo.num_aup == num_aup).first()
     if not aup_info:
-        return jsonify({ 'error': 'Данный АУП отсутствует.' })
-    
+        return jsonify({'error': 'Данный АУП отсутствует.'})
+
     discipline_is_exist = AupData.query.filter(AupData.id_discipline == id_discipline).first()
     if not discipline_is_exist:
-        return jsonify({ 'error': 'Дисциплина отсутствует в АУП.' })
+        return jsonify({'error': 'Дисциплина отсутствует в АУП.'})
 
     rpd = RPD.query.filter(RPD.id_aup == aup_info.id_aup, RPD.id_unique_discipline == id_discipline).first()
     if not rpd:
@@ -71,15 +72,16 @@ def getLessons():
 
     return jsonify(response_data)
 
+
 # Роут для генерации несуществующей таблицы
 @cabinet.route('/lessons', methods=['POST'])
 def postLessons():
     if 'aup' not in request.args:
         return make_response('Отсутствует параметр "aup"', 401)
-    
+
     if 'id' not in request.args:
         return make_response('Отсутствует параметр "id"', 401)
-    
+
     aup = request.args.get('aup')
     id_discipline = request.args.get('id')
 
@@ -90,13 +92,14 @@ def postLessons():
         'data': data
     })
 
+
 @cabinet.route('/edit-lesson', methods=['POST'])
 def edit_lesson():
     data = request.get_json()
-    
+
     if 'lesson' not in data:
         return make_response('Отсутствует поле "lesson"', 401)
-    
+
     topic = Topics.query.filter(Topics.id == data['lesson']['id']).first()
 
     topic.chapter = data['lesson']['chapter']
@@ -114,31 +117,33 @@ def edit_lesson():
 
     return make_response(jsonify(res))
 
+
 @cabinet.route('/create-lesson', methods=['POST'])
-def create_lesson():   
+def create_lesson():
     data = request.get_json()
 
     if not data:
         return make_response('Отсутствует поле "lesson"', 400)
 
     new_lesson = Topics(
-        topic=data['topic'], 
-        chapter=data['chapter'], 
-        id_type_control=data['id_type_control'], 
-        task_link=data['task_link'], 
-        task_link_name=data['task_link_name'], 
-        completed_task_link=data['completed_task_link'], 
-        completed_task_link_name=data['completed_task_link_name'], 
+        topic=data['topic'],
+        chapter=data['chapter'],
+        id_type_control=data['id_type_control'],
+        task_link=data['task_link'],
+        task_link_name=data['task_link_name'],
+        completed_task_link=data['completed_task_link'],
+        completed_task_link_name=data['completed_task_link_name'],
         id_rpd=data['id_rpd'],
         semester=data['semester'],
         study_group_id=data['study_group_id'],
     )
 
-    db.session.add(new_lesson)   
+    db.session.add(new_lesson)
     db.session.commit()
 
     res = serialize(new_lesson)
     return make_response(jsonify(res))
+
 
 @cabinet.route('/delete-lesson', methods=['POST'])
 def delete_lesson():
@@ -146,7 +151,7 @@ def delete_lesson():
 
     if not data['id']:
         return make_response('Отсутствует "id"', 400)
-    
+
     lesson = Topics.query.filter_by(id=data['id']).first()
 
     res = serialize(lesson)
@@ -155,6 +160,7 @@ def delete_lesson():
     db.session.commit()
 
     return make_response(jsonify(res), 200)
+
 
 # Получение всех нагрузок дисциплины
 @cabinet.route('/control_types', methods=['GET'])
@@ -176,7 +182,7 @@ def controlTypesRPD():
             'title': row.title,
             'shortname': row.shortname
         }
-    
+
     # Преобразует все строки из выгрузки в список нагрузок на дисциплине
     def mapDisciplinesToControlType(dicipline):
         id = dicipline['id_type_control']
@@ -189,7 +195,7 @@ def controlTypesRPD():
             'amount': dicipline['amount'] / 100,
             'id_period': dicipline['id_period']
         }
-    
+
     control_types = list(map(mapDisciplinesToControlType, serialized_diciplines))
 
     grouped_control_types = groupby(sorted(control_types, key=lambda x: x['id_period']), key=lambda x: x['id_period'])
@@ -209,21 +215,20 @@ def auth():
 
     if not data['login']:
         return make_response('Отсутствует "login"', 400)
-    
+
     if not data['password']:
         return make_response('Отсутствует "password"', 400)
-    
 
     payload = {
         'ulogin': data['login'],
         'upassword': data['password'],
     }
 
-
     from app import app
-    res = requests.post(app.config.get('LK_URL'), data = payload)
+    res = requests.post(app.config.get('LK_URL'), data=payload)
 
     return jsonify(res.json())
+
 
 @cabinet.route('getUser', methods=['POST'])
 def getUser():
@@ -231,24 +236,27 @@ def getUser():
 
     if not data['token']:
         return make_response('Отсутствует "token"', 400)
-    
-    payload = { 'getUser': '', 'token': data['token'] }
+
+    payload = {'getUser': '', 'token': data['token']}
 
     from app import app
-    res = requests.get(app.config.get('LK_URL'), params = payload)
+    res = requests.get(app.config.get('LK_URL'), params=payload)
+
 
 
     return jsonify(res.json())
+
 
 @cabinet.route('aup', methods=['GET'])
 def getAup():
     search = request.args.get('search')
 
-    found = AupInfo.query.filter(AupInfo.file.like("%"+search+"%")).all()
+    found = AupInfo.query.filter(AupInfo.file.like("%" + search + "%")).all()
 
     res = serialize(found)
 
     return jsonify(res)
+
 
 @cabinet.route('disciplines', methods=['GET'])
 def disciplines():
@@ -266,3 +274,5 @@ def disciplines():
             unique_disciplines_map[discipline['unique_discipline']['id']] = discipline['unique_discipline']
 
     return jsonify(list(unique_disciplines_map.values()))
+
+

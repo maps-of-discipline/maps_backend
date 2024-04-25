@@ -8,7 +8,7 @@ from save_into_bd import SaveCard
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
 from excel_check import excel_check
 from models import Users, D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, AupData, \
-    AupInfo, Groups, SprFaculty, Mode, SprDiscipline
+    AupInfo, Groups, SprFaculty, Mode, SprDiscipline, Roles
 import pandas as pd
 from upload_xml import create_xml
 from openpyxl import load_workbook
@@ -23,6 +23,7 @@ import os
 import warnings
 from auth import *
 from cabinet.cabinet import cabinet
+import requests
 
 warnings.simplefilter("ignore")
 
@@ -639,6 +640,7 @@ def login():
     if 'password' not in request_data:
         return make_response("Password is required", 401)
 
+
     user = Users.query.filter_by(login=request_data['username']).first()
 
     if not user:
@@ -646,6 +648,48 @@ def login():
 
     if not user.check_password(request_data['password']):
         return make_response('Incorrect password', 400)
+
+    response = {
+        'access': get_access_token(user.id_user),
+        'refresh': get_refresh_token(user.id_user, request.headers['User-Agent']),
+    }
+
+    return make_response(json.dumps(response, ensure_ascii=False), 200)
+
+
+@app.route('/api/login/lk')
+def lk_login():
+    request_data = request.get_json()
+
+    if 'username' not in request_data or 'password' not in request_data:
+        return make_response("Username and password are required", 401)
+
+    response = requests.post(app.config.get('LK_URL'), data={
+        'ulogin': request_data['username'],
+        'upassword': request_data['password'],
+    }).json()
+
+
+    res = requests.get(app.config.get('LK_URL'), params={'getUser': '', 'token': response['token']}).json()
+    res = res['user']
+    name = ' '.join([res['surname'], res['name'], res['patronymic']])
+    email = res['email']
+
+    user = Users.query.filter_by(login=request_data['username']).first()
+    if not user:
+        user = Users()
+        user.auth_type = 'lk'
+        guest_role = Roles.query.filter_by(name_role='Guest').first()
+        if guest_role:
+            user.roles.append(guest_role)
+
+    user.login = request_data['username']
+    user.set_password(request_data['password'])
+    user.name = name
+    user.email = email
+
+    db.session.add(user)
+    db.session.commit()
 
     response = {
         'access': get_access_token(user.id_user),

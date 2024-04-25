@@ -1,6 +1,7 @@
 from .maps import db
 from sqlalchemy_serializer import SerializerMixin
 
+
 class RPD(db.Model, SerializerMixin):
     __tablename__ = 'rpd'
 
@@ -13,10 +14,12 @@ class RPD(db.Model, SerializerMixin):
     aupData = db.relationship('AupInfo')
     sprDiscipline = db.relationship('SprDiscipline')
 
+
 class Topics(db.Model, SerializerMixin):
     __tablename__ = 'topic'
 
-    serialize_only = ('id', 'topic', 'chapter', 'id_type_control', 'task_link', 'task_link_name', 'completed_task_link', 'completed_task_link_name', 'id_rpd', 'semester', 'study_group_id')
+    serialize_only = ('id', 'topic', 'chapter', 'id_type_control', 'task_link', 'task_link_name', 'completed_task_link',
+                      'completed_task_link_name', 'id_rpd', 'semester', 'study_group_id')
 
     id: int = db.Column(db.Integer(), primary_key=True)
     topic: str = db.Column(db.String(400), nullable=True)
@@ -33,6 +36,7 @@ class Topics(db.Model, SerializerMixin):
     d_control_type = db.relationship('D_ControlType')
     rpd = db.relationship('RPD')
 
+
 class StudyGroups(db.Model, SerializerMixin):
     __tablename__ = 'study_group'
 
@@ -43,3 +47,20 @@ class StudyGroups(db.Model, SerializerMixin):
     id_aup: int = db.Column(db.Integer(), db.ForeignKey('tbl_aup.id_aup'), nullable=False)
 
     aupData = db.relationship('AupInfo')
+
+
+class Student(db.Model):
+    __tablename__ = 'students'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(400), nullable=False)
+    study_group_id = db.Column(db.Integer, db.ForeignKey('study_group.id'), nullable=False)
+
+
+class Grade(db.Model):
+    __tablename__ = 'grades'
+
+    id = db.Column(db.Integer, primary_key=True)
+    value = db.Column(db.Integer)
+    student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
+    topic_id = db.Column(db.Integer, db.ForeignKey("topic.id"), nullable=False)

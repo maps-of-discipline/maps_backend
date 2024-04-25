@@ -17,22 +17,29 @@ def get_access_token(user_id) -> str:
     user: Users = Users.query.filter_by(id_user=user_id).first()
 
     can_edit = []
+    roles = [role.id_role for role in user.roles]
 
-    if user.id_role == 2:   # faculty
+    if 2 in roles:   # faculty
         for faq in user.faculties:
             aup_infos = AupInfo.query.filter_by(id_faculty=faq.id_faculty).all()
             for aup in aup_infos:
                 can_edit.append(aup.num_aup)
 
-    elif user.id_role == 3:     # department
+    elif 3 in roles:     # department
         aup_infos = AupInfo.query.filter_by(id_department=user.department_id)
         for aup in aup_infos:
             can_edit.append(aup.num_aup)
 
+    roles = [{
+        "id": role.id_role,
+        "name": role.role_name,
+    } for role in user.roles]
+
     payload = {
         'user_id': user.id_user,
+        'name': user.name,
         'login': user.login,
-        'role_id': user.id_role,
+        'roles': roles,
         'department_id': user.department_id,
         'faculties': [faq.id_faculty for faq in user.faculties],
         'exp': round(time()) + ACCESS_TOKEN_LIFETIME,
@@ -117,11 +124,11 @@ def aup_require(request):
             except sqlalchemy.exc.NoResultFound:
                 return make_response("No such aup found", 404)
 
-            if payload['role_id'] == 2:
+            if 2 not in payload['roles']:
                 if aup_info.id_faculty not in [faq.id_faculty for faq in user.faculties]:
                     return make_response('Forbidden', 403)
 
-            elif payload['role_id'] == 3:
+            elif 3 not in payload['roles']:
                 if not user.department_id or aup_info.id_department != user.department_id:
                     return make_response('Forbidden', 403)
 
@@ -142,7 +149,7 @@ def admin_only(request):
             if not payload or not verify_result:
                 return make_response('Authorization token is invalid', 401)
 
-            if payload['role_id'] != 1:
+            if 1 not in payload['roles']:
                 return make_response('Forbidden', 403)
 
             result = f(*args, **kwargs)

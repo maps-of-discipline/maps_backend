@@ -10,21 +10,25 @@ users_faculty_table = db.Table(
     db.Column('faculty_id', db.ForeignKey('spr_faculty.id_faculty'), nullable=False)
 )
 
+user_has_role_table = db.Table(
+    'user_has_role',
+    db.Column('user_id', db.ForeignKey('tbl_users.id_user'), nullable=True),
+    db.Column('role_id', db.ForeignKey('roles.id_role'), nullable=True),
+)
+
 
 class Users(db.Model, UserMixin):
     __tablename__ = 'tbl_users'
 
     id_user = db.Column(db.Integer, primary_key=True)
     login = db.Column(db.String(100), unique=True, nullable=False)
+    name = db.Column(db.String(200))
     email = db.Column(db.String(100), nullable=True)
     password_hash = db.Column(db.String(200), unique=True, nullable=False)
-
-    id_role = db.Column(db.Integer, db.ForeignKey(
-        'roles.id_role'), nullable=False)
-
-    role = db.relationship('Roles')
-
+    auth_type = db.Column(db.String(255), default="kd")
     department_id = db.Column(db.Integer, db.ForeignKey('tbl_department.id_department'), nullable=True)
+
+    roles = db.relationship('Roles', secondary=user_has_role_table)
 
     faculties = db.Relationship(
         'SprFaculty',
@@ -40,10 +44,6 @@ class Users(db.Model, UserMixin):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
-
-    # @property
-    # def full_name(self):
-    #     return ' '.join([self.last_name, self.first_name, self.middle_name or ''])
 
     @property
     def is_admin(self):
