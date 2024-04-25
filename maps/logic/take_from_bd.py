@@ -1,8 +1,7 @@
-
 import pandas as pd
 
 from maps.logic.global_variables import addGlobalVariable, getGroupId, getModuleId
-from maps.logic.tools import check_skiplist, prepare_shifr, timeit
+from maps.logic.tools import check_skiplist, prepare_shifr, timeit, get_grouped_disciplines
 from maps.models import AupData, AupInfo, Groups, db, D_Blocks, D_Part, D_TypeRecord, D_Period, D_ControlType, \
     D_EdIzmereniya
 
@@ -29,31 +28,19 @@ def create_json(aup: str) -> dict | None:
         Функция для преобразования данных из БД для формирования веб-версии карты дисциплин
     """
 
-    aup_info = AupInfo.query.filter_by(num_aup=aup).first()
+    aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
     if not aup_info:
         return None
 
-    aup_data = AupData.query.filter_by(id_aup=aup_info.id_aup).order_by(AupData.discipline, AupData.id_period).all()
     result = {
         "header": [aup_info.name_op.okco.program_code + '.' + aup_info.name_op.num_profile,
                    aup_info.name_op.okco.name_okco, aup_info.name_op.name_spec, aup_info.faculty.name_faculty],
         "year": aup_info.year_beg,
     }
 
-    grouped_disciplines = {}
-
-    for el in aup_data:
-        el: AupData
-
-        key = (el.discipline, el.id_period)
-        if key not in grouped_disciplines:
-            grouped_disciplines.update({key: [el]})
-        else:
-            grouped_disciplines[key].append(el)
-
     data = []
-    for (discipline, id_period), loads in grouped_disciplines.items():
-        el = loads[0]
+    for (discipline, id_period), loads in get_grouped_disciplines(aup_info.aup_data).items():
+        el: AupData = loads[0]
         data_element = {
             "discipline": discipline,
             "id_group": el.id_group,
@@ -84,10 +71,12 @@ def create_json(aup: str) -> dict | None:
                 "control_type_id": load.id_type_control,
                 "type": "control" if load.id_type_control in [1, 5, 9] else 'load'
             }
+
             if load['type'] == 'control':
                 data_element['type']['session'].append(load)
             else:
                 data_element['type']['value'].append(load)
+
         data.append(data_element)
     result['data'] = data
     return result
@@ -140,19 +129,8 @@ def create_json_print(aup_data):
     """
     group_id_to_color = {el.id_group: el.color for el in Groups.query.all()}
 
-    grouped_disciplines = {}
-
-    for el in aup_data:
-        el: AupData
-
-        key = (el.discipline, el.id_period)
-        if key not in grouped_disciplines:
-            grouped_disciplines.update({key: [el]})
-        else:
-            grouped_disciplines[key].append(el)
-
     data = []
-    for (discipline, id_period), loads in grouped_disciplines.items():
+    for (discipline, id_period), loads in get_grouped_disciplines(aup_data).items():
         el: AupData = loads[0]
         zet = 0
         for load in loads:
@@ -174,7 +152,6 @@ def create_json_print(aup_data):
         data.append(data_element)
 
     return {"data": data}
-
 
 
 @timeit
@@ -315,4 +292,5 @@ def getAupData(file):
 
         allRow[i][12] = counter
 
+    print(allRow)
     return allRow

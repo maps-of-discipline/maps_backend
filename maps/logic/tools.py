@@ -144,3 +144,23 @@ def save_loop(i, in_type, l, request_data):
             return make_response('Save error', 400)
 
 
+def get_grouped_disciplines(aup_data) -> dict[tuple[str, int], list[AupData]]:
+    """
+        Функция для группировки aupData по дисциплине и периоду.
+        Возвращает словарь:
+            key - кортеж (Дисциплина, ID периода)
+            value - список объектов AupData
+    """
+
+    grouped_disciplines = {}
+
+    for el in aup_data:
+        el: AupData
+
+        key = (el.discipline, el.id_period)
+        if key not in grouped_disciplines:
+            grouped_disciplines.update({key: [el]})
+        else:
+            grouped_disciplines[key].append(el)
+
+    return grouped_disciplines

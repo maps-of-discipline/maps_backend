@@ -85,62 +85,46 @@ def get_id_edizm():
     }), 200)
 
 
-@maps.route('/upload', methods=["POST", "GET"])
+@maps.route('/upload', methods=["POST"])
 @timeit
 @login_required(request)
 def upload():
-    if request.method == "POST":
-        files = request.files.getlist("file")
-        result_list = list()
-        for f in files:
-            options_check = json.loads(request.form['options'])
-            print(options_check)
+    files = request.files.getlist("file")
+    result_list = list()
+    for f in files:
+        options_check = json.loads(request.form['options'])
+        print(options_check)
 
-            ### путь к файлу на диске
-            path = os.path.join(maps.static_folder, 'temp', f.filename)
+        path = os.path.join(maps.static_folder, 'temp', f.filename)
+        f.save(path)
+        aup = take_aup_from_excel_file(path)
 
-            # сохранить временный файл с учебным планом
-            f.save(path)
+        result = {
+            'aup': aup,
+            'filename': f.filename,
+            'errors': excel_check(path, aup, options_check)
+        }
 
-            # Вытащить из файла номер аупа
-            aup = take_aup_from_excel_file(path)
+        result_list.append(result)
 
-            # одна функция, описанная в отдельном файле, которая будет выполнять все проверки
-            result = {
-                'aup': aup,
-                'filename': f.filename,
-                'errors': excel_check(path, aup, options_check)
-            }
-
-            result_list.append(result)
-
-            if result['errors']:
-                os.remove(path)
-                continue
-
-            # словарь с содержимым 1 листа
-            aupInfo = getAupInfo(path, f.filename)
-
-            # берём aupInfo["num"] и смотрим, есть ли в БД уже такая карта, если есть, то редиректим на страницу с этой картой ???
-            # Можно сделать всплывающее окно: "Хотите перезаписать существующий учебный план?" и ответы "Да" и "Нет".
-            # Если нет, то просто редиректим на карту, если да, то просто стираем все по номеру аупа в aupData
-            # (в SaveCard уже реализован этот функционал)
-
-            # массив с содержимым 2 листа
-            aupData = getAupData(path)
-            # json = create_json(aupData, aupInfo)
-            # сохранение карты
-            SaveCard(db, aupInfo, aupData)
-            f.close()
-            # удалить временный файл
+        if result['errors']:
             os.remove(path)
+            continue
 
-        return make_response(jsonify(result_list), 200)
-    else:
-        return make_response(jsonify("Only post method"), 400)
+        # словарь с содержимым 1 листа
+        aupInfo = getAupInfo(path, f.filename)
+
+        # массив с содержимым 2 листа
+        aupData = getAupData(path)
+
+        SaveCard(db, aupInfo, aupData)
+        f.close()
+
+        os.remove(path)
+
+    return make_response(jsonify(result_list), 200)
 
 
-# путь для загрузки сформированной КД
 @maps.route("/save_excel/<string:aup>", methods=["GET"])
 def save_excel(aup):
     try:
@@ -151,12 +135,12 @@ def save_excel(aup):
         orientation = "land"
     filename = saveMap(aup, maps.static_folder, paper_size, orientation, expo=60)
 
-    # Upload xlxs file in memory and delete file from storage -----
+    # Upload xlxs file in memory and delete file from storage
     return_data = io.BytesIO()
     with open(filename, 'rb') as fo:
         return_data.write(fo.read())
 
-    # (after writing, cursor will be at last byte, so move it to start)
+    # after writing, cursor will be at last byte, so move it to start
     return_data.seek(0)
 
     os.remove(filename)
@@ -320,7 +304,7 @@ def upload_xml(aup):
     return send_file(data, download_name="sample.txt")
 
 
-@maps.route('/aup-info/<int:aup>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@maps.route('/aup-info/<int:aup>', methods=['GET', 'POST', 'PATCH', 'DELETE'])
 @login_required(request)
 @aup_require(request)
 def aup_crud(aup: str | None):
@@ -347,7 +331,7 @@ def aup_crud(aup: str | None):
             case _:
                 return jsonify({"result": "failed"}), 400
 
-    if request.method == "PUT":
+    if request.method == "PATCH":
         data = request.get_json()
 
         for field, value in data.items():
@@ -363,7 +347,7 @@ def aup_crud(aup: str | None):
             db.session.rollback()
             return jsonify({'status': 'failed', 'aup_num': aup.num_aup}), 403
 
-        return jsonify({'status': 'ok', 'aup_num': aup.num_aup})
+        return jsonify({'status': 'ok', 'aup_num': aup.num_aup}), 200
 
 
 

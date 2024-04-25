@@ -7,7 +7,7 @@ from unification.models import *
 bp = Blueprint("unification", __name__, url_prefix='/api')
 
 
-@bp.route('/unification')
+@bp.route('/unification-config')
 def unification():
     res = []
     for el in UnificationDiscipline.query.all():
