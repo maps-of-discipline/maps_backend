@@ -48,16 +48,21 @@ class StudyGroups(db.Model, SerializerMixin):
 
 
 
-class Student(db.Model):
+class Students(db.Model, SerializerMixin):
     __tablename__ = 'students'
+
+    serialize_only = ('id', 'name', 'study_group_id', 'lk_id')
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(400), nullable=False)
     study_group_id = db.Column(db.Integer, db.ForeignKey('study_group.id'), nullable=False)
+    lk_id = db.Column(db.Integer, nullable=False)
 
 
-class Grade(db.Model):
+class Grade(db.Model, SerializerMixin):
     __tablename__ = 'grades'
+
+    serialize_only = ('id', 'value', 'student_id', 'topic_id')
 
     id = db.Column(db.Integer, primary_key=True)
     value = db.Column(db.Integer)

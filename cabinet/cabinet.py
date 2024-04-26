@@ -1,5 +1,5 @@
 from models.maps import D_ControlType, SprDiscipline, db, AupData, AupInfo
-from models.cabinet import RPD, StudyGroups, Topics
+from models.cabinet import RPD, StudyGroups, Topics, Students, Grade
 from flask import Blueprint, make_response, jsonify, request
 from cabinet.utils.serialize import serialize
 from cabinet.lib.generate_empty_rpd import generate_empty_rpd
@@ -78,6 +78,99 @@ def getLessons():
 
     return jsonify(response_data)
 
+
+# Метод для обновления списка студентов по группе в базе данных
+def bulkInsertStudentsByGroup(group):
+    from app import app
+    payload = {
+        'getStudents': '', 
+        'group': group, 
+        'token': app.config.get('LK_TOKEN')
+    }
+    print(app.config.get('LK_TOKEN'))
+    
+    res = requests.get(app.config.get('LK_URL'), params=payload)
+    data = res.json()
+    data_students = data['items']
+
+    bulk_students = []
+
+    group_obj = StudyGroups.query.filter_by(title=group).first()
+
+    group_obj_s = serialize(group_obj)
+
+    print(group_obj_s)
+
+    for student in data_students:
+        lk_id = student['id']
+        is_exist = bool(Students.query.filter_by(lk_id = lk_id).first())
+
+        if not is_exist:
+            bulk_students.append(Students(name=student['fio'], study_group_id=group_obj_s['id'], lk_id=lk_id))
+ 
+    db.session.bulk_save_objects(bulk_students)
+    db.session.commit()
+
+    return bulk_students
+
+@cabinet.route('getGrades', methods=['GET'])
+def getGrades():
+    if 'aup' not in request.args:
+        return make_response('Отсутствует параметр "aup"', 400)
+
+    if 'id' not in request.args:
+        return make_response('Отсутствует параметр "id"', 400)
+    
+    if 'group' not in request.args:
+        return make_response('Отсутствует параметр "group"', 400)
+
+    num_aup = request.args.get('aup')
+    id_discipline = request.args.get('id')
+    group = request.args.get('group')
+
+    bulkInsertStudentsByGroup(group)
+    
+    group_obj = StudyGroups.query.filter_by(title=group).first()
+    students = Students.query.filter(Students.study_group_id == group_obj.id).all()
+    students = serialize(students)
+
+    rows = []
+    for student in students:
+        grades = Grade.query.filter(Grade.student_id == student['id']).all()
+        grades = serialize(grades)
+
+        values = {}
+        for grade in grades:
+            values[grade['topic_id']] = grade['value']
+
+        rows.append({
+            'id': student['id'],
+            'name': student['name'],
+            'values': values
+        })
+
+    return jsonify(rows)
+
+@cabinet.route('updateGrade', methods=['POST'])
+def updateGrade():
+    data = request.get_json()
+    print(data)
+
+    grade = Grade.query.filter(Grade.student_id == data['student_id'], Grade.topic_id == data['topic_id']).first()
+
+
+    if not grade:
+        grade = Grade(value=data['value'], student_id=data['student_id'], topic_id=data['topic_id'])
+        db.session.add(grade)
+    else:
+        grade.value = data['value']
+
+
+    db.session.commit()
+
+    res = serialize(grade)
+
+    return jsonify(res)
 
 # Роут для генерации несуществующей таблицы
 @cabinet.route('/lessons', methods=['POST'])
@@ -310,11 +403,20 @@ def uploadGroups():
             num_aup = num_aup_regexp[0]
 
             study_groups.append(StudyGroups(title=group_name, num_aup=num_aup))
-
+ 
     db.session.bulk_save_objects(study_groups)
     db.session.commit()
 
     res = serialize(study_groups)
+
+    return jsonify(res)
+
+# Метод для получения списка доступных групп
+@cabinet.route('getGroups', methods=['GET'])
+def getGroups():
+    groups = StudyGroups.query.all()
+    
+    res = serialize(groups)
 
     return jsonify(res)
 
