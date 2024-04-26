@@ -4,6 +4,12 @@ from flask import Blueprint, make_response, jsonify, request
 from cabinet.utils.serialize import serialize
 from cabinet.lib.generate_empty_rpd import generate_empty_rpd
 
+from openpyxl import load_workbook
+import os
+
+# regexp
+import re 
+
 from take_from_bd import (control_type_r)
 import requests
 
@@ -67,7 +73,7 @@ def getLessons():
     topics: Topics = Topics.query.filter(Topics.id_rpd == rpd.id).all()
     response_data['topics'] = serialize(topics)
 
-    groups = StudyGroups.query.filter(StudyGroups.id_aup == aup_info.id_aup).all()
+    groups = StudyGroups.query.filter(StudyGroups.num_aup == num_aup).all()
     response_data['groups'] = serialize(groups)
 
     return jsonify(response_data)
@@ -275,4 +281,40 @@ def disciplines():
 
     return jsonify(list(unique_disciplines_map.values()))
 
+
+# Метод для загрузки файла выгрузки из 1С "Соответствие групп и учебных планов"
+# и формирование на его основе таблицы в базе данных
+@cabinet.route('uploadGroups', methods=['POST'])
+def uploadGroups():
+    files = request.files.getlist("file")
+    file = files[0]
+
+    from app import app
+
+    path = os.path.join(app.static_folder, 'temp', file.filename)
+    file.save(path)
+    
+    wb = load_workbook(file)
+    sheet = wb.active
+
+    study_groups = []
+
+    for i in range(1, sheet.max_row + 1):
+        group_cell = sheet.cell(row = i, column = 2)
+        aup_cell = sheet.cell(row = i, column = 3)
+
+        group_name = group_cell.value
+        num_aup_regexp = re.search(r'\d{9}', aup_cell.value)
+
+        if not num_aup_regexp == None:
+            num_aup = num_aup_regexp[0]
+
+            study_groups.append(StudyGroups(title=group_name, num_aup=num_aup))
+
+    db.session.bulk_save_objects(study_groups)
+    db.session.commit()
+
+    res = serialize(study_groups)
+
+    return jsonify(res)
 
