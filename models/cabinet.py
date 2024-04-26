@@ -40,13 +40,12 @@ class Topics(db.Model, SerializerMixin):
 class StudyGroups(db.Model, SerializerMixin):
     __tablename__ = 'study_group'
 
-    serialize_only = ('id', 'title')
+    serialize_only = ('id', 'title', 'num_aup')
 
     id: int = db.Column(db.Integer(), primary_key=True)
     title: str = db.Column(db.String(255), nullable=False)
-    id_aup: int = db.Column(db.Integer(), db.ForeignKey('tbl_aup.id_aup'), nullable=False)
+    num_aup: str = db.Column(db.String(255), nullable=False)
 
-    aupData = db.relationship('AupInfo')
 
 
 class Student(db.Model):
