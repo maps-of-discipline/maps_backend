@@ -465,8 +465,8 @@ def getAupData(file):
 @app.route("/api/save_excel/<string:aup>", methods=["GET"])
 def save_excel(aup):
     try:
-        paper_size = json.loads(request.form['paper_size'])
-        orientation = json.loads(request.form['orientation'])
+        paper_size = json.loads(request.args['paper_size'])
+        orientation = json.loads(request.args['orientation'])
     except:
         paper_size = "3"
         orientation = "land"
