@@ -145,7 +145,7 @@ def saveMap(aup, static, papper_size, orientation, **kwargs):
     if papper_size=="3":
         ws.page_setup.papperSize = ws.PAPERSIZE_A3
     elif papper_size=="4":
-        ws.page_setup.papperSize = ws.PAPERSIZE_A3
+        ws.page_setup.papperSize = ws.PAPERSIZE_A4
     if orientation=="land":
         ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
     elif orientation=="port":
