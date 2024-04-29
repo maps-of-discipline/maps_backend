@@ -470,6 +470,7 @@ def save_excel(aup):
     except:
         paper_size = "3"
         orientation = "land"
+    print(paper_size, orientation)
     filename = saveMap(aup, app.static_folder, paper_size, orientation, expo=60)
     # Upload xlxs file in memory and delete file from storage -----
     return_data = io.BytesIO()
@@ -482,9 +483,8 @@ def save_excel(aup):
     os.remove(filename)
     # --------------
 
-    response = make_response(send_file(return_data, download_name=filename))
+    response = make_response(send_file(return_data, download_name=filename.split("\\")[-1]))
     response.headers['Access-Control-Expose-Headers'] = "Content-Disposition"
-    response.headers['Filename'] = str.encode(filename.split('\\')[-1], 'utf-8')
     return response
 
 
