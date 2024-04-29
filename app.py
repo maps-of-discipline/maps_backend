@@ -465,8 +465,8 @@ def getAupData(file):
 @app.route("/api/save_excel/<string:aup>", methods=["GET"])
 def save_excel(aup):
     try:
-        paper_size = json.loads(request.args['paper_size'])
-        orientation = json.loads(request.args['orientation'])
+        paper_size = request.args['paper_size']
+        orientation = request.args['orientation']
     except:
         paper_size = "3"
         orientation = "land"
@@ -484,6 +484,7 @@ def save_excel(aup):
 
     response = make_response(send_file(return_data, download_name=filename))
     response.headers['Access-Control-Expose-Headers'] = "Content-Disposition"
+    response.headers['Filename'] = str.encode(filename.split('\\')[-1], 'utf-8')
     return response
 
 

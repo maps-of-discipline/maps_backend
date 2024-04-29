@@ -63,7 +63,7 @@ def makeLegend(wb, table, aup):
     aup2 = aup2[1:len(aup2)-2]
     # ws['A22'].value = str(aup2)
 
-    dis =  faculty_dis(aup2)
+    dis = faculty_dis(aup2)
     i=1
     for key in dis.keys():
         ws['A' + str(i+20)].style = 'standart'
@@ -143,9 +143,9 @@ def saveMap(aup, static, papper_size, orientation, **kwargs):
     ws.oddFooter.right.font = "Arial,Bold"
     ws.oddFooter.right.color = "000000"
     if papper_size=="3":
-        ws.page_setup.papperSize = ws.PAPERSIZE_A3
+        ws.page_setup.paperSize = ws.PAPERSIZE_A3
     elif papper_size=="4":
-        ws.page_setup.papperSize = ws.PAPERSIZE_A4
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
     if orientation=="land":
         ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
     elif orientation=="port":
@@ -287,7 +287,7 @@ def CreateMap(filename_map, max_zet, table_length):
     ws = wk.add_worksheet()
     ws.set_column(1, 40, 40)
     wk.close()
-    workbook = openpyxl.load_workbook(filename_map)
+    workbook: openpyxl.Workbook = openpyxl.load_workbook(filename_map)
     worksheet = workbook.active
     
     addStyles(workbook)
