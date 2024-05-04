@@ -10,12 +10,7 @@ from flask import make_response
 from auth.models import Users, Token
 from maps.models import db, AupInfo
 
-from config import SECRET_KEY
-
-
-ACCESS_TOKEN_LIFETIME = 3600  # 1 hour in seconds
-REFRESH_TOKEN_LIFETIME = 7 * 24 * 3600  # 7 days in seconds
-
+from config import SECRET_KEY, ACCESS_TOKEN_LIFETIME, REFRESH_TOKEN_LIFETIME
 
 def get_access_token(user_id) -> str:
     user: Users = Users.query.filter_by(id_user=user_id).first()

@@ -1,10 +1,13 @@
-import warnings
 
-from flask import Flask, url_for
+from flask import Flask, jsonify
 from flask_admin import Admin
 from flask_cors import CORS
 from flask_migrate import Migrate
 from sqlalchemy import MetaData
+from werkzeug.exceptions import HTTPException
+from flask_mail import Mail
+import requests
+from config import TELEGRAM_TOKEN, TELEGRAM_URL, TELEGRAM_CHAT_ID
 
 from maps.logic.global_variables import setGlobalVariables
 from maps.logic.take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
@@ -14,9 +17,7 @@ from maps.models import db
 from auth.admin import auth_admin_views
 from unification import unification_blueprint
 from unification.admin import unification_admin_views
-from flask_mail import Mail
 
-warnings.simplefilter("ignore")
 
 app = Flask(__name__)
 
@@ -55,3 +56,27 @@ migrate = Migrate(app, db)
 
 setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r,
                    ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
+
+
+import traceback
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Return JSON instead of HTML for HTTP errors."""
+    
+    message = f'*{type(e).__name__}: {str(e)}*\n\n'
+    tb = str(traceback.format_exc())
+    message += f"```python\n{tb}```"
+    print(message)
+    
+    requests.get(
+        url=f'{TELEGRAM_URL}/bot{TELEGRAM_TOKEN}/sendMessage', 
+        params={
+            'chat_id': TELEGRAM_CHAT_ID, 
+            'text': message, 
+            'parse_mode': "MarkdownV2"
+        })
+    
+    if isinstance(e, HTTPException):
+        return e
+    
+    return jsonify({'result': 'error', 'reason': str(e), 'traceback': str(traceback.format_exc())})
