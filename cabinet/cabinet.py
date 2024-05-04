@@ -326,6 +326,13 @@ def auth():
     from app import app
     res = requests.post(app.config.get('LK_URL'), data=payload)
 
+    if (res.status_code == 400):
+        return make_response(jsonify({
+            'error': True,
+            'message': 'Неверный логин или пароль'
+        }), 400)
+
+
     return jsonify(res.json())
 
 
