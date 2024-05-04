@@ -1,17 +1,22 @@
-SECRET_KEY = 'e1c6fe5819c4bc8857e2cbce963a7be5904692eba862d1a809f195710aff5cdc'
-SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://kd_user:KBS8xChDY!DaE&6C@kd.mospolytech.ru:3306/kd_user_test'
-SQLALCHEMY_TRACK_MODIFICATIONS = False
-SQLALCHEMY_ECHO = True
-CORS_HEADERS = "Content-Type"
+import os
+from dotenv import load_dotenv
 
-MAIL_SERVER = 'smtp.mail.ru'
-MAIL_PORT = 587
-MAIL_USE_TLS = True
-MAIL_USERNAME = 'kd.mospolytech.noreply@mail.ru'  # введите свой адрес электронной почты здесь
-MAIL_DEFAULT_SENDER = 'kd.mospolytech.noreply@mail.ru'  # и здесь
-MAIL_PASSWORD = 'bZ970VraJ1c2CsRwujvG'  # введите пароль
+load_dotenv()
 
-ADMIN_ROLE_ID = 1
-FACULTY_ROLE_ID = 2
-DEPARTMENT_ROLE_ID = 3
+SECRET_KEY = os.getenv("SECRET_KEY")
+SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
+SQLALCHEMY_TRACK_MODIFICATIONS = os.getenv("SQLALCHEMY_TRACK_MODIFICATIONS")
+SQLALCHEMY_ECHO = os.getenv("SQLALCHEMY_ECHO")
+CORS_HEADERS = os.getenv("CORS_HEADERS")
+
+MAIL_SERVER = os.getenv("MAIL_SERVER")
+MAIL_PORT = os.getenv("MAIL_PORT")
+MAIL_USE_TLS = os.getenv("MAIL_USE_TLS")
+MAIL_USERNAME = os.getenv("MAIL_USERNAME")
+MAIL_DEFAULT_SENDER = os.getenv("MAIL_DEFAULT_SENDER")
+MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
+
+ADMIN_ROLE_ID = os.getenv("ADMIN_ROLE_ID")
+FACULTY_ROLE_ID = os.getenv("FACULTY_ROLE_ID")
+DEPARTMENT_ROLE_ID = os.getenv("DEPARTMENT_ROLE_ID")
 
