@@ -84,7 +84,7 @@ def makeLegend(wb, table, aup):
 def saveMap(aup, static, papper_size, orientation, **kwargs):
 
     aup = AupInfo.query.filter_by(num_aup=aup).first()
-    data = AupData.query.filter_by(id_aup=aup.id_aup).order_by(AupData.shifr, AupData.discipline,
+    data = AupData.query.filter_by(id_aup=aup.id_aup).order_by(AupData.shifr, AupData.id_discipline,
                                                                AupData.id_period).all()
     filename_map = aup.file
     filename_map_down = f"КД {filename_map}"

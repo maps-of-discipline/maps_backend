@@ -31,7 +31,7 @@ def get_access_token(user_id) -> str:
     payload = {
         'user_id': user.id_user,
         'login': user.login,
-        'role_id': user.id_role,
+        'roles': [role.id_role for role in user.roles],
         'department_id': user.department_id,
         'faculties': [faq.id_faculty for faq in user.faculties],
         'exp': round(time()) + ACCESS_TOKEN_LIFETIME,
@@ -115,11 +115,11 @@ def aup_require(request):
             except sqlalchemy.exc.NoResultFound:
                 return make_response("No such aup found", 404)
 
-            if payload['role_id'] == 2:
+            if 2 in payload['roles']:
                 if aup_info.id_faculty not in [faq.id_faculty for faq in user.faculties]:
                     return make_response('Forbidden', 403)
 
-            elif payload['role_id'] == 3:
+            elif 3 in payload['roles']:
                 if not user.department_id or aup_info.id_department != user.department_id:
                     return make_response('Forbidden', 403)
 
@@ -142,7 +142,7 @@ def admin_only(request):
             if not payload or not verify_result:
                 return make_response('Authorization token is invalid', 401)
 
-            if payload['role_id'] != 1:
+            if 1 not in payload['roles']:
                 return make_response('Forbidden', 403)
 
             result = f(*args, **kwargs)

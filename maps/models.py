@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+import logging.config
 
 db = SQLAlchemy()
 
@@ -314,7 +315,8 @@ class AupData(db.Model):
     id_group = db.Column(db.Integer, nullable=False)
     id_type_record = db.Column(db.Integer, db.ForeignKey(
         'd_type_record.id'), nullable=False)
-    discipline = db.Column(db.String(350), nullable=False)
+    id_discipline = db.Column(db.Integer, db.ForeignKey("spr_discipline.id"), nullable=True)
+    _discipline = db.Column("discipline", db.String(350), nullable=False)
     id_period = db.Column(db.Integer, nullable=False)
     num_row = db.Column(db.Integer, nullable=False)
     id_type_control = db.Column(db.Integer, db.ForeignKey(
@@ -331,6 +333,22 @@ class AupData(db.Model):
     type_control = db.relationship('D_ControlType', lazy='joined')
     aup = db.relationship('AupInfo', back_populates='aup_data')
     ed_izmereniya = db.relationship('D_EdIzmereniya', lazy='joined')
+
+
+    @property
+    def discipline(self) -> str:
+        return self._discipline
+
+    @discipline.setter
+    def discipline(self, value: str):
+        discipline = SprDiscipline.query.filter_by(title=value).first()
+
+        if not discipline: 
+            discipline = SprDiscipline(title=value)
+            db.session.add(discipline)
+            db.session.commit()
+
+        self._discipline = value
 
     def __repr__(self):
         return '<AupData %r>' % self.aup.num_aup
@@ -352,3 +370,12 @@ class AupData(db.Model):
             id_edizm=self.id_edizm,
             zet=self.zet,
         )
+
+
+class SprDiscipline(db.Model):
+    __tablename__ = "spr_discipline"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255))
+
+

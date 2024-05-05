@@ -289,7 +289,32 @@ def getControlTypes():
 
 @maps.route("/test")
 def test():
-    return make_response(jsonify('OK'), 200)
+    disciplines = {}
+    aup_data_objects = []
+    i = 1
+
+    for el in SprDiscipline.query.all():
+        disciplines.update({el.title: el.id})
+
+    for aup_data in AupData.query.all():
+        aup_data: AupData
+
+        if aup_data.discipline not in disciplines: 
+            spr_discipline = SprDiscipline()
+            spr_discipline.title = aup_data.discipline
+            db.session.add(spr_discipline)
+            disciplines.update({aup_data.discipline: spr_discipline.id})
+        
+        aup_data.id_discipline = disciplines[aup_data.discipline]
+        aup_data_objects.append(aup_data)
+        
+
+
+    db.session.add_all(aup_data_objects)
+    db.session.commit()
+    
+
+    return jsonify(disciplines), 200
 
 
 @maps.route("/upload-xml/<string:aup>")
