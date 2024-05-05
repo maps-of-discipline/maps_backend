@@ -427,3 +427,24 @@ def getGroups():
 
     return jsonify(res)
 
+@cabinet.route('getReportByDiscipline', methods=['GET'])
+def getReport():
+    id_discipline = request.args.get('id_discipline')
+
+    rpds: RPD = RPD.query.filter(RPD.id_unique_discipline == id_discipline).all()
+
+    grades = {
+        2: 0,
+        3: 0,
+        4: 0,
+        5: 0,
+    }
+
+    for rpd in rpds:
+        for topic in rpd.topics:
+            for grade in topic.grades:
+                grades[grade.value] += 1
+
+    res = grades
+
+    return jsonify(res)

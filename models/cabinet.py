@@ -13,7 +13,7 @@ class RPD(db.Model, SerializerMixin):
 
     aupData = db.relationship('AupInfo')
     sprDiscipline = db.relationship('SprDiscipline')
-
+    topics = db.relationship('Topics', back_populates="rpd", lazy="joined")
 
 class Topics(db.Model, SerializerMixin):
     __tablename__ = 'topic'
@@ -34,7 +34,8 @@ class Topics(db.Model, SerializerMixin):
     study_group_id: int = db.Column(db.Integer(), db.ForeignKey('study_group.id'), nullable=False)
 
     d_control_type = db.relationship('D_ControlType')
-    rpd = db.relationship('RPD')
+    rpd = db.relationship('RPD', back_populates="topics")
+    grades = db.relationship('Grade', lazy="joined")
 
 
 class StudyGroups(db.Model, SerializerMixin):
