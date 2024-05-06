@@ -163,6 +163,31 @@ def get_colors():
     return l
 
 
+@maps.route('/get-modules', methods=['GET'])
+def get_modules():
+    modules = D_Modules.query.all()
+    return jsonify([module.as_dict() for module in modules])
+
+
+@maps.route('/add-module', methods=['POST'])
+@login_required(request)
+@aup_require(request)
+def add_module():
+    module = request.get_json()
+    if not module['title']: 
+        return jsonify({'result': 'error', 'message': 'поле title не должно быть пустым'}), 400
+    
+    new_module = D_Modules()
+    new_module.title = module['title']
+    new_module.color = module['color']
+
+    db.session.add(new_module)
+    db.session.commit()
+
+    return jsonify({'result': 'ok', 'id': new_module.id}), 200
+
+    
+
 @maps.route("/getAllMaps")
 def getAllMaps():
     specialization_names = {}
@@ -289,32 +314,12 @@ def getControlTypes():
 
 @maps.route("/test")
 def test():
-    disciplines = {}
-    aup_data_objects = []
-    i = 1
-
-    for el in SprDiscipline.query.all():
-        disciplines.update({el.title: el.id})
-
-    for aup_data in AupData.query.all():
-        aup_data: AupData
-
-        if aup_data.discipline not in disciplines: 
-            spr_discipline = SprDiscipline()
-            spr_discipline.title = aup_data.discipline
-            db.session.add(spr_discipline)
-            disciplines.update({aup_data.discipline: spr_discipline.id})
-        
-        aup_data.id_discipline = disciplines[aup_data.discipline]
-        aup_data_objects.append(aup_data)
-        
-
-
-    db.session.add_all(aup_data_objects)
+    for module in D_Modules.query.all():
+        module.color = '#5f60ec'
+        db.session.add(module)
     db.session.commit()
     
-
-    return jsonify(disciplines), 200
+    return jsonify(), 200
 
 
 @maps.route("/upload-xml/<string:aup>")

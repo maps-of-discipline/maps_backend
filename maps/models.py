@@ -1,5 +1,4 @@
 from flask_sqlalchemy import SQLAlchemy
-import logging.config
 
 db = SQLAlchemy()
 
@@ -280,10 +279,11 @@ class D_TypeRecord(db.Model):
         return '<D_TypeRecord %r>' % self.title
 
 
-class D_Modules(db.Model):
+class D_Modules(db.Model, SerializationMixin):
     __tablename__ = 'd_modules'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
+    color = db.Column(db.String(8), nullable=False, default='#5f60ec')
 
     def __repr__(self):
         return '<D_Modules %r>' % self.title

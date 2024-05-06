@@ -6,8 +6,8 @@ import xlsxwriter
 from openpyxl.styles import (Alignment, Border, Font, NamedStyle, PatternFill,
                              Side)
 
-from maps.logic.discipline_list import elective_disciplines
-from maps.logic.take_from_bd import create_json_print
+
+from maps.logic.take_from_bd import create_json_print, elective_disciplines
 from maps.logic.tools import get_maximum_rows
 from maps.models import (AupInfo, AupData, Groups)
 
