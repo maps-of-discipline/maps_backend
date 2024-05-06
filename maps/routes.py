@@ -170,8 +170,8 @@ def get_modules():
 
 
 @maps.route('/add-module', methods=['POST'])
-@login_required(request)
-@aup_require(request)
+# @login_required(request)
+# @aup_require(request)
 def add_module():
     module = request.get_json()
     if not module['title']: 
@@ -185,6 +185,29 @@ def add_module():
     db.session.commit()
 
     return jsonify({'result': 'ok', 'id': new_module.id}), 200
+
+
+@maps.route('/modules/<int:id>', methods=['PUT', 'DELETE'])
+def edit_or_delete_module(id: int): 
+    module = D_Modules.query.get(id)
+    if not module:
+        return jsonify({'result': 'error', 'message': 'not found'}), 404
+        
+    if request.method == "DELETE":    
+        db.session.delete(module)
+        db.session.commit()
+        return jsonify({'result': 'ok'}), 200
+
+    elif request.method == "PUT":
+        data = request.get_json()
+        module.title = data['title']
+        module.color = data['color']
+
+        db.session.add(module)
+        db.session.commit()
+
+        return jsonify(module.as_dict()), 200
+
 
     
 
@@ -318,7 +341,7 @@ def test():
         module.color = '#5f60ec'
         db.session.add(module)
     db.session.commit()
-    
+
     return jsonify(), 200
 
 
