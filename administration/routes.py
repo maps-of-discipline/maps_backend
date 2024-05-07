@@ -21,7 +21,7 @@ class RolesAdminView(SimpleAdminView):
 
 @admin.route("/roles", methods=["GET", "POST", "PUT", "DELETE"])
 @admin.route("/roles/<int:id>", methods=["GET", "POST", "PUT", "DELETE"])
-# @admin_only(request)
+@admin_only(request)
 def roles_view(id: int | None = None):
     view = RolesAdminView()
     return view.handle_request(request, id)
@@ -38,7 +38,7 @@ class ModesAdminView(SimpleAdminView):
 
 @admin.route("/modes", methods=["GET", "POST", "PUT", "DELETE"])
 @admin.route("/modes/<int:id>", methods=["GET", "POST", "PUT", "DELETE"])
-# @admin_only(request)
+@admin_only(request)
 def modes_view(id: int | None = None):
     view = ModesAdminView()
     return view.handle_request(request, id)
@@ -46,7 +46,7 @@ def modes_view(id: int | None = None):
 
 @admin.route("/users", methods=["GET", "POST", "PUT", "DELETE"])
 @admin.route("/users/<int:id>", methods=["GET", "POST", "PUT", "DELETE"])
-# @admin_only(request)
+@admin_only(request)
 def user_view(id: int | None = None):
     view = UserCrudView()
     print(id)
@@ -54,6 +54,7 @@ def user_view(id: int | None = None):
 
 
 @admin.route('/permissions', methods=['GET', 'POST'])
+@admin_only(request)
 def permissions_view():
     
     if request.method == "GET":
