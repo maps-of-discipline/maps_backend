@@ -2,14 +2,14 @@ from maps.models import db
 
 faculty_discipline_period_assoc = db.Table(
     'faculty_discipline_period',
-    db.Column('discipline_period_id', db.ForeignKey('discipline_period_assoc.id')),
-    db.Column('faculty_id', db.ForeignKey('spr_faculty.id_faculty')),
+    db.Column('discipline_period_id', db.ForeignKey('discipline_period_assoc.id', ondelete='CASCADE')),
+    db.Column('faculty_id', db.ForeignKey('spr_faculty.id_faculty', ondelete='CASCADE')),
 )
 
 unification_okso_assoc = db.Table(
     'unification_okso_assoc',
-    db.Column('unification_id', db.ForeignKey('unification_discipline.id')),
-    db.Column('okso_id', db.String(255, collation='utf8mb4_unicode_ci'), db.ForeignKey("spr_okco.program_code"))
+    db.Column('unification_id', db.ForeignKey('unification_discipline.id', ondelete='CASCADE')),
+    db.Column('okso_id', db.String(255, collation='utf8mb4_unicode_ci'), db.ForeignKey("spr_okco.program_code", ondelete='CASCADE'))
 )
 
 
@@ -17,8 +17,8 @@ class DisciplinePeriodAssoc(db.Model):
     __tablename__ = 'discipline_period_assoc'
 
     id = db.Column(db.Integer, primary_key=True)
-    unification_discipline_id = db.Column(db.Integer, db.ForeignKey('unification_discipline.id'))
-    period_id = db.Column(db.Integer, db.ForeignKey('d_period.id'))
+    unification_discipline_id = db.Column(db.Integer, db.ForeignKey('unification_discipline.id', ondelete='CASCADE'))
+    period_id = db.Column(db.Integer, db.ForeignKey('d_period.id', ondelete='CASCADE'))
 
     faculties = db.relationship('SprFaculty', secondary=faculty_discipline_period_assoc, lazy='subquery')
     unification_discipline = db.relationship("UnificationDiscipline")
@@ -26,12 +26,11 @@ class DisciplinePeriodAssoc(db.Model):
     load = db.relationship("UnificationLoad", lazy='subquery')
 
 
-
 class UnificationLoad(db.Model):
     __tablename__ = 'unification_load'
     id = db.Column(db.Integer, primary_key=True)
-    education_form_id = db.Column(db.Integer, db.ForeignKey('spr_form_education.id_form'))
-    discipline_period_assoc_id = db.Column(db.Integer, db.ForeignKey('discipline_period_assoc.id'))
+    education_form_id = db.Column(db.Integer, db.ForeignKey('spr_form_education.id_form', ondelete='CASCADE'))
+    discipline_period_assoc_id = db.Column(db.Integer, db.ForeignKey('discipline_period_assoc.id', ondelete='CASCADE'))
     lectures = db.Column(db.Float)
     seminars = db.Column(db.Float)
     srs = db.Column(db.Float)
@@ -76,7 +75,7 @@ class UnificationDiscipline(db.Model):
 
     semesters_count = db.Column(db.Integer)
     amount = db.Column(db.Integer)
-    measure_id = db.Column(db.Integer, db.ForeignKey('d_ed_izmereniya.id'))
+    measure_id = db.Column(db.Integer, db.ForeignKey('d_ed_izmereniya.id', ondelete='CASCADE'))
 
     periods = db.relationship('DisciplinePeriodAssoc', lazy='subquery')
     related_okso = db.relationship("SprOKCO", secondary=unification_okso_assoc)

@@ -4,22 +4,22 @@ from maps.models import db, SerializationMixin
 
 users_faculty_table = db.Table(
     "users_faculty",
-    db.Column("user_id", db.ForeignKey("tbl_users.id_user"), nullable=False),
-    db.Column("faculty_id", db.ForeignKey("spr_faculty.id_faculty"), nullable=False),
+    db.Column("user_id", db.ForeignKey("tbl_users.id_user", ondelete="CASCADE"), nullable=False),
+    db.Column("faculty_id", db.ForeignKey("spr_faculty.id_faculty", ondelete="CASCADE"), nullable=False),
 )
 
 
 permissions_table = db.Table(
     "Permissions",
-    db.Column("role_id", db.ForeignKey("roles.id_role"), nullable=False),
-    db.Column("mode_id", db.ForeignKey("Mode.id"), nullable=False),
+    db.Column("role_id", db.ForeignKey("roles.id_role", ondelete="CASCADE"), nullable=False),
+    db.Column("mode_id", db.ForeignKey("Mode.id", ondelete="CASCADE"), nullable=False),
 )
 
 
 user_roles_table = db.Table(
     "user_roles",
-    db.Column("role_id", db.ForeignKey("roles.id_role"), nullable=False),
-    db.Column("user_id", db.ForeignKey("tbl_users.id_user"), nullable=False),
+    db.Column("role_id", db.ForeignKey("roles.id_role", ondelete="CASCADE"), nullable=False),
+    db.Column("user_id", db.ForeignKey("tbl_users.id_user", ondelete="CASCADE"), nullable=False),
 )
 
 
@@ -32,11 +32,17 @@ class Users(db.Model, SerializationMixin):
     password_hash = db.Column(db.String(200), unique=True, nullable=False)
 
     department_id = db.Column(
-        db.Integer, db.ForeignKey("tbl_department.id_department"), nullable=True
+        db.Integer,
+        db.ForeignKey(
+            "tbl_department.id_department",
+            ondelete='SET NULL'),
     )
 
-    roles = db.relationship("Roles", secondary=user_roles_table)
-    
+    roles = db.relationship(
+        "Roles",
+        secondary=user_roles_table
+    )
+
     faculties = db.Relationship(
         "SprFaculty",
         secondary=users_faculty_table,
@@ -64,7 +70,11 @@ class Token(db.Model):
 
     id = db.Column(db.Integer(), primary_key=True)
     user_id = db.Column(
-        db.Integer(), db.ForeignKey("tbl_users.id_user"), nullable=False
+        db.Integer(), 
+        db.ForeignKey(
+            "tbl_users.id_user",
+            ondelete="CASCADE"),
+            nullable=False
     )
     refresh_token = db.Column(db.String(256), nullable=False)
     user_agent = db.Column(db.String(256), nullable=False)
