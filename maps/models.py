@@ -29,7 +29,7 @@ class SprDegreeEducation(db.Model):
         return '<DegreeEducation %r>' % self.name_deg
 
 
-class SprFaculty(db.Model):
+class SprFaculty(db.Model, SerializationMixin):
     __tablename__ = 'spr_faculty'
 
     id_faculty = db.Column(db.Integer, primary_key=True)
@@ -159,7 +159,7 @@ class AupInfo(db.Model, SerializationMixin):
 
 
 
-class Department(db.Model):
+class Department(db.Model, SerializationMixin):
     __tablename__ = 'tbl_department'
 
     id_department = db.Column(db.Integer, primary_key=True)

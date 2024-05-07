@@ -1,7 +1,6 @@
-from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from maps.models import db, SprFormEducation
+from maps.models import db, SerializationMixin
 
 users_faculty_table = db.Table(
     "users_faculty",
@@ -24,7 +23,7 @@ user_roles_table = db.Table(
 )
 
 
-class Users(db.Model, UserMixin):
+class Users(db.Model, SerializationMixin):
     __tablename__ = "tbl_users"
 
     id_user = db.Column(db.Integer, primary_key=True)
@@ -74,7 +73,7 @@ class Token(db.Model):
     user = db.relationship("Users")
 
 
-class Roles(db.Model):
+class Roles(db.Model, SerializationMixin):
     __tablename__ = "roles"
 
     id_role = db.Column(db.Integer, primary_key=True)
@@ -94,7 +93,7 @@ class Roles(db.Model):
         return self.name_role
 
 
-class Mode(db.Model):
+class Mode(db.Model, SerializationMixin):
     __tablename__ = "Mode"
 
     id = db.Column(db.Integer, primary_key=True)
