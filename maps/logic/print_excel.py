@@ -61,24 +61,37 @@ def makeLegend(wb, table, aup):
     ws['A' + str(len(table_dict) + 2)].style = 'standart'
     ws['A' + str(len(table_dict) + 2)].value = 'Итого: ' + str(sum_zet)
 
+    last_row = len(table_dict) + 2
+    # отступ от Итого
+    last_row += 4
     # --- часть легенды с факультативами ---
 
-    ws['A19'].style = 'standart'
-    ws['A19'].value = 'Факультативы:'
-    ws['A20'].style = 'standart'
-    ws['B20'].style = 'standart'
-    ws['A20'].value = 'Название'
-    ws['B20'].value = 'Часы'
+    ws['B'+str(last_row)].value = 'Факультативы:'
+    ws['B' + str(last_row)].style = 'standart'
+    last_row += 1
+    ws['A'+str(last_row)].style = 'standart'
+    ws['B'+str(last_row)].style = 'standart'
+    ws['A'+str(last_row)].value = 'ЗЕТ'
+    ws['B'+str(last_row)].value = 'Название'
+    ws['C'+str(last_row)].value = 'Часы'
+    ws['C' + str(last_row)].style = 'standart'
 
     dis = elective_disciplines(aup)
+    last_row += 1
+    sum = 0
+    # запись названий в столбец B
+    for key, value in dis.items():
+        ws['B' + str(last_row)] = key
+        ws['B' + str(last_row)].style = 'standart'
+        ws['C' + str(last_row)] = value
+        ws['C' + str(last_row)].style = 'standart'
+        ws['A' + str(last_row)] = value / 36
+        ws['A' + str(last_row)].style = 'standart'
+        sum += value / 36
+        last_row += 1
 
-    i = 1
-    for key in dis.keys():
-        ws['A' + str(i + 20)].style = 'standart'
-        ws['A' + str(i + 20)].value = str(key)
-        ws['B' + str(i + 20)].style = 'standart'
-        ws['B' + str(i + 20)].value = str(dis[key])
-        i += 1
+    ws['A' + str(last_row)].style = 'standart'
+    ws['A' + str(last_row)].value = f'Итого: {sum}'
 
 
 def saveMap(aup, static, papper_size, orientation, **kwargs):
