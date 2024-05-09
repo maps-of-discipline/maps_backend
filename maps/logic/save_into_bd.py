@@ -50,7 +50,6 @@ def check_actual(year_end):
         return True
 
 
-
 def SaveCard(db, aupInfo, aupData):
     # посмотреть есть ли в таблице факультетов такой факультет и если нет, то добавить
     get_faculty = SprFaculty.query.filter_by(name_faculty=aupInfo["name_faculty"]).first()

@@ -68,4 +68,3 @@ def permissions_view():
         db.session.execute(permissions_table.insert().values(data))
         db.session.commit()
         return jsonify({'result': "ok"}), 200
-    

@@ -17,13 +17,13 @@ def get_access_token(user_id) -> str:
 
     can_edit = []
 
-    if user.id_role == 2:  # faculty
+    if 2 in [role.id_role for role in user.roles]:  # faculty
         for faq in user.faculties:
             aup_infos = AupInfo.query.filter_by(id_faculty=faq.id_faculty).all()
             for aup in aup_infos:
                 can_edit.append(aup.num_aup)
 
-    elif user.id_role == 3:  # department
+    elif 3 in [role.id_role for role in user.roles] :  # department
         aup_infos = AupInfo.query.filter_by(id_department=user.department_id)
         for aup in aup_infos:
             can_edit.append(aup.num_aup)
