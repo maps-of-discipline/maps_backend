@@ -1,5 +1,5 @@
 from models.maps import D_ControlType, SprDiscipline, db, AupData, AupInfo
-from models.cabinet import RPD, StudyGroups, Topics, Students, Grade
+from models.cabinet import RPD, StudyGroups, Topics, Students, Grade, GradeTable, GradeType
 from flask import Blueprint, make_response, jsonify, request
 from cabinet.utils.serialize import serialize
 from cabinet.lib.generate_empty_rpd import generate_empty_rpd
@@ -99,8 +99,6 @@ def bulkInsertStudentsByGroup(group):
 
     group_obj_s = serialize(group_obj)
 
-    print(group_obj_s)
-
     for student in data_students:
         lk_id = student['id']
         is_exist = bool(Students.query.filter_by(lk_id = lk_id).first())
@@ -113,7 +111,7 @@ def bulkInsertStudentsByGroup(group):
 
     return bulk_students
 
-@cabinet.route('getGrades', methods=['GET'])
+@cabinet.route('get-grades', methods=['GET'])
 def getGrades():
     if 'aup' not in request.args:
         return make_response('Отсутствует параметр "aup"', 400)
@@ -126,12 +124,34 @@ def getGrades():
 
     num_aup = request.args.get('aup')
     id_discipline = request.args.get('id')
-    group = request.args.get('group')
+    group_num = request.args.get('group')
 
-    bulkInsertStudentsByGroup(group)
+    aup_info: AupInfo = AupInfo.query.filter(AupInfo.num_aup == num_aup).first()
+    if not aup_info:
+        return jsonify({'error': 'Данный АУП отсутствует.'})
+
+    discipline_is_exist = AupData.query.filter(AupData.id_discipline == id_discipline).first()
+    if not discipline_is_exist:
+        return jsonify({'error': 'Дисциплина отсутствует в АУП.'})
     
-    group_obj = StudyGroups.query.filter_by(title=group).first()
-    students = Students.query.filter(Students.study_group_id == group_obj.id).all()
+    group = StudyGroups.query.filter(StudyGroups.title == group_num).first()
+    if not group:
+        return jsonify({'error': 'Данная группа отсутствует.'})
+
+    grade_table = GradeTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline, study_group_id=group.id).first()
+    if not grade_table:
+        return jsonify({
+            'is_not_exist': True,
+            'message': 'Таблица успеваемости отсутствует'
+        })
+
+    groups = StudyGroups.query.filter_by(num_aup=num_aup).all()
+
+
+    """ for group in groups:
+        bulkInsertStudentsByGroup(group.title) """
+    
+    students = Students.query.filter(Students.study_group_id == group.id).all()
     students = serialize(students)
 
     rows = []
@@ -141,7 +161,7 @@ def getGrades():
 
         values = {}
         for grade in grades:
-            values[grade['topic_id']] = grade['value']
+            values[grade['col_id']] = grade['value']
 
         rows.append({
             'id': student['id'],
@@ -149,22 +169,53 @@ def getGrades():
             'values': values
         })
 
-    return jsonify(rows)
+    return jsonify({
+        'gradeTypes': [],
+        'gradeTableId': grade_table.id,
+        'rows': rows
+    })
+
+@cabinet.route('create-grade-table')
+def createGrades():
+    num_aup = request.args.get('aup')
+    id_discipline = request.args.get('id')
+    group_num = request.args.get('group')
+
+    aup_info: AupInfo = AupInfo.query.filter(AupInfo.num_aup == num_aup).first()
+    if not aup_info:
+        return jsonify({'error': 'Данный АУП отсутствует.'})
+
+    group = StudyGroups.query.filter(StudyGroups.title == group_num).first()
+    if not group:
+        return jsonify({'error': 'Данная группа отсутствует.'})
+
+    grade_table = GradeTable(id_aup = aup_info.id_aup, id_unique_discipline = id_discipline, study_group_id=group.id)
+
+    db.session.add(grade_table)   
+    db.session.commit()
+
+    return jsonify(serialize(grade_table))
+
+""" @cabinet.route('get-types-grade')
+def getTypesGrade():
+    num_aup = request.args.get('aup')
+    id_discipline = request.args.get('id')
+
+    type_grades = GradeTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline).first()
+
+    return jsonify(serialize(1)) """
 
 @cabinet.route('updateGrade', methods=['POST'])
 def updateGrade():
     data = request.get_json()
-    print(data)
 
-    grade = Grade.query.filter(Grade.student_id == data['student_id'], Grade.topic_id == data['topic_id']).first()
-
+    grade = Grade.query.filter_by(grade_table_id=data['grade_table_id'], student_id=data['student_id'], col_id=data['col_id']).first()
 
     if not grade:
-        grade = Grade(value=data['value'], student_id=data['student_id'], topic_id=data['topic_id'])
+        grade = Grade(grade_table_id=data['grade_table_id'], value=data['value'], student_id=data['student_id'], col_id=data['col_id'])
         db.session.add(grade)
     else:
         grade.value = data['value']
-
 
     db.session.commit()
 

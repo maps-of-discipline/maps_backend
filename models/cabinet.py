@@ -35,7 +35,6 @@ class Topics(db.Model, SerializerMixin):
 
     d_control_type = db.relationship('D_ControlType')
     rpd = db.relationship('RPD', back_populates="topics")
-    grades = db.relationship('Grade', lazy="joined")
 
 
 class StudyGroups(db.Model, SerializerMixin):
@@ -74,22 +73,32 @@ class GradeTable(db.Model, SerializerMixin):
 class Grade(db.Model, SerializerMixin):
     __tablename__ = 'grades'
 
-    serialize_only = ('id', 'grade_table_id', 'value', 'student_id', 'topic_id')
+    serialize_only = ('id', 'grade_table_id', 'value', 'student_id', 'col_id')
 
     id = db.Column(db.Integer, primary_key=True)
     grade_table_id = db.Column(db.Integer, db.ForeignKey("grade_table.id"), nullable=False)
     value = db.Column(db.Integer)
     student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
-    topic_id = db.Column(db.Integer, db.ForeignKey("topic.id"), nullable=False)
+    grade_column_id = db.Column(db.Integer, db.ForeignKey("grade_column.id"), nullable=False)
+
+class GradeColumn(db.Model, SerializerMixin):
+    __tablename__ = 'grade_column'
+
+    serialize_only = ('id', 'name', 'grade_table_id', 'grade_type_id')
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(400), nullable=False)
+    grade_table_id = db.Column(db.Integer, db.ForeignKey("grade_table.id"), nullable=False)
+    grade_type_id = db.Column(db.Integer, db.ForeignKey("grade_type.id"), nullable=False)
 
 # Виды оценивания (посещаемость, активность, задания)
-class SprGrade(db.Model, SerializerMixin):
-    __tablename__ = 'spr_grade'
+class GradeType(db.Model, SerializerMixin):
+    __tablename__ = 'grade_type'
 
-    serialize_only = ('id', 'name', 'grade_table_id')
+    serialize_only = ('id', 'name')
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
-    grade_table_id = db.Column(db.Integer, db.ForeignKey("grade_table.id"), nullable=False)
+    type = db.Column(db.String(255), nullable=False)
 
 # TODO: Настройки видов оценивания
