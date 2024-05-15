@@ -1,5 +1,5 @@
 from models.maps import D_ControlType, SprDiscipline, db, AupData, AupInfo
-from models.cabinet import RPD, StudyGroups, Topics, Students, Grade, GradeTable, GradeType
+from models.cabinet import RPD, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn
 from flask import Blueprint, make_response, jsonify, request
 from cabinet.utils.serialize import serialize
 from cabinet.lib.generate_empty_rpd import generate_empty_rpd
@@ -144,9 +144,8 @@ def getGrades():
             'is_not_exist': True,
             'message': 'Таблица успеваемости отсутствует'
         })
-
-    groups = StudyGroups.query.filter_by(num_aup=num_aup).all()
-
+    
+    grade_types = GradeType.query.filter_by(grade_table_id=grade_table.id).all()
 
     """ for group in groups:
         bulkInsertStudentsByGroup(group.title) """
@@ -161,7 +160,7 @@ def getGrades():
 
         values = {}
         for grade in grades:
-            values[grade['col_id']] = grade['value']
+            values[grade['grade_column_id']] = grade['value']
 
         rows.append({
             'id': student['id'],
@@ -169,9 +168,12 @@ def getGrades():
             'values': values
         })
 
+    columns = GradeColumn.query.filter_by(grade_table_id=grade_table.id).all()
+
     return jsonify({
-        'gradeTypes': [],
+        'gradeTypes': serialize(grade_types),
         'gradeTableId': grade_table.id,
+        'columns': serialize(columns),
         'rows': rows
     })
 
@@ -192,27 +194,45 @@ def createGrades():
     grade_table = GradeTable(id_aup = aup_info.id_aup, id_unique_discipline = id_discipline, study_group_id=group.id)
 
     db.session.add(grade_table)   
+
+    db.session.commit()
+
+    grade_type_tasks = GradeType(name='Задания', type='tasks', grade_table_id=grade_table.id)
+    grade_type_activity = GradeType(name='Активность', type='activity', grade_table_id=grade_table.id)
+    db.session.add(grade_type_tasks)   
+    db.session.add(grade_type_activity)   
+
     db.session.commit()
 
     return jsonify(serialize(grade_table))
 
-""" @cabinet.route('get-types-grade')
+@cabinet.route('get-types-grade')
 def getTypesGrade():
     num_aup = request.args.get('aup')
     id_discipline = request.args.get('id')
+    group_num = request.args.get('group')
 
-    type_grades = GradeTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline).first()
+    aup_info: AupInfo = AupInfo.query.filter(AupInfo.num_aup == num_aup).first()
+    if not aup_info:
+        return jsonify({'error': 'Данный АУП отсутствует.'})
 
-    return jsonify(serialize(1)) """
+    group = StudyGroups.query.filter(StudyGroups.title == group_num).first()
+    if not group:
+        return jsonify({'error': 'Данная группа отсутствует.'})
+
+    grade_table = GradeTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline, study_group_id=group.id).first()
+    grade_types = GradeType.query.filter_by(grade_table_id=grade_table.id).all()
+
+    return jsonify(serialize(grade_types))
 
 @cabinet.route('updateGrade', methods=['POST'])
 def updateGrade():
     data = request.get_json()
 
-    grade = Grade.query.filter_by(grade_table_id=data['grade_table_id'], student_id=data['student_id'], col_id=data['col_id']).first()
+    grade = Grade.query.filter_by(student_id=data['student_id'], grade_table_id=data['grade_table_id'], grade_column_id=data['grade_column_id']).first()
 
     if not grade:
-        grade = Grade(grade_table_id=data['grade_table_id'], value=data['value'], student_id=data['student_id'], col_id=data['col_id'])
+        grade = Grade(value=data['value'], student_id=data['student_id'], grade_table_id=data['grade_table_id'], grade_column_id=data['grade_column_id'])
         db.session.add(grade)
     else:
         grade.value = data['value']
