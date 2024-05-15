@@ -63,7 +63,7 @@ class Students(db.Model, SerializerMixin):
 class GradeTable(db.Model, SerializerMixin):
     __tablename__ = 'grade_table'
 
-    serialize_only = ('id', 'id_aup', 'id_unique_discipline', 'id_group')
+    serialize_only = ('id', 'id_aup', 'id_unique_discipline', 'study_group_id')
 
     id: int = db.Column(db.Integer(), primary_key=True)
     id_aup: int = db.Column(db.Integer(), db.ForeignKey('tbl_aup.id_aup'), nullable=False)
@@ -74,7 +74,7 @@ class GradeTable(db.Model, SerializerMixin):
 class Grade(db.Model, SerializerMixin):
     __tablename__ = 'grades'
 
-    serialize_only = ('id', 'value', 'student_id', 'topic_id')
+    serialize_only = ('id', 'grade_table_id', 'value', 'student_id', 'topic_id')
 
     id = db.Column(db.Integer, primary_key=True)
     grade_table_id = db.Column(db.Integer, db.ForeignKey("grade_table.id"), nullable=False)
@@ -86,7 +86,7 @@ class Grade(db.Model, SerializerMixin):
 class SprGrade(db.Model, SerializerMixin):
     __tablename__ = 'spr_grade'
 
-    serialize_only = ('id', 'name')
+    serialize_only = ('id', 'name', 'grade_table_id')
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
