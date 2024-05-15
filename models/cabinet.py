@@ -59,13 +59,37 @@ class Students(db.Model, SerializerMixin):
     study_group_id = db.Column(db.Integer, db.ForeignKey('study_group.id'), nullable=False)
     lk_id = db.Column(db.Integer, nullable=False)
 
+# Таблица с оценками
+class GradeTable(db.Model, SerializerMixin):
+    __tablename__ = 'grade_table'
 
+    serialize_only = ('id', 'id_aup', 'id_unique_discipline', 'id_group')
+
+    id: int = db.Column(db.Integer(), primary_key=True)
+    id_aup: int = db.Column(db.Integer(), db.ForeignKey('tbl_aup.id_aup'), nullable=False)
+    id_unique_discipline: int = db.Column(db.Integer(), db.ForeignKey('spr_discipline.id'), nullable=False)
+    study_group_id: int = db.Column(db.Integer(), db.ForeignKey('study_group.id'), nullable=False)
+
+# Оценки
 class Grade(db.Model, SerializerMixin):
     __tablename__ = 'grades'
 
     serialize_only = ('id', 'value', 'student_id', 'topic_id')
 
     id = db.Column(db.Integer, primary_key=True)
+    grade_table_id = db.Column(db.Integer, db.ForeignKey("grade_table.id"), nullable=False)
     value = db.Column(db.Integer)
     student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
     topic_id = db.Column(db.Integer, db.ForeignKey("topic.id"), nullable=False)
+
+# Виды оценивания (посещаемость, активность, задания)
+class SprGrade(db.Model, SerializerMixin):
+    __tablename__ = 'spr_grade'
+
+    serialize_only = ('id', 'name')
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    grade_table_id = db.Column(db.Integer, db.ForeignKey("grade_table.id"), nullable=False)
+
+# TODO: Настройки видов оценивания
