@@ -95,11 +95,15 @@ class GradeColumn(db.Model, SerializerMixin):
 class GradeType(db.Model, SerializerMixin):
     __tablename__ = 'grade_type'
 
-    serialize_only = ('id', 'name', 'type', 'grade_table_id')
+    serialize_only = ('id', 'name', 'type', 'grade_table_id', 'min_grade', 'max_grade', 'archived')
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
     type = db.Column(db.String(255), nullable=False)
+    min_grade = db.Column(db.Integer, default=2)
+    max_grade = db.Column(db.Integer, default=5)
+    archived =  db.Column(db.Boolean, default=False)
+
     grade_table_id = db.Column(db.Integer, db.ForeignKey("grade_table.id"), nullable=False)
 
 # TODO: Настройки видов оценивания

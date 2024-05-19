@@ -155,7 +155,7 @@ def getGrades():
 
     rows = []
     for student in students:
-        grades = Grade.query.filter(Grade.student_id == student['id']).all()
+        grades = Grade.query.filter(Grade.student_id == student['id'], Grade.grade_table_id == grade_table.id).all()
         grades = serialize(grades)
 
         values = {}
@@ -224,6 +224,30 @@ def getTypesGrade():
     grade_types = GradeType.query.filter_by(grade_table_id=grade_table.id).all()
 
     return jsonify(serialize(grade_types))
+
+@cabinet.route('update-grade-type', methods=['POST'])
+def updateGradeType():
+    data = request.get_json()
+
+    grade_type = GradeType.query.filter_by(id=data['id']).first()
+
+    grade_type.archived = data['archived']
+
+    db.session.commit()
+
+    res = serialize(grade_type)
+
+    return jsonify(res)
+
+@cabinet.route('create-grade-type', methods=['POST'])
+def createGradeType():
+    data = request.get_json()
+
+    grade_type = GradeType(name=data['name'], grade_table_id=data['table_id'], type="custom")
+    db.session.add(grade_type)
+    db.session.commit()
+
+    return jsonify(serialize(grade_type))
 
 @cabinet.route('updateGrade', methods=['POST'])
 def updateGrade():
@@ -452,6 +476,33 @@ def disciplines():
 
     return jsonify(list(unique_disciplines_map.values()))
 
+@cabinet.route('disciplines-new', methods=['GET'])
+def disciplinesNew():
+    num_aup = request.args.get('aup')
+
+    aup_info = AupInfo.query.filter(AupInfo.num_aup == num_aup).first()
+    aup_data = AupData.query.filter_by(id_aup=aup_info.id_aup).order_by(AupData.shifr, AupData._discipline, AupData.id_period).all()
+
+    disciplines_items = {}
+    flag = ""
+
+    for i, item in enumerate(aup_data): 
+        if flag != item.discipline + str(item.id_period):
+            flag = item.discipline + str(item.id_period)
+
+            d = dict()
+
+            d["id"] = item.id_discipline
+            d["name"] = item.unique_discipline.title
+            d["num_row"] = item.num_row
+            d["color"] = '#5f60ec'
+
+            if (item.id_period  in disciplines_items):
+                disciplines_items[item.id_period].append(d)
+            else:
+                disciplines_items[item.id_period] = [d]
+
+    return jsonify(disciplines_items)
 
 # Метод для загрузки файла выгрузки из 1С "Соответствие групп и учебных планов"
 # и формирование на его основе таблицы в базе данных
