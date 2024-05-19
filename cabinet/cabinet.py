@@ -1,15 +1,19 @@
+import json
+
+
 from models.maps import D_ControlType, SprDiscipline, db, AupData, AupInfo
 from models.cabinet import RPD, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn
 from flask import Blueprint, make_response, jsonify, request
 from cabinet.utils.serialize import serialize
 from cabinet.lib.generate_empty_rpd import generate_empty_rpd
 from datetime import datetime
+from docxtpl import DocxTemplate
 
 from openpyxl import load_workbook
 import os
 
 # regexp
-import re 
+import re
 
 from take_from_bd import (control_type_r)
 import requests
@@ -17,6 +21,7 @@ import requests
 from itertools import groupby
 
 cabinet = Blueprint('cabinet', __name__)
+
 
 @cabinet.route('/ping')
 def test():
@@ -84,12 +89,12 @@ def getLessons():
 def bulkInsertStudentsByGroup(group):
     from app import app
     payload = {
-        'getStudents': '', 
-        'group': group, 
+        'getStudents': '',
+        'group': group,
         'token': app.config.get('LK_TOKEN')
     }
     print(app.config.get('LK_TOKEN'))
-    
+
     res = requests.get(app.config.get('LK_URL'), params=payload)
     data = res.json()
     data_students = data['items']
@@ -102,15 +107,16 @@ def bulkInsertStudentsByGroup(group):
 
     for student in data_students:
         lk_id = student['id']
-        is_exist = bool(Students.query.filter_by(lk_id = lk_id).first())
+        is_exist = bool(Students.query.filter_by(lk_id=lk_id).first())
 
         if not is_exist:
             bulk_students.append(Students(name=student['fio'], study_group_id=group_obj_s['id'], lk_id=lk_id))
- 
+
     db.session.bulk_save_objects(bulk_students)
     db.session.commit()
 
     return bulk_students
+
 
 @cabinet.route('get-grades', methods=['GET'])
 def getGrades():
@@ -119,7 +125,7 @@ def getGrades():
 
     if 'id' not in request.args:
         return make_response('Отсутствует параметр "id"', 400)
-    
+
     if 'group' not in request.args:
         return make_response('Отсутствует параметр "group"', 400)
 
@@ -134,23 +140,24 @@ def getGrades():
     discipline_is_exist = AupData.query.filter(AupData.id_discipline == id_discipline).first()
     if not discipline_is_exist:
         return jsonify({'error': 'Дисциплина отсутствует в АУП.'})
-    
+
     group = StudyGroups.query.filter(StudyGroups.title == group_num).first()
     if not group:
         return jsonify({'error': 'Данная группа отсутствует.'})
 
-    grade_table = GradeTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline, study_group_id=group.id).first()
+    grade_table = GradeTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline,
+                                             study_group_id=group.id).first()
     if not grade_table:
         return jsonify({
             'is_not_exist': True,
             'message': 'Таблица успеваемости отсутствует'
         })
-    
+
     grade_types = GradeType.query.filter_by(grade_table_id=grade_table.id).all()
 
     """ for group in groups:
         bulkInsertStudentsByGroup(group.title) """
-    
+
     students = Students.query.filter(Students.study_group_id == group.id).all()
     students = serialize(students)
 
@@ -178,6 +185,7 @@ def getGrades():
         'rows': rows
     })
 
+
 @cabinet.route('create-grade-table')
 def createGrades():
     num_aup = request.args.get('aup')
@@ -192,20 +200,21 @@ def createGrades():
     if not group:
         return jsonify({'error': 'Данная группа отсутствует.'})
 
-    grade_table = GradeTable(id_aup = aup_info.id_aup, id_unique_discipline = id_discipline, study_group_id=group.id)
+    grade_table = GradeTable(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline, study_group_id=group.id)
 
-    db.session.add(grade_table)   
+    db.session.add(grade_table)
 
     db.session.commit()
 
     grade_type_tasks = GradeType(name='Задания', type='tasks', grade_table_id=grade_table.id)
     grade_type_activity = GradeType(name='Активность', type='activity', grade_table_id=grade_table.id)
-    db.session.add(grade_type_tasks)   
-    db.session.add(grade_type_activity)   
+    db.session.add(grade_type_tasks)
+    db.session.add(grade_type_activity)
 
     db.session.commit()
 
     return jsonify(serialize(grade_table))
+
 
 @cabinet.route('get-types-grade')
 def getTypesGrade():
@@ -221,10 +230,12 @@ def getTypesGrade():
     if not group:
         return jsonify({'error': 'Данная группа отсутствует.'})
 
-    grade_table = GradeTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline, study_group_id=group.id).first()
+    grade_table = GradeTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline,
+                                             study_group_id=group.id).first()
     grade_types = GradeType.query.filter_by(grade_table_id=grade_table.id).all()
 
     return jsonify(serialize(grade_types))
+
 
 @cabinet.route('update-grade-type', methods=['POST'])
 def updateGradeType():
@@ -240,6 +251,7 @@ def updateGradeType():
 
     return jsonify(res)
 
+
 @cabinet.route('create-grade-type', methods=['POST'])
 def createGradeType():
     data = request.get_json()
@@ -250,14 +262,17 @@ def createGradeType():
 
     return jsonify(serialize(grade_type))
 
+
 @cabinet.route('updateGrade', methods=['POST'])
 def updateGrade():
     data = request.get_json()
 
-    grade = Grade.query.filter_by(student_id=data['student_id'], grade_table_id=data['grade_table_id'], grade_column_id=data['grade_column_id']).first()
+    grade = Grade.query.filter_by(student_id=data['student_id'], grade_table_id=data['grade_table_id'],
+                                  grade_column_id=data['grade_column_id']).first()
 
     if not grade:
-        grade = Grade(value=data['value'], student_id=data['student_id'], grade_table_id=data['grade_table_id'], grade_column_id=data['grade_column_id'])
+        grade = Grade(value=data['value'], student_id=data['student_id'], grade_table_id=data['grade_table_id'],
+                      grade_column_id=data['grade_column_id'])
         db.session.add(grade)
     else:
         grade.value = data['value']
@@ -267,6 +282,7 @@ def updateGrade():
     res = serialize(grade)
 
     return jsonify(res)
+
 
 # Роут для генерации несуществующей таблицы
 @cabinet.route('/lessons', methods=['POST'])
@@ -435,7 +451,6 @@ def auth():
             'message': 'Неверный логин или пароль'
         }), 400)
 
-
     return jsonify(res.json())
 
 
@@ -450,8 +465,6 @@ def getUser():
 
     from app import app
     res = requests.get(app.config.get('LK_URL'), params=payload)
-
-
 
     return jsonify(res.json())
 
@@ -484,17 +497,19 @@ def disciplines():
 
     return jsonify(list(unique_disciplines_map.values()))
 
+
 @cabinet.route('disciplines-new', methods=['GET'])
 def disciplinesNew():
     num_aup = request.args.get('aup')
 
     aup_info = AupInfo.query.filter(AupInfo.num_aup == num_aup).first()
-    aup_data = AupData.query.filter_by(id_aup=aup_info.id_aup).order_by(AupData.shifr, AupData._discipline, AupData.id_period).all()
+    aup_data = AupData.query.filter_by(id_aup=aup_info.id_aup).order_by(AupData.shifr, AupData._discipline,
+                                                                        AupData.id_period).all()
 
     disciplines_items = {}
     flag = ""
 
-    for i, item in enumerate(aup_data): 
+    for i, item in enumerate(aup_data):
         if flag != item.discipline + str(item.id_period):
             flag = item.discipline + str(item.id_period)
 
@@ -505,12 +520,13 @@ def disciplinesNew():
             d["num_row"] = item.num_row
             d["color"] = '#5f60ec'
 
-            if (item.id_period  in disciplines_items):
+            if (item.id_period in disciplines_items):
                 disciplines_items[item.id_period].append(d)
             else:
                 disciplines_items[item.id_period] = [d]
 
     return jsonify(disciplines_items)
+
 
 # Метод для загрузки файла выгрузки из 1С "Соответствие групп и учебных планов"
 # и формирование на его основе таблицы в базе данных
@@ -523,15 +539,15 @@ def uploadGroups():
 
     path = os.path.join(app.static_folder, 'temp', file.filename)
     file.save(path)
-    
+
     wb = load_workbook(file)
     sheet = wb.active
 
     study_groups = []
 
     for i in range(1, sheet.max_row + 1):
-        group_cell = sheet.cell(row = i, column = 2)
-        aup_cell = sheet.cell(row = i, column = 3)
+        group_cell = sheet.cell(row=i, column=2)
+        aup_cell = sheet.cell(row=i, column=3)
 
         group_name = group_cell.value
         num_aup_regexp = re.search(r'\d{9}', aup_cell.value)
@@ -540,7 +556,7 @@ def uploadGroups():
             num_aup = num_aup_regexp[0]
 
             study_groups.append(StudyGroups(title=group_name, num_aup=num_aup))
- 
+
     db.session.bulk_save_objects(study_groups)
     db.session.commit()
 
@@ -548,14 +564,16 @@ def uploadGroups():
 
     return jsonify(res)
 
+
 # Метод для получения списка доступных групп
 @cabinet.route('getGroups', methods=['GET'])
 def getGroups():
     groups = StudyGroups.query.all()
-    
+
     res = serialize(groups)
 
     return jsonify(res)
+
 
 @cabinet.route('getReportByDiscipline', methods=['GET'])
 def getReport():
@@ -578,3 +596,16 @@ def getReport():
     res = grades
 
     return jsonify(res)
+
+
+from flask import current_app
+@cabinet.route('get-word', methods=['POST'])
+def getWord():
+    data = request.get_json()
+    docx = DocxTemplate('static/docx_templates/tutor_template.docx')
+    print(current_app.static_folder)
+
+    docx.render(data)
+    docx.save('static/docx_templates/tutor_template_res.docx')
+
+    return ''
