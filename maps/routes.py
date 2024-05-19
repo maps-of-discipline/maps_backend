@@ -166,29 +166,36 @@ def get_colors():
 @maps.route('/get-modules', methods=['GET'])
 def get_modules():
     modules = D_Modules.query.all()
-    return jsonify([module.as_dict() for module in modules])
-
+    res = []
+    for module in modules:
+        module_as_dict: dict = module.as_dict()
+        module_as_dict['name'] = module_as_dict['title']
+        module_as_dict.pop('title')
+        res.append(module_as_dict)
+    return jsonify(res)
 
 @maps.route('/add-module', methods=['POST'])
 # @login_required(request)
 # @aup_require(request)
 def add_module():
     module = request.get_json()
-    if not module['title']: 
-        return jsonify({'result': 'error', 'message': 'поле title не должно быть пустым'}), 400
+    if not module['name']:
+        return jsonify({'result': 'error', 'message': 'поле "name" не должно быть пустым'}), 400
     
     new_module = D_Modules()
-    new_module.title = module['title']
+    new_module.title = module['name']
     new_module.color = module['color']
 
     db.session.add(new_module)
     db.session.commit()
 
-    return jsonify({'result': 'ok', 'id': new_module.id}), 200
+    return jsonify(new_module.as_dict()), 200
 
 
 @maps.route('/modules/<int:id>', methods=['PUT', 'DELETE'])
-def edit_or_delete_module(id: int): 
+# @login_required(request)
+# @aup_require(request)
+def edit_or_delete_module(id: int):
     module = D_Modules.query.get(id)
     if not module:
         return jsonify({'result': 'error', 'message': 'not found'}), 404
@@ -200,7 +207,7 @@ def edit_or_delete_module(id: int):
 
     elif request.method == "PUT":
         data = request.get_json()
-        module.title = data['title']
+        module.title = data['name']
         module.color = data['color']
 
         db.session.add(module)
@@ -307,7 +314,8 @@ def GetModulesByAup(aup):
         if m.title != 'Без названия':
             modules.append({
                 "id": m.id,
-                "title": m.title,
+                "name": m.title,
+                'color': m.color,
             })
     return make_response(jsonify(modules), 200)
 
