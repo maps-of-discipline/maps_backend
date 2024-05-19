@@ -3,6 +3,7 @@ from models.cabinet import RPD, StudyGroups, Topics, Students, Grade, GradeTable
 from flask import Blueprint, make_response, jsonify, request
 from cabinet.utils.serialize import serialize
 from cabinet.lib.generate_empty_rpd import generate_empty_rpd
+from datetime import datetime
 
 from openpyxl import load_workbook
 import os
@@ -303,6 +304,13 @@ def edit_lesson():
     topic.completed_task_link = data['lesson']['completed_task_link']
     topic.completed_task_link_name = data['lesson']['completed_task_link_name']
     topic.id_type_control = data['lesson']['id_type_control']
+
+    if data['lesson']['date'] == None:
+        topic.date = None
+    else:
+        topic.date = datetime.strptime(data['lesson']['date'], r'%d.%m.%Y')
+
+    topic.lesson_order = data['lesson']['lesson_order']
 
     db.session.add(topic)
     db.session.commit()
