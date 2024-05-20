@@ -122,10 +122,14 @@ def getGrades():
     
     if 'group' not in request.args:
         return make_response('Отсутствует параметр "group"', 400)
+    
+    if 'semester' not in request.args:
+        return make_response('Отсутствует параметр "semester"', 400)
 
     num_aup = request.args.get('aup')
     id_discipline = request.args.get('id')
     group_num = request.args.get('group')
+    semester = request.args.get('semester')
 
     aup_info: AupInfo = AupInfo.query.filter(AupInfo.num_aup == num_aup).first()
     if not aup_info:
@@ -139,7 +143,7 @@ def getGrades():
     if not group:
         return jsonify({'error': 'Данная группа отсутствует.'})
 
-    grade_table = GradeTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline, study_group_id=group.id).first()
+    grade_table = GradeTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline, study_group_id=group.id, semester=semester).first()
     if not grade_table:
         return jsonify({
             'is_not_exist': True,
@@ -183,6 +187,7 @@ def createGrades():
     num_aup = request.args.get('aup')
     id_discipline = request.args.get('id')
     group_num = request.args.get('group')
+    semester = request.args.get('semester')
 
     aup_info: AupInfo = AupInfo.query.filter(AupInfo.num_aup == num_aup).first()
     if not aup_info:
@@ -192,16 +197,32 @@ def createGrades():
     if not group:
         return jsonify({'error': 'Данная группа отсутствует.'})
 
-    grade_table = GradeTable(id_aup = aup_info.id_aup, id_unique_discipline = id_discipline, study_group_id=group.id)
+    grade_table = GradeTable(id_aup = aup_info.id_aup, id_unique_discipline = id_discipline, study_group_id=group.id, semester=semester)
 
     db.session.add(grade_table)   
 
     db.session.commit()
 
+    grade_type_attendance = GradeType(name='Посещение', type='attendance', grade_table_id=grade_table.id)
     grade_type_tasks = GradeType(name='Задания', type='tasks', grade_table_id=grade_table.id)
     grade_type_activity = GradeType(name='Активность', type='activity', grade_table_id=grade_table.id)
+    db.session.add(grade_type_attendance)   
     db.session.add(grade_type_tasks)   
     db.session.add(grade_type_activity)   
+
+    rpd = RPD.query.filter(RPD.id_aup == aup_info.id_aup, RPD.id_unique_discipline == id_discipline).first()
+    topics = Topics.query.filter(Topics.id_rpd == rpd.id, Topics.semester == semester).all()
+
+    bulk_grade_columns_attendance = []
+    for topic in topics:
+        date = None
+        if type(topic.date) is datetime:
+            date = topic.date.strftime('%d.%m')
+
+        bulk_grade_columns_attendance.append(GradeColumn(name=date, grade_table_id=grade_table.id, grade_type_id=grade_type_attendance.id, topic_id=topic.id))
+        bulk_grade_columns_attendance.append(GradeColumn(name=date, grade_table_id=grade_table.id, grade_type_id=grade_type_activity.id, topic_id=topic.id))
+ 
+    db.session.bulk_save_objects(bulk_grade_columns_attendance)
 
     db.session.commit()
 
@@ -233,6 +254,11 @@ def updateGradeType():
     grade_type = GradeType.query.filter_by(id=data['id']).first()
 
     grade_type.archived = data['archived']
+    grade_type.name = data['name']
+    grade_type.min_grade = data['min_grade']
+    grade_type.max_grade = data['max_grade']    
+    grade_type.binary = data['binary']
+    grade_type.weight_grade = data['weight_grade']
 
     db.session.commit()
 

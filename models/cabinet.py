@@ -66,11 +66,12 @@ class Students(db.Model, SerializerMixin):
 class GradeTable(db.Model, SerializerMixin):
     __tablename__ = 'grade_table'
 
-    serialize_only = ('id', 'id_aup', 'id_unique_discipline', 'study_group_id')
+    serialize_only = ('id', 'id_aup', 'id_unique_discipline', 'study_group_id', 'semester')
 
     id: int = db.Column(db.Integer(), primary_key=True)
     id_aup: int = db.Column(db.Integer(), db.ForeignKey('tbl_aup.id_aup'), nullable=False)
     id_unique_discipline: int = db.Column(db.Integer(), db.ForeignKey('spr_discipline.id'), nullable=False)
+    semester: int =  db.Column(db.Integer(), nullable=False)
     study_group_id: int = db.Column(db.Integer(), db.ForeignKey('study_group.id'), nullable=False)
 
 # Оценки
@@ -91,15 +92,16 @@ class GradeColumn(db.Model, SerializerMixin):
     serialize_only = ('id', 'name', 'grade_table_id', 'grade_type_id')
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(400), nullable=False)
+    name = db.Column(db.String(400), nullable=True)
     grade_table_id = db.Column(db.Integer, db.ForeignKey("grade_table.id"), nullable=False)
     grade_type_id = db.Column(db.Integer, db.ForeignKey("grade_type.id"), nullable=False)
+    topic_id = db.Column(db.Integer, db.ForeignKey("topic.id"), nullable=True)
 
 # Виды оценивания (посещаемость, активность, задания)
 class GradeType(db.Model, SerializerMixin):
     __tablename__ = 'grade_type'
 
-    serialize_only = ('id', 'name', 'type', 'grade_table_id', 'min_grade', 'max_grade', 'archived')
+    serialize_only = ('id', 'name', 'type', 'grade_table_id', 'min_grade', 'max_grade', 'archived', 'binary', 'weight_grade')
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
@@ -107,6 +109,8 @@ class GradeType(db.Model, SerializerMixin):
     min_grade = db.Column(db.Integer, default=2)
     max_grade = db.Column(db.Integer, default=5)
     archived =  db.Column(db.Boolean, default=False)
+    binary = db.Column(db.Boolean, default=False)
+    weight_grade = db.Column(db.Integer, default=1)
 
     grade_table_id = db.Column(db.Integer, db.ForeignKey("grade_table.id"), nullable=False)
 
