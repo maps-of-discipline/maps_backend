@@ -225,16 +225,17 @@ def createGrades():
     rpd = RPD.query.filter(RPD.id_aup == aup_info.id_aup, RPD.id_unique_discipline == id_discipline).first()
     topics = Topics.query.filter(Topics.id_rpd == rpd.id, Topics.semester == semester).all()
 
-    bulk_grade_columns_attendance = []
+    bulk_grade_columns= []
     for topic in topics:
         date = None
         if type(topic.date) is datetime:
             date = topic.date.strftime('%d.%m')
 
-        bulk_grade_columns_attendance.append(GradeColumn(name=date, grade_table_id=grade_table.id, grade_type_id=grade_type_attendance.id, topic_id=topic.id))
-        bulk_grade_columns_attendance.append(GradeColumn(name=date, grade_table_id=grade_table.id, grade_type_id=grade_type_activity.id, topic_id=topic.id))
+        bulk_grade_columns.append(GradeColumn(name=date, grade_table_id=grade_table.id, grade_type_id=grade_type_attendance.id, topic_id=topic.id))
+        bulk_grade_columns.append(GradeColumn(name=topic.task_link_name, grade_table_id=grade_table.id, grade_type_id=grade_type_tasks.id, topic_id=topic.id))
+        bulk_grade_columns.append(GradeColumn(name=date, grade_table_id=grade_table.id, grade_type_id=grade_type_activity.id, topic_id=topic.id))
  
-    db.session.bulk_save_objects(bulk_grade_columns_attendance)
+    db.session.bulk_save_objects(bulk_grade_columns)
 
     db.session.commit()
 
