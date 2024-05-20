@@ -223,7 +223,7 @@ def createGrades():
 
 
     rpd = RPD.query.filter(RPD.id_aup == aup_info.id_aup, RPD.id_unique_discipline == id_discipline).first()
-    topics = Topics.query.filter(Topics.id_rpd == rpd.id, Topics.semester == semester).all()
+    topics = Topics.query.filter(Topics.id_rpd == rpd.id, Topics.semester == semester, Topics.study_group_id == group.id).all()
 
     bulk_grade_columns= []
     for topic in topics:
