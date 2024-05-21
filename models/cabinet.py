@@ -19,7 +19,7 @@ class Topics(db.Model, SerializerMixin):
     __tablename__ = 'topic'
 
     serialize_only = ('id', 'topic', 'chapter', 'id_type_control', 'task_link', 'task_link_name', 'completed_task_link',
-                      'completed_task_link_name', 'id_rpd', 'semester', 'study_group_id', 'date', 'lesson_order', 'date_task_finish')
+                      'completed_task_link_name', 'id_rpd', 'semester', 'study_group_id', 'date', 'lesson_order', 'date_task_finish', 'date_task_finish_include')
 
     id: int = db.Column(db.Integer(), primary_key=True)
     topic: str = db.Column(db.String(400), nullable=True)
@@ -35,7 +35,8 @@ class Topics(db.Model, SerializerMixin):
 
     date = db.Column(db.DateTime()) 
     lesson_order = db.Column(db.Integer()) 
-    date_task_finish = db.Column(db.DateTime()) 
+    date_task_finish = db.Column(db.DateTime())
+    date_task_finish_include =  db.Column(db.Boolean, default=False)
 
     d_control_type = db.relationship('D_ControlType')
     rpd = db.relationship('RPD', back_populates="topics")

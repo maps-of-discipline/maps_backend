@@ -6,7 +6,8 @@ from models.cabinet import RPD, StudyGroups, Topics, Students, Grade, GradeTable
 from flask import Blueprint, make_response, jsonify, request
 from cabinet.utils.serialize import serialize
 from cabinet.lib.generate_empty_rpd import generate_empty_rpd
-from datetime import datetime
+import datetime
+from dateutil.parser import parse
 from docxtpl import DocxTemplate
 
 from openpyxl import load_workbook
@@ -228,7 +229,7 @@ def createGrades():
     bulk_grade_columns= []
     for topic in topics:
         date = None
-        if type(topic.date) is datetime:
+        if type(topic.date) is datetime.datetime:
             date = topic.date.strftime('%d.%m')
 
         bulk_grade_columns.append(GradeColumn(name=date, grade_table_id=grade_table.id, grade_type_id=grade_type_attendance.id, topic_id=topic.id))
@@ -351,11 +352,22 @@ def edit_lesson():
     topic.completed_task_link = data['lesson']['completed_task_link']
     topic.completed_task_link_name = data['lesson']['completed_task_link_name']
     topic.id_type_control = data['lesson']['id_type_control']
+    topic.date_task_finish_include = data['lesson']['date_task_finish_include']
 
     if data['lesson']['date'] == None:
         topic.date = None
     else:
-        topic.date = datetime.strptime(data['lesson']['date'], r'%d.%m.%Y')
+        topic.date = parse(data['lesson']['date']).astimezone(datetime.timezone(datetime.timedelta(hours=3)))
+        """ date_obj = datetime.datetime.strptime(data['lesson']['date'], r'%Y-%m-%dT%H:%M:%S.%f%z')
+        topic.date = date_obj.astimezone(datetime.timezone(datetime.timedelta(hours=3))) """
+
+
+    if data['lesson']['date_task_finish'] == None:
+        topic.date_task_finish = None
+    else:
+        topic.date_task_finish = parse(data['lesson']['date_task_finish']).astimezone(datetime.timezone(datetime.timedelta(hours=3)))
+        """ date_obj = datetime.datetime.strptime(data['lesson']['date_task_finish'], r'%Y-%m-%dT%H:%M:%S.%f%z')
+        topic.date_task_finish = date_obj.astimezone(datetime.timezone(datetime.timedelta(hours=3))) """
 
     topic.lesson_order = data['lesson']['lesson_order']
 
