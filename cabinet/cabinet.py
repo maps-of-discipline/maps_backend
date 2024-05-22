@@ -671,6 +671,15 @@ def getBells():
     bells = SprBells.query.all()
     return jsonify(serialize(bells))
 
+@cabinet.route('update-bells', methods=['POST'])
+def updateBells():
+    data = request.get_json()
+
+    db.session.bulk_update_mappings(SprBells, data)
+    db.session.commit()
+
+    return jsonify('ok')
+
 @cabinet.route('get-staff', methods=['GET'])
 def getStaff():
     division = request.args.get('division')
