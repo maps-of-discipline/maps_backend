@@ -1,8 +1,9 @@
 import json
 
 
-from models.maps import D_ControlType, SprDiscipline, db, AupData, AupInfo
+from models.maps import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department
 from models.cabinet import RPD, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn
+
 from flask import Blueprint, make_response, jsonify, request
 from cabinet.utils.serialize import serialize
 from cabinet.lib.generate_empty_rpd import generate_empty_rpd
@@ -652,3 +653,31 @@ def getWord():
     docx.save('static/docx_templates/tutor_template_res.docx')
 
     return ''
+
+# Тьюторы
+@cabinet.route('get-faculties', methods=['GET'])
+def getFaculties():
+    faculties = SprFaculty.query.all()
+    return jsonify(serialize(faculties))
+
+@cabinet.route('get-departments', methods=['GET'])
+def getDepartments():
+    departments = Department.query.all()
+    return jsonify(serialize(departments))
+
+@cabinet.route('get-staff', methods=['GET'])
+def getStaff():
+    division = request.args.get('division')
+
+    from app import app
+    payload = {
+        'getStaff': '',
+        'division': division,
+        'token': app.config.get('LK_TOKEN')
+    }
+
+    res = requests.get(app.config.get('LK_URL'), params=payload)
+    data = res.json()
+    staff = data['items']
+
+    return jsonify(staff)
