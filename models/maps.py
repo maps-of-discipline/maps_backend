@@ -45,6 +45,8 @@ class SprFaculty(db.Model, SerializerMixin):
 class Department(db.Model, SerializerMixin):
     __tablename__ = 'tbl_department'
 
+    serialize_rules = ("-faculty.departments",)
+
     id_department = db.Column(db.Integer, primary_key=True)
     name_department = db.Column(db.String(255), nullable=True)
     faculty_id = db.Column(db.Integer, db.ForeignKey('spr_faculty.id_faculty'))
@@ -96,6 +98,7 @@ class SprRop(db.Model, SerializerMixin):
 
 class AupInfo(db.Model, SerializerMixin):
     __tablename__ = 'tbl_aup'
+    serialize_rules = ('-department.tbl_aups',)
 
     id_aup = db.Column(db.Integer, primary_key=True)
     file = db.Column(db.String(255), nullable=False)
@@ -126,7 +129,7 @@ class AupInfo(db.Model, SerializerMixin):
     name_op = db.relationship('NameOP', lazy='joined')
     rop = db.relationship('SprRop')
     department = db.relationship('Department', back_populates='tbl_aups')
-    faculty = 1
+
 
     def __repr__(self):
         return '<№ AUP %r>' % self.num_aup
@@ -291,6 +294,8 @@ class Groups(db.Model, SerializerMixin):
 
 class AupData(db.Model, SerializerMixin):
     __tablename__ = 'aup_data'
+    # serialize_rules = ("-aup",)
+
     id = db.Column(db.Integer, primary_key=True)
     id_aup = db.Column(db.Integer, db.ForeignKey(
         'tbl_aup.id_aup', ondelete='CASCADE'), nullable=False)

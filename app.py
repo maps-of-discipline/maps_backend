@@ -774,8 +774,8 @@ def delete_aup(aup):
 # @login_required(request)
 # @aup_require(request)
 def test(aup):
-
-    return make_response("mapper", 200)
+    disc = AupData.query.first()
+    return jsonify(disc.to_dict()), 200
 
 
 @app.route("/api/upload-xml/<string:aup>")

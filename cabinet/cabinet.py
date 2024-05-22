@@ -437,7 +437,7 @@ def controlTypesRPD():
     id_aup = rpd.id_aup
 
     diciplines = AupData.query.filter(AupData.id_aup == id_aup, AupData.id_discipline == id_unique_discipline).all()
-    serialized_diciplines = serialize(diciplines)
+    serialized_diciplines = [discipline.to_dict() for discipline in diciplines]
 
     control_types = {}
     control_type_q = D_ControlType.query.all()
