@@ -36,8 +36,24 @@ class SprFaculty(db.Model, SerializerMixin):
     admin_only = db.Column(db.Boolean, default=0)
     branch = db.relationship('SprBranch')
 
+    departments = db.relationship("Department", back_populates='faculty', lazy='joined')
+
     def __repr__(self):
         return '<Faculty %r>' % self.name_faculty
+
+
+class Department(db.Model, SerializerMixin):
+    __tablename__ = 'tbl_department'
+
+    id_department = db.Column(db.Integer, primary_key=True)
+    name_department = db.Column(db.String(255), nullable=True)
+    faculty_id = db.Column(db.Integer, db.ForeignKey('spr_faculty.id_faculty'))
+
+    faculty = db.relationship("SprFaculty", back_populates='departments')
+    tbl_aups = db.relationship('AupInfo', back_populates='department', lazy='joined')
+
+    def __repr__(self):
+        return '<Department %r>' % self.name_department
 
 
 class SprFormEducation(db.Model, SerializerMixin):
@@ -85,8 +101,6 @@ class AupInfo(db.Model, SerializerMixin):
     file = db.Column(db.String(255), nullable=False)
     num_aup = db.Column(db.String(255), nullable=False)
     base = db.Column(db.String(255), nullable=False)
-    id_faculty = db.Column(db.Integer, db.ForeignKey(
-        'spr_faculty.id_faculty'), nullable=False)
     id_rop = db.Column(db.Integer, db.ForeignKey(
         'spr_rop.id_rop'), nullable=False)
     type_educ = db.Column(db.String(255), nullable=False)
@@ -109,10 +123,10 @@ class AupInfo(db.Model, SerializerMixin):
 
     degree = db.relationship('SprDegreeEducation')
     form = db.relationship('SprFormEducation')
-    name_op = db.relationship('NameOP')
-    faculty = db.relationship('SprFaculty')
+    name_op = db.relationship('NameOP', lazy='joined')
     rop = db.relationship('SprRop')
-    department = db.relationship('Department')
+    department = db.relationship('Department', back_populates='tbl_aups')
+    faculty = 1
 
     def __repr__(self):
         return '<№ AUP %r>' % self.num_aup
@@ -122,7 +136,6 @@ class AupInfo(db.Model, SerializerMixin):
             file=file if file else "",
             num_aup=num if num else self.num_aup,
             base=self.base,
-            id_faculty=self.id_faculty,
             id_rop=self.id_rop,
             type_educ=self.type_educ,
             qualification=self.qualification,
@@ -146,16 +159,6 @@ class AupInfo(db.Model, SerializerMixin):
         db.session.add_all([el.copy(new_aup) for el in aup_data_queryset])
 
         db.session.commit()
-
-
-class Department(db.Model, SerializerMixin):
-    __tablename__ = 'tbl_department'
-
-    id_department = db.Column(db.Integer, primary_key=True)
-    name_department = db.Column(db.String(255), nullable=True)
-
-    def __repr__(self):
-        return '<Department %r>' % self.name_department
 
 
 class NameOP(db.Model, SerializerMixin):

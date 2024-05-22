@@ -32,7 +32,7 @@ def create_json(aup):
 
     json = dict()
     json['header'] = [aupInfo.name_op.okco.program_code + '.' + aupInfo.name_op.num_profile,
-                      aupInfo.name_op.okco.name_okco, aupInfo.name_op.name_spec, aupInfo.faculty.name_faculty]
+                      aupInfo.name_op.okco.name_okco, aupInfo.name_op.name_spec, aupInfo.department.faculty.name_faculty]
     json['year'] = aupInfo.year_beg
     json['data'] = list()
     flag = ""
@@ -160,7 +160,7 @@ def get_allow_control_types(shifr):
 def create_json_test(aupInfo, aupData, max_column, max_row):
     json = dict()
     json['header'] = [aupInfo.name_op.okco.program_code + '.' + aupInfo.name_op.num_profile,
-                      aupInfo.name_op.okco.name_okco, aupInfo.name_op.name_spec, aupInfo.faculty.name_faculty]
+                      aupInfo.name_op.okco.name_okco, aupInfo.name_op.name_spec, aupInfo.department.faculty.name_faculty]
     json['year'] = aupInfo.year_beg
     json['data'] = list()
     for i in range(1, max_column + 1):

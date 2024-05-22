@@ -8,7 +8,7 @@ from save_into_bd import SaveCard
 from global_variables import setGlobalVariables, addGlobalVariable, getModuleId, getGroupId
 from excel_check import excel_check
 from models import Users, D_Blocks, D_Part, D_ControlType, D_EdIzmereniya, D_Period, D_TypeRecord, D_Modules, AupData, \
-    AupInfo, Groups, SprFaculty, Mode, SprDiscipline, Roles
+    AupInfo, Groups, SprFaculty, Mode, SprDiscipline, Roles, Department
 import pandas as pd
 from upload_xml import create_xml
 from openpyxl import load_workbook
@@ -519,7 +519,7 @@ def get_colors():
     return l
 
 
-@app.route("/api/getAllMaps")
+@app.route("/api/GetMaps")
 def getAllMaps():
     fac = SprFaculty.query.all()
     li = list()
@@ -535,19 +535,24 @@ def getAllMaps():
 
 
 def GetMaps(id):
-    q = AupInfo.query.filter(AupInfo.id_faculty == id).all()
-    l = list()
-    for row in q:
-        d = dict()
-        name = str(row.file).split(" ")
-        # d["name"] = " ".join(name[5:len(name)-4])
-        # d["code"] = str(row.num_aup).split(" ")[0]
-        d["name"] = row.name_op.name_spec
-        d["code"] = row.num_aup
-        d["year"] = row.year_beg
-        d["form_educ"] = row.id_form
-        l.append(d)
-    return l
+    faculty: SprFaculty = SprFaculty.query.get(id)
+    if not faculty:
+        return jsonify({"error": "Not Found"}), 404
+
+    res = []
+    for dep in faculty.departments:
+        dep: Department
+        for aup_info in dep.tbl_aups:
+            res.append({
+                "name": aup_info.name_op.name_spec,
+                "code": aup_info.num_aup,
+                "year": aup_info.year_beg,
+                "form_educ": aup_info.id_form,
+            })
+    return res
+
+
+
 
 
 @app.route('/api/add-group', methods=["POST"])
@@ -762,11 +767,15 @@ def delete_aup(aup):
 
     return jsonify({'result': "successful"})
 
+
+
+
 @app.route('/api/test/<string:aup>')
 # @login_required(request)
 # @aup_require(request)
 def test(aup):
-    return make_response(str('asdf'), 200)
+
+    return make_response("mapper", 200)
 
 
 @app.route("/api/upload-xml/<string:aup>")

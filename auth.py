@@ -125,7 +125,7 @@ def aup_require(request):
                 return make_response("No such aup found", 404)
 
             if 2 not in payload['roles']:
-                if aup_info.id_faculty not in [faq.id_faculty for faq in user.faculties]:
+                if aup_info.department.faculty.id_faculty not in [faq.id_faculty for faq in user.faculties]:
                     return make_response('Forbidden', 403)
 
             elif 3 not in payload['roles']:
