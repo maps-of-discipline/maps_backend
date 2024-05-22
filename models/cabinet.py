@@ -19,7 +19,7 @@ class Topics(db.Model, SerializerMixin):
     __tablename__ = 'topic'
 
     serialize_only = ('id', 'topic', 'chapter', 'id_type_control', 'task_link', 'task_link_name', 'completed_task_link',
-                      'completed_task_link_name', 'id_rpd', 'semester', 'study_group_id', 'date', 'lesson_order', 'date_task_finish', 'date_task_finish_include')
+                      'completed_task_link_name', 'id_rpd', 'semester', 'study_group_id', 'date', 'lesson_order', 'date_task_finish', 'date_task_finish_include', 'spr_bells_id')
 
     id: int = db.Column(db.Integer(), primary_key=True)
     topic: str = db.Column(db.String(400), nullable=True)
@@ -35,6 +35,7 @@ class Topics(db.Model, SerializerMixin):
 
     date = db.Column(db.DateTime()) 
     lesson_order = db.Column(db.Integer()) 
+    spr_bells_id = db.Column(db.Integer, db.ForeignKey("spr_bells.id"), nullable=True)
     date_task_finish = db.Column(db.DateTime())
     date_task_finish_include =  db.Column(db.Boolean, default=False)
 
@@ -115,4 +116,11 @@ class GradeType(db.Model, SerializerMixin):
 
     grade_table_id = db.Column(db.Integer, db.ForeignKey("grade_table.id"), nullable=False)
 
-# TODO: Настройки видов оценивания
+class SprBells(db.Model, SerializerMixin):
+    __tablename__ = 'spr_bells'
+
+    serialize_only = ('id', 'order', 'name')
+
+    id = db.Column(db.Integer, primary_key=True)
+    order = db.Column(db.Integer, nullable=False)
+    name = db.Column(db.String(255), nullable=False)

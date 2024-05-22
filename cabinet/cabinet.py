@@ -2,7 +2,7 @@ import json
 
 
 from models.maps import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department
-from models.cabinet import RPD, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn
+from models.cabinet import RPD, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells
 
 from flask import Blueprint, make_response, jsonify, request
 from cabinet.utils.serialize import serialize
@@ -354,6 +354,7 @@ def edit_lesson():
     topic.completed_task_link_name = data['lesson']['completed_task_link_name']
     topic.id_type_control = data['lesson']['id_type_control']
     topic.date_task_finish_include = data['lesson']['date_task_finish_include']
+    topic.spr_bells_id = data['lesson']['spr_bells_id']
 
     if data['lesson']['date'] == None:
         topic.date = None
@@ -664,6 +665,11 @@ def getFaculties():
 def getDepartments():
     departments = Department.query.all()
     return jsonify(serialize(departments))
+
+@cabinet.route('get-bells', methods=['GET'])
+def getBells():
+    bells = SprBells.query.all()
+    return jsonify(serialize(bells))
 
 @cabinet.route('get-staff', methods=['GET'])
 def getStaff():
