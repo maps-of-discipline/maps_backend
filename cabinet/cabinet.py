@@ -2,6 +2,7 @@ import json
 import operator
 
 
+from models import Users
 from models.maps import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department
 from models.cabinet import RPD, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells
 
@@ -472,33 +473,30 @@ def controlTypesRPD():
         'control_types': result
     })
 
+@cabinet.route('get-lk-users', methods=['GET'])
+def getLKUsers():
+    users = Users.query.filter_by(auth_type='lk').all()
 
-@cabinet.route('/auth', methods=['POST'])
-def auth():
+    res = []
+    for user in users:
+        res.append({
+            'id_user': user.id_user,
+            'name': user.name,
+            'approved_lk': user.approved_lk,
+        })
+
+    return jsonify(res)
+
+@cabinet.route('update-approve-user', methods=['POST'])
+def updateApproveUser():
     data = request.get_json()
 
-    if not data['login']:
-        return make_response('Отсутствует "login"', 400)
+    user: Users = Users.query.filter_by(id_user=data['id_user']).first()
+    user.approved_lk = data['value']
 
-    if not data['password']:
-        return make_response('Отсутствует "password"', 400)
+    db.session.commit()
 
-    payload = {
-        'ulogin': data['login'],
-        'upassword': data['password'],
-    }
-
-    from app import app
-    res = requests.post(app.config.get('LK_URL'), data=payload)
-
-    if (res.status_code == 400):
-        return make_response(jsonify({
-            'error': True,
-            'message': 'Неверный логин или пароль'
-        }), 400)
-
-    return jsonify(res.json())
-
+    return jsonify(True)
 
 @cabinet.route('getUser', methods=['POST'])
 def getUser():

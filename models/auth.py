@@ -27,6 +27,7 @@ class Users(db.Model, UserMixin):
     password_hash = db.Column(db.String(200), unique=True, nullable=False)
     auth_type = db.Column(db.String(255), default="kd")
     department_id = db.Column(db.Integer, db.ForeignKey('tbl_department.id_department'), nullable=True)
+    approved_lk = db.Column(db.Boolean, default=False)
 
     roles = db.relationship('Roles', secondary=user_has_role_table)
 

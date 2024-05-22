@@ -32,7 +32,7 @@ def get_access_token(user_id) -> str:
 
     roles = [{
         "id": role.id_role,
-        "name": role.role_name,
+        "name": role.name_role,
     } for role in user.roles]
 
     payload = {

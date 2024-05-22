@@ -675,7 +675,7 @@ def login():
     return make_response(json.dumps(response, ensure_ascii=False), 200)
 
 
-@app.route('/api/login/lk')
+@app.route('/api/login/lk', methods=['POST'])
 def lk_login():
     request_data = request.get_json()
 
@@ -712,6 +712,7 @@ def lk_login():
     response = {
         'access': get_access_token(user.id_user),
         'refresh': get_refresh_token(user.id_user, request.headers['User-Agent']),
+        'token': response['token']
     }
 
     return make_response(json.dumps(response, ensure_ascii=False), 200)
