@@ -80,18 +80,17 @@ class GradeTable(db.Model, SerializerMixin):
 class Grade(db.Model, SerializerMixin):
     __tablename__ = 'grades'
 
-    serialize_only = ('id', 'grade_table_id', 'value', 'student_id', 'grade_column_id')
-
     id = db.Column(db.Integer, primary_key=True)
     grade_table_id = db.Column(db.Integer, db.ForeignKey("grade_table.id"), nullable=False)
     value = db.Column(db.Integer)
     student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
     grade_column_id = db.Column(db.Integer, db.ForeignKey("grade_column.id"), nullable=False)
 
+    grade_column = db.relationship('GradeColumn')
+    student = db.relationship('Students')
+
 class GradeColumn(db.Model, SerializerMixin):
     __tablename__ = 'grade_column'
-
-    serialize_only = ('id', 'name', 'grade_table_id', 'grade_type_id')
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(400), nullable=True)
@@ -99,11 +98,11 @@ class GradeColumn(db.Model, SerializerMixin):
     grade_type_id = db.Column(db.Integer, db.ForeignKey("grade_type.id"), nullable=False)
     topic_id = db.Column(db.Integer, db.ForeignKey("topic.id"), nullable=True)
 
+    grade_type = db.relationship('GradeType')
+
 # Виды оценивания (посещаемость, активность, задания)
 class GradeType(db.Model, SerializerMixin):
     __tablename__ = 'grade_type'
-
-    serialize_only = ('id', 'name', 'type', 'grade_table_id', 'min_grade', 'max_grade', 'archived', 'binary', 'weight_grade')
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)

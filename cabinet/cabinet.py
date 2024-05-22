@@ -1,4 +1,5 @@
 import json
+import operator
 
 
 from models.maps import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department
@@ -696,3 +697,83 @@ def getStaff():
     staff = data['items']
 
     return jsonify(staff)
+
+@cabinet.route('get-report', methods=['GET'])
+def getReportByGroup():
+    num_aup = request.args.get('aup')
+    id_discipline = request.args.get('id')
+    group_num = request.args.get('group')
+
+    aup_info: AupInfo = AupInfo.query.filter(AupInfo.num_aup == num_aup).first()
+    if not aup_info:
+        return jsonify({'error': 'Данный АУП отсутствует.'})
+
+    group = StudyGroups.query.filter(StudyGroups.title == group_num).first()
+    if not group:
+        return jsonify({'error': 'Данная группа отсутствует.'})
+
+    grade_table = GradeTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline,
+                                             study_group_id=group.id).first()
+
+    grades = Grade.query.filter_by(grade_table_id=grade_table.id, student_id="385").join(GradeColumn, Grade.grade_column_id == GradeColumn.id).join(GradeType, GradeColumn.grade_type_id == GradeType.id).join(Students, Grade.student_id == Students.id).all()
+    grades = serialize(grades)
+
+    grouped_grades_by_students = groupby(sorted(grades, key=lambda x: x['student_id']), key=lambda x: x['student_id'])
+    # grouped_grades_by_column = groupby(grouped_grades_by_students, key=lambda x: x['grade_column_id'])
+
+    example = [        
+        {
+            'name': 'Шеховцов Всеволод Антонович',
+            'categories': [
+                {
+                    'name': 'Посещение',
+                    'value': 44,
+                },
+                {
+                    'name': 'Активность',
+                    'value': 53,
+                },
+                {
+                    'name': 'Задания',
+                    'value': 12,
+                },
+            ],
+	    }
+    ]
+
+    result = {}
+
+    def get_sum_cols(cols):
+        res = {
+            'value': 0
+        }
+        
+        for col in cols:
+            if 'name' not in res:
+                res['name'] = col['grade_column']['grade_type']['name']
+
+            if isinstance(col['value'], int):
+                res['value'] = res['value'] + col['value']
+
+        return res
+
+    for key, grades_student in grouped_grades_by_students:
+        grouped_by_grade_type = groupby(sorted(grades_student, key=lambda x: x['grade_column']['grade_type_id']), key=lambda x: x['grade_column']['grade_type_id'])
+
+        if key not in result:
+            result[key] = dict()
+
+        for key_cols, cols in grouped_by_grade_type:
+            if 'categories' not in result[key]:
+                result[key]['categories'] = dict()
+
+            list_cols = list(cols)
+
+            if 'name' not in result[key]:
+                result[key]['name'] = list_cols[0]['student']['name']
+
+            result[key]['categories'][key_cols] = get_sum_cols(list_cols)
+
+    return jsonify({
+        'rating_chart': result,
+    })
