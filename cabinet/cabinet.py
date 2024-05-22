@@ -167,20 +167,20 @@ def getGrades():
         bulkInsertStudentsByGroup(group.title) """
 
     students = Students.query.filter(Students.study_group_id == group.id).all()
-    students = serialize(students)
+    # students = serialize(students)
 
     rows = []
     for student in students:
-        grades = Grade.query.filter(Grade.student_id == student['id'], Grade.grade_table_id == grade_table.id).all()
-        grades = serialize(grades)
+        student: Students
+        grades = serialize(student.grades)
 
         values = {}
         for grade in grades:
             values[grade['grade_column_id']] = grade['value']
 
         rows.append({
-            'id': student['id'],
-            'name': student['name'],
+            'id': student.id,
+            'name': student.name,
             'values': values
         })
 
@@ -716,6 +716,7 @@ def getReportByGroup():
                                              study_group_id=group.id).first()
 
     grades = Grade.query.filter_by(grade_table_id=grade_table.id).join(GradeColumn, Grade.grade_column_id == GradeColumn.id).join(GradeType, GradeColumn.grade_type_id == GradeType.id).join(Students, Grade.student_id == Students.id).all()
+    print(grades)
     grades = serialize(grades)
 
     grouped_grades_by_students = groupby(sorted(grades, key=lambda x: x['student_id']), key=lambda x: x['student_id'])

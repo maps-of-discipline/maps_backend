@@ -1,5 +1,6 @@
-from .maps import db
 from sqlalchemy_serializer import SerializerMixin
+
+from .maps import db
 
 
 class RPD(db.Model, SerializerMixin):
@@ -15,11 +16,13 @@ class RPD(db.Model, SerializerMixin):
     sprDiscipline = db.relationship('SprDiscipline')
     topics = db.relationship('Topics', back_populates="rpd", lazy="joined")
 
+
 class Topics(db.Model, SerializerMixin):
     __tablename__ = 'topic'
 
     serialize_only = ('id', 'topic', 'chapter', 'id_type_control', 'task_link', 'task_link_name', 'completed_task_link',
-                      'completed_task_link_name', 'id_rpd', 'semester', 'study_group_id', 'date', 'lesson_order', 'date_task_finish', 'date_task_finish_include', 'spr_bells_id')
+                      'completed_task_link_name', 'id_rpd', 'semester', 'study_group_id', 'date', 'lesson_order',
+                      'date_task_finish', 'date_task_finish_include', 'spr_bells_id')
 
     id: int = db.Column(db.Integer(), primary_key=True)
     topic: str = db.Column(db.String(400), nullable=True)
@@ -33,11 +36,11 @@ class Topics(db.Model, SerializerMixin):
     semester: int = db.Column(db.Integer())
     study_group_id: int = db.Column(db.Integer(), db.ForeignKey('study_group.id'), nullable=False)
 
-    date = db.Column(db.DateTime()) 
-    lesson_order = db.Column(db.Integer()) 
+    date = db.Column(db.DateTime())
+    lesson_order = db.Column(db.Integer())
     spr_bells_id = db.Column(db.Integer, db.ForeignKey("spr_bells.id"), nullable=True)
     date_task_finish = db.Column(db.DateTime())
-    date_task_finish_include =  db.Column(db.Boolean, default=False)
+    date_task_finish_include = db.Column(db.Boolean, default=False)
 
     d_control_type = db.relationship('D_ControlType')
     rpd = db.relationship('RPD', back_populates="topics")
@@ -53,7 +56,6 @@ class StudyGroups(db.Model, SerializerMixin):
     num_aup: str = db.Column(db.String(255), nullable=False)
 
 
-
 class Students(db.Model, SerializerMixin):
     __tablename__ = 'students'
 
@@ -64,6 +66,9 @@ class Students(db.Model, SerializerMixin):
     study_group_id = db.Column(db.Integer, db.ForeignKey('study_group.id'), nullable=False)
     lk_id = db.Column(db.Integer, nullable=False)
 
+    grades = db.relationship('Grade', back_populates='student', lazy='joined')
+
+
 # Таблица с оценками
 class GradeTable(db.Model, SerializerMixin):
     __tablename__ = 'grade_table'
@@ -73,8 +78,11 @@ class GradeTable(db.Model, SerializerMixin):
     id: int = db.Column(db.Integer(), primary_key=True)
     id_aup: int = db.Column(db.Integer(), db.ForeignKey('tbl_aup.id_aup'), nullable=False)
     id_unique_discipline: int = db.Column(db.Integer(), db.ForeignKey('spr_discipline.id'), nullable=False)
-    semester: int =  db.Column(db.Integer(), nullable=False)
+    semester: int = db.Column(db.Integer(), nullable=False)
     study_group_id: int = db.Column(db.Integer(), db.ForeignKey('study_group.id'), nullable=False)
+
+    grade_columns = db.relationship('GradeColumn', lazy='joined')
+
 
 # Оценки
 class Grade(db.Model, SerializerMixin):
@@ -87,7 +95,8 @@ class Grade(db.Model, SerializerMixin):
     grade_column_id = db.Column(db.Integer, db.ForeignKey("grade_column.id"), nullable=False)
 
     grade_column = db.relationship('GradeColumn')
-    student = db.relationship('Students')
+    student = db.relationship('Students', back_populates='grades')
+
 
 class GradeColumn(db.Model, SerializerMixin):
     __tablename__ = 'grade_column'
@@ -100,6 +109,7 @@ class GradeColumn(db.Model, SerializerMixin):
 
     grade_type = db.relationship('GradeType')
 
+
 # Виды оценивания (посещаемость, активность, задания)
 class GradeType(db.Model, SerializerMixin):
     __tablename__ = 'grade_type'
@@ -109,11 +119,12 @@ class GradeType(db.Model, SerializerMixin):
     type = db.Column(db.String(255), nullable=False)
     min_grade = db.Column(db.Integer, default=2)
     max_grade = db.Column(db.Integer, default=5)
-    archived =  db.Column(db.Boolean, default=False)
+    archived = db.Column(db.Boolean, default=False)
     binary = db.Column(db.Boolean, default=False)
     weight_grade = db.Column(db.Integer, default=1)
 
     grade_table_id = db.Column(db.Integer, db.ForeignKey("grade_table.id"), nullable=False)
+
 
 class SprBells(db.Model, SerializerMixin):
     __tablename__ = 'spr_bells'
