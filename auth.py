@@ -43,7 +43,8 @@ def get_access_token(user_id) -> str:
         'department_id': user.department_id,
         'faculties': [faq.id_faculty for faq in user.faculties],
         'exp': round(time()) + ACCESS_TOKEN_LIFETIME,
-        'can_edit': can_edit
+        'can_edit': can_edit,
+        'approved_lk': user.approved_lk
     }
 
     return str(jwt.encode(payload, SECRET_KEY, algorithm='HS256'))
@@ -103,6 +104,20 @@ def login_required(request):
             payload, verify_result = verify_jwt_token(request.headers["Authorization"])
             if not payload or not verify_result:
                 return make_response('Authorization token is invalid', 401)
+
+            result = f(*args, **kwargs)
+            return result
+        return decorated_function
+    return decorator
+
+def approved_required(request):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            payload, verify_result = verify_jwt_token(request.headers["Authorization"])
+
+            if not payload['approved_lk']:
+                return make_response('Need approved', 403)
 
             result = f(*args, **kwargs)
             return result

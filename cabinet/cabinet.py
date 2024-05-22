@@ -2,6 +2,7 @@ import json
 import operator
 
 
+from auth import approved_required, login_required
 from models import Users
 from models.maps import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department
 from models.cabinet import RPD, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells
@@ -34,6 +35,8 @@ def test():
 
 # Получение списка РПД
 @cabinet.route('/rpd', methods=['GET'])
+@login_required(request)
+@approved_required(request)
 def rpd():
     rpdList = RPD.query.all()
     rpdList = serialize(rpdList)
@@ -42,6 +45,8 @@ def rpd():
 
 # Получение тем занятий по номеру АУП и айди дисциплины
 @cabinet.route('/lessons', methods=['GET'])
+@login_required(request)
+@approved_required(request)
 def getLessons():
     if 'aup' not in request.args:
         return make_response('Отсутствует параметр "aup"', 400)
@@ -123,6 +128,8 @@ def bulkInsertStudentsByGroup(group):
 
 
 @cabinet.route('get-grades', methods=['GET'])
+@login_required(request)
+@approved_required(request)
 def getGrades():
     if 'aup' not in request.args:
         return make_response('Отсутствует параметр "aup"', 400)
@@ -196,6 +203,8 @@ def getGrades():
 
 
 @cabinet.route('create-grade-table')
+@login_required(request)
+@approved_required(request)
 def createGrades():
     num_aup = request.args.get('aup')
     id_discipline = request.args.get('id')
@@ -247,6 +256,8 @@ def createGrades():
 
 
 @cabinet.route('get-types-grade')
+@login_required(request)
+@approved_required(request)
 def getTypesGrade():
     num_aup = request.args.get('aup')
     id_discipline = request.args.get('id')
@@ -268,6 +279,8 @@ def getTypesGrade():
 
 
 @cabinet.route('update-grade-type', methods=['POST'])
+@login_required(request)
+@approved_required(request)
 def updateGradeType():
     data = request.get_json()
 
@@ -288,6 +301,8 @@ def updateGradeType():
 
 
 @cabinet.route('create-grade-type', methods=['POST'])
+@login_required(request)
+@approved_required(request)
 def createGradeType():
     data = request.get_json()
 
@@ -299,6 +314,8 @@ def createGradeType():
 
 
 @cabinet.route('updateGrade', methods=['POST'])
+@login_required(request)
+@approved_required(request)
 def updateGrade():
     data = request.get_json()
 
@@ -321,6 +338,8 @@ def updateGrade():
 
 # Роут для генерации несуществующей таблицы
 @cabinet.route('/lessons', methods=['POST'])
+@login_required(request)
+@approved_required(request)
 def postLessons():
     if 'aup' not in request.args:
         return make_response('Отсутствует параметр "aup"', 401)
@@ -340,6 +359,8 @@ def postLessons():
 
 
 @cabinet.route('/edit-lesson', methods=['POST'])
+@login_required(request)
+@approved_required(request)
 def edit_lesson():
     data = request.get_json()
 
@@ -384,6 +405,8 @@ def edit_lesson():
 
 
 @cabinet.route('/create-lesson', methods=['POST'])
+@login_required(request)
+@approved_required(request)
 def create_lesson():
     data = request.get_json()
 
@@ -411,6 +434,8 @@ def create_lesson():
 
 
 @cabinet.route('/delete-lesson', methods=['POST'])
+@login_required(request)
+@approved_required(request)
 def delete_lesson():
     data = request.get_json()
 
@@ -429,6 +454,8 @@ def delete_lesson():
 
 # Получение всех нагрузок дисциплины
 @cabinet.route('/control_types', methods=['GET'])
+@login_required(request)
+@approved_required(request)
 def controlTypesRPD():
     id_rpd = request.args.get('rpd')
 
@@ -474,6 +501,8 @@ def controlTypesRPD():
     })
 
 @cabinet.route('get-lk-users', methods=['GET'])
+@login_required(request)
+@approved_required(request)
 def getLKUsers():
     users = Users.query.filter_by(auth_type='lk').all()
 
@@ -487,7 +516,10 @@ def getLKUsers():
 
     return jsonify(res)
 
+
 @cabinet.route('update-approve-user', methods=['POST'])
+@login_required(request)
+@approved_required(request)
 def updateApproveUser():
     data = request.get_json()
 
@@ -499,6 +531,8 @@ def updateApproveUser():
     return jsonify(True)
 
 @cabinet.route('getUser', methods=['POST'])
+@login_required(request)
+@approved_required(request)
 def getUser():
     data = request.get_json()
 
@@ -514,6 +548,8 @@ def getUser():
 
 
 @cabinet.route('aup', methods=['GET'])
+@login_required(request)
+@approved_required(request)
 def getAup():
     search = request.args.get('search')
 
@@ -525,6 +561,8 @@ def getAup():
 
 
 @cabinet.route('disciplines', methods=['GET'])
+@login_required(request)
+@approved_required(request)
 def disciplines():
     q_num_aup = request.args.get('aup')
 
@@ -543,6 +581,8 @@ def disciplines():
 
 
 @cabinet.route('disciplines-new', methods=['GET'])
+@login_required(request)
+@approved_required(request)
 def disciplinesNew():
     num_aup = request.args.get('aup')
 
@@ -575,6 +615,8 @@ def disciplinesNew():
 # Метод для загрузки файла выгрузки из 1С "Соответствие групп и учебных планов"
 # и формирование на его основе таблицы в базе данных
 @cabinet.route('uploadGroups', methods=['POST'])
+@login_required(request)
+@approved_required(request)
 def uploadGroups():
     files = request.files.getlist("file")
     file = files[0]
@@ -611,6 +653,8 @@ def uploadGroups():
 
 # Метод для получения списка доступных групп
 @cabinet.route('getGroups', methods=['GET'])
+@login_required(request)
+@approved_required(request)
 def getGroups():
     groups = StudyGroups.query.all()
 
@@ -620,6 +664,8 @@ def getGroups():
 
 
 @cabinet.route('getReportByDiscipline', methods=['GET'])
+@login_required(request)
+@approved_required(request)
 def getReport():
     id_discipline = request.args.get('id_discipline')
 
@@ -644,6 +690,8 @@ def getReport():
 
 from flask import current_app
 @cabinet.route('get-word', methods=['POST'])
+@login_required(request)
+@approved_required(request)
 def getWord():
     data = request.get_json()
     docx = DocxTemplate('static/docx_templates/tutor_template.docx')
@@ -656,21 +704,29 @@ def getWord():
 
 # Тьюторы
 @cabinet.route('get-faculties', methods=['GET'])
+@login_required(request)
+@approved_required(request)
 def getFaculties():
     faculties = SprFaculty.query.all()
     return jsonify(serialize(faculties))
 
 @cabinet.route('get-departments', methods=['GET'])
+@login_required(request)
+@approved_required(request)
 def getDepartments():
     departments = Department.query.all()
     return jsonify(serialize(departments))
 
 @cabinet.route('get-bells', methods=['GET'])
+@login_required(request)
+@approved_required(request)
 def getBells():
     bells = SprBells.query.all()
     return jsonify(serialize(bells))
 
 @cabinet.route('update-bells', methods=['POST'])
+@login_required(request)
+@approved_required(request)
 def updateBells():
     data = request.get_json()
 
@@ -680,6 +736,8 @@ def updateBells():
     return jsonify('ok')
 
 @cabinet.route('get-staff', methods=['GET'])
+@login_required(request)
+@approved_required(request)
 def getStaff():
     division = request.args.get('division')
 
@@ -697,6 +755,8 @@ def getStaff():
     return jsonify(staff)
 
 @cabinet.route('get-report', methods=['GET'])
+@login_required(request)
+@approved_required(request)
 def getReportByGroup():
     num_aup = request.args.get('aup')
     id_discipline = request.args.get('id')

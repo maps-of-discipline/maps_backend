@@ -712,7 +712,8 @@ def lk_login():
     response = {
         'access': get_access_token(user.id_user),
         'refresh': get_refresh_token(user.id_user, request.headers['User-Agent']),
-        'token': response['token']
+        'token': response['token'],
+        'approved': user.approved_lk,
     }
 
     return make_response(json.dumps(response, ensure_ascii=False), 200)
