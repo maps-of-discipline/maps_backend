@@ -773,8 +773,9 @@ def getReportByGroup():
     grade_table = GradeTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline,
                                              study_group_id=group.id).first()
 
-    grades = Grade.query.filter_by(grade_table_id=grade_table.id).join(GradeColumn, Grade.grade_column_id == GradeColumn.id).join(GradeType, GradeColumn.grade_type_id == GradeType.id).join(Students, Grade.student_id == Students.id).all()
-    print(grades)
+    grade_types = GradeType.query.filter_by(grade_table_id=grade_table.id).all()
+    grades = Grade.query.filter_by(grade_table_id=grade_table.id).all()
+
     grades = serialize(grades)
 
     grouped_grades_by_students = groupby(sorted(grades, key=lambda x: x['student_id']), key=lambda x: x['student_id'])
@@ -811,8 +812,8 @@ def getReportByGroup():
             if 'name' not in res:
                 res['name'] = col['grade_column']['grade_type']['name']
 
-            if 'id' not in res:
-                res['id'] = col['grade_column']['id']
+            if 'grade_type_id' not in res:
+                res['grade_type_id'] = col['grade_column']['grade_type']['id']
 
             if isinstance(col['value'], int):
                 res['value'] = res['value'] + col['value']
@@ -825,16 +826,29 @@ def getReportByGroup():
         if key not in result:
             result[key] = dict()
 
+        result[key]['categories'] = {}
+        for grade_type in grade_types:
+            result[key]['categories'][grade_type.id] = {
+                'grade_type_id': grade_type.id,
+                'name': grade_type.name,
+                'value': 0,
+            }
+
         for key_cols, cols in grouped_by_grade_type:
             if 'categories' not in result[key]:
-                result[key]['categories'] = list()
+                result[key]['categories'] = dict()
 
             list_cols = list(cols)
 
             if 'name' not in result[key]:
                 result[key]['name'] = list_cols[0]['student']['name']
 
-            result[key]['categories'].append(get_sum_cols(list_cols))
+            grade_type_id = list_cols[0]['grade_column']['grade_type_id']
+            for col in list_cols:
+                if isinstance(col['value'], int):
+                    result[key]['categories'][grade_type_id]['value'] = result[key]['categories'][grade_type_id]['value'] + col['value']
+
+    print()
 
     return jsonify({
         'rating_chart': result,
