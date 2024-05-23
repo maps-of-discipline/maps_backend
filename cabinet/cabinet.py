@@ -7,7 +7,7 @@ from models import Users
 from models.maps import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department
 from models.cabinet import RPD, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells
 
-from flask import Blueprint, make_response, jsonify, request
+from flask import Blueprint, make_response, jsonify, request, send_file, send_from_directory
 from cabinet.utils.serialize import serialize
 from cabinet.lib.generate_empty_rpd import generate_empty_rpd
 import datetime
@@ -689,18 +689,39 @@ def getReport():
 
 
 from flask import current_app
-@cabinet.route('get-word', methods=['POST'])
+@cabinet.route('download-tutor-order', methods=['POST'])
 @login_required(request)
 @approved_required(request)
-def getWord():
-    data = request.get_json()
-    docx = DocxTemplate('static/docx_templates/tutor_template.docx')
-    print(current_app.static_folder)
+def downloadTutorOrder():
+    body = request.get_json()
 
-    docx.render(data)
+
+    template = {
+        "date": "01.09.2023",
+        "order": "10-Р",
+        "year": "2023/2024",
+        "faculty": "факультет информационных технологий",
+        "form_education": "очная",
+        "body": body,
+        "need_report": "раз в месяц",
+        "need_report_day": "первый понедельник",
+        "provide_person": {
+            "jobtitle": "заместитель декана по общим вопросам",
+            "name": "В.М. Черновой"
+        },
+        "signer": {
+            "name": "Д.Г. Демидов"
+        },
+        "executor": "Олейникова Е.В., тел: 1704"
+    }
+
+    docx = DocxTemplate('static/docx_templates/tutor_template.docx')
+
+
+    docx.render(template)
     docx.save('static/docx_templates/tutor_template_res.docx')
 
-    return ''
+    return send_from_directory('static/docx_templates', 'tutor_template_res.docx', as_attachment=True)
 
 # Тьюторы
 @cabinet.route('get-faculties', methods=['GET'])
