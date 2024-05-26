@@ -204,7 +204,11 @@ def add_module():
     db.session.add(new_module)
     db.session.commit()
 
-    return jsonify(new_module.as_dict()), 200
+    return jsonify({
+        'id': new_module.id,
+        'name': new_module.title,
+        'color': new_module.color
+    }), 200
 
 
 @maps.route('/modules/<int:id>', methods=['PUT', 'DELETE'])
@@ -215,7 +219,11 @@ def edit_or_delete_module(id: int):
     if not module:
         return jsonify({'result': 'error', 'message': 'not found'}), 404
         
-    if request.method == "DELETE":    
+    if request.method == "DELETE":
+        for el in AupData.query.filter_by(id_module=module.id).all():
+            el.id_module = 1
+            db.session.add(el)
+        
         db.session.delete(module)
         db.session.commit()
         return jsonify({'result': 'ok'}), 200
