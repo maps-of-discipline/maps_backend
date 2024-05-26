@@ -11,9 +11,11 @@ from maps.logic.print_excel import saveMap
 from maps.logic.save_into_bd import SaveCard
 from maps.logic.take_from_bd import (control_type_r,
                                      create_json, getAupData)
-from maps.logic.tools import take_aup_from_excel_file, timeit, getAupInfo, save_loop
+from maps.logic.tools import take_aup_from_excel_file, timeit, getAupInfo, save_loop, prepare_shifr
 from maps.logic.upload_xml import create_xml
 from maps.models import *
+from datetime import datetime
+
 
 maps = Blueprint("maps", __name__, url_prefix='/api', static_folder='static')
 
@@ -34,18 +36,31 @@ def getMap(aup):
 @login_required(request)
 @aup_require(request)
 def saveMap1(aup):
+    changes = []
     if request.method == "POST":
         request_data = request.get_json()
         l = list()
         for i in range(0, len(request_data)):
-            save_loop(i, 'session', l, request_data)
-            save_loop(i, 'value', l, request_data)
+            changes.extend(save_loop(i, 'session', l, request_data))
+            changes.extend(save_loop(i, 'value', l, request_data))
+
+        if changes:
+            payload, verify_result = verify_jwt_token(request.headers["Authorization"])
+            aup_info = AupInfo.query.filter_by(num_aup=aup).first()
+            revision = Revision(
+                title = "",
+                date = datetime.now(),
+                isActual = True,
+                user_id = payload['user_id'],
+                aup_id = aup_info.id_aup,
+            )
+            revision.changes = changes
+            db.session.add(revision)
 
         db.session.bulk_save_objects(l)
         db.session.commit()
         json = create_json(aup)
         return make_response(jsonify(json), 200)
-
 
 @maps.route('/meta-info', methods=["GET"])
 def get_id_edizm():
@@ -87,7 +102,7 @@ def get_id_edizm():
 
 @maps.route('/upload', methods=["POST"])
 @timeit
-@login_required(request)
+#@login_required(request)
 def upload():
     files = request.files.getlist("file")
     result_list = list()

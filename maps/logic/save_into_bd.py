@@ -72,22 +72,35 @@ def SaveCard(db, aupInfo, aupData):
 
     db.session.commit()
 
+    group = {
+
+    }
+
     # Перезапись карты, если есть уже в базе и мы обновляем ее
     get_aup = AupInfo.query.filter_by(num_aup=aupInfo["num"]).first()
 
     if get_aup:
+        for item in get_aup.aup_data:
+            item:AupData
+            group.update({item.discipline: item.id_group})
+
+
         db.session.delete(get_aup)
         db.session.commit()
 
     get_aup = add_new_aup(aupInfo)
 
+
     l = list()
     temp_i = 0
     for i in aupData:
         temp_i += 1
+        id_group = i[11]
+        if group and i[5] in group:
+            id_group = group[i[5]]
 
         new_row = AupData(id_aup=get_aup.id_aup, id_block=i[0], shifr=i[1], id_part=i[2], id_module=i[3],
-                          id_group=i[11], id_type_record=i[4],
+                          id_group=id_group, id_type_record=i[4],
                           discipline=i[5], id_period=i[6], id_type_control=i[7], amount=int(i[8]), id_edizm=i[9],
                           zet=int(i[10]), num_row=i[12])
         l.append(new_row)

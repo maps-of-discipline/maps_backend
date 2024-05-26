@@ -123,27 +123,63 @@ def getAupInfo(file, filename):
 
 
 def save_loop(i, in_type, l, request_data):
+    changes = []
     for j in range(0, len(request_data[i]['type'][in_type])):
         try:
+
             row = AupData.query.filter_by(
                 id=request_data[i]['type'][in_type][j]['id']).first()
 
+            track_changes(changes, "AupData", "discipline", row.discipline, request_data[i]['discipline'])
             row.discipline = request_data[i]['discipline']
+
+            track_changes(changes, "AupData", "amount", row.amount, request_data[i]['type'][in_type][j]['amount'] * 100)
             row.amount = request_data[i]['type'][in_type][j]['amount'] * 100
+
+            track_changes(changes, "AupData", "id_edizm", row.id_edizm,
+                          1 if request_data[i]['type'][in_type][j]['amount_type'] == 'hour' else 2)
             row.id_edizm = 1 if request_data[i]['type'][in_type][j]['amount_type'] == 'hour' else 2
+
+            track_changes(changes, "AupData", "control_type_id", row.control_type_id,
+                          request_data[i]['type'][in_type][j]['control_type_id'])
             row.control_type_id = request_data[i]['type'][in_type][j]['control_type_id']
+
+            track_changes(changes, "AupData", "id_period", row.id_period, request_data[i]['num_col'] + 1)
             row.id_period = request_data[i]['num_col'] + 1
+
+            track_changes(changes, "AupData", "num_row", row.num_row, request_data[i]['num_row'])
             row.num_row = request_data[i]['num_row']
+
+            track_changes(changes, "AupData", "id_group", row.id_group, request_data[i]['id_group'])
             row.id_group = request_data[i]['id_group']
+
+            track_changes(changes, "AupData", "id_block", row.id_block, request_data[i]['id_block'])
             row.id_block = request_data[i]['id_block']
+
+            track_changes(changes, "AupData", "id_module", row.id_module, request_data[i]['id_module'])
             row.id_module = request_data[i]['id_module']
+
+            track_changes(changes, "AupData", "id_part", row.id_part, request_data[i]['id_part'])
             row.id_part = request_data[i]['id_part']
+
+            track_changes(changes, "AupData", "shifr", row.shifr, prepare_shifr(request_data[i]['shifr']))
             row.shifr = prepare_shifr(request_data[i]['shifr'])
             l.append(row)
+
+
         except:
             return make_response('Save error', 400)
+        return changes
 
+def track_changes(changes: list, model: str, field: str, old: str, new: str):
 
+    if old != new:
+        savingChanges: ChangeLog = ChangeLog()
+        savingChanges.model = model
+        savingChanges.field = field
+        savingChanges.old = old
+        savingChanges.new = new
+        changes.append(savingChanges)
 def get_grouped_disciplines(aup_data) -> dict[tuple[str, int], list[AupData]]:
     """
         Функция для группировки aupData по дисциплине и периоду.

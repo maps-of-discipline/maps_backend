@@ -1,5 +1,4 @@
 from flask_sqlalchemy import SQLAlchemy
-
 db = SQLAlchemy()
 
 
@@ -412,3 +411,27 @@ class SprDiscipline(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255))
+
+
+class Revision(db.Model):
+    __tablename__ = "Revision"
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255))
+    date = db.Column(db.DateTime)
+    isActual = db.Column(db.Boolean)
+    user_id = db.Column(db.Integer, db.ForeignKey("tbl_users.id_user"), nullable=False)
+    aup_id = db.Column(db.Integer, db.ForeignKey("tbl_aup.id_aup"), nullable=False)
+
+
+    logs = db.relationship("ChangeLog", lazy="joined")
+
+
+class ChangeLog(db.Model):
+    __tablename__ = "ChangeLog"
+    id = db.Column(db.Integer, primary_key=True)
+    model = db.Column(db.String(45))
+    field = db.Column(db.String(45))
+    old = db.Column(db.String(500))
+    new = db.Column(db.String(500))
+    revision_id = db.Column(db.Integer, db.ForeignKey("Revision.id"), nullable=False)
+
