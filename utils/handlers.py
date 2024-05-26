@@ -29,22 +29,20 @@ def handle_exception(e):
     error_body = escapte_special(str(e))
 
     message = f'*{error_name}: {error_body}*\n\nTime: {time}\n\n'
-    
+
     tb = escapte_special(traceback.format_exc())
     message += f"```python\n{tb}```"
-    
+
     response = send_telegram_message(message)
 
     if not response.json()['ok']:
         message = '*ErrorHandler error*\n\n'
         message += f'```json\n{response.json()}```'
         send_telegram_message(message)
-    
+
     print(e)
 
     if isinstance(e, HTTPException):
         return e
-    
-    # raise e
-    
+
     return jsonify({'result': 'error', 'reason': str(e), 'traceback': str(traceback.format_exc())}), 500

@@ -2,9 +2,10 @@ import io
 import json
 import os
 
+import werkzeug.exceptions
 from flask import Blueprint, make_response, jsonify, request, send_file
 
-from auth.logic import login_required, aup_require
+from auth.logic import login_required, aup_require, verify_jwt_token
 from auth.models import Mode
 from maps.logic.excel_check import excel_check
 from maps.logic.print_excel import saveMap
@@ -48,13 +49,13 @@ def saveMap1(aup):
             payload, verify_result = verify_jwt_token(request.headers["Authorization"])
             aup_info = AupInfo.query.filter_by(num_aup=aup).first()
             revision = Revision(
-                title = "",
-                date = datetime.now(),
-                isActual = True,
-                user_id = payload['user_id'],
-                aup_id = aup_info.id_aup,
+                title="",
+                date=datetime.now(),
+                isActual=True,
+                user_id=payload['user_id'],
+                aup_id=aup_info.id_aup,
             )
-            revision.changes = changes
+            revision.logs = changes
             db.session.add(revision)
 
         db.session.bulk_save_objects(l)
@@ -223,7 +224,7 @@ def edit_or_delete_module(id: int):
         for el in AupData.query.filter_by(id_module=module.id).all():
             el.id_module = 1
             db.session.add(el)
-        
+
         db.session.delete(module)
         db.session.commit()
         return jsonify({'result': 'ok'}), 200
@@ -368,10 +369,6 @@ def getControlTypes():
 
 @maps.route("/test")
 def test():
-    for module in D_Modules.query.all():
-        module.color = '#5f60ec'
-        db.session.add(module)
-    db.session.commit()
 
     return jsonify(), 200
 

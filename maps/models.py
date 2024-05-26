@@ -330,7 +330,7 @@ class AupData(db.Model):
 
     id_part = db.Column(db.Integer, db.ForeignKey("d_part.id", ondelete="SET NULL"))
 
-    id_module = db.Column(db.Integer, db.ForeignKey("d_modules.id", ondelete="SET NULL"))
+    id_module = db.Column(db.Integer, db.ForeignKey("d_modules.id", ondelete="SET DEFAULT"), default=1)
 
     id_group = db.Column(db.Integer, db.ForeignKey("groups.id_group", ondelete='SET DEFAULT'), default=1)
 
@@ -430,8 +430,9 @@ class ChangeLog(db.Model):
     __tablename__ = "ChangeLog"
     id = db.Column(db.Integer, primary_key=True)
     model = db.Column(db.String(45))
+    row_id = db.Column(db.Integer)
     field = db.Column(db.String(45))
     old = db.Column(db.String(500))
     new = db.Column(db.String(500))
-    revision_id = db.Column(db.Integer, db.ForeignKey("Revision.id"), nullable=False)
+    revision_id = db.Column(db.Integer, db.ForeignKey("Revision.id", ondelete='CASCADE'), nullable=False)
 

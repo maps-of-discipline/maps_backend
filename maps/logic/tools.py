@@ -4,10 +4,11 @@ from functools import wraps
 import pandas as pd
 from flask import make_response
 from openpyxl import load_workbook
+from werkzeug import exceptions
 
 # from maps.logic.take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
 #                                      ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
-from maps.models import AupData
+from maps.models import AupData, ChangeLog
 
 # # Условия фильтра, если добавлять категорию, то нужно исправить if
 skiplist = {
@@ -82,6 +83,7 @@ def check_sum_zet_in_type(data):
             sum_zet_type += i['zet']
         if sum_zet_type == 0: return False
 
+
 @timeit
 def getAupInfo(file, filename):
     data = pd.read_excel(file, sheet_name='Лист1')
@@ -130,56 +132,61 @@ def save_loop(i, in_type, l, request_data):
             row = AupData.query.filter_by(
                 id=request_data[i]['type'][in_type][j]['id']).first()
 
-            track_changes(changes, "AupData", "discipline", row.discipline, request_data[i]['discipline'])
+            track_changes(changes, "AupData", "discipline", row.discipline, request_data[i]['discipline'], row.id)
             row.discipline = request_data[i]['discipline']
 
-            track_changes(changes, "AupData", "amount", row.amount, request_data[i]['type'][in_type][j]['amount'] * 100)
+            track_changes(changes, "AupData", "amount", row.amount, request_data[i]['type'][in_type][j]['amount'] * 100, row.id)
             row.amount = request_data[i]['type'][in_type][j]['amount'] * 100
 
             track_changes(changes, "AupData", "id_edizm", row.id_edizm,
-                          1 if request_data[i]['type'][in_type][j]['amount_type'] == 'hour' else 2)
+                          1 if request_data[i]['type'][in_type][j]['amount_type'] == 'hour' else 2, row.id)
             row.id_edizm = 1 if request_data[i]['type'][in_type][j]['amount_type'] == 'hour' else 2
 
-            track_changes(changes, "AupData", "control_type_id", row.control_type_id,
-                          request_data[i]['type'][in_type][j]['control_type_id'])
-            row.control_type_id = request_data[i]['type'][in_type][j]['control_type_id']
+            track_changes(changes, "AupData", "id_type_control", row.id_type_control,
+                          request_data[i]['type'][in_type][j]['control_type_id'], row.id)
+            row.id_type_control = request_data[i]['type'][in_type][j]['control_type_id']
 
-            track_changes(changes, "AupData", "id_period", row.id_period, request_data[i]['num_col'] + 1)
+            track_changes(changes, "AupData", "id_period", row.id_period, request_data[i]['num_col'] + 1, row.id)
             row.id_period = request_data[i]['num_col'] + 1
 
-            track_changes(changes, "AupData", "num_row", row.num_row, request_data[i]['num_row'])
+            track_changes(changes, "AupData", "num_row", row.num_row, request_data[i]['num_row'], row.id)
             row.num_row = request_data[i]['num_row']
 
-            track_changes(changes, "AupData", "id_group", row.id_group, request_data[i]['id_group'])
+            track_changes(changes, "AupData", "id_group", row.id_group, request_data[i]['id_group'], row.id)
             row.id_group = request_data[i]['id_group']
 
-            track_changes(changes, "AupData", "id_block", row.id_block, request_data[i]['id_block'])
+            track_changes(changes, "AupData", "id_block", str(row.id_block), str(request_data[i]['id_block']), row.id)
             row.id_block = request_data[i]['id_block']
 
-            track_changes(changes, "AupData", "id_module", row.id_module, request_data[i]['id_module'])
+            track_changes(changes, "AupData", "id_module", row.id_module, request_data[i]['id_module'], row.id)
             row.id_module = request_data[i]['id_module']
 
-            track_changes(changes, "AupData", "id_part", row.id_part, request_data[i]['id_part'])
+            track_changes(changes, "AupData", "id_part", row.id_part, request_data[i]['id_part'], row.id)
             row.id_part = request_data[i]['id_part']
 
-            track_changes(changes, "AupData", "shifr", row.shifr, prepare_shifr(request_data[i]['shifr']))
+            track_changes(changes, "AupData", "shifr", row.shifr, prepare_shifr(request_data[i]['shifr']), row.id)
             row.shifr = prepare_shifr(request_data[i]['shifr'])
             l.append(row)
 
 
-        except:
-            return make_response('Save error', 400)
-        return changes
+        except Exception as e:
+            print(e)
+            raise exceptions.BadRequest("Save error")
 
-def track_changes(changes: list, model: str, field: str, old: str, new: str):
+    return changes
 
+
+def track_changes(changes: list, model: str, field: str, old: str, new: str, row_id):
     if old != new:
         savingChanges: ChangeLog = ChangeLog()
         savingChanges.model = model
         savingChanges.field = field
+        savingChanges.row_id = row_id
         savingChanges.old = old
         savingChanges.new = new
         changes.append(savingChanges)
+
+
 def get_grouped_disciplines(aup_data) -> dict[tuple[str, int], list[AupData]]:
     """
         Функция для группировки aupData по дисциплине и периоду.
