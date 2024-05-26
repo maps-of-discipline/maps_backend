@@ -222,7 +222,7 @@ def edit_or_delete_module(id: int):
         
     if request.method == "DELETE":
         for el in AupData.query.filter_by(id_module=module.id).all():
-            el.id_module = 1
+            el.id_module = 19
             db.session.add(el)
 
         db.session.delete(module)
