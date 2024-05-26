@@ -1,3 +1,4 @@
+import datetime
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -28,6 +29,7 @@ class Users(db.Model, UserMixin):
     auth_type = db.Column(db.String(255), default="kd")
     department_id = db.Column(db.Integer, db.ForeignKey('tbl_department.id_department'), nullable=True)
     approved_lk = db.Column(db.Boolean, default=False)
+    request_approve_date = db.Column(db.DateTime, default=datetime.datetime.now)
 
     roles = db.relationship('Roles', secondary=user_has_role_table)
 

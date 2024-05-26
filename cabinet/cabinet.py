@@ -512,6 +512,7 @@ def getLKUsers():
             'id_user': user.id_user,
             'name': user.name,
             'approved_lk': user.approved_lk,
+            'request_approve_date': user.request_approve_date,
         })
 
     return jsonify(res)
