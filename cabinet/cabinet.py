@@ -127,7 +127,7 @@ def bulkInsertStudentsByGroup(group):
     return bulk_students
 
 
-@cabinet.route('get-grades', methods=['GET'])
+@cabinet.route('grades', methods=['GET'])
 @login_required(request)
 @approved_required(request)
 def getGrades():
@@ -202,14 +202,16 @@ def getGrades():
     })
 
 
-@cabinet.route('create-grade-table')
+@cabinet.route('grade-table', methods=['POST'])
 @login_required(request)
 @approved_required(request)
 def createGrades():
-    num_aup = request.args.get('aup')
-    id_discipline = request.args.get('id')
-    group_num = request.args.get('group')
-    semester = request.args.get('semester')
+    data = request.get_json()
+
+    num_aup = data['aup']
+    id_discipline = data['id']
+    group_num = data['group']
+    semester = data['semester']
 
     aup_info: AupInfo = AupInfo.query.filter(AupInfo.num_aup == num_aup).first()
     if not aup_info:
@@ -255,10 +257,10 @@ def createGrades():
     return jsonify(serialize(grade_table))
 
 
-@cabinet.route('get-types-grade')
+@cabinet.route('grade-type', methods=['GET'])
 @login_required(request)
 @approved_required(request)
-def getTypesGrade():
+def getGradeType():
     num_aup = request.args.get('aup')
     id_discipline = request.args.get('id')
     group_num = request.args.get('group')
@@ -278,7 +280,7 @@ def getTypesGrade():
     return jsonify(serialize(grade_types))
 
 
-@cabinet.route('update-grade-type', methods=['POST'])
+@cabinet.route('grade-type', methods=['PATCH'])
 @login_required(request)
 @approved_required(request)
 def updateGradeType():
@@ -300,7 +302,7 @@ def updateGradeType():
     return jsonify(res)
 
 
-@cabinet.route('create-grade-type', methods=['POST'])
+@cabinet.route('grade-type', methods=['POST'])
 @login_required(request)
 @approved_required(request)
 def createGradeType():
@@ -313,7 +315,7 @@ def createGradeType():
     return jsonify(serialize(grade_type))
 
 
-@cabinet.route('updateGrade', methods=['POST'])
+@cabinet.route('grade', methods=['PATCH'])
 @login_required(request)
 @approved_required(request)
 def updateGrade():
@@ -340,7 +342,7 @@ def updateGrade():
 @cabinet.route('/lessons', methods=['POST'])
 @login_required(request)
 @approved_required(request)
-def postLessons():
+def createLessons():
     if 'aup' not in request.args:
         return make_response('Отсутствует параметр "aup"', 401)
 
@@ -358,10 +360,10 @@ def postLessons():
     })
 
 
-@cabinet.route('/edit-lesson', methods=['POST'])
+@cabinet.route('/lesson', methods=['PATCH'])
 @login_required(request)
 @approved_required(request)
-def edit_lesson():
+def editLesson():
     data = request.get_json()
 
     if 'lesson' not in data:
@@ -404,10 +406,10 @@ def edit_lesson():
     return make_response(jsonify(res))
 
 
-@cabinet.route('/create-lesson', methods=['POST'])
+@cabinet.route('/lesson', methods=['POST'])
 @login_required(request)
 @approved_required(request)
-def create_lesson():
+def createLesson():
     data = request.get_json()
 
     if not data:
@@ -433,10 +435,10 @@ def create_lesson():
     return make_response(jsonify(res))
 
 
-@cabinet.route('/delete-lesson', methods=['POST'])
+@cabinet.route('/lesson', methods=['DELETE'])
 @login_required(request)
 @approved_required(request)
-def delete_lesson():
+def deleteLesson():
     data = request.get_json()
 
     if not data['id']:
