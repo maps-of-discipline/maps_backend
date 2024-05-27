@@ -13,7 +13,7 @@ class RPD(db.Model, SerializerMixin):
     id_unique_discipline: int = db.Column(db.Integer(), db.ForeignKey('spr_discipline.id'), nullable=False)
 
     aupData = db.relationship('AupInfo')
-    sprDiscipline = db.relationship('SprDiscipline')
+    sprDiscipline = db.relationship('SprDiscipline', lazy='joined')
     topics = db.relationship('Topics', back_populates="rpd", lazy="joined")
 
 
