@@ -27,11 +27,12 @@ from itertools import groupby
 
 cabinet = Blueprint('cabinet', __name__)
 
-
+# Тестовый роут
 @cabinet.route('/ping')
 def test():
     return make_response('pong', 200)
 
+### Задания
 
 # Получение списка РПД
 @cabinet.route('/rpd', methods=['GET'])
@@ -42,8 +43,7 @@ def rpd():
     rpdList = serialize(rpdList)
     return jsonify(rpdList)
 
-
-# Получение тем занятий по номеру АУП и айди дисциплины
+# Получение данных таблицы "Задания"
 @cabinet.route('/lessons', methods=['GET'])
 @login_required(request)
 @approved_required(request)
@@ -93,6 +93,124 @@ def getLessons():
 
     return jsonify(response_data)
 
+# Создание пустой таблицы "Задания"
+@cabinet.route('/lessons', methods=['POST'])
+@login_required(request)
+@approved_required(request)
+def createLessons():
+    if 'aup' not in request.args:
+        return make_response('Отсутствует параметр "aup"', 401)
+
+    if 'id' not in request.args:
+        return make_response('Отсутствует параметр "id"', 401)
+
+    aup = request.args.get('aup')
+    id_discipline = request.args.get('id')
+
+    success, data = generate_empty_rpd(aup, id_discipline)
+
+    return jsonify({
+        'success': success,
+        'data': data
+    })
+
+# Создание строки "Задания"
+@cabinet.route('/lesson', methods=['POST'])
+@login_required(request)
+@approved_required(request)
+def createLesson():
+    data = request.get_json()
+
+    if not data:
+        return make_response('Отсутствует поле "lesson"', 400)
+
+    new_lesson = Topics(
+        topic=data['topic'],
+        chapter=data['chapter'],
+        id_type_control=data['id_type_control'],
+        task_link=data['task_link'],
+        task_link_name=data['task_link_name'],
+        completed_task_link=data['completed_task_link'],
+        completed_task_link_name=data['completed_task_link_name'],
+        id_rpd=data['id_rpd'],
+        semester=data['semester'],
+        study_group_id=data['study_group_id'],
+    )
+
+    db.session.add(new_lesson)
+    db.session.commit()
+
+    res = serialize(new_lesson)
+    return make_response(jsonify(res))
+
+# Редактирование строки "Задания"
+@cabinet.route('/lesson', methods=['PATCH'])
+@login_required(request)
+@approved_required(request)
+def editLesson():
+    data = request.get_json()
+
+    if 'lesson' not in data:
+        return make_response('Отсутствует поле "lesson"', 401)
+
+    topic = Topics.query.filter(Topics.id == data['lesson']['id']).first()
+
+    topic.chapter = data['lesson']['chapter']
+    topic.topic = data['lesson']['topic']
+    topic.task_link = data['lesson']['task_link']
+    topic.task_link_name = data['lesson']['task_link_name']
+    topic.completed_task_link = data['lesson']['completed_task_link']
+    topic.completed_task_link_name = data['lesson']['completed_task_link_name']
+    topic.id_type_control = data['lesson']['id_type_control']
+    topic.date_task_finish_include = data['lesson']['date_task_finish_include']
+    topic.spr_bells_id = data['lesson']['spr_bells_id']
+
+    if data['lesson']['date'] == None:
+        topic.date = None
+    else:
+        topic.date = parse(data['lesson']['date']).astimezone(datetime.timezone(datetime.timedelta(hours=3)))
+        """ date_obj = datetime.datetime.strptime(data['lesson']['date'], r'%Y-%m-%dT%H:%M:%S.%f%z')
+        topic.date = date_obj.astimezone(datetime.timezone(datetime.timedelta(hours=3))) """
+
+
+    if data['lesson']['date_task_finish'] == None:
+        topic.date_task_finish = None
+    else:
+        topic.date_task_finish = parse(data['lesson']['date_task_finish']).astimezone(datetime.timezone(datetime.timedelta(hours=3)))
+        """ date_obj = datetime.datetime.strptime(data['lesson']['date_task_finish'], r'%Y-%m-%dT%H:%M:%S.%f%z')
+        topic.date_task_finish = date_obj.astimezone(datetime.timezone(datetime.timedelta(hours=3))) """
+
+    topic.lesson_order = data['lesson']['lesson_order']
+
+    db.session.add(topic)
+    db.session.commit()
+
+    res = serialize(topic)
+
+    return make_response(jsonify(res))
+
+# Удаление строки "Задания"
+@cabinet.route('/lesson', methods=['DELETE'])
+@login_required(request)
+@approved_required(request)
+def deleteLesson():
+    id = request.args.get('id')
+
+    if not id:
+        return make_response('Отсутствует "id"', 400)
+
+    lesson = Topics.query.filter_by(id=id).first()
+
+    res = serialize(lesson)
+
+    db.session.delete(lesson)
+    db.session.commit()
+
+    return make_response(jsonify(res), 200)
+
+###
+
+### Оценки
 
 # Метод для обновления списка студентов по группе в базе данных
 def bulkInsertStudentsByGroup(group):
@@ -126,8 +244,8 @@ def bulkInsertStudentsByGroup(group):
 
     return bulk_students
 
-
-@cabinet.route('grades', methods=['GET'])
+# Получение данных таблицы "Успеваемость"
+@cabinet.route('/grades', methods=['GET'])
 @login_required(request)
 @approved_required(request)
 def getGrades():
@@ -201,8 +319,31 @@ def getGrades():
         'rows': rows
     })
 
+# Редактирование оценки
+@cabinet.route('/grade', methods=['PATCH'])
+@login_required(request)
+@approved_required(request)
+def updateGrade():
+    data = request.get_json()
 
-@cabinet.route('grade-table', methods=['POST'])
+    grade = Grade.query.filter_by(student_id=data['student_id'], grade_table_id=data['grade_table_id'],
+                                  grade_column_id=data['grade_column_id']).first()
+
+    if not grade:
+        grade = Grade(value=data['value'], student_id=data['student_id'], grade_table_id=data['grade_table_id'],
+                      grade_column_id=data['grade_column_id'])
+        db.session.add(grade)
+    else:
+        grade.value = data['value']
+
+    db.session.commit()
+
+    res = serialize(grade)
+
+    return jsonify(res)
+
+# Создание пустой таблицы "Успеваемость"
+@cabinet.route('/grade-table', methods=['POST'])
 @login_required(request)
 @approved_required(request)
 def createGrades():
@@ -256,8 +397,12 @@ def createGrades():
 
     return jsonify(serialize(grade_table))
 
+###
 
-@cabinet.route('grade-type', methods=['GET'])
+### Виды оценивания
+
+# Получение видов оценивания
+@cabinet.route('/grade-type', methods=['GET'])
 @login_required(request)
 @approved_required(request)
 def getGradeType():
@@ -279,8 +424,21 @@ def getGradeType():
 
     return jsonify(serialize(grade_types))
 
+# Создание нового вида оценивания
+@cabinet.route('/grade-type', methods=['POST'])
+@login_required(request)
+@approved_required(request)
+def createGradeType():
+    data = request.get_json()
 
-@cabinet.route('grade-type', methods=['PATCH'])
+    grade_type = GradeType(name=data['name'], grade_table_id=data['table_id'], type="custom")
+    db.session.add(grade_type)
+    db.session.commit()
+
+    return jsonify(serialize(grade_type))
+
+# Редактирование видов оценивания
+@cabinet.route('/grade-type', methods=['PATCH'])
 @login_required(request)
 @approved_required(request)
 def updateGradeType():
@@ -301,208 +459,29 @@ def updateGradeType():
 
     return jsonify(res)
 
+###
 
-@cabinet.route('grade-type', methods=['POST'])
+### Пользователи
+
+# Получение данных о пользователе
+@cabinet.route('/user', methods=['GET'])
 @login_required(request)
 @approved_required(request)
-def createGradeType():
-    data = request.get_json()
+def getUser():
+    token = request.args.get('token')
 
-    grade_type = GradeType(name=data['name'], grade_table_id=data['table_id'], type="custom")
-    db.session.add(grade_type)
-    db.session.commit()
+    if not token:
+        return make_response('Отсутствует "token"', 400)
 
-    return jsonify(serialize(grade_type))
+    payload = {'getUser': '', 'token': token}
 
+    from app import app
+    res = requests.get(app.config.get('LK_URL'), params=payload)
 
-@cabinet.route('grade', methods=['PATCH'])
-@login_required(request)
-@approved_required(request)
-def updateGrade():
-    data = request.get_json()
+    return jsonify(res.json())
 
-    grade = Grade.query.filter_by(student_id=data['student_id'], grade_table_id=data['grade_table_id'],
-                                  grade_column_id=data['grade_column_id']).first()
-
-    if not grade:
-        grade = Grade(value=data['value'], student_id=data['student_id'], grade_table_id=data['grade_table_id'],
-                      grade_column_id=data['grade_column_id'])
-        db.session.add(grade)
-    else:
-        grade.value = data['value']
-
-    db.session.commit()
-
-    res = serialize(grade)
-
-    return jsonify(res)
-
-
-# Роут для генерации несуществующей таблицы
-@cabinet.route('/lessons', methods=['POST'])
-@login_required(request)
-@approved_required(request)
-def createLessons():
-    if 'aup' not in request.args:
-        return make_response('Отсутствует параметр "aup"', 401)
-
-    if 'id' not in request.args:
-        return make_response('Отсутствует параметр "id"', 401)
-
-    aup = request.args.get('aup')
-    id_discipline = request.args.get('id')
-
-    success, data = generate_empty_rpd(aup, id_discipline)
-
-    return jsonify({
-        'success': success,
-        'data': data
-    })
-
-
-@cabinet.route('/lesson', methods=['PATCH'])
-@login_required(request)
-@approved_required(request)
-def editLesson():
-    data = request.get_json()
-
-    if 'lesson' not in data:
-        return make_response('Отсутствует поле "lesson"', 401)
-
-    topic = Topics.query.filter(Topics.id == data['lesson']['id']).first()
-
-    topic.chapter = data['lesson']['chapter']
-    topic.topic = data['lesson']['topic']
-    topic.task_link = data['lesson']['task_link']
-    topic.task_link_name = data['lesson']['task_link_name']
-    topic.completed_task_link = data['lesson']['completed_task_link']
-    topic.completed_task_link_name = data['lesson']['completed_task_link_name']
-    topic.id_type_control = data['lesson']['id_type_control']
-    topic.date_task_finish_include = data['lesson']['date_task_finish_include']
-    topic.spr_bells_id = data['lesson']['spr_bells_id']
-
-    if data['lesson']['date'] == None:
-        topic.date = None
-    else:
-        topic.date = parse(data['lesson']['date']).astimezone(datetime.timezone(datetime.timedelta(hours=3)))
-        """ date_obj = datetime.datetime.strptime(data['lesson']['date'], r'%Y-%m-%dT%H:%M:%S.%f%z')
-        topic.date = date_obj.astimezone(datetime.timezone(datetime.timedelta(hours=3))) """
-
-
-    if data['lesson']['date_task_finish'] == None:
-        topic.date_task_finish = None
-    else:
-        topic.date_task_finish = parse(data['lesson']['date_task_finish']).astimezone(datetime.timezone(datetime.timedelta(hours=3)))
-        """ date_obj = datetime.datetime.strptime(data['lesson']['date_task_finish'], r'%Y-%m-%dT%H:%M:%S.%f%z')
-        topic.date_task_finish = date_obj.astimezone(datetime.timezone(datetime.timedelta(hours=3))) """
-
-    topic.lesson_order = data['lesson']['lesson_order']
-
-    db.session.add(topic)
-    db.session.commit()
-
-    res = serialize(topic)
-
-    return make_response(jsonify(res))
-
-
-@cabinet.route('/lesson', methods=['POST'])
-@login_required(request)
-@approved_required(request)
-def createLesson():
-    data = request.get_json()
-
-    if not data:
-        return make_response('Отсутствует поле "lesson"', 400)
-
-    new_lesson = Topics(
-        topic=data['topic'],
-        chapter=data['chapter'],
-        id_type_control=data['id_type_control'],
-        task_link=data['task_link'],
-        task_link_name=data['task_link_name'],
-        completed_task_link=data['completed_task_link'],
-        completed_task_link_name=data['completed_task_link_name'],
-        id_rpd=data['id_rpd'],
-        semester=data['semester'],
-        study_group_id=data['study_group_id'],
-    )
-
-    db.session.add(new_lesson)
-    db.session.commit()
-
-    res = serialize(new_lesson)
-    return make_response(jsonify(res))
-
-
-@cabinet.route('/lesson', methods=['DELETE'])
-@login_required(request)
-@approved_required(request)
-def deleteLesson():
-    data = request.get_json()
-
-    if not data['id']:
-        return make_response('Отсутствует "id"', 400)
-
-    lesson = Topics.query.filter_by(id=data['id']).first()
-
-    res = serialize(lesson)
-
-    db.session.delete(lesson)
-    db.session.commit()
-
-    return make_response(jsonify(res), 200)
-
-
-# Получение всех нагрузок дисциплины
-@cabinet.route('/control_types', methods=['GET'])
-@login_required(request)
-@approved_required(request)
-def controlTypesRPD():
-    id_rpd = request.args.get('rpd')
-
-    rpd = RPD.query.filter(RPD.id == id_rpd).first()
-
-    id_unique_discipline = rpd.id_unique_discipline
-    id_aup = rpd.id_aup
-
-    diciplines = AupData.query.filter(AupData.id_aup == id_aup, AupData.id_discipline == id_unique_discipline).all()
-    serialized_diciplines = [discipline.to_dict() for discipline in diciplines]
-
-    control_types = {}
-    control_type_q = D_ControlType.query.all()
-    for row in control_type_q:
-        control_types[row.id] = {
-            'title': row.title,
-            'shortname': row.shortname
-        }
-
-    # Преобразует все строки из выгрузки в список нагрузок на дисциплине
-    def mapDisciplinesToControlType(dicipline):
-        id = dicipline['id_type_control']
-
-        return {
-            'id_type_control': id,
-            'name': control_types[id]['title'],
-            'shortname': control_types[id]['shortname'],
-            'id_edizm': dicipline['id_edizm'],
-            'amount': dicipline['amount'] / 100,
-            'id_period': dicipline['id_period']
-        }
-
-    control_types = list(map(mapDisciplinesToControlType, serialized_diciplines))
-
-    grouped_control_types = groupby(sorted(control_types, key=lambda x: x['id_period']), key=lambda x: x['id_period'])
-
-    result = {}
-    for key, group in grouped_control_types:
-        result[key] = list(group)
-
-    return jsonify({
-        'control_types': result
-    })
-
-@cabinet.route('get-lk-users', methods=['GET'])
+# Получение пользователей системы
+@cabinet.route('/lk-users', methods=['GET'])
 @login_required(request)
 @approved_required(request)
 def getLKUsers():
@@ -527,8 +506,8 @@ def getLKUsers():
 
     return jsonify(res)
 
-
-@cabinet.route('update-approve-user', methods=['POST'])
+# Выдача доступа для пользователя
+@cabinet.route('/approve-user', methods=['PATCH'])
 @login_required(request)
 @approved_required(request)
 def updateApproveUser():
@@ -541,91 +520,13 @@ def updateApproveUser():
 
     return jsonify(True)
 
-@cabinet.route('getUser', methods=['POST'])
-@login_required(request)
-@approved_required(request)
-def getUser():
-    data = request.get_json()
+### 
 
-    if not data['token']:
-        return make_response('Отсутствует "token"', 400)
+### Группы
 
-    payload = {'getUser': '', 'token': data['token']}
-
-    from app import app
-    res = requests.get(app.config.get('LK_URL'), params=payload)
-
-    return jsonify(res.json())
-
-
-@cabinet.route('aup', methods=['GET'])
-@login_required(request)
-@approved_required(request)
-def getAup():
-    search = request.args.get('search')
-
-    found = AupInfo.query.filter(AupInfo.file.like("%" + search + "%")).all()
-
-    res = serialize(found)
-
-    return jsonify(res)
-
-
-@cabinet.route('disciplines', methods=['GET'])
-@login_required(request)
-@approved_required(request)
-def disciplines():
-    q_num_aup = request.args.get('aup')
-
-    aup = AupInfo.query.filter(AupInfo.num_aup == q_num_aup).first()
-
-    disciplines = AupData.query.filter(AupData.id_aup == aup.id_aup).all()
-    disciplines = serialize(disciplines)
-
-    unique_disciplines_map = {}
-
-    for discipline in disciplines:
-        if not discipline['unique_discipline']['id'] in unique_disciplines_map:
-            unique_disciplines_map[discipline['unique_discipline']['id']] = discipline['unique_discipline']
-
-    return jsonify(list(unique_disciplines_map.values()))
-
-
-@cabinet.route('disciplines-new', methods=['GET'])
-@login_required(request)
-@approved_required(request)
-def disciplinesNew():
-    num_aup = request.args.get('aup')
-
-    aup_info = AupInfo.query.filter(AupInfo.num_aup == num_aup).first()
-    aup_data = AupData.query.filter_by(id_aup=aup_info.id_aup).order_by(AupData.shifr, AupData._discipline,
-                                                                        AupData.id_period).all()
-
-    disciplines_items = {}
-    flag = ""
-
-    for i, item in enumerate(aup_data):
-        if flag != item.discipline + str(item.id_period):
-            flag = item.discipline + str(item.id_period)
-
-            d = dict()
-
-            d["id"] = item.id_discipline
-            d["name"] = item.unique_discipline.title
-            d["num_row"] = item.num_row
-            d["color"] = '#5f60ec'
-
-            if (item.id_period in disciplines_items):
-                disciplines_items[item.id_period].append(d)
-            else:
-                disciplines_items[item.id_period] = [d]
-
-    return jsonify(disciplines_items)
-
-
-# Метод для загрузки файла выгрузки из 1С "Соответствие групп и учебных планов"
+# Загрузка файла выгрузки из 1С "Соответствие групп и учебных планов"
 # и формирование на его основе таблицы в базе данных
-@cabinet.route('uploadGroups', methods=['POST'])
+@cabinet.route('/groups', methods=['PATCH'])
 @login_required(request)
 @approved_required(request)
 def uploadGroups():
@@ -662,8 +563,8 @@ def uploadGroups():
     return jsonify(res)
 
 
-# Метод для получения списка доступных групп
-@cabinet.route('getGroups', methods=['GET'])
+# Получение списка доступных групп
+@cabinet.route('/groups', methods=['GET'])
 @login_required(request)
 @approved_required(request)
 def getGroups():
@@ -673,11 +574,39 @@ def getGroups():
 
     return jsonify(res)
 
+###
 
-@cabinet.route('getReportByDiscipline', methods=['GET'])
+### Звонки
+
+# Получение расписания звонков
+@cabinet.route('/bells', methods=['GET'])
 @login_required(request)
 @approved_required(request)
-def getReport():
+def getBells():
+    bells = SprBells.query.all()
+    return jsonify(serialize(bells))
+
+# Обновление звонков
+@cabinet.route('/bells', methods=['PATCH'])
+@login_required(request)
+@approved_required(request)
+def updateBells():
+    data = request.get_json()
+
+    db.session.bulk_update_mappings(SprBells, data)
+    db.session.commit()
+
+    return jsonify('ok')
+
+###
+
+### Отчеты
+
+# Получить отчет по дисциплине
+@cabinet.route('/report-by-discipline', methods=['GET'])
+@login_required(request)
+@approved_required(request)
+def getReportByDiscipline():
     id_discipline = request.args.get('id_discipline')
 
     rpds: RPD = RPD.query.filter(RPD.id_unique_discipline == id_discipline).all()
@@ -698,98 +627,11 @@ def getReport():
 
     return jsonify(res)
 
-
-from flask import current_app
-@cabinet.route('download-tutor-order', methods=['POST'])
+# Получение отчета по группе
+@cabinet.route('/report', methods=['GET'])
 @login_required(request)
 @approved_required(request)
-def downloadTutorOrder():
-    body = request.get_json()
-
-
-    template = {
-        "date": "01.09.2023",
-        "order": "10-Р",
-        "year": "2023/2024",
-        "faculty": "факультет информационных технологий",
-        "form_education": "очная",
-        "body": body,
-        "need_report": "раз в месяц",
-        "need_report_day": "первый понедельник",
-        "provide_person": {
-            "jobtitle": "заместитель декана по общим вопросам",
-            "name": "В.М. Черновой"
-        },
-        "signer": {
-            "name": "Д.Г. Демидов"
-        },
-        "executor": "Олейникова Е.В., тел: 1704"
-    }
-
-    docx = DocxTemplate('static/docx_templates/tutor_template.docx')
-
-
-    docx.render(template)
-    docx.save('static/docx_templates/tutor_template_res.docx')
-
-    return send_from_directory('static/docx_templates', 'tutor_template_res.docx', as_attachment=True)
-
-# Тьюторы
-@cabinet.route('get-faculties', methods=['GET'])
-@login_required(request)
-@approved_required(request)
-def getFaculties():
-    faculties = SprFaculty.query.all()
-    return jsonify(serialize(faculties))
-
-@cabinet.route('get-departments', methods=['GET'])
-@login_required(request)
-@approved_required(request)
-def getDepartments():
-    departments = Department.query.all()
-    return jsonify(serialize(departments))
-
-@cabinet.route('get-bells', methods=['GET'])
-@login_required(request)
-@approved_required(request)
-def getBells():
-    bells = SprBells.query.all()
-    return jsonify(serialize(bells))
-
-@cabinet.route('update-bells', methods=['POST'])
-@login_required(request)
-@approved_required(request)
-def updateBells():
-    data = request.get_json()
-
-    db.session.bulk_update_mappings(SprBells, data)
-    db.session.commit()
-
-    return jsonify('ok')
-
-@cabinet.route('get-staff', methods=['GET'])
-@login_required(request)
-@approved_required(request)
-def getStaff():
-    division = request.args.get('division')
-
-    from app import app
-    payload = {
-        'getStaff': '',
-        'division': division,
-        'token': app.config.get('LK_TOKEN')
-    }
-
-    res = requests.get(app.config.get('LK_URL'), params=payload)
-    data = res.json()
-    staff = data['items']
-
-    return jsonify(staff)
-
-@cabinet.route('get-report', methods=['GET'])
-@login_required(request)
-@approved_required(request)
-def getReportByGroup():
+def getReport():
     num_aup = request.args.get('aup')
     id_discipline = request.args.get('id')
     group_num = request.args.get('group')
@@ -866,3 +708,192 @@ def getReportByGroup():
     return jsonify({
         'rating_chart': result,
     })
+
+###
+
+### Остальное
+
+# Получение всех нагрузок дисциплины
+@cabinet.route('/control-types', methods=['GET'])
+@login_required(request)
+@approved_required(request)
+def getControlTypes():
+    id_rpd = request.args.get('rpd')
+
+    rpd = RPD.query.filter(RPD.id == id_rpd).first()
+
+    id_unique_discipline = rpd.id_unique_discipline
+    id_aup = rpd.id_aup
+
+    diciplines = AupData.query.filter(AupData.id_aup == id_aup, AupData.id_discipline == id_unique_discipline).all()
+    serialized_diciplines = [discipline.to_dict() for discipline in diciplines]
+
+    control_types = {}
+    control_type_q = D_ControlType.query.all()
+    for row in control_type_q:
+        control_types[row.id] = {
+            'title': row.title,
+            'shortname': row.shortname
+        }
+
+    # Преобразует все строки из выгрузки в список нагрузок на дисциплине
+    def mapDisciplinesToControlType(dicipline):
+        id = dicipline['id_type_control']
+
+        return {
+            'id_type_control': id,
+            'name': control_types[id]['title'],
+            'shortname': control_types[id]['shortname'],
+            'id_edizm': dicipline['id_edizm'],
+            'amount': dicipline['amount'] / 100,
+            'id_period': dicipline['id_period']
+        }
+
+    control_types = list(map(mapDisciplinesToControlType, serialized_diciplines))
+
+    grouped_control_types = groupby(sorted(control_types, key=lambda x: x['id_period']), key=lambda x: x['id_period'])
+
+    result = {}
+    for key, group in grouped_control_types:
+        result[key] = list(group)
+
+    return jsonify({
+        'control_types': result
+    })
+
+# Получение данных об учебном плане по поиску
+@cabinet.route('/aup', methods=['GET'])
+@login_required(request)
+@approved_required(request)
+def getAup():
+    search = request.args.get('search')
+
+    found = AupInfo.query.filter(AupInfo.file.like("%" + search + "%")).all()
+
+    res = serialize(found)
+
+    return jsonify(res)
+
+# Получение списка дисциплин учебного плана
+@cabinet.route('/disciplines', methods=['GET'])
+@login_required(request)
+@approved_required(request)
+def disciplines():
+    q_num_aup = request.args.get('aup')
+
+    aup = AupInfo.query.filter(AupInfo.num_aup == q_num_aup).first()
+
+    disciplines = AupData.query.filter(AupData.id_aup == aup.id_aup).all()
+    disciplines = serialize(disciplines)
+
+    unique_disciplines_map = {}
+
+    for discipline in disciplines:
+        if not discipline['unique_discipline']['id'] in unique_disciplines_map:
+            unique_disciplines_map[discipline['unique_discipline']['id']] = discipline['unique_discipline']
+
+    return jsonify(list(unique_disciplines_map.values()))
+
+# Получение списка дисциплин учебного плана (вариант для студентов)
+@cabinet.route('/disciplines-new', methods=['GET'])
+@login_required(request)
+@approved_required(request)
+def disciplinesNew():
+    num_aup = request.args.get('aup')
+
+    aup_info = AupInfo.query.filter(AupInfo.num_aup == num_aup).first()
+    aup_data = AupData.query.filter_by(id_aup=aup_info.id_aup).order_by(AupData.shifr, AupData._discipline,
+                                                                        AupData.id_period).all()
+
+    disciplines_items = {}
+    flag = ""
+
+    for i, item in enumerate(aup_data):
+        if flag != item.discipline + str(item.id_period):
+            flag = item.discipline + str(item.id_period)
+
+            d = dict()
+
+            d["id"] = item.id_discipline
+            d["name"] = item.unique_discipline.title
+            d["num_row"] = item.num_row
+            d["color"] = '#5f60ec'
+
+            if (item.id_period in disciplines_items):
+                disciplines_items[item.id_period].append(d)
+            else:
+                disciplines_items[item.id_period] = [d]
+
+    return jsonify(disciplines_items)
+
+
+from flask import current_app
+# Скачать распоряжение тьюторов
+@cabinet.route('/download-tutor-order', methods=['POST'])
+@login_required(request)
+@approved_required(request)
+def downloadTutorOrder():
+    body = request.get_json()
+
+    template = {
+        "date": "01.09.2023",
+        "order": "10-Р",
+        "year": "2023/2024",
+        "faculty": "факультет информационных технологий",
+        "form_education": "очная",
+        "body": body,
+        "need_report": "раз в месяц",
+        "need_report_day": "первый понедельник",
+        "provide_person": {
+            "jobtitle": "заместитель декана по общим вопросам",
+            "name": "В.М. Черновой"
+        },
+        "signer": {
+            "name": "Д.Г. Демидов"
+        },
+        "executor": "Олейникова Е.В., тел: 1704"
+    }
+
+    docx = DocxTemplate('static/docx_templates/tutor_template.docx')
+
+
+    docx.render(template)
+    docx.save('static/docx_templates/tutor_template_res.docx')
+
+    return send_from_directory('static/docx_templates', 'tutor_template_res.docx', as_attachment=True)
+
+# Получение списка факультетов
+@cabinet.route('/faculties', methods=['GET'])
+@login_required(request)
+@approved_required(request)
+def getFaculties():
+    faculties = SprFaculty.query.all()
+    return jsonify(serialize(faculties))
+
+# Получение списка кафедр
+@cabinet.route('/departments', methods=['GET'])
+@login_required(request)
+@approved_required(request)
+def getDepartments():
+    departments = Department.query.all()
+    return jsonify(serialize(departments))
+
+# Получение списка сотрудников
+@cabinet.route('/staff', methods=['GET'])
+@login_required(request)
+@approved_required(request)
+def getStaff():
+    division = request.args.get('division')
+
+    from app import app
+    payload = {
+        'getStaff': '',
+        'division': division,
+        'token': app.config.get('LK_TOKEN')
+    }
+
+    res = requests.get(app.config.get('LK_URL'), params=payload)
+    data = res.json()
+    staff = data['items']
+
+    return jsonify(staff)
