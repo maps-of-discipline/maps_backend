@@ -94,8 +94,8 @@ class Grade(db.Model, SerializerMixin):
     student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
     grade_column_id = db.Column(db.Integer, db.ForeignKey("grade_column.id"), nullable=False)
 
-    grade_column = db.relationship('GradeColumn')
-    student = db.relationship('Students', back_populates='grades')
+    grade_column = db.relationship('GradeColumn', lazy='joined')
+    student = db.relationship('Students', back_populates='grades', lazy='joined')
 
 
 class GradeColumn(db.Model, SerializerMixin):

@@ -804,32 +804,13 @@ def getReportByGroup():
                                              study_group_id=group.id).first()
 
     grade_types = GradeType.query.filter_by(grade_table_id=grade_table.id).all()
+
     grades = Grade.query.filter_by(grade_table_id=grade_table.id).all()
 
     grades = serialize(grades)
 
     grouped_grades_by_students = groupby(sorted(grades, key=lambda x: x['student_id']), key=lambda x: x['student_id'])
     # grouped_grades_by_column = groupby(grouped_grades_by_students, key=lambda x: x['grade_column_id'])
-
-    example = [        
-        {
-            'name': 'Шеховцов Всеволод Антонович',
-            'categories': [
-                {
-                    'name': 'Посещение',
-                    'value': 44,
-                },
-                {
-                    'name': 'Активность',
-                    'value': 53,
-                },
-                {
-                    'name': 'Задания',
-                    'value': 12,
-                },
-            ],
-	    }
-    ]
 
     result = {}
 
