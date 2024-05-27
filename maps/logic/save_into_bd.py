@@ -1,10 +1,11 @@
-import datetime
+from datetime import datetime
 
 import pandas as pd
-from sqlalchemy import desc
+from sqlalchemy import desc, inspect
 
-from maps.logic.tools import timeit
-from maps.models import AupData, AupInfo, NameOP, SprDegreeEducation, SprFormEducation, SprFaculty, Department, db
+from maps.logic.tools import timeit, prepare_shifr
+from maps.models import AupData, AupInfo, NameOP, SprDegreeEducation, SprFormEducation, SprFaculty, Department, db, \
+    Revision, ChangeLog
 
 NAMEOP_PARAMS = ['program_code', 'num_profile', 'name_spec']
 AUP_PARAMS = ['file', 'num_aup', 'base', 'id_faculty', 'id_rop', 'type_educ',
@@ -157,3 +158,65 @@ def add_new_aup(aupInfo):
     db.session.commit()
 
     return new_str_tbl_aup
+
+
+def update_field(el: AupData, field: str, value: any) -> ChangeLog | None:
+    """
+        Функция для записи изменений в таблицу с логом.
+    """
+    old_value = el.__getattribute__(field)
+
+    if value == old_value:
+        return None
+    setattr(el, field, value)
+
+    log: ChangeLog = ChangeLog()
+    log.model = el.__class__.__name__
+    log.field = field
+    log.row_id = inspect(el).identity[0] if inspect(el).identity else None
+    log.old = old_value
+    log.new = value
+
+    return log
+
+
+def update_fields(aup_data: AupData, discipline: dict, load: dict) -> list[ChangeLog | None]:
+    """
+        Функция для обновления полей 1 записи таблицы AupData
+    """
+
+    if load['amount_type'] == 'hour':
+        zet = int((load['amount'] / 18) * 100)
+    else:
+        zet = int((load['amount'] * 15) * 100)
+
+    return list(filter(bool, [
+        update_field(aup_data, 'id_group', discipline['id_group']),
+        update_field(aup_data, 'id_block', int(discipline['id_block'])),
+        update_field(aup_data, 'shifr', prepare_shifr(discipline['shifr'])),
+        update_field(aup_data, 'id_part', discipline['id_part']),
+        update_field(aup_data, 'id_module', discipline['id_module']),
+        update_field(aup_data, 'id_period', discipline['num_col'] + 1),
+        update_field(aup_data, 'num_row', discipline['num_row']),
+        update_field(aup_data, 'id_type_record', discipline['id_type_record']),
+        update_field(aup_data, 'amount', load['amount'] * 100),
+        update_field(aup_data, 'id_edizm', 1 if load['amount_type'] == 'hour' else 2),
+        update_field(aup_data, 'id_type_control', load['control_type_id']),
+        update_field(aup_data, 'discipline', discipline['discipline']),
+        update_field(aup_data, 'zet', zet),
+    ]))
+
+
+def create_changes_revision(user_id: int, aup_info_id: int, changes: list[ChangeLog]) -> None:
+    """
+        Функция для создания Ревизии изменений.
+    """
+    revision = Revision(
+        title="",
+        date=datetime.now(),
+        isActual=True,
+        user_id=user_id,
+        aup_id=aup_info_id,
+    )
+    revision.logs = changes
+    db.session.add(revision)

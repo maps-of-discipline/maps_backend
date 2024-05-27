@@ -382,6 +382,7 @@ class AupData(db.Model):
             db.session.add(discipline)
             db.session.commit()
 
+        self.id_discipline = discipline.id
         self._discipline = value
 
     def __repr__(self):

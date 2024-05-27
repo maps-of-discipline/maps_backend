@@ -42,6 +42,7 @@ def create_json(aup: str) -> dict | None:
     for (discipline, id_period), loads in get_grouped_disciplines(aup_info.aup_data).items():
         el: AupData = loads[0]
         data_element = {
+            "id": el.id,
             "discipline": discipline,
             "id_group": el.id_group,
             "id_block": el.id_block,
@@ -52,7 +53,7 @@ def create_json(aup: str) -> dict | None:
             "id_module": el.id_module,
             "num_col": id_period - 1,
             "num_row": el.num_row,
-            "id": el.id,
+            'id_type_record': el.id_type_record,
             "is_skip": not check_skiplist(el.zet, el.discipline, el.type_record.title, el.block.title),
             'type': {
                 'session': [],

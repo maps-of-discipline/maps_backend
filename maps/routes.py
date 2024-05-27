@@ -1,22 +1,21 @@
 import io
 import json
 import os
+from itertools import chain
 
-import werkzeug.exceptions
 from flask import Blueprint, make_response, jsonify, request, send_file
 
 from auth.logic import login_required, aup_require, verify_jwt_token
 from auth.models import Mode
 from maps.logic.excel_check import excel_check
 from maps.logic.print_excel import saveMap
-from maps.logic.save_into_bd import SaveCard
+from maps.logic.save_into_bd import SaveCard, update_fields, \
+    create_changes_revision
 from maps.logic.take_from_bd import (control_type_r,
                                      create_json, getAupData)
-from maps.logic.tools import take_aup_from_excel_file, timeit, getAupInfo, save_loop, prepare_shifr
+from maps.logic.tools import take_aup_from_excel_file, timeit, getAupInfo
 from maps.logic.upload_xml import create_xml
 from maps.models import *
-from datetime import datetime
-
 
 maps = Blueprint("maps", __name__, url_prefix='/api', static_folder='static')
 
@@ -36,32 +35,38 @@ def getMap(aup):
 @maps.route('/save/<string:aup>', methods=["POST"])
 @login_required(request)
 @aup_require(request)
-def saveMap1(aup):
+def save_map(aup):
+    data = request.get_json()
+
+    aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
+    aup_data_id_map = {el.id: el for el in aup_info.aup_data}
+
     changes = []
-    if request.method == "POST":
-        request_data = request.get_json()
-        l = list()
-        for i in range(0, len(request_data)):
-            changes.extend(save_loop(i, 'session', l, request_data))
-            changes.extend(save_loop(i, 'value', l, request_data))
+    for discipline in data:
+        for load in chain(*discipline['type'].values()):
+            if "id" not in load:
+                aup_data = AupData()
+                aup_data.discipline = discipline['discipline']
+                aup_info.aup_data.append(aup_data)
+            else:
+                aup_data = aup_data_id_map.pop(load['id'])
 
-        if changes:
-            payload, verify_result = verify_jwt_token(request.headers["Authorization"])
-            aup_info = AupInfo.query.filter_by(num_aup=aup).first()
-            revision = Revision(
-                title="",
-                date=datetime.now(),
-                isActual=True,
-                user_id=payload['user_id'],
-                aup_id=aup_info.id_aup,
-            )
-            revision.logs = changes
-            db.session.add(revision)
+            changes.extend(update_fields(aup_data, discipline, load))
 
-        db.session.bulk_save_objects(l)
-        db.session.commit()
-        json = create_json(aup)
-        return make_response(jsonify(json), 200)
+            if changes:
+                db.session.add(aup_data)
+
+    if changes:
+        payload, verify_result = verify_jwt_token(request.headers["Authorization"])
+        create_changes_revision(payload['user_id'], aup_info.id_aup, changes)
+
+    if aup_data_id_map.keys():
+        for el in AupData.query.filter(AupData.id.in_(aup_data_id_map.keys())):
+            db.session.delete(el)
+
+    db.session.commit()
+    return make_response(jsonify(create_json(aup)), 200)
+
 
 @maps.route('/meta-info', methods=["GET"])
 def get_id_edizm():
@@ -103,7 +108,7 @@ def get_id_edizm():
 
 @maps.route('/upload', methods=["POST"])
 @timeit
-#@login_required(request)
+# @login_required(request)
 def upload():
     files = request.files.getlist("file")
     result_list = list()
@@ -190,6 +195,7 @@ def get_modules():
         res.append(module_as_dict)
     return jsonify(res)
 
+
 @maps.route('/add-module', methods=['POST'])
 # @login_required(request)
 # @aup_require(request)
@@ -197,7 +203,7 @@ def add_module():
     module = request.get_json()
     if not module['name']:
         return jsonify({'result': 'error', 'message': 'поле "name" не должно быть пустым'}), 400
-    
+
     new_module = D_Modules()
     new_module.title = module['name']
     new_module.color = module['color']
@@ -219,7 +225,7 @@ def edit_or_delete_module(id: int):
     module = D_Modules.query.get(id)
     if not module:
         return jsonify({'result': 'error', 'message': 'not found'}), 404
-        
+
     if request.method == "DELETE":
         for el in AupData.query.filter_by(id_module=module.id).all():
             el.id_module = 19
@@ -239,8 +245,6 @@ def edit_or_delete_module(id: int):
 
         return jsonify(module.as_dict()), 200
 
-
-    
 
 @maps.route("/getAllMaps")
 def getAllMaps():
@@ -369,7 +373,6 @@ def getControlTypes():
 
 @maps.route("/test")
 def test():
-
     return jsonify(), 200
 
 
@@ -429,7 +432,3 @@ def aup_crud(aup: str | None):
             return jsonify({'status': 'failed', 'aup_num': aup.num_aup}), 403
 
         return jsonify({'status': 'ok', 'aup_num': aup.num_aup}), 200
-
-
-
-
