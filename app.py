@@ -697,7 +697,13 @@ def lk_login():
     if not user:
         user = Users()
         user.auth_type = 'lk'
-        guest_role = Roles.query.filter_by(name_role='Guest').first()
+
+        name_role = 'Guest'
+        if res['user_status'] == 'stud':
+            name_role = 'Student'
+
+        guest_role = Roles.query.filter_by(name_role=name_role).first()
+
         if guest_role:
             user.roles.append(guest_role)
 

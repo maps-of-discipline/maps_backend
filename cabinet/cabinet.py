@@ -508,11 +508,19 @@ def getLKUsers():
 
     res = []
     for user in users:
+        roles = []
+        for role in user.roles:
+            roles.append({
+                "id_role": role.id_role,
+                "name_role": role.name_role
+            })
+
         res.append({
             'id_user': user.id_user,
             'name': user.name,
             'approved_lk': user.approved_lk,
             'request_approve_date': user.request_approve_date,
+            'roles': roles,
         })
 
     return jsonify(res)
