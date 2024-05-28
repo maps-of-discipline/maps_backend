@@ -897,3 +897,29 @@ def getStaff():
     staff = data['items']
 
     return jsonify(staff)
+
+@cabinet.route('/get-disciplines', methods=['POST'])
+def get_disciplines():
+    fullname = request.get_json()['fullname']
+    payload = {
+        'getScheduleTeacher': '',
+        'fio': fullname,
+        "token": "fVuzytCC7l7g31Rj0%2FjUR4HJ4gvzRZGLwjMvp6wmM4b91x%2FmFKwVJffBQA8DN0XpdvhClndCo5wC7Ii6HHqiQvCLMvnS5%2BzwFg1t%2BzVEIuqI0ddC52M43dyJAiK70En911P8cTRIt3CnCLqVO8sAIjyE%2Bnrpu9gXx%2BvrhSDSiW4%3D",
+        'session': 1,
+    }
+    from app import app
+    res = requests.get(app.config.get('LK_URL'), params=payload)
+    data = json.loads(res.text)
+
+    data = dict(filter(lambda x: bool(x[1]), data.items()))
+    disciplines = {}
+    for value in data.values():
+        for discipline in value:
+            discipline_name = discipline['name'].split('(')[0]
+            if discipline_name not in disciplines:
+                disciplines.update({discipline_name: {*discipline['groups'].split(', ')}})
+            else:
+                disciplines[discipline_name] |= {*discipline['groups'].split(', ')}
+
+    disciplines = [{"name": key, "groups": list(value)} for key, value in disciplines.items()]
+    return jsonify(disciplines), 200
