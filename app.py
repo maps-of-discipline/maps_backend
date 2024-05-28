@@ -55,5 +55,6 @@ migrate = Migrate(app, db)
 setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, control_type_r,
                    ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
 
+
 if not app.config['DEBUG']:
     app.register_error_handler(Exception, handle_exception)
