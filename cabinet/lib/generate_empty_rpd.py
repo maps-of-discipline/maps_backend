@@ -1,9 +1,8 @@
-from models.maps import db, AupData, AupInfo, SprDiscipline
-from models.cabinet import RPD, Topics
+from maps.models import db, AupInfo, SprDiscipline
+from cabinet.models import RPD
 
-from cabinet.utils.serialize import serialize
 
-# Создает РПД для дисциплины в АУП, а также генерирует 
+# Создает РПД для дисциплины в АУП, а также генерирует
 # пустые строки тем занятий
 def generate_empty_rpd(id_aup, id_discipline):
     rpd: RPD = RPD.query.filter(RPD.id_aup == id_aup, RPD.id_unique_discipline == id_discipline).first()
@@ -18,7 +17,7 @@ def generate_empty_rpd(id_aup, id_discipline):
     if not spr_discipline:
         return { 'error': 'Данная дисциплина отсутствует.' }
     
-    new_rpd = RPD(id_aup = aup.id_aup, id_unique_discipline = id_discipline)
+    new_rpd = RPD(id_aup=aup.id_aup, id_unique_discipline=id_discipline)
 
     db.session.add(new_rpd)   
     db.session.commit()

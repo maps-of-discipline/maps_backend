@@ -1,4 +1,4 @@
-
+import requests
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_migrate import Migrate
@@ -6,7 +6,7 @@ from sqlalchemy import MetaData
 from flask_mail import Mail
 from dotenv import load_dotenv
 
-
+from cabinet.cabinet import cabinet
 from maps.logic.global_variables import setGlobalVariables
 from maps.logic.take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
                                      ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)

@@ -1,6 +1,6 @@
 from sqlalchemy_serializer import SerializerMixin
 
-from .maps import db
+from maps.models import db
 
 
 class RPD(db.Model, SerializerMixin):

@@ -1,6 +1,9 @@
+import datetime
+from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from maps.models import db, SerializationMixin
+from maps.models import db
+from sqlalchemy_serializer import SerializerMixin
 
 users_faculty_table = db.Table(
     "users_faculty",
@@ -23,13 +26,17 @@ user_roles_table = db.Table(
 )
 
 
-class Users(db.Model, SerializationMixin):
+class Users(db.Model, SerializerMixin):
     __tablename__ = "tbl_users"
 
     id_user = db.Column(db.Integer, primary_key=True)
     login = db.Column(db.String(100), unique=True, nullable=False)
+    name = db.Column(db.String(200))
     email = db.Column(db.String(100), nullable=True)
     password_hash = db.Column(db.String(200), unique=True, nullable=False)
+    auth_type = db.Column(db.String(255), default="kd")
+    approved_lk = db.Column(db.Boolean, default=False)
+    request_approve_date = db.Column(db.DateTime, default=datetime.datetime.now)
 
     department_id = db.Column(
         db.Integer,
@@ -44,12 +51,12 @@ class Users(db.Model, SerializationMixin):
     )
 
     faculties = db.Relationship(
-        "SprFaculty",
+        'SprFaculty',
         secondary=users_faculty_table,
     )
 
     department = db.Relationship(
-        "Department",
+        'Department',
     )
 
     def set_password(self, password):
@@ -70,7 +77,7 @@ class Token(db.Model):
 
     id = db.Column(db.Integer(), primary_key=True)
     user_id = db.Column(
-        db.Integer(), 
+        db.Integer(),
         db.ForeignKey(
             "tbl_users.id_user",
             ondelete="CASCADE"),
@@ -80,11 +87,11 @@ class Token(db.Model):
     user_agent = db.Column(db.String(256), nullable=False)
     ttl = db.Column(db.Integer(), nullable=False)
 
-    user = db.relationship("Users")
+    user = db.relationship('Users')
 
 
-class Roles(db.Model, SerializationMixin):
-    __tablename__ = "roles"
+class Roles(db.Model):
+    __tablename__ = 'roles'
 
     id_role = db.Column(db.Integer, primary_key=True)
     name_role = db.Column(db.String(100), nullable=False)
@@ -97,13 +104,13 @@ class Roles(db.Model, SerializationMixin):
     users = db.relationship("Users", secondary=user_roles_table)
 
     def __repr__(self):
-        return "<Role %r>" % self.name_role
+        return '<Role %r>' % self.name_role
 
     def __str__(self):
         return self.name_role
 
 
-class Mode(db.Model, SerializationMixin):
+class Mode(db.Model, SerializerMixin):
     __tablename__ = "Mode"
 
     id = db.Column(db.Integer, primary_key=True)

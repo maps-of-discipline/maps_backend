@@ -1,15 +1,16 @@
 import json
 
+import requests
 from flask import Blueprint, make_response, request, jsonify, url_for
 import time
 import secrets
 from flask_mail import Mail, Message
 from auth.logic import verify_jwt_token, verify_refresh_token, get_access_token, get_refresh_token
-from auth.models import Users
+from auth.models import Users, Roles
 from maps.models import db
 from .cli import register_commands
 from pprint import pprint
-from app import mail
+from app import mail, app
 
 auth = Blueprint("auth", __name__, url_prefix='/api')
 register_commands(auth)
@@ -137,3 +138,51 @@ def reset_with_token(token):
     return jsonify({'result': 'ok'}), 200
 
 
+@app.route('/api/login/lk', methods=['POST'])
+def lk_login():
+    request_data = request.get_json()
+
+    if 'username' not in request_data or 'password' not in request_data:
+        return make_response("Username and password are required", 401)
+
+    response = requests.post(app.config.get('LK_URL'), data={
+        'ulogin': request_data['username'],
+        'upassword': request_data['password'],
+    }).json()
+
+
+    res = requests.get(app.config.get('LK_URL'), params={'getUser': '', 'token': response['token']}).json()
+    res = res['user']
+    name = ' '.join([res['surname'], res['name'], res['patronymic']])
+    email = res['email']
+
+    user = Users.query.filter_by(login=request_data['username']).first()
+    if not user:
+        user = Users()
+        user.auth_type = 'lk'
+
+        name_role = 'Guest'
+        if res['user_status'] == 'stud':
+            name_role = 'Student'
+
+        guest_role = Roles.query.filter_by(name_role=name_role).first()
+
+        if guest_role:
+            user.roles.append(guest_role)
+
+    user.login = request_data['username']
+    user.set_password(request_data['password'])
+    user.name = name
+    user.email = email
+
+    db.session.add(user)
+    db.session.commit()
+
+    response = {
+        'access': get_access_token(user.id_user),
+        'refresh': get_refresh_token(user.id_user, request.headers['User-Agent']),
+        'token': response['token'],
+        'approved': user.approved_lk,
+    }
+
+    return make_response(json.dumps(response, ensure_ascii=False), 200)

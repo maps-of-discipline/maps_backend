@@ -1,13 +1,12 @@
 import json
-import operator
+from pprint import pprint
 
+from auth.logic import approved_required, login_required
+from auth.models import Users
+from maps.models import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department
+from cabinet.models import RPD, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells
 
-from auth import approved_required, login_required
-from models import Users
-from models.maps import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department
-from models.cabinet import RPD, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells
-
-from flask import Blueprint, make_response, jsonify, request, send_file, send_from_directory
+from flask import Blueprint, make_response, jsonify, request, send_from_directory
 from cabinet.utils.serialize import serialize
 from cabinet.lib.generate_empty_rpd import generate_empty_rpd
 import datetime
@@ -20,7 +19,6 @@ import os
 # regexp
 import re
 
-from take_from_bd import (control_type_r)
 import requests
 
 from itertools import groupby
@@ -780,19 +778,12 @@ def getAup():
 @approved_required(request)
 def disciplines():
     q_num_aup = request.args.get('aup')
-
     aup = AupInfo.query.filter(AupInfo.num_aup == q_num_aup).first()
-
     disciplines = AupData.query.filter(AupData.id_aup == aup.id_aup).all()
-    disciplines = serialize(disciplines)
-
-    unique_disciplines_map = {}
-
-    for discipline in disciplines:
-        if not discipline['unique_discipline']['id'] in unique_disciplines_map:
-            unique_disciplines_map[discipline['unique_discipline']['id']] = discipline['unique_discipline']
-
-    return jsonify(list(unique_disciplines_map.values()))
+    
+    res = list({(el.id_discipline, el._discipline) for el in disciplines})
+    res = [dict(id=el[0], title=el[1]) for el in res]
+    return jsonify(res)
 
 # Получение списка дисциплин учебного плана (вариант для студентов)
 @cabinet.route('/disciplines-new', methods=['GET'])
@@ -827,7 +818,6 @@ def disciplinesNew():
     return jsonify(disciplines_items)
 
 
-from flask import current_app
 # Скачать распоряжение тьюторов
 @cabinet.route('/download-tutor-order', methods=['POST'])
 @login_required(request)

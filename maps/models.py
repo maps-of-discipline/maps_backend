@@ -1,66 +1,75 @@
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy_serializer import SerializerMixin
+
 db = SQLAlchemy()
 
 
-class SerializationMixin:
-    def as_dict(self):
-        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
-
-
-class SprBranch(db.Model):
-    __tablename__ = "spr_branch"
+class SprBranch(db.Model, SerializerMixin):
+    __tablename__ = 'spr_branch'
 
     id_branch = db.Column(db.Integer, primary_key=True)
     city = db.Column(db.String(255), nullable=False)
     location = db.Column(db.String(255), nullable=False)
 
     def __repr__(self):
-        return "<Branch %r>" % self.location
+        return '<Branch %r>' % self.location
 
 
-class SprDegreeEducation(db.Model):
-    __tablename__ = "spr_degree_education"
+class SprDegreeEducation(db.Model, SerializerMixin):
+    __tablename__ = 'spr_degree_education'
 
     id_degree = db.Column(db.Integer, primary_key=True)
     name_deg = db.Column(db.String(255), nullable=False)
 
     def __repr__(self):
-        return "<DegreeEducation %r>" % self.name_deg
+        return '<DegreeEducation %r>' % self.name_deg
 
 
-class SprFaculty(db.Model, SerializationMixin):
-    __tablename__ = "spr_faculty"
+class SprFaculty(db.Model, SerializerMixin):
+    __tablename__ = 'spr_faculty'
 
     id_faculty = db.Column(db.Integer, primary_key=True)
     name_faculty = db.Column(db.String(255), nullable=False)
-    id_branch = db.Column(
-        db.Integer, db.ForeignKey("spr_branch.id_branch"), nullable=False
-    )
+    id_branch = db.Column(db.Integer, db.ForeignKey(
+        'spr_branch.id_branch'), nullable=False)
     dean = db.Column(db.String(255), nullable=True)
     admin_only = db.Column(db.Boolean, default=0)
-    branch = db.relationship("SprBranch")
+    branch = db.relationship('SprBranch')
 
-    aup_infos = db.relationship("AupInfo", back_populates="faculty", lazy="joined")
+    departments = db.relationship("Department", back_populates='faculty', lazy='joined')
 
     def __repr__(self):
-        return "<Faculty %r>" % self.name_faculty
-
-    def __str__(self):
-        return self.name_faculty
+        return '<Faculty %r>' % self.name_faculty
 
 
-class SprFormEducation(db.Model):
-    __tablename__ = "spr_form_education"
+class Department(db.Model, SerializerMixin):
+    __tablename__ = 'tbl_department'
+
+    serialize_rules = ("-faculty.departments",)
+
+    id_department = db.Column(db.Integer, primary_key=True)
+    name_department = db.Column(db.String(255), nullable=True)
+    faculty_id = db.Column(db.Integer, db.ForeignKey('spr_faculty.id_faculty'))
+
+    faculty = db.relationship("SprFaculty", back_populates='departments')
+    tbl_aups = db.relationship('AupInfo', back_populates='department', lazy='joined')
+
+    def __repr__(self):
+        return '<Department %r>' % self.name_department
+
+
+class SprFormEducation(db.Model, SerializerMixin):
+    __tablename__ = 'spr_form_education'
 
     id_form = db.Column(db.Integer, primary_key=True)
     form = db.Column(db.String(255), nullable=False)
 
     def __repr__(self):
-        return "<FormEducation %r>" % self.form
+        return '<FormEducation %r>' % self.form
 
 
-class SprOKCO(db.Model):
-    __tablename__ = "spr_okco"
+class SprOKCO(db.Model, SerializerMixin):
+    __tablename__ = 'spr_okco'
 
     program_code = db.Column(db.String(255), primary_key=True)
     name_okco = db.Column(db.String(255), nullable=False)
@@ -69,8 +78,8 @@ class SprOKCO(db.Model):
         return "<OKCO %r>" % self.name_okco
 
 
-class SprRop(db.Model):
-    __tablename__ = "spr_rop"
+class SprRop(db.Model, SerializerMixin):
+    __tablename__ = 'spr_rop'
 
     id_rop = db.Column(db.Integer, primary_key=True)
     last_name = db.Column(db.String(255), nullable=False)
@@ -87,8 +96,9 @@ class SprRop(db.Model):
         return "<Rop %r>" % self.full_name
 
 
-class AupInfo(db.Model, SerializationMixin):
-    __tablename__ = "tbl_aup"
+class AupInfo(db.Model, SerializerMixin):
+    __tablename__ = 'tbl_aup'
+    serialize_rules = ('-department.tbl_aups', '-aup_data.aup')
 
     id_aup = db.Column(db.Integer, primary_key=True)
     file = db.Column(db.String(255), nullable=False)
@@ -170,20 +180,7 @@ class AupInfo(db.Model, SerializationMixin):
         db.session.commit()
 
 
-class Department(db.Model, SerializationMixin):
-    __tablename__ = "tbl_department"
-
-    id_department = db.Column(db.Integer, primary_key=True)
-    name_department = db.Column(db.String(255), nullable=True)
-
-    def __repr__(self):
-        return "<Department %r>" % self.name_department
-
-    def __str__(self):
-        return f"{self.name_department}"
-
-
-class NameOP(db.Model):
+class NameOP(db.Model, SerializerMixin):
     __tablename__ = "spr_name_op"
 
     id_spec = db.Column(db.Integer, primary_key=True)
@@ -226,8 +223,8 @@ class SprVolumeDegreeZET(db.Model):
         return "<SprVolumeDegreeZET %r>" % self.volume_degree_zet
 
 
-class SprStandard(db.Model):
-    __tablename__ = "spr_standard_zet"
+class SprStandard(db.Model, SerializerMixin):
+    __tablename__ = 'spr_standard_zet'
 
     id_standard = db.Column(db.Integer, primary_key=True)
     type_standard = db.Column(db.String(255), nullable=False)
@@ -240,8 +237,8 @@ class SprStandard(db.Model):
         return "<SprStandardZET %r>" % self.standard_date
 
 
-class D_Blocks(db.Model):
-    __tablename__ = "d_blocks"
+class D_Blocks(db.Model, SerializerMixin):
+    __tablename__ = 'd_blocks'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
 
@@ -249,8 +246,8 @@ class D_Blocks(db.Model):
         return "<D_Blocks %r>" % self.title
 
 
-class D_Period(db.Model):
-    __tablename__ = "d_period"
+class D_Period(db.Model, SerializerMixin):
+    __tablename__ = 'd_period'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
 
@@ -258,17 +255,18 @@ class D_Period(db.Model):
         return "<D_Period %r>" % self.title
 
 
-class D_ControlType(db.Model):
-    __tablename__ = "d_control_type"
+class D_ControlType(db.Model, SerializerMixin):
+    __tablename__ = 'd_control_type'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
+    shortname = db.Column(db.String(255), nullable=True)
 
     def __repr__(self):
         return "<D_ControlType %r>" % self.title
 
 
-class D_EdIzmereniya(db.Model):
-    __tablename__ = "d_ed_izmereniya"
+class D_EdIzmereniya(db.Model, SerializerMixin):
+    __tablename__ = 'd_ed_izmereniya'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
 
@@ -276,8 +274,8 @@ class D_EdIzmereniya(db.Model):
         return "<D_EdIzmereniya %r>" % self.title
 
 
-class D_Part(db.Model):
-    __tablename__ = "d_part"
+class D_Part(db.Model, SerializerMixin):
+    __tablename__ = 'd_part'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
 
@@ -285,8 +283,8 @@ class D_Part(db.Model):
         return "<D_Part %r>" % self.title
 
 
-class D_TypeRecord(db.Model):
-    __tablename__ = "d_type_record"
+class D_TypeRecord(db.Model, SerializerMixin):
+    __tablename__ = 'd_type_record'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
 
@@ -294,8 +292,8 @@ class D_TypeRecord(db.Model):
         return "<D_TypeRecord %r>" % self.title
 
 
-class D_Modules(db.Model, SerializationMixin):
-    __tablename__ = "d_modules"
+class D_Modules(db.Model, SerializerMixin):
+    __tablename__ = 'd_modules'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
     color = db.Column(db.String(8), nullable=False, default="#5f60ec")
@@ -304,19 +302,21 @@ class D_Modules(db.Model, SerializationMixin):
         return "<D_Modules %r>" % self.title
 
 
-class Groups(db.Model):
-    __tablename__ = "groups"
+class Groups(db.Model, SerializerMixin):
+    __tablename__ = 'groups'
     id_group = db.Column(db.Integer, primary_key=True)
     name_group = db.Column(db.String(255), nullable=False)
     color = db.Column(db.String(8), nullable=False)
     weight = db.Column(db.Integer, nullable=False, default=5)
 
     def __repr__(self):
-        return "<Groups %r>" % self.name_group
+        return '<Groups %r>' % self.name_group
 
 
-class AupData(db.Model):
-    __tablename__ = "aup_data"
+class AupData(db.Model, SerializerMixin):
+    __tablename__ = 'aup_data'
+    serialize_rules = ("-aup",)
+
     id = db.Column(db.Integer, primary_key=True)
     id_aup = db.Column(
         db.Integer, db.ForeignKey("tbl_aup.id_aup", ondelete="CASCADE"), nullable=False
@@ -368,6 +368,7 @@ class AupData(db.Model):
     aup = db.relationship("AupInfo", back_populates="aup_data")
     ed_izmereniya = db.relationship("D_EdIzmereniya", lazy="joined")
     group = db.relationship("Groups", lazy="joined")
+    unique_discipline = db.relationship("SprDiscipline")
 
     @property
     def discipline(self) -> str:
@@ -407,8 +408,10 @@ class AupData(db.Model):
         )
 
 
-class SprDiscipline(db.Model):
+class SprDiscipline(db.Model, SerializerMixin):
     __tablename__ = "spr_discipline"
+
+    serialize_only = ('id', 'title')
 
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255))
