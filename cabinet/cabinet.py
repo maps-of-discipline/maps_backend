@@ -917,3 +917,19 @@ def getDisciplinesByTeacher(fullname):
 
     disciplines = [{"name": key, "groups": list(value)} for key, value in disciplines.items()]
     return jsonify(disciplines), 200
+
+
+@cabinet.route('/discipline-by-aup')
+def get_discipline_by_aup():
+    aup_id = request.args['aup_id']
+    discipline_id = request.args['discipline_id']
+
+    aup_data = AupData.query.filter_by(id_aup=aup_id, id_discipline=discipline_id).all()
+
+    if not aup_data:
+        return jsonify({"error": "Not found"}), 400
+
+    res = {"title": aup_data[0].discipline, "periods": list({el.id_period for el in aup_data})}
+
+    return jsonify(res)
+
