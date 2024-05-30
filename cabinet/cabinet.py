@@ -136,6 +136,9 @@ def createLesson():
         id_rpd=data['id_rpd'],
         semester=data['semester'],
         study_group_id=data['study_group_id'],
+        spr_place_id = data['spr_place_id'],
+        place_note = data['place_note'],
+        note = data['note'],
     )
 
     db.session.add(new_lesson)
