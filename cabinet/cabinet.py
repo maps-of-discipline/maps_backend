@@ -4,7 +4,7 @@ from pprint import pprint
 from auth.logic import approved_required, login_required
 from auth.models import Users
 from maps.models import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department
-from cabinet.models import RPD, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells
+from cabinet.models import RPD, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells, SprPlace
 
 from flask import Blueprint, make_response, jsonify, request, send_from_directory
 from cabinet.utils.serialize import serialize
@@ -88,6 +88,9 @@ def getLessons():
 
     groups = StudyGroups.query.filter(StudyGroups.num_aup == num_aup).all()
     response_data['groups'] = serialize(groups)
+    
+    places = SprPlace.query.all()
+    response_data['places'] = serialize(places)
 
     return jsonify(response_data)
 
@@ -162,6 +165,9 @@ def editLesson():
     topic.id_type_control = data['lesson']['id_type_control']
     topic.date_task_finish_include = data['lesson']['date_task_finish_include']
     topic.spr_bells_id = data['lesson']['spr_bells_id']
+    topic.spr_place_id = data['lesson']['spr_place_id']
+    topic.place_note = data['lesson']['place_note']
+    topic.note = data['lesson']['note']
 
     if data['lesson']['date'] == None:
         topic.date = None
@@ -758,6 +764,14 @@ def getControlTypes():
     return jsonify({
         'control_types': result
     })
+
+# Получение всех нагрузок дисциплины
+@cabinet.route('/place', methods=['GET'])
+@login_required(request)
+@approved_required(request)
+def getPlace():
+    faculties = SprPlace.query.all()
+    return jsonify(serialize(faculties))
 
 # Получение данных об учебном плане по поиску
 @cabinet.route('/aup', methods=['GET'])
