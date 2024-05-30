@@ -2,6 +2,21 @@ from sqlalchemy_serializer import SerializerMixin
 
 from maps.models import db
 
+# Таблица с оценками
+class DisciplineTable(db.Model, SerializerMixin):
+    __tablename__ = 'discipline_table'
+
+    serialize_only = ('id', 'id_aup', 'id_unique_discipline', 'study_group_id', 'semester')
+
+    id: int = db.Column(db.Integer(), primary_key=True)
+    id_aup: int = db.Column(db.Integer(), db.ForeignKey('tbl_aup.id_aup'), nullable=False)
+    id_unique_discipline: int = db.Column(db.Integer(), db.ForeignKey('spr_discipline.id'), nullable=False)
+    study_group_id: int = db.Column(db.Integer(), db.ForeignKey('study_group.id'), nullable=False)
+    semester: int = db.Column(db.Integer(), nullable=False)
+
+    grade_columns = db.relationship('GradeColumn', lazy='joined')
+    topics = db.relationship('Topics', back_populates="discipline_table", lazy="joined")
+
 
 class RPD(db.Model, SerializerMixin):
     __tablename__ = 'rpd'
@@ -14,17 +29,17 @@ class RPD(db.Model, SerializerMixin):
 
     aupData = db.relationship('AupInfo')
     sprDiscipline = db.relationship('SprDiscipline', lazy='joined')
-    topics = db.relationship('Topics', back_populates="rpd", lazy="joined")
 
 
 class Topics(db.Model, SerializerMixin):
     __tablename__ = 'topic'
 
     serialize_only = ('id', 'topic', 'chapter', 'id_type_control', 'task_link', 'task_link_name', 'completed_task_link',
-                      'completed_task_link_name', 'id_rpd', 'semester', 'study_group_id', 'date', 'lesson_order',
+                      'completed_task_link_name', 'discipline_table_id', 'study_group_id', 'date', 'lesson_order',
                       'date_task_finish', 'date_task_finish_include', 'spr_bells_id', 'spr_place_id', 'place_note', 'note')
 
     id: int = db.Column(db.Integer(), primary_key=True)
+    discipline_table_id: int = db.Column(db.Integer(), db.ForeignKey('discipline_table.id'))
     topic: str = db.Column(db.String(400), nullable=True)
     chapter: str = db.Column(db.String(400), nullable=True)
     id_type_control = db.Column(db.Integer(), db.ForeignKey('d_control_type.id'), nullable=True)
@@ -32,8 +47,6 @@ class Topics(db.Model, SerializerMixin):
     task_link_name: str = db.Column(db.String(255), nullable=True)
     completed_task_link: str = db.Column(db.String(255), nullable=True)
     completed_task_link_name: str = db.Column(db.String(255), nullable=True)
-    id_rpd: int = db.Column(db.Integer(), db.ForeignKey('rpd.id'))
-    semester: int = db.Column(db.Integer())
     study_group_id: int = db.Column(db.Integer(), db.ForeignKey('study_group.id'), nullable=False)
 
     date = db.Column(db.DateTime())
@@ -47,7 +60,7 @@ class Topics(db.Model, SerializerMixin):
     note = db.Column(db.String(400), nullable=True)
 
     d_control_type = db.relationship('D_ControlType')
-    rpd = db.relationship('RPD', back_populates="topics")
+    discipline_table = db.relationship('DisciplineTable', back_populates="topics")
 
 
 class StudyGroups(db.Model, SerializerMixin):
@@ -94,7 +107,6 @@ class GradeTable(db.Model, SerializerMixin):
     semester: int = db.Column(db.Integer(), nullable=False)
     study_group_id: int = db.Column(db.Integer(), db.ForeignKey('study_group.id'), nullable=False)
 
-    grade_columns = db.relationship('GradeColumn', lazy='joined')
 
 
 # Оценки
@@ -116,7 +128,7 @@ class GradeColumn(db.Model, SerializerMixin):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(400), nullable=True)
-    grade_table_id = db.Column(db.Integer, db.ForeignKey("grade_table.id"), nullable=False)
+    discipline_table_id = db.Column(db.Integer, db.ForeignKey("discipline_table.id"), nullable=False)
     grade_type_id = db.Column(db.Integer, db.ForeignKey("grade_type.id"), nullable=False)
     topic_id = db.Column(db.Integer, db.ForeignKey("topic.id"), nullable=True)
 

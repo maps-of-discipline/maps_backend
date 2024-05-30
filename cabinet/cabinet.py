@@ -4,11 +4,13 @@ from pprint import pprint
 from auth.logic import approved_required, login_required
 from auth.models import Users
 from maps.models import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department
-from cabinet.models import RPD, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells, SprPlace
+from cabinet.models import RPD, DisciplineTable, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells, SprPlace
 
 from flask import Blueprint, make_response, jsonify, request, send_from_directory
 from cabinet.utils.serialize import serialize
 from cabinet.lib.generate_empty_rpd import generate_empty_rpd
+from cabinet.lib.generate_grade_table import generate_grade_table
+from cabinet.lib.generate_discipline_table import generate_discipline_table
 import datetime
 from dateutil.parser import parse
 from docxtpl import DocxTemplate
@@ -46,54 +48,41 @@ def rpd():
 @login_required(request)
 @approved_required(request)
 def getLessons():
-    if 'aup' not in request.args:
-        return make_response('Отсутствует параметр "aup"', 400)
-
-    if 'id' not in request.args:
-        return make_response('Отсутствует параметр "id"', 400)
-
     num_aup = request.args.get('aup')
     id_discipline = request.args.get('id')
+    group_num = request.args.get('group')
+    semester = request.args.get('semester')
 
-    response_data = {
-        'topics': [],
-        'rpd_id': None,
-        'title': None
-    }
+    group = StudyGroups.query.filter_by(title=group_num).first()
+    aup_info: AupInfo = AupInfo.query.filter_by(num_aup=num_aup).first()
 
-    aup_info: AupInfo = AupInfo.query.filter(AupInfo.num_aup == num_aup).first()
-    if not aup_info:
-        return jsonify({'error': 'Данный АУП отсутствует.'})
-
-    discipline_is_exist = AupData.query.filter(AupData.id_discipline == id_discipline).first()
-    if not discipline_is_exist:
-        return jsonify({'error': 'Дисциплина отсутствует в АУП.'})
-
-    rpd = RPD.query.filter(RPD.id_aup == aup_info.id_aup, RPD.id_unique_discipline == id_discipline).first()
-    if not rpd:
-        res = generate_empty_rpd(aup_info.id_aup, id_discipline)
+    discipline_table = DisciplineTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline, study_group_id=group.id, semester=semester).first()
+    if not discipline_table:
+        res = generate_discipline_table(aup_info.id_aup, id_discipline, group.id, semester)
 
         if 'error' in res:
             return jsonify(res)
         else:
-            rpd = res['data']
-
-    response_data['rpd_id'] = rpd.id
+            discipline_table = res['data']
+    
+    response_data = {
+        'topics': [],
+        'table_id': discipline_table.id,
+        'title': None
+    }
 
     spr_discipline = SprDiscipline.query.filter(SprDiscipline.id == id_discipline).first()
     response_data['title'] = spr_discipline.title
 
-    topics: Topics = Topics.query.filter(Topics.id_rpd == rpd.id).all()
+    topics: Topics = Topics.query.filter(Topics.discipline_table_id == discipline_table.id).all()
     response_data['topics'] = serialize(topics)
 
-    groups = StudyGroups.query.filter(StudyGroups.num_aup == num_aup).all()
-    response_data['groups'] = serialize(groups)
-    
     places = SprPlace.query.all()
     response_data['places'] = serialize(places)
 
     return jsonify(response_data)
 
+# Не используется
 # Создание пустой таблицы "Задания"
 @cabinet.route('/lessons', methods=['POST'])
 @login_required(request)
@@ -296,8 +285,7 @@ def getGrades():
 
     grade_types = GradeType.query.filter_by(grade_table_id=grade_table.id).all()
 
-    """ for group in groups:
-        bulkInsertStudentsByGroup(group.title) """
+    bulkInsertStudentsByGroup(group.title)
 
     students = Students.query.filter(Students.study_group_id == group.id).all()
     # students = serialize(students)
