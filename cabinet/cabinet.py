@@ -1,19 +1,19 @@
 import json
+from math import ceil
 from pprint import pprint
 
 from auth.logic import approved_required, login_required
 from auth.models import Users
 from maps.models import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department
-from cabinet.models import RPD, DisciplineTable, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells, SprPlace
+from cabinet.models import DisciplineTable, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells, SprPlace
 
 from flask import Blueprint, make_response, jsonify, request, send_from_directory
 from cabinet.utils.serialize import serialize
-from cabinet.lib.generate_empty_rpd import generate_empty_rpd
-from cabinet.lib.generate_grade_table import generate_grade_table
 from cabinet.lib.generate_discipline_table import generate_discipline_table
 import datetime
 from dateutil.parser import parse
 from docxtpl import DocxTemplate
+import functools 
 
 from openpyxl import load_workbook
 import os
@@ -34,14 +34,6 @@ def test():
 
 ### Задания
 
-# Получение списка РПД
-@cabinet.route('/rpd', methods=['GET'])
-@login_required(request)
-@approved_required(request)
-def rpd():
-    rpdList = RPD.query.all()
-    rpdList = serialize(rpdList)
-    return jsonify(rpdList)
 
 # Получение данных таблицы "Задания"
 @cabinet.route('/lessons', methods=['GET'])
@@ -57,17 +49,23 @@ def getLessons():
     aup_info: AupInfo = AupInfo.query.filter_by(num_aup=num_aup).first()
 
     discipline_table = DisciplineTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline, study_group_id=group.id, semester=semester).first()
-    if not discipline_table:
-        res = generate_discipline_table(aup_info.id_aup, id_discipline, group.id, semester)
 
+    control_types = getControlTypes(aup_info.id_aup, id_discipline, semester)
+
+    amounts = [el['amount'] for el in control_types]
+    sum_hours = sum(amounts)
+    row_count = ceil(sum_hours / 2)
+
+    if not discipline_table:
+        res = generate_discipline_table(num_aup, id_discipline, group_num, semester, row_count)
         if 'error' in res:
-            return jsonify(res)
+            return jsonify(res['data'])
         else:
             discipline_table = res['data']
-    
+
     response_data = {
         'topics': [],
-        'table_id': discipline_table.id,
+        'discipline_table_id': discipline_table.id,
         'title': None
     }
 
@@ -80,29 +78,9 @@ def getLessons():
     places = SprPlace.query.all()
     response_data['places'] = serialize(places)
 
+    response_data['control_types'] = control_types
+
     return jsonify(response_data)
-
-# Не используется
-# Создание пустой таблицы "Задания"
-@cabinet.route('/lessons', methods=['POST'])
-@login_required(request)
-@approved_required(request)
-def createLessons():
-    if 'aup' not in request.args:
-        return make_response('Отсутствует параметр "aup"', 401)
-
-    if 'id' not in request.args:
-        return make_response('Отсутствует параметр "id"', 401)
-
-    aup = request.args.get('aup')
-    id_discipline = request.args.get('id')
-
-    success, data = generate_empty_rpd(aup, id_discipline)
-
-    return jsonify({
-        'success': success,
-        'data': data
-    })
 
 # Создание строки "Задания"
 @cabinet.route('/lesson', methods=['POST'])
@@ -122,8 +100,7 @@ def createLesson():
         task_link_name=data['task_link_name'],
         completed_task_link=data['completed_task_link'],
         completed_task_link_name=data['completed_task_link_name'],
-        id_rpd=data['id_rpd'],
-        semester=data['semester'],
+        discipline_table_id=data['discipline_table_id'],
         study_group_id=data['study_group_id'],
         spr_place_id = data['spr_place_id'],
         place_note = data['place_note'],
@@ -180,6 +157,28 @@ def editLesson():
 
     db.session.add(topic)
     db.session.commit()
+
+    if len(data['lesson']['task_link_name']) != 0:
+        grade_type = GradeType.query.filter_by(discipline_table_id=topic.discipline_table.id, type='tasks').first()
+
+        grade_column = GradeColumn.query.filter_by(topic_id=topic.id, discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id).first()
+
+        if not grade_column:
+            new_grade_column = GradeColumn(name=topic.task_link_name, discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id, topic_id=topic.id)
+            db.session.add(new_grade_column)
+            db.session.commit()
+    
+    if topic.date:
+        types = ['activity', 'attendance']
+
+        for type in types: 
+            grade_type = GradeType.query.filter_by(discipline_table_id=topic.discipline_table.id, type=type).first()
+
+            grade_column = GradeColumn.query.filter_by(topic_id=topic.id, discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id).first()
+            if not grade_column:
+                new_grade_column = GradeColumn(name=topic.task_link_name, discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id, topic_id=topic.id)
+                db.session.add(new_grade_column)
+                db.session.commit()
 
     res = serialize(topic)
 
@@ -274,16 +273,15 @@ def getGrades():
     if not group:
         return jsonify({'error': 'Данная группа отсутствует.'})
 
+    discipline_table = DisciplineTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline, study_group_id=group.id, semester=semester).first()
 
-    grade_table = GradeTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline, study_group_id=group.id, semester=semester).first()
-
-    if not grade_table:
+    if not discipline_table:
         return jsonify({
             'is_not_exist': True,
             'message': 'Таблица успеваемости отсутствует'
         })
 
-    grade_types = GradeType.query.filter_by(grade_table_id=grade_table.id).all()
+    grade_types = GradeType.query.filter_by(discipline_table_id=discipline_table.id).all()
 
     bulkInsertStudentsByGroup(group.title)
 
@@ -305,11 +303,11 @@ def getGrades():
             'values': values
         })
 
-    columns = GradeColumn.query.filter_by(grade_table_id=grade_table.id).all()
+    columns = GradeColumn.query.filter_by(discipline_table_id=discipline_table.id).all()
 
     return jsonify({
         'gradeTypes': serialize(grade_types),
-        'gradeTableId': grade_table.id,
+        'disciplineTableId': discipline_table.id,
         'columns': serialize(columns),
         'rows': rows
     })
@@ -321,11 +319,11 @@ def getGrades():
 def updateGrade():
     data = request.get_json()
 
-    grade = Grade.query.filter_by(student_id=data['student_id'], grade_table_id=data['grade_table_id'],
+    grade = Grade.query.filter_by(student_id=data['student_id'],
                                   grade_column_id=data['grade_column_id']).first()
 
     if not grade:
-        grade = Grade(value=data['value'], student_id=data['student_id'], grade_table_id=data['grade_table_id'],
+        grade = Grade(value=data['value'], student_id=data['student_id'],
                       grade_column_id=data['grade_column_id'])
         db.session.add(grade)
     else:
@@ -336,61 +334,6 @@ def updateGrade():
     res = serialize(grade)
 
     return jsonify(res)
-
-# Создание пустой таблицы "Успеваемость"
-@cabinet.route('/grade-table', methods=['POST'])
-@login_required(request)
-@approved_required(request)
-def createGrades():
-    data = request.get_json()
-
-    num_aup = data['aup']
-    id_discipline = data['id']
-    group_num = data['group']
-    semester = data['semester']
-
-    aup_info: AupInfo = AupInfo.query.filter(AupInfo.num_aup == num_aup).first()
-    if not aup_info:
-        return jsonify({'error': 'Данный АУП отсутствует.'})
-
-    group = StudyGroups.query.filter(StudyGroups.title == group_num).first()
-    if not group:
-        return jsonify({'error': 'Данная группа отсутствует.'})
-
-
-    grade_table = GradeTable(id_aup = aup_info.id_aup, id_unique_discipline = id_discipline, study_group_id=group.id, semester=semester)
-
-    db.session.add(grade_table)
-
-    db.session.commit()
-
-    grade_type_attendance = GradeType(name='Посещение', type='attendance', grade_table_id=grade_table.id)
-    grade_type_tasks = GradeType(name='Задания', type='tasks', grade_table_id=grade_table.id)
-    grade_type_activity = GradeType(name='Активность', type='activity', grade_table_id=grade_table.id)
-
-    db.session.add(grade_type_attendance)   
-    db.session.add(grade_type_tasks)   
-    db.session.add(grade_type_activity)   
-
-
-    rpd = RPD.query.filter(RPD.id_aup == aup_info.id_aup, RPD.id_unique_discipline == id_discipline).first()
-    topics = Topics.query.filter(Topics.id_rpd == rpd.id, Topics.semester == semester, Topics.study_group_id == group.id).all()
-
-    bulk_grade_columns= []
-    for topic in topics:
-        date = None
-        if type(topic.date) is datetime.datetime:
-            date = topic.date.strftime('%d.%m')
-
-        bulk_grade_columns.append(GradeColumn(name=date, grade_table_id=grade_table.id, grade_type_id=grade_type_attendance.id, topic_id=topic.id))
-        bulk_grade_columns.append(GradeColumn(name=topic.task_link_name, grade_table_id=grade_table.id, grade_type_id=grade_type_tasks.id, topic_id=topic.id))
-        bulk_grade_columns.append(GradeColumn(name=date, grade_table_id=grade_table.id, grade_type_id=grade_type_activity.id, topic_id=topic.id))
- 
-    db.session.bulk_save_objects(bulk_grade_columns)
-
-    db.session.commit()
-
-    return jsonify(serialize(grade_table))
 
 ###
 
@@ -413,9 +356,9 @@ def getGradeType():
     if not group:
         return jsonify({'error': 'Данная группа отсутствует.'})
 
-    grade_table = GradeTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline,
+    discipline_table = DisciplineTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline,
                                              study_group_id=group.id).first()
-    grade_types = GradeType.query.filter_by(grade_table_id=grade_table.id).all()
+    grade_types = GradeType.query.filter_by(discipline_table_id=discipline_table.id).all()
 
     return jsonify(serialize(grade_types))
 
@@ -426,7 +369,7 @@ def getGradeType():
 def createGradeType():
     data = request.get_json()
 
-    grade_type = GradeType(name=data['name'], grade_table_id=data['table_id'], type="custom")
+    grade_type = GradeType(name=data['name'], discipline_table_id=data['table_id'], type="custom")
     db.session.add(grade_type)
     db.session.commit()
 
@@ -563,12 +506,17 @@ def uploadGroups():
 @login_required(request)
 @approved_required(request)
 def getGroups():
-    groups = StudyGroups.query.all()
+    num_aup = request.args.get('aup')
+
+    groups = None
+    if num_aup:
+        groups = StudyGroups.query.filter_by(num_aup=num_aup).all()
+    else:
+        groups = StudyGroups.query.all()
 
     res = serialize(groups)
 
     return jsonify(res)
-
 ###
 
 ### Звонки
@@ -639,12 +587,12 @@ def getReport():
     if not group:
         return jsonify({'error': 'Данная группа отсутствует.'})
 
-    grade_table = GradeTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline,
+    discipline_table = DisciplineTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline,
                                              study_group_id=group.id).first()
 
-    grade_types = GradeType.query.filter_by(grade_table_id=grade_table.id).all()
+    grade_types = GradeType.query.filter_by(discipline_table_id=discipline_table.id).all()
 
-    grades = Grade.query.filter_by(grade_table_id=grade_table.id).all()
+    grades = Grade.query.filter_by(discipline_table_id=discipline_table.id).all()
 
     grades = serialize(grades)
 
@@ -709,18 +657,8 @@ def getReport():
 ### Остальное
 
 # Получение всех нагрузок дисциплины
-@cabinet.route('/control-types', methods=['GET'])
-@login_required(request)
-@approved_required(request)
-def getControlTypes():
-    id_rpd = request.args.get('rpd')
-
-    rpd = RPD.query.filter(RPD.id == id_rpd).first()
-
-    id_unique_discipline = rpd.id_unique_discipline
-    id_aup = rpd.id_aup
-
-    diciplines = AupData.query.filter(AupData.id_aup == id_aup, AupData.id_discipline == id_unique_discipline).all()
+def getControlTypes(id_aup, id_unique_discipline, semester):
+    diciplines = AupData.query.filter_by(id_aup=id_aup, id_discipline=id_unique_discipline, id_period=semester).all()
     serialized_diciplines = [discipline.to_dict() for discipline in diciplines]
 
     control_types = {}
@@ -735,26 +673,22 @@ def getControlTypes():
     def mapDisciplinesToControlType(dicipline):
         id = dicipline['id_type_control']
 
+        amount = dicipline['amount'] / 100
+        if dicipline['id_edizm'] == 2:
+            amount = amount * 54
+
         return {
             'id_type_control': id,
             'name': control_types[id]['title'],
             'shortname': control_types[id]['shortname'],
-            'id_edizm': dicipline['id_edizm'],
-            'amount': dicipline['amount'] / 100,
+            'amount': amount,
             'id_period': dicipline['id_period']
         }
 
     control_types = list(map(mapDisciplinesToControlType, serialized_diciplines))
+    filtered_control_types = filter(lambda ct: ct['amount'] != 0, control_types)
 
-    grouped_control_types = groupby(sorted(control_types, key=lambda x: x['id_period']), key=lambda x: x['id_period'])
-
-    result = {}
-    for key, group in grouped_control_types:
-        result[key] = list(group)
-
-    return jsonify({
-        'control_types': result
-    })
+    return list(filtered_control_types)
 
 # Получение всех нагрузок дисциплины
 @cabinet.route('/place', methods=['GET'])
@@ -769,11 +703,21 @@ def getPlace():
 @login_required(request)
 @approved_required(request)
 def getAup():
+    num_aup = request.args.get('aup')
     search = request.args.get('search')
 
-    found = AupInfo.query.filter(AupInfo.file.like("%" + search + "%")).all()
-
-    res = serialize(found)
+    res = None
+    if search:
+        found = AupInfo.query.filter(AupInfo.file.like("%" + search + "%")).all()
+        res = serialize(found)
+    else:
+        found: AupInfo = AupInfo.query.filter_by(num_aup=num_aup).first()
+        res = {
+            'num_aup': found.num_aup,
+            'id': found.id_aup,
+            'title': found.name_op.name_spec,
+            'semesters': [1, 2, 3, 4, 5, 6, 7, 8]
+        }
 
     return jsonify(res)
 
@@ -821,6 +765,38 @@ def disciplinesNew():
                 disciplines_items[item.id_period] = [d]
 
     return jsonify(disciplines_items)
+
+
+# Получение информации о дисциплине
+@cabinet.route('/discipline', methods=['GET'])
+@login_required(request)
+@approved_required(request)
+def discipline():
+    id = request.args.get('id')
+    
+    spr_discipline = SprDiscipline.query.filter_by(id=id).first()
+
+    return jsonify(serialize(spr_discipline))
+
+# Получение информации о выбранном АУПе и дисциплине
+@cabinet.route('/discipline-info', methods=['GET'])
+@login_required(request)
+@approved_required(request)
+def disciplineInfo():
+    num_aup = request.args.get('aup')
+    id_discipline = request.args.get('id')
+    
+    spr_discipline = SprDiscipline.query.filter_by(id=id_discipline).first()
+    groups = StudyGroups.query.filter_by(num_aup=num_aup).all()
+
+    res = {
+        title: spr_discipline.title,
+        groups: serialize(groups)
+    }
+
+    return jsonify(res)
+
+
 
 
 # Скачать распоряжение тьюторов
@@ -921,10 +897,10 @@ def getDisciplinesByTeacher(fullname):
 
 @cabinet.route('/discipline-by-aup')
 def get_discipline_by_aup():
-    aup_id = request.args['aup_id']
-    discipline_id = request.args['discipline_id']
+    id_aup = request.args['id_aup']
+    id_discipline = request.args['id_discipline']
 
-    aup_data = AupData.query.filter_by(id_aup=aup_id, id_discipline=discipline_id).all()
+    aup_data = AupData.query.filter_by(id_aup=id_aup, id_discipline=id_discipline).all()
 
     if not aup_data:
         return jsonify({"error": "Not found"}), 400

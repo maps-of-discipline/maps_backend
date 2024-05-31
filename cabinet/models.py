@@ -15,21 +15,8 @@ class DisciplineTable(db.Model, SerializerMixin):
     semester: int = db.Column(db.Integer(), nullable=False)
 
     grade_columns = db.relationship('GradeColumn', lazy='joined')
+    grade_types = db.relationship('GradeType', lazy='joined')
     topics = db.relationship('Topics', back_populates="discipline_table", lazy="joined")
-
-
-class RPD(db.Model, SerializerMixin):
-    __tablename__ = 'rpd'
-
-    serialize_only = ('id', 'id_aup', 'id_unique_discipline')
-
-    id: int = db.Column(db.Integer(), primary_key=True)
-    id_aup: int = db.Column(db.Integer(), db.ForeignKey('tbl_aup.id_aup'), nullable=False)
-    id_unique_discipline: int = db.Column(db.Integer(), db.ForeignKey('spr_discipline.id'), nullable=False)
-
-    aupData = db.relationship('AupInfo')
-    sprDiscipline = db.relationship('SprDiscipline', lazy='joined')
-
 
 class Topics(db.Model, SerializerMixin):
     __tablename__ = 'topic'
@@ -114,7 +101,6 @@ class Grade(db.Model, SerializerMixin):
     __tablename__ = 'grades'
 
     id = db.Column(db.Integer, primary_key=True)
-    grade_table_id = db.Column(db.Integer, db.ForeignKey("grade_table.id"), nullable=False)
     value = db.Column(db.Integer)
     student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
     grade_column_id = db.Column(db.Integer, db.ForeignKey("grade_column.id"), nullable=False)
@@ -133,6 +119,7 @@ class GradeColumn(db.Model, SerializerMixin):
     topic_id = db.Column(db.Integer, db.ForeignKey("topic.id"), nullable=True)
 
     grade_type = db.relationship('GradeType')
+    topic = db.relationship('Topics')
 
 
 # Виды оценивания (посещаемость, активность, задания)
@@ -148,7 +135,7 @@ class GradeType(db.Model, SerializerMixin):
     binary = db.Column(db.Boolean, default=False)
     weight_grade = db.Column(db.Integer, default=1)
 
-    grade_table_id = db.Column(db.Integer, db.ForeignKey("grade_table.id"), nullable=False)
+    discipline_table_id = db.Column(db.Integer, db.ForeignKey("discipline_table.id"), nullable=False)
 
 
 class SprBells(db.Model, SerializerMixin):
