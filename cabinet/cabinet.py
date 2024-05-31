@@ -4,7 +4,7 @@ from pprint import pprint
 
 from auth.logic import approved_required, login_required
 from auth.models import Users
-from maps.models import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department
+from maps.models import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department, Groups
 from cabinet.models import DisciplineTable, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells, SprPlace
 
 from flask import Blueprint, make_response, jsonify, request, send_from_directory
@@ -283,7 +283,7 @@ def getGrades():
 
     grade_types = GradeType.query.filter_by(discipline_table_id=discipline_table.id).all()
 
-    bulkInsertStudentsByGroup(group.title)
+    """ bulkInsertStudentsByGroup(group.title) """
 
     students = Students.query.filter(Students.study_group_id == group.id).all()
     # students = serialize(students)
@@ -748,6 +748,8 @@ def disciplinesNew():
     disciplines_items = {}
     flag = ""
 
+    group_color_mapper  = {el.id_group: el.color for el in Groups.query.all()}
+
     for i, item in enumerate(aup_data):
         if flag != item.discipline + str(item.id_period):
             flag = item.discipline + str(item.id_period)
@@ -757,7 +759,7 @@ def disciplinesNew():
             d["id"] = item.id_discipline
             d["name"] = item.unique_discipline.title
             d["num_row"] = item.num_row
-            d["color"] = '#5f60ec'
+            d["color"] = group_color_mapper[item.id_group]
 
             if (item.id_period in disciplines_items):
                 disciplines_items[item.id_period].append(d)
