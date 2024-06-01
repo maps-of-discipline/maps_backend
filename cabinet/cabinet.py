@@ -727,7 +727,7 @@ def getAup():
     res = None
     if search:
         found = AupInfo.query.filter(AupInfo.file.like("%" + search + "%")).all()
-        res = serialize(found)
+        res = [aup_item.to_dict(rules=['-aup_data']) for aup_item in found]
     else:
         found: AupInfo = AupInfo.query.filter_by(num_aup=num_aup).first()
         res = {
