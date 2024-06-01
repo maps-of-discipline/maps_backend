@@ -425,15 +425,20 @@ def getUser():
     for role in roles:
         if (role.name_role == 'student'):
             student = Students.query.filter_by(lk_id=user_db.lk_id).first()
+
+            if not student:
+                continue
+
             study_group = StudyGroups.query.filter_by(id=student.study_group_id).first()
 
-            permissions['student'] = {
-                'aup': study_group.num_aup,
-                'group': {
-                    'id': study_group.id,
-                    'title': study_group.title,
-                },
-            }
+            if (study_group):
+                permissions['student'] = {
+                    'aup': study_group.num_aup,
+                    'group': {
+                        'id': study_group.id,
+                        'title': study_group.title,
+                    },
+                }
 
     return jsonify({
         'name': user['name'],
