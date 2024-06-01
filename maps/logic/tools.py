@@ -141,3 +141,12 @@ def get_grouped_disciplines(aup_data) -> dict[tuple[str, int], list[AupData]]:
             grouped_disciplines[key].append(el)
 
     return grouped_disciplines
+
+
+class LineTimer:
+    def __init__(self):
+        self.start = time.time()
+
+    def log(self, message: str = ''):
+        delta = time.time() - self.start
+        print(f'\033[93m[LINE_TIME] {message: <32}\033[0m took: {delta}s')

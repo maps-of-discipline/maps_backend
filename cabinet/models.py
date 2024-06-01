@@ -14,8 +14,8 @@ class DisciplineTable(db.Model, SerializerMixin):
     study_group_id: int = db.Column(db.Integer(), db.ForeignKey('study_group.id'), nullable=False)
     semester: int = db.Column(db.Integer(), nullable=False)
 
-    grade_columns = db.relationship('GradeColumn', lazy='joined')
-    grade_types = db.relationship('GradeType', lazy='joined')
+    grade_columns = db.relationship('GradeColumn')
+    grade_types = db.relationship('GradeType')
     topics = db.relationship('Topics', back_populates="discipline_table", lazy="joined")
 
 class Topics(db.Model, SerializerMixin):

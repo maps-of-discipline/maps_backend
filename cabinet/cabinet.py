@@ -4,6 +4,7 @@ from pprint import pprint
 
 from auth.logic import approved_required, login_required
 from auth.models import Users
+from maps.logic.tools import timeit, LineTimer
 from maps.models import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department, Groups
 from cabinet.models import DisciplineTable, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells, SprPlace
 
@@ -33,7 +34,7 @@ def test():
     return make_response('pong', 200)
 
 ### Задания
-
+from time import time
 
 # Получение данных таблицы "Задания"
 @cabinet.route('/lessons', methods=['GET'])
@@ -47,11 +48,9 @@ def getLessons():
 
     group = StudyGroups.query.filter_by(title=group_num).first()
     aup_info: AupInfo = AupInfo.query.filter_by(num_aup=num_aup).first()
-
     discipline_table = DisciplineTable.query.filter_by(id_aup=aup_info.id_aup, id_unique_discipline=id_discipline, study_group_id=group.id, semester=semester).first()
 
     control_types = getControlTypes(aup_info.id_aup, id_discipline, semester)
-
     amounts = [el['amount'] for el in control_types]
     sum_hours = sum(amounts)
     row_count = ceil(sum_hours / 2)
@@ -79,6 +78,7 @@ def getLessons():
     response_data['places'] = serialize(places)
 
     response_data['control_types'] = control_types
+
 
     return jsonify(response_data)
 
@@ -552,7 +552,7 @@ def updateBells():
 def getReportByDiscipline():
     id_discipline = request.args.get('id_discipline')
 
-    rpds: RPD = RPD.query.filter(RPD.id_unique_discipline == id_discipline).all()
+    rpds: DisciplineTable = DisciplineTable.query.filter(DisciplineTable.id_unique_discipline == id_discipline).all()
 
     grades = {
         2: 0,
@@ -779,26 +779,6 @@ def discipline():
     spr_discipline = SprDiscipline.query.filter_by(id=id).first()
 
     return jsonify(serialize(spr_discipline))
-
-# Получение информации о выбранном АУПе и дисциплине
-@cabinet.route('/discipline-info', methods=['GET'])
-@login_required(request)
-@approved_required(request)
-def disciplineInfo():
-    num_aup = request.args.get('aup')
-    id_discipline = request.args.get('id')
-    
-    spr_discipline = SprDiscipline.query.filter_by(id=id_discipline).first()
-    groups = StudyGroups.query.filter_by(num_aup=num_aup).all()
-
-    res = {
-        title: spr_discipline.title,
-        groups: serialize(groups)
-    }
-
-    return jsonify(res)
-
-
 
 
 # Скачать распоряжение тьюторов
