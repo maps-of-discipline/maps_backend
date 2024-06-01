@@ -4,11 +4,12 @@ from pprint import pprint
 
 from auth.logic import approved_required, login_required
 from auth.models import Users
+from cabinet.utils.excel_tools import create_excel_lessons_report
 from maps.logic.tools import timeit, LineTimer
 from maps.models import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department, Groups
 from cabinet.models import DisciplineTable, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells, SprPlace
 
-from flask import Blueprint, make_response, jsonify, request, send_from_directory
+from flask import Blueprint, make_response, jsonify, request, send_from_directory, send_file
 from cabinet.utils.serialize import serialize
 from cabinet.lib.generate_discipline_table import generate_discipline_table
 import datetime
@@ -81,6 +82,40 @@ def getLessons():
 
 
     return jsonify(response_data)
+
+
+
+@cabinet.route('/lessons-excel', methods=['GET'])
+# @login_required(request)
+# @approved_required(request)
+def get_lessons_as_xlsx():
+    num_aup = request.args.get('aup')
+    id_discipline = request.args.get('id')
+    group_num = request.args.get('group')
+    semester = request.args.get('semester')
+
+    group = StudyGroups.query.filter_by(title=group_num).first()
+    aup_info: AupInfo = AupInfo.query.filter_by(num_aup=num_aup).first()
+
+    discipline_table: DisciplineTable = DisciplineTable.query.filter_by(
+        id_aup=aup_info.id_aup,
+        id_unique_discipline=id_discipline,
+        study_group_id=group.id,
+        semester=semester
+    ).first()
+
+    if not discipline_table:
+        return jsonify({"error": "Not Found"}), 404
+
+    file = create_excel_lessons_report(discipline_table.topics)
+    file.seek(0)
+    return send_file(
+        file,
+        download_name='Report.xlsx',
+        as_attachment=True,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
 
 # Создание строки "Задания"
 @cabinet.route('/lesson', methods=['POST'])
@@ -696,7 +731,7 @@ def getAup():
     res = None
     if search:
         found = AupInfo.query.filter(AupInfo.file.like("%" + search + "%")).all()
-        res = serialize(found)
+        res = found.as_dict(rules=['-aup_data'])
     else:
         found: AupInfo = AupInfo.query.filter_by(num_aup=num_aup).first()
         res = {
