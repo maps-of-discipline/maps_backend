@@ -166,8 +166,6 @@ def editLesson():
         if not grade_column:
             new_grade_column = GradeColumn(name=topic.task_link_name, discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id, topic_id=topic.id)
             db.session.add(new_grade_column)
-            db.session.commit()
-    
     if topic.date:
         types = ['activity', 'attendance']
 
@@ -178,7 +176,7 @@ def editLesson():
             if not grade_column:
                 new_grade_column = GradeColumn(name=topic.task_link_name, discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id, topic_id=topic.id)
                 db.session.add(new_grade_column)
-                db.session.commit()
+    db.session.commit()
 
     res = serialize(topic)
 
@@ -592,34 +590,25 @@ def getReport():
 
     grade_types = GradeType.query.filter_by(discipline_table_id=discipline_table.id).all()
 
-    grades = Grade.query.filter_by(discipline_table_id=discipline_table.id).all()
+    gcs = GradeColumn.query.filter_by(discipline_table_id=discipline_table.id).all()
 
-    grades = serialize(grades)
+    grades = []
+    for column in gcs:
+        for grade in column.grades:
+            grades.append(grade)
+
+
+    grades = [grade.to_dict(rules=['-grade_column.grades']) for grade in grades]
 
     grouped_grades_by_students = groupby(sorted(grades, key=lambda x: x['student_id']), key=lambda x: x['student_id'])
-    # grouped_grades_by_column = groupby(grouped_grades_by_students, key=lambda x: x['grade_column_id'])
 
     result = {}
 
-    def get_sum_cols(cols):
-        res = {
-            'value': 0
-        }
-        
-        for col in cols:
-            if 'name' not in res:
-                res['name'] = col['grade_column']['grade_type']['name']
-
-            if 'grade_type_id' not in res:
-                res['grade_type_id'] = col['grade_column']['grade_type']['id']
-
-            if isinstance(col['value'], int):
-                res['value'] = res['value'] + col['value']
-
-        return res
-
     for key, grades_student in grouped_grades_by_students:
-        grouped_by_grade_type = groupby(sorted(grades_student, key=lambda x: x['grade_column']['grade_type_id']), key=lambda x: x['grade_column']['grade_type_id'])
+        grouped_by_grade_type = groupby(
+            sorted(grades_student, key=lambda x: x['grade_column']['grade_type_id']),
+            key=lambda x: x['grade_column']['grade_type_id']
+        )
 
         if key not in result:
             result[key] = dict()
@@ -645,8 +634,6 @@ def getReport():
             for col in list_cols:
                 if isinstance(col['value'], int):
                     result[key]['categories'][grade_type_id]['value'] = result[key]['categories'][grade_type_id]['value'] + col['value']
-
-    print()
 
     return jsonify({
         'rating_chart': result,

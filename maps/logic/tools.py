@@ -1,4 +1,5 @@
 import time
+import traceback
 from functools import wraps
 
 import pandas as pd
@@ -149,4 +150,5 @@ class LineTimer:
 
     def log(self, message: str = ''):
         delta = time.time() - self.start
-        print(f'\033[93m[LINE_TIME] {message: <32}\033[0m took: {delta}s')
+        line = traceback.extract_stack()[-2].lineno
+        print(f'\033[93m[LINE_TIME] line: [Line: {line}] {message: <32}\033[0m took: {delta*1000}ms')
