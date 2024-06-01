@@ -289,7 +289,7 @@ def getGrades():
     rows = []
     for student in students:
         student: Students
-        grades = serialize(student.grades)
+        grades = [grade.to_dict(rules=['-student', '-grade_column']) for grade in student.grades]
 
         values = {}
         for grade in grades:
@@ -306,7 +306,7 @@ def getGrades():
     return jsonify({
         'gradeTypes': serialize(grade_types),
         'disciplineTableId': discipline_table.id,
-        'columns': serialize(columns),
+        'columns': [col.to_dict(rules=['-grades']) for col in columns],
         'rows': rows
     })
 
