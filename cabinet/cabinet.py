@@ -416,7 +416,33 @@ def getUser():
     from app import app
     res = requests.get(app.config.get('LK_URL'), params=payload)
 
-    return jsonify(res.json())
+    user = res.json()['user']
+
+    user_db = Users.query.filter_by(lk_id=user['id']).first()
+
+    roles = user_db.roles
+    print(roles)
+
+    permissions = {}
+    for role in roles:
+        if (role.name_role == 'student'):
+            student = Students.query.filter_by(lk_id=user_db.lk_id).first()
+            study_group = StudyGroups.query.filter_by(id=student.study_group_id).first()
+
+            permissions['student'] = {
+                'aup': study_group.num_aup,
+                'group': {
+                    'id': study_group.id,
+                    'title': study_group.title,
+                },
+            }
+
+    return jsonify({
+        'name': user['name'],
+        'surname': user['surname'],
+        'avatar': user['avatar'],
+        'permissions': permissions
+    })
 
 # Получение пользователей системы
 @cabinet.route('/lk-users', methods=['GET'])
