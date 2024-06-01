@@ -7,6 +7,7 @@ import secrets
 from flask_mail import Mail, Message
 from auth.logic import verify_jwt_token, verify_refresh_token, get_access_token, get_refresh_token
 from auth.models import Users, Roles
+from cabinet.models import StudyGroups
 from maps.models import db
 from .cli import register_commands
 from pprint import pprint
@@ -160,10 +161,11 @@ def lk_login():
     if not user:
         user = Users()
         user.auth_type = 'lk'
+        user.lk_id = res['id']
 
         name_role = 'Guest'
         if res['user_status'] == 'stud':
-            name_role = 'Student'
+            name_role = 'student'
 
         guest_role = Roles.query.filter_by(name_role=name_role).first()
 

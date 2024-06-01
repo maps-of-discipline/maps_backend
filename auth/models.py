@@ -37,6 +37,7 @@ class Users(db.Model, SerializerMixin):
     auth_type = db.Column(db.String(255), default="kd")
     approved_lk = db.Column(db.Boolean, default=False)
     request_approve_date = db.Column(db.DateTime, default=datetime.datetime.now)
+    lk_id = db.Column(db.Integer, nullable=True)
 
     department_id = db.Column(
         db.Integer,
