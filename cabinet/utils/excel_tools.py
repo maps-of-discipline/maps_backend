@@ -1,8 +1,10 @@
 from io import BytesIO
+from itertools import cycle
 
 import xlsxwriter
+from xlsxwriter.utility import xl_col_to_name
 
-from cabinet.models import Topics, SprPlace, SprBells
+from cabinet.models import Topics, SprPlace, SprBells, DisciplineTable, GradeColumn, StudyGroups, Students
 from maps.models import D_ControlType
 
 
@@ -41,6 +43,94 @@ def create_excel_lessons_report(topics: list[Topics]) -> BytesIO:
     return in_memory_file
 
 
+def create_performance_report(discipline_table: DisciplineTable, study_group: StudyGroups):
+    performance_types = [grade_type.type for grade_type in discipline_table.grade_types]
+    type_colors = cycle(['#90b3e7', '#c895f8', '#7cbbb4', '#75cada', '#db8480'])
+    value_begin_row_index = 3
 
+    in_memory_file = BytesIO()
 
+    workbook = xlsxwriter.Workbook(in_memory_file)
+    worksheet = workbook.add_worksheet()
 
+    worksheet.freeze_panes(3, 2)
+    worksheet.set_zoom(175)
+
+    format_default = workbook.add_format({})
+    format_default.set_align("left")
+    format_default.set_border(1)
+
+    format_header = workbook.add_format({})
+    format_header.set_align("left")
+    format_header.set_border(1)
+    format_header.set_bold(True)
+
+    format_nums = workbook.add_format({})
+    format_nums.set_align("left")
+    format_nums.set_border(1)
+    format_nums.set_num_format("0.00")
+
+    format_formula = workbook.add_format({})
+    format_formula.set_align("center")
+    format_formula.set_border(1)
+    format_formula.set_bg_color("#81c89b")
+    format_formula.set_num_format("0.0")
+
+    students = {stud.id: stud.name for stud in study_group.students}
+
+    worksheet.write_column(value_begin_row_index - 1, 0, ["№", *list(range(1, len(students) + 1))], format_header)
+    worksheet.write_column(value_begin_row_index - 1, 1, ["ФИО", *list(students.values())], format_header)
+
+    col_num = 2
+    merge_range_args = []
+
+    for type_, type_color in zip(performance_types, cycle(type_colors)):
+        temp_format_header = workbook.add_format()
+        temp_format_header.set_align("left")
+        temp_format_header.set_border(1)
+        temp_format_header.set_bg_color(type_color)
+        temp_format_header.set_bold(True)
+
+        columns: list[GradeColumn] = list(filter(
+            lambda el: el.grade_type.type == type_ and not el.grade_type.archived,
+            discipline_table.grade_columns
+        ))
+
+        columns.sort(key=lambda el: el.topic.date)
+        num = 0
+
+        merge_range_args.append((value_begin_row_index - 3, col_num, value_begin_row_index - 3, col_num + len(columns),
+                                 columns[0].grade_type.name, temp_format_header))
+        first_col = col_num
+        for col in columns:
+            num += 1
+            col_headers = [num, str(col.topic.date.strftime(r'%d.%m'))] if type_ != 'tasks' else [num,
+                                                                                                  col.topic.task_link_name]
+
+            grades = {grade.student_id: grade.value for grade in col.grades}
+            grades = [(grades[stud_id] if stud_id in grades else "") for stud_id in students.keys() if stud_id]
+            grades = list(map(lambda x: "" if int(x or 0) == 0 else int(x), grades))
+
+            worksheet.write_column(value_begin_row_index - len(col_headers), col_num, col_headers, format_header)
+            worksheet.write_column(value_begin_row_index, col_num, grades, format_nums)
+            col_num += 1
+
+        worksheet.write(value_begin_row_index - 1, col_num, "Итого:", temp_format_header)
+        worksheet.write(value_begin_row_index - 2, col_num, "", temp_format_header)
+        for i in range(1, len(students) + 1):
+            worksheet.write_formula(
+                value_begin_row_index + i - 1, col_num,
+                f'=SUM({xl_col_to_name(first_col)}{value_begin_row_index + i}:{xl_col_to_name(col_num - 1)}{value_begin_row_index + i})',
+                temp_format_header
+            )
+
+        col_num += 1
+
+    worksheet.autofit()
+
+    for args in merge_range_args:
+        worksheet.merge_range(*args)
+
+    workbook.close()
+    in_memory_file.seek(0)
+    return in_memory_file

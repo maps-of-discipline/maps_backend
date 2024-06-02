@@ -59,6 +59,8 @@ class StudyGroups(db.Model, SerializerMixin):
     title: str = db.Column(db.String(255), nullable=False)
     num_aup: str = db.Column(db.String(255), nullable=False)
 
+    students = db.relationship("Students")
+
 class SprPlace(db.Model, SerializerMixin):
     __tablename__ = 'spr_place'
 
@@ -81,6 +83,9 @@ class Students(db.Model, SerializerMixin):
 
     grades = db.relationship('Grade', back_populates='student', lazy='joined')
 
+
+    def __repr__(self):
+        return F"<Student {self.id} {self.name}>"
 
 # Таблица с оценками
 class GradeTable(db.Model, SerializerMixin):
@@ -109,6 +114,9 @@ class Grade(db.Model, SerializerMixin):
     student = db.relationship('Students', back_populates='grades', lazy='joined')
 
 
+    def __repr__(self):
+        return f"<Grade {self.id} {self.value}"
+
 class GradeColumn(db.Model, SerializerMixin):
     __tablename__ = 'grade_column'
 
@@ -122,6 +130,8 @@ class GradeColumn(db.Model, SerializerMixin):
     topic = db.relationship('Topics')
     grades = db.relationship("Grade", back_populates="grade_column")
 
+    def __repr__(self):
+        return F"<Grade Column '{self.grade_type.name}'"
 
 # Виды оценивания (посещаемость, активность, задания)
 class GradeType(db.Model, SerializerMixin):
