@@ -113,10 +113,10 @@ class GradeColumn(db.Model, SerializerMixin):
     __tablename__ = 'grade_column'
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(400), nullable=True)
     discipline_table_id = db.Column(db.Integer, db.ForeignKey("discipline_table.id"), nullable=False)
     grade_type_id = db.Column(db.Integer, db.ForeignKey("grade_type.id"), nullable=False)
     topic_id = db.Column(db.Integer, db.ForeignKey("topic.id"), nullable=True)
+    hidden = db.Column(db.Boolean, nullable=False, default=False)
 
     grade_type = db.relationship('GradeType')
     topic = db.relationship('Topics')
