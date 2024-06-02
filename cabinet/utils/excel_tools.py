@@ -66,15 +66,14 @@ def create_performance_report(discipline_table: DisciplineTable, study_group: St
     format_header.set_bold(True)
 
     format_nums = workbook.add_format({})
-    format_nums.set_align("left")
+    format_nums.set_align("center")
     format_nums.set_border(1)
-    format_nums.set_num_format("0.00")
+
 
     format_formula = workbook.add_format({})
     format_formula.set_align("center")
     format_formula.set_border(1)
     format_formula.set_bg_color("#81c89b")
-    format_formula.set_num_format("0.0")
 
     students = {stud.id: stud.name for stud in study_group.students}
 
@@ -108,8 +107,8 @@ def create_performance_report(discipline_table: DisciplineTable, study_group: St
                                                                                                   col.topic.task_link_name]
 
             grades = {grade.student_id: grade.value for grade in col.grades}
-            grades = [(grades[stud_id] if stud_id in grades else "") for stud_id in students.keys() if stud_id]
-            grades = list(map(lambda x: "" if int(x or 0) == 0 else int(x), grades))
+            grades = [grades[stud_id] if stud_id in grades else "" for stud_id in students.keys() if stud_id]
+            grades = list(map(lambda x: "" if int(x or 0) == 0 else float(x), grades))
 
             worksheet.write_column(value_begin_row_index - len(col_headers), col_num, col_headers, format_header)
             worksheet.write_column(value_begin_row_index, col_num, grades, format_nums)
