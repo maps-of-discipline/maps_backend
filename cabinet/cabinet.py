@@ -6,8 +6,8 @@ from auth.logic import approved_required, login_required
 from auth.models import Users
 from cabinet.utils.excel_tools import create_excel_lessons_report
 from maps.logic.tools import timeit, LineTimer
-from maps.models import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department, Groups
-from cabinet.models import DisciplineTable, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells, SprPlace
+from maps.models import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department, Groups, SprFormEducation
+from cabinet.models import DisciplineTable, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells, SprPlace, TutorsOrder
 
 from flask import Blueprint, make_response, jsonify, request, send_from_directory, send_file
 from cabinet.utils.serialize import serialize
@@ -364,7 +364,7 @@ def updateGrade():
 
     db.session.commit()
 
-    res = serialize(grade)
+    res = grade.to_dict(rules=['-grade_column.grades'])
 
     return jsonify(res)
 
@@ -874,7 +874,10 @@ def downloadTutorOrder():
 @approved_required(request)
 def getFaculties():
     faculties = SprFaculty.query.all()
-    return jsonify(serialize(faculties))
+
+    res = [faculty.to_dict(rules=['-departments.faculty', '-departments.tbl_aups']) for faculty in faculties]
+
+    return jsonify(res)
 
 # Получение списка кафедр
 @cabinet.route('/departments', methods=['GET'])
@@ -944,3 +947,47 @@ def get_discipline_by_aup():
 
     return jsonify(res)
 
+# Получение списка сотрудников
+@cabinet.route('/tutor-orders', methods=['GET'])
+@login_required(request)
+@approved_required(request)
+def tutorOrders():
+    faculty_id = request.args.get('id')
+
+    tutor_orders = TutorsOrder.query.filter_by(faculty_id=faculty_id).all()
+
+    return jsonify(serialize(tutor_orders))
+
+# Получение списка сотрудников
+@cabinet.route('/tutor-order', methods=['PATCH'])
+@login_required(request)
+@approved_required(request)
+def editTutorOrder():
+    data = request.get_json()
+    print(data)
+
+    id_order = data['id']
+    meta = data['meta']
+    body = data['body']
+
+    tutor_order = TutorsOrder.query.filter_by(id=id_order).first()
+
+    tutor_order.date = parse(meta['date']).astimezone(datetime.timezone(datetime.timedelta(hours=3)))
+    tutor_order.num_order = meta['order']
+    tutor_order.year = meta['year']
+    tutor_order.executor = meta['executor']
+    tutor_order.signer = meta['signer']
+
+    db.session.add(tutor_order)
+    db.session.commit()
+
+    return jsonify(1)
+
+
+# Получение списка сотрудников
+@cabinet.route('/form-of-educations', methods=['GET'])
+@login_required(request)
+@approved_required(request)
+def getFormOfEducations():
+    form_of_educations = SprFormEducation.query.all()
+    return jsonify(serialize(form_of_educations))

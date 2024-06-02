@@ -147,3 +147,32 @@ class SprBells(db.Model, SerializerMixin):
     id = db.Column(db.Integer, primary_key=True)
     order = db.Column(db.Integer, nullable=False)
     name = db.Column(db.String(255), nullable=False)
+
+class TutorsOrder(db.Model, SerializerMixin):
+    __tablename__ = 'tutors_order'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Для какого факультета
+    faculty_id = db.Column(db.Integer, db.ForeignKey("spr_faculty.id_faculty"), nullable=False)
+    # Дата распоряжения
+    date = db.Column(db.DateTime())
+    # Номер распоряжения
+    num_order = db.Column(db.Integer, nullable=False)
+    # Форма обучения
+    spr_form_education_id = db.Column(db.Integer, db.ForeignKey("spr_form_education.id_form"))
+    # На какой год распоряжение
+    year = db.Column(db.Integer, nullable=False)
+    # На какой год распоряжение
+    executor = db.Column(db.String(255), nullable=False)
+    # На какой год распоряжение
+    signer = db.Column(db.String(255), nullable=False)
+
+    form_education = db.relationship('SprFormEducation')
+
+
+""" class Tutors(db.Model, SerializerMixin):
+    __tablename__ = 'tutors_order'
+
+    id = db.Column(db.Integer, primary_key=True)
+    lk_id = db.Column(db.Integer) """
