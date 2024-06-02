@@ -111,7 +111,7 @@ def get_lessons_as_xlsx():
     file.seek(0)
     return send_file(
         file,
-        download_name='Report.xlsx',
+        download_name=f'{SprDiscipline.query.get(id_discipline).title}.xlsx',
         as_attachment=True,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
@@ -756,8 +756,8 @@ def getAup():
 
     res = None
     if search:
-        found = AupInfo.query.filter(AupInfo.file.like("%" + search + "%")).all()
-        res = found.as_dict(rules=['-aup_data'])
+        found: list[AupInfo] = AupInfo.query.filter(AupInfo.file.like("%" + search + "%")).all()
+        res = [aup.to_dict(rules=['-aup_data']) for aup in found]
     else:
         found: AupInfo = AupInfo.query.filter_by(num_aup=num_aup).first()
         res = {

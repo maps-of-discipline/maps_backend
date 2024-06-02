@@ -16,7 +16,8 @@ def create_excel_lessons_report(topics: list[Topics]) -> BytesIO:
     bells = {bell.id: bell.name for bell in SprBells.query.all()}
     type_controls = {type_.id: type_.shortname for type_ in D_ControlType.query.all()}
 
-    worksheet.write_row(0, 0, ['Место', 'Дата', 'Время', 'Вид', 'Глава', 'Тема'])
+    worksheet.write_row(0, 0,
+                        ['Место', 'Дата', 'Время', 'Вид', 'Глава', 'Тема', 'Загрузка', 'задания', 'Срок выполнения', 'Примечание', ])
 
     for i, topic in enumerate(topics, 1):
         worksheet.write(i, 0, places.get(topic.spr_place_id))
@@ -31,7 +32,6 @@ def create_excel_lessons_report(topics: list[Topics]) -> BytesIO:
         worksheet.write_url(i, 7, url=topic.completed_task_link, string=topic.completed_task_link_name)
 
         worksheet.write(i, 8, str(topic.date_task_finish or ""))
-        print(str(topic.date))
 
         worksheet.write(i, 9, topic.note)
 
