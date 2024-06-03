@@ -199,7 +199,7 @@ def editLesson():
         grade_column = GradeColumn.query.filter_by(topic_id=topic.id, discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id).first()
 
         if not grade_column:
-            new_grade_column = GradeColumn(name=topic.task_link_name, discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id, topic_id=topic.id)
+            new_grade_column = GradeColumn(discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id, topic_id=topic.id)
             db.session.add(new_grade_column)
     if topic.date:
         types = ['activity', 'attendance']
@@ -209,7 +209,7 @@ def editLesson():
 
             grade_column = GradeColumn.query.filter_by(topic_id=topic.id, discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id).first()
             if not grade_column:
-                new_grade_column = GradeColumn(name=topic.task_link_name, discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id, topic_id=topic.id)
+                new_grade_column = GradeColumn(discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id, topic_id=topic.id)
                 db.session.add(new_grade_column)
     db.session.commit()
 
@@ -355,6 +355,9 @@ def updateGrade():
     grade = Grade.query.filter_by(student_id=data['student_id'],
                                   grade_column_id=data['grade_column_id']).first()
 
+    if data['value'] == None:
+        data['value'] = 0
+
     if not grade:
         grade = Grade(value=data['value'], student_id=data['student_id'],
                       grade_column_id=data['grade_column_id'])
@@ -369,6 +372,41 @@ def updateGrade():
     return jsonify(res)
 
 ###
+
+### Столбцы оценок
+
+@cabinet.route('/grade-column-visible', methods=['PATCH'])
+@login_required(request)
+@approved_required(request)
+def updateGradeColumn():
+    data = request.get_json()
+
+    id = data['id']
+    visible_column_ids = data['visible']
+    hidden_column_ids = data['hidden']
+
+    visible_columns = GradeColumn.query.filter(GradeColumn.id.in_(visible_column_ids)).all()
+    hidden_columns = GradeColumn.query.filter(GradeColumn.id.in_(hidden_column_ids)).all()
+
+    
+    for col in visible_columns:
+        col.hidden = False
+
+    for col in hidden_columns:
+        col.hidden = True
+
+    db.session.bulk_save_objects(visible_columns)
+    db.session.bulk_save_objects(hidden_columns)
+    db.session.commit()
+
+    res = []
+    for col in visible_columns:
+        res.append(col.to_dict(rules=['-grades']))
+
+    for col in hidden_columns:
+        res.append(col.to_dict(rules=['-grades']))
+
+    return jsonify(res)
 
 ### Виды оценивания
 
@@ -762,7 +800,14 @@ def getAup():
     res = None
     if search:
         found: list[AupInfo] = AupInfo.query.filter(AupInfo.file.like("%" + search + "%")).all()
-        res = [aup.to_dict(rules=['-aup_data']) for aup in found]
+        res = []
+        for aup in found:
+            res.append({
+                'num_aup': aup.num_aup,
+                'id': aup.id_aup,
+                'title': aup.name_op.name_spec,
+                'year_beg': aup.year_beg,
+            })
     else:
         found: AupInfo = AupInfo.query.filter_by(num_aup=num_aup).first()
         res = {
