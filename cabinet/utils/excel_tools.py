@@ -91,9 +91,12 @@ def create_performance_report(discipline_table: DisciplineTable, study_group: St
         temp_format_header.set_bold(True)
 
         columns: list[GradeColumn] = list(filter(
-            lambda el: el.grade_type.type == type_ and not el.grade_type.archived,
+            lambda el: el.grade_type.type == type_ and not el.grade_type.archived and not el.hidden,
             discipline_table.grade_columns
         ))
+
+        if not len(columns):
+            continue
 
         columns.sort(key=lambda el: el.topic.date)
         num = 0
