@@ -40,6 +40,7 @@ class SprFaculty(db.Model, SerializationMixin):
     admin_only = db.Column(db.Boolean, default=0)
     branch = db.relationship("SprBranch")
 
+
     aup_infos = db.relationship("AupInfo", back_populates="faculty", lazy="joined")
 
     def __repr__(self):
@@ -135,6 +136,7 @@ class AupInfo(db.Model, SerializationMixin):
     rop = db.relationship("SprRop")
     department = db.relationship("Department")
     aup_data = db.relationship("AupData", back_populates="aup")
+    spec = db.relationship("NameOP")
 
     def __repr__(self):
         return "<№ AUP %r>" % self.num_aup

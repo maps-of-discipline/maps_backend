@@ -3,12 +3,13 @@ import json
 import os
 from itertools import chain
 
+import xlsxwriter
 from flask import Blueprint, make_response, jsonify, request, send_file
 
 from auth.logic import login_required, aup_require, verify_jwt_token
 from auth.models import Mode
 from maps.logic.excel_check import excel_check
-from maps.logic.print_excel import saveMap
+from maps.logic.print_excel import saveMap, get_aup_data_excel
 from maps.logic.save_into_bd import SaveCard, update_fields, \
     create_changes_revision
 from maps.logic.take_from_bd import (control_type_r,
@@ -432,3 +433,18 @@ def aup_crud(aup: str | None):
             return jsonify({'status': 'failed', 'aup_num': aup.num_aup}), 403
 
         return jsonify({'status': 'ok', 'aup_num': aup.num_aup}), 200
+
+
+
+@maps.route("/exprort-aup/<string:aup>", methods=['GET'])
+def export_aup_excel(aup: str):
+    file, filename = get_aup_data_excel(aup)
+    file.seek(0)
+
+    return send_file(
+        file,
+        download_name=f'{filename}.xlsx',
+        as_attachment=True,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+

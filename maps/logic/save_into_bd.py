@@ -44,7 +44,7 @@ def set_year_begin_end(duration):
 
 
 def check_actual(year_end):
-    year_now = datetime.date.today().year
+    year_now = datetime.today().year
     if year_now > int(year_end):
         return False
     else:
