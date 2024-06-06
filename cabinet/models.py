@@ -58,6 +58,7 @@ class StudyGroups(db.Model, SerializerMixin):
     id: int = db.Column(db.Integer(), primary_key=True)
     title: str = db.Column(db.String(255), nullable=False)
     num_aup: str = db.Column(db.String(255), nullable=False)
+    tutor_id: int = db.Column(db.Integer, db.ForeignKey('tutors.id'), nullable=True)
 
     students = db.relationship("Students")
 
@@ -87,6 +88,13 @@ class Students(db.Model, SerializerMixin):
     def __repr__(self):
         return F"<Student {self.id} {self.name}>"
 
+class Tutors(db.Model, SerializerMixin):
+    __tablename__ = 'tutors'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(400), nullable=False)
+    lk_id = db.Column(db.Integer)
+
 # Таблица с оценками
 class GradeTable(db.Model, SerializerMixin):
     __tablename__ = 'grade_table'
@@ -98,8 +106,6 @@ class GradeTable(db.Model, SerializerMixin):
     id_unique_discipline: int = db.Column(db.Integer(), db.ForeignKey('spr_discipline.id'), nullable=False)
     semester: int = db.Column(db.Integer(), nullable=False)
     study_group_id: int = db.Column(db.Integer(), db.ForeignKey('study_group.id'), nullable=False)
-
-
 
 # Оценки
 class Grade(db.Model, SerializerMixin):
