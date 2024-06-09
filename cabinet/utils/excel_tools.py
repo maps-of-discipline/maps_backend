@@ -44,7 +44,8 @@ def create_excel_lessons_report(topics: list[Topics]) -> BytesIO:
 
 
 def create_performance_report(discipline_table: DisciplineTable, study_group: StudyGroups):
-    performance_types = [grade_type.type for grade_type in discipline_table.grade_types]
+    performance_types = [grade_type.name for grade_type in discipline_table.grade_types]
+    performance_types.sort()
     type_colors = cycle(['#90b3e7', '#c895f8', '#7cbbb4', '#75cada', '#db8480'])
     value_begin_row_index = 3
 
@@ -83,15 +84,15 @@ def create_performance_report(discipline_table: DisciplineTable, study_group: St
     col_num = 2
     merge_range_args = []
 
-    for type_, type_color in zip(performance_types, cycle(type_colors)):
+    for type_name, type_color in zip(performance_types, cycle(type_colors)):
         temp_format_header = workbook.add_format()
         temp_format_header.set_align("left")
         temp_format_header.set_border(1)
-        temp_format_header.set_bg_color(type_color)
+        
         temp_format_header.set_bold(True)
 
         columns: list[GradeColumn] = list(filter(
-            lambda el: el.grade_type.type == type_ and not el.grade_type.archived and not el.hidden,
+            lambda el: el.grade_type.name == type_name and not el.grade_type.archived and not el.hidden,
             discipline_table.grade_columns
         ))
 
@@ -101,12 +102,15 @@ def create_performance_report(discipline_table: DisciplineTable, study_group: St
         columns.sort(key=lambda el: el.topic.date)
         num = 0
 
+        temp_format_header.set_bg_color(columns[0].grade_type.color if columns[0].grade_type.color else '#ffffff')
+
+
         merge_range_args.append((value_begin_row_index - 3, col_num, value_begin_row_index - 3, col_num + len(columns),
                                  columns[0].grade_type.name, temp_format_header))
         first_col = col_num
         for col in columns:
             num += 1
-            col_headers = [num, str(col.topic.date.strftime(r'%d.%m'))] if type_ != 'tasks' else [num,
+            col_headers = [num, str(col.topic.date.strftime(r'%d.%m'))] if col.grade_type.type != 'tasks' else [num,
                                                                                                   col.topic.task_link_name]
 
             grades = {grade.student_id: grade.value for grade in col.grades}

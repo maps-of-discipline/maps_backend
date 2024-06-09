@@ -443,11 +443,29 @@ def getGradeType():
 def createGradeType():
     data = request.get_json()
 
-    grade_type = GradeType(name=data['name'], discipline_table_id=data['table_id'], type="custom")
+    grade_type = GradeType(name=data['name'], discipline_table_id=data['table_id'], type=data['type'], is_custom=True)
     db.session.add(grade_type)
     db.session.commit()
+    
+    discipline_table = DisciplineTable.query.filter_by(id=data['table_id']).first()
+    
+    need_add_cols = []
+    if grade_type.type == 'attendance':
+            for topic in discipline_table.topics:
+                if topic.date:
+                    need_add_cols.append(GradeColumn(discipline_table_id=data['table_id'], grade_type_id=grade_type.id, topic_id=topic.id))
 
-    return jsonify(serialize(grade_type))
+    print(need_add_cols)
+
+    db.session.bulk_save_objects(need_add_cols)
+    db.session.commit()
+
+    cols = GradeColumn.query.filter_by(discipline_table_id=data['table_id'], grade_type_id=grade_type.id).all()
+
+    return jsonify({
+        'grade_type': serialize(grade_type),
+        'columns': serialize(cols),
+    })
 
 # Редактирование видов оценивания
 @cabinet.route('/grade-type', methods=['PATCH'])
@@ -470,6 +488,19 @@ def updateGradeType():
     res = serialize(grade_type)
 
     return jsonify(res)
+
+@cabinet.route('/grade-type', methods=['DELETE'])
+@login_required(request)
+@approved_required(request)
+def deleteGradeType():
+    id = request.args.get('id')
+
+    grade_type = GradeType.query.filter_by(id=id).first()
+
+    db.session.delete(grade_type)
+    db.session.commit()
+
+    return jsonify(1)
 
 ###
 

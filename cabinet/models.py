@@ -120,7 +120,7 @@ class Grade(db.Model, SerializerMixin):
     id = db.Column(db.Integer, primary_key=True)
     value = db.Column(db.Integer)
     student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
-    grade_column_id = db.Column(db.Integer, db.ForeignKey("grade_column.id"), nullable=False)
+    grade_column_id = db.Column(db.Integer, db.ForeignKey("grade_column.id", ondelete="CASCADE"), nullable=False)
 
     grade_column = db.relationship('GradeColumn', back_populates='grades', lazy='joined')
     student = db.relationship('Students', back_populates='grades', lazy='joined')
@@ -134,16 +134,13 @@ class GradeColumn(db.Model, SerializerMixin):
 
     id = db.Column(db.Integer, primary_key=True)
     discipline_table_id = db.Column(db.Integer, db.ForeignKey("discipline_table.id"), nullable=False)
-    grade_type_id = db.Column(db.Integer, db.ForeignKey("grade_type.id"), nullable=False)
+    grade_type_id = db.Column(db.Integer, db.ForeignKey("grade_type.id", ondelete="CASCADE"), nullable=False)
     topic_id = db.Column(db.Integer, db.ForeignKey("topic.id"), nullable=True)
     hidden = db.Column(db.Boolean, nullable=False, default=False)
 
     grade_type = db.relationship('GradeType')
     topic = db.relationship('Topics')
     grades = db.relationship("Grade", back_populates="grade_column")
-
-    def __repr__(self):
-        return F"<Grade Column '{self.grade_type.name}'"
 
 # Виды оценивания (посещаемость, активность, задания)
 class GradeType(db.Model, SerializerMixin):
@@ -157,7 +154,8 @@ class GradeType(db.Model, SerializerMixin):
     archived = db.Column(db.Boolean, default=False)
     binary = db.Column(db.Boolean, default=False)
     weight_grade = db.Column(db.Integer, default=1)
-    color = db.Column(db.String(255), nullable=False)
+    color = db.Column(db.String(255), nullable=True)
+    is_custom = db.Column(db.Boolean, default=False)
 
     discipline_table_id = db.Column(db.Integer, db.ForeignKey("discipline_table.id"), nullable=False)
 
