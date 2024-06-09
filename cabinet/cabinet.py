@@ -450,10 +450,11 @@ def createGradeType():
     discipline_table = DisciplineTable.query.filter_by(id=data['table_id']).first()
     
     need_add_cols = []
-    if grade_type.type == 'attendance':
-            for topic in discipline_table.topics:
-                if topic.date:
-                    need_add_cols.append(GradeColumn(discipline_table_id=data['table_id'], grade_type_id=grade_type.id, topic_id=topic.id))
+    for topic in discipline_table.topics:
+        if grade_type.type == 'attendance' and topic.date:
+            need_add_cols.append(GradeColumn(discipline_table_id=data['table_id'], grade_type_id=grade_type.id, topic_id=topic.id))
+        if grade_type.type == 'tasks' and topic.task_link_name:
+            need_add_cols.append(GradeColumn(discipline_table_id=data['table_id'], grade_type_id=grade_type.id, topic_id=topic.id))
 
     print(need_add_cols)
 
