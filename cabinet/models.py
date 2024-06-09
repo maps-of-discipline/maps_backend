@@ -157,6 +157,7 @@ class GradeType(db.Model, SerializerMixin):
     archived = db.Column(db.Boolean, default=False)
     binary = db.Column(db.Boolean, default=False)
     weight_grade = db.Column(db.Integer, default=1)
+    color = db.Column(db.String(255), nullable=False)
 
     discipline_table_id = db.Column(db.Integer, db.ForeignKey("discipline_table.id"), nullable=False)
 

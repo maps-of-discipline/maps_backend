@@ -33,9 +33,9 @@ def generate_discipline_table(num_aup, id_discipline, group_num, semester, row_c
 
     need_add_grade_types = []
 
-    need_add_grade_types.append(GradeType(name='Посещение', type='attendance', discipline_table_id=discipline_table.id))
-    need_add_grade_types.append(GradeType(name='Задания', type='tasks', discipline_table_id=discipline_table.id))
-    need_add_grade_types.append(GradeType(name='Активность', type='activity', discipline_table_id=discipline_table.id))
+    need_add_grade_types.append(GradeType(name='Посещение', type='attendance', discipline_table_id=discipline_table.id, color='#90b3e7'))
+    need_add_grade_types.append(GradeType(name='Задания', type='tasks', discipline_table_id=discipline_table.id, color='#c895f8'))
+    need_add_grade_types.append(GradeType(name='Активность', type='activity', discipline_table_id=discipline_table.id, color='#7cbbb4'))
 
     db.session.bulk_save_objects(need_add_grade_types)
     db.session.commit()
