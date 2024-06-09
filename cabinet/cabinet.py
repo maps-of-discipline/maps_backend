@@ -8,7 +8,7 @@ from auth.models import Users
 from cabinet.utils.excel_tools import create_excel_lessons_report, create_performance_report
 from maps.logic.tools import timeit, LineTimer
 from maps.models import D_ControlType, SprDiscipline, db, AupData, AupInfo, SprFaculty, Department, Groups, SprFormEducation
-from cabinet.models import DisciplineTable, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells, SprPlace, TutorsOrder
+from cabinet.models import DisciplineTable, StudyGroups, Topics, Students, Grade, GradeTable, GradeType, GradeColumn, SprBells, SprPlace, TutorsOrder, TutorsOrderRow, Tutors
 
 from flask import Blueprint, make_response, jsonify, request, send_from_directory, send_file
 from cabinet.utils.serialize import serialize
@@ -17,6 +17,8 @@ import datetime
 from dateutil.parser import parse
 from docxtpl import DocxTemplate
 import functools 
+import uuid
+
 
 from openpyxl import load_workbook
 import os
@@ -938,20 +940,43 @@ def getDepartments():
 @login_required(request)
 @approved_required(request)
 def getStaff():
-    division = request.args.get('division')
+    name_department = request.args.get('division')
+
+    department = Department.query.filter_by(name_department=name_department).first()
+    
+    print(department, name_department)
+
 
     from app import app
     payload = {
         'getStaff': '',
-        'division': division,
+        'division': name_department,
         'token': app.config.get('LK_TOKEN')
     }
 
     res = requests.get(app.config.get('LK_URL'), params=payload)
     data = res.json()
-    staff = data['items']
+    staffs = data['items']
 
-    return jsonify(staff)
+    has_tutors_map_lk_ids = [tutor.lk_id for tutor in Tutors.query.filter_by(id_department=department.id_department).all()]
+
+    need_add = []
+    for staff in staffs:
+        converted_staff = Tutors(
+            lk_id=staff['id'],
+            name=staff['fio'],
+            id_department=department.id_department
+        )
+
+        if (int(converted_staff.lk_id) not in has_tutors_map_lk_ids):
+            need_add.append(converted_staff)
+    
+    db.session.bulk_save_objects(need_add)
+    db.session.commit()
+
+    tutors = Tutors.query.filter_by(id_department=department.id_department).all()
+
+    return jsonify(serialize(tutors))
 
 def getDisciplinesByTeacher(fullname):
     payload = {
@@ -993,7 +1018,7 @@ def get_discipline_by_aup():
 
     return jsonify(res)
 
-# Получение списка сотрудников
+# Получение распоряжения
 @cabinet.route('/tutor-orders', methods=['GET'])
 @login_required(request)
 @approved_required(request)
@@ -1001,10 +1026,44 @@ def tutorOrders():
     faculty_id = request.args.get('id')
 
     tutor_orders = TutorsOrder.query.filter_by(faculty_id=faculty_id).all()
+    
+    res = []
+    for tutor_order in tutor_orders:
+        tutor_order_rows = TutorsOrderRow.query.filter_by(tutors_order_id=tutor_order.id).all()
+        tutor_order_rows = [tutor_order_row.to_dict(rules=['-department.tbl_aups', '-department.faculty']) for tutor_order_row in tutor_order_rows]
 
-    return jsonify(serialize(tutor_orders))
+        exist_department_tutors= []
+        grouped_tutor_order_rows = {}
+        for row in tutor_order_rows:
+            if row['tutor']['lk_id'] in exist_department_tutors:
+                continue
 
-# Получение списка сотрудников
+            if row['department_id'] not in grouped_tutor_order_rows:
+                grouped_tutor_order_rows[row['department_id']] = {
+                    'id_department': row['department_id'],
+                    'name_department': row['department']['name_department'],
+                    'rows': []
+                }
+
+            tutor_rows = TutorsOrderRow.query.filter_by(tutor_id=row['tutor']['id'], department_id=row['department']['id_department']).all()
+            study_groups = [tr.study_group.to_dict() for tr in tutor_rows]
+
+            grouped_tutor_order_rows[row['department_id']]['rows'].append({
+                'id': uuid.uuid4(),
+                'tutor': row['tutor'],
+                'study_groups': study_groups,
+            })
+
+            exist_department_tutors.append(row['tutor']['lk_id'])
+
+        res.append({
+            'meta': serialize(tutor_order),
+            'body': grouped_tutor_order_rows,
+        })
+
+    return jsonify(res)
+
+# Редактирование распоряжение тьюторов
 @cabinet.route('/tutor-order', methods=['PATCH'])
 @login_required(request)
 @approved_required(request)
@@ -1016,6 +1075,51 @@ def editTutorOrder():
     meta = data['meta']
     body = data['body']
 
+    
+    """ tutors = []
+    tutors_ids = []
+    groups_by_lk_id = {}
+    for department in body:
+        rows = department['rows']
+
+        tutors_department = []
+        tutors_department_ids = []
+        for row in rows:
+            tutor = Tutors(
+                name= row['tutor']['fio'], 
+                post=row['tutor']['post'], 
+                id_department=department['id_department'], 
+                lk_id=int(row['tutor']['id'])
+            )
+
+            tutors_department.append(tutor)
+            tutors_department_ids.append(tutor.lk_id)
+            groups_by_lk_id[tutor.lk_id] = row['study_groups']
+
+        tutors.extend(tutors_department)
+        tutors_ids.extend(tutors_department_ids)
+
+
+    found_tutors = Tutors.query.filter(Tutors.lk_id.in_(tutors_ids)).all()
+    exist_tutors_ids = [ exist_tutor.lk_id for exist_tutor in found_tutors ]
+
+    need_add_tutors = []
+    for tutor in tutors:
+        if (tutor.lk_id in exist_tutors_ids):
+            pass
+        else:
+            need_add_tutors.append(tutor)
+
+
+    db.session.bulk_save_objects(need_add_tutors)
+    db.session.commit() 
+
+    exist_tutors = Tutors.query.filter(Tutors.lk_id.in_(tutors_ids)).all()
+
+    for tutor in exist_tutors:
+        study_group_ids = [ group['id'] for group in groups_by_lk_id[tutor.lk_id] ]
+        StudyGroups.query.filter(StudyGroups.id.in_(study_group_ids)).update({ StudyGroups.tutor_id: tutor.id }) """
+
     tutor_order = TutorsOrder.query.filter_by(id=id_order).first()
 
     tutor_order.date = parse(meta['date']).astimezone(datetime.timezone(datetime.timedelta(hours=3)))
@@ -1024,13 +1128,55 @@ def editTutorOrder():
     tutor_order.executor = meta['executor']
     tutor_order.signer = meta['signer']
 
+    tutors_order_rows = TutorsOrderRow.query.filter_by(tutors_order_id=id_order).all()
+
+    TutorsOrderRow.query.filter_by(tutors_order_id=tutor_order.id).delete(synchronize_session=False)
+
+    new_tutors_order_rows = []
+    for department in body:
+        for row in department['rows']:
+            for study_group in row['study_groups']:
+                new_tutors_order_rows.append(TutorsOrderRow(
+                    tutors_order_id=tutor_order.id,
+                    department_id=department['id_department'],
+                    study_group_id=study_group['id'],
+                    tutor_id=row['tutor']['id'],
+                ))
+
+    print(new_tutors_order_rows)
+    db.session.bulk_save_objects(new_tutors_order_rows)
+
+
+    """tutors_order_rows_map = [ row.id for row in tutors_order_rows ]
+
+     need_add_row = []
+    for department in body:
+        rows = department['rows']
+
+        for row in rows:
+            if row['id'] not in tutors_order_rows_map:
+                tutor = Tutors.query.filter_by(lk_id=row['tutor']['id']).all()
+
+                need_add_row.append(TutorsOrderRow(
+                    tutors_order_id=tutor_order.id,
+                    department_id=department['id_department'],
+                    tutor_id=tutor.id,
+                )) """
+
+
     db.session.add(tutor_order)
     db.session.commit()
 
-    return jsonify(1)
+    
+    res = {
+        'meta': serialize(tutor_order),
+        'body': [],
+    }
+
+    return jsonify(res)
 
 
-# Получение списка сотрудников
+# Получение формы обучения
 @cabinet.route('/form-of-educations', methods=['GET'])
 @login_required(request)
 @approved_required(request)

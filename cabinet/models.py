@@ -93,7 +93,13 @@ class Tutors(db.Model, SerializerMixin):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(400), nullable=False)
-    lk_id = db.Column(db.Integer)
+    lk_id = db.Column(db.Integer, nullable=False)
+    post = db.Column(db.String(400))
+
+    id_department = db.Column(db.Integer, db.ForeignKey('tbl_department.id_department'), nullable=False)
+
+    def __repr__(self):
+        return F"<Tutors {self.lk_id} {self.name}>"
 
 # Таблица с оценками
 class GradeTable(db.Model, SerializerMixin):
@@ -186,6 +192,19 @@ class TutorsOrder(db.Model, SerializerMixin):
 
     form_education = db.relationship('SprFormEducation')
 
+class TutorsOrderRow(db.Model, SerializerMixin):
+    __tablename__ = 'tutors_order_row'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    tutors_order_id = db.Column(db.Integer, db.ForeignKey('tutors_order.id'), nullable=False)
+    department_id = db.Column(db.Integer, db.ForeignKey('tbl_department.id_department'), nullable=False)
+    study_group_id = db.Column(db.Integer(), db.ForeignKey('study_group.id'), nullable=False)
+    tutor_id = db.Column(db.Integer, db.ForeignKey('tutors.id'))
+
+    tutor = db.relationship('Tutors')
+    department = db.relationship('Department')
+    study_group = db.relationship('StudyGroups')
 
 """ class Tutors(db.Model, SerializerMixin):
     __tablename__ = 'tutors_order'
