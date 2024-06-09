@@ -197,23 +197,28 @@ def editLesson():
     db.session.commit()
 
     if len(data['lesson']['task_link_name']) != 0:
-        grade_type = GradeType.query.filter_by(discipline_table_id=topic.discipline_table.id, type='tasks').first()
+        grade_types = GradeType.query.filter_by(discipline_table_id=topic.discipline_table.id, type='tasks').all()
 
-        grade_column = GradeColumn.query.filter_by(topic_id=topic.id, discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id).first()
+        for grade_type in grade_types:
+            grade_column = GradeColumn.query.filter_by(topic_id=topic.id, discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id).first()
 
-        if not grade_column:
-            new_grade_column = GradeColumn(discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id, topic_id=topic.id)
-            db.session.add(new_grade_column)
+            if not grade_column:
+                new_grade_column = GradeColumn(discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id, topic_id=topic.id)
+                db.session.add(new_grade_column)
+    
     if topic.date:
         types = ['activity', 'attendance']
 
         for type in types: 
-            grade_type = GradeType.query.filter_by(discipline_table_id=topic.discipline_table.id, type=type).first()
+            grade_types = GradeType.query.filter_by(discipline_table_id=topic.discipline_table.id, type=type).all()
 
-            grade_column = GradeColumn.query.filter_by(topic_id=topic.id, discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id).first()
-            if not grade_column:
-                new_grade_column = GradeColumn(discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id, topic_id=topic.id)
-                db.session.add(new_grade_column)
+            for grade_type in grade_types:
+                grade_column = GradeColumn.query.filter_by(topic_id=topic.id, discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id).first()
+                
+                if not grade_column:
+                    new_grade_column = GradeColumn(discipline_table_id=topic.discipline_table.id, grade_type_id=grade_type.id, topic_id=topic.id)
+                    db.session.add(new_grade_column)
+    
     db.session.commit()
 
     res = serialize(topic)
