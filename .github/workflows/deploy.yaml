@@ -20,6 +20,10 @@ jobs:
   deploy-dev:
     if: github.ref_name == 'dev'
     runs-on: self-hosted
+
+    env:
+      TAG: localhost:5050/maps-back-dev-build:latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -29,11 +33,11 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          docker build --no-cache -t localhost:5050/dev-back-build:latest .
+          docker build --no-cache -t $TAG .
 
       - name: Push Docker Image to Local Registry
         run: |
-          docker push localhost:5050/back-dev:latest
+          docker push $TAG
 
       - name: Restart Services with Docker Compose
         working-directory: /opt/registry-apps
