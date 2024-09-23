@@ -33,7 +33,7 @@ jobs:
 
       - name: Push Docker Image to Local Registry
         run: |
-          docker push localhost:5050/test-build:latest
+          docker push localhost:5050/back-dev:latest
 
       - name: Restart Services with Docker Compose
         working-directory: /opt/registry-apps
