@@ -12,17 +12,33 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v2
-      - name: Copy repo to production directory 
+      - name: Copy repo to production directory
         run: cp -r ./* /opt/apps_docker/apps/prod/back_prod
       - name: Rebuild docker-compose
-        run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-prod 
+        run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-prod
 
   deploy-dev:
     if: github.ref_name == 'dev'
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v2
-      - name: Copy repo to development directory 
-        run: cp -r ./* /opt/apps_docker/apps/dev/back_dev
-      - name: Rebuild docker-compose
-        run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-dev
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Docker Image
+        run: |
+          docker build --no-cache -t localhost:5050/dev-back-build:latest .
+
+      - name: Push Docker Image to Local Registry
+        run: |
+          docker push localhost:5050/test-build:latest
+
+      - name: Restart Services with Docker Compose
+        working-directory: /opt/registry-apps
+        run: |
+          docker-compose -f docker-compose.maps.dev.yml down
+          docker-compose -f docker-compose.maps.dev.yml up -d
+
+
