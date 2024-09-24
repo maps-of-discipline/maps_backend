@@ -1,24 +1,12 @@
-name: Deploy
+name: Deploy development
 
 on:
   push:
     branches:
-      - main
       - dev
 
 jobs:
-  deploy-prod:
-    if: github.ref_name == 'main'
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@v2
-      - name: Copy repo to production directory
-        run: cp -r ./* /opt/apps_docker/apps/prod/back_prod
-      - name: Rebuild docker-compose
-        run: docker-compose -f /opt/apps_docker/docker-compose.yml up -d --build back-prod
-
   deploy-dev:
-    if: github.ref_name == 'dev'
     runs-on: self-hosted
 
     env:
