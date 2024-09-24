@@ -1,0 +1,14 @@
+FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.txt requirements.txt
+RUN pip install --no-cache-dir --upgrade -r requirements.txt
+COPY . .
+CMD ["gunicorn", \
+        "app:app", \
+        "--preload", \
+        "--bind", "0.0.0.0:5000", \
+        "--workers", "4", \
+        "--log-file", "/app/logs/gunicorn.log", \
+        "--access-logfile", "/app/logs/access.log", \
+        "--error-logfile", "/app/logs/error.log" \
+]
