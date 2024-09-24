@@ -28,4 +28,4 @@ jobs:
         working-directory: /opt/registry-apps/ap
         run: |
           docker-compose down
-          docker-compose -d
+          docker-compose up -d
