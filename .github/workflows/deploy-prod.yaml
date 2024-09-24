@@ -28,8 +28,8 @@ jobs:
           docker push $TAG
 
       - name: Restart Services with Docker Compose
-        working-directory: /opt/registry-apps
+        working-directory: /opt/registry-apps/maps/prod
         run: |
-          docker-compose -f docker-compose.maps.prod.yml down
-          docker-compose -f docker-compose.maps.prod.yml up -d
+          docker-compose down
+          docker-compose -d
 
