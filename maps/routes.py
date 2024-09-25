@@ -374,6 +374,7 @@ def getControlTypes():
 
 @maps.route("/test")
 def test():
+    a = 1 / 0
     return jsonify(), 200
 
 
