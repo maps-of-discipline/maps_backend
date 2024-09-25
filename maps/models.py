@@ -131,7 +131,6 @@ class AupInfo(db.Model, SerializationMixin):
 
     degree = db.relationship("SprDegreeEducation")
     form = db.relationship("SprFormEducation")
-    name_op = db.relationship("NameOP")
     faculty = db.relationship("SprFaculty")
     rop = db.relationship("SprRop")
     department = db.relationship("Department")

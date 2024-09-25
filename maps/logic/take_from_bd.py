@@ -33,8 +33,8 @@ def create_json(aup: str) -> dict | None:
         return None
 
     result = {
-        "header": [aup_info.name_op.okco.program_code + '.' + aup_info.name_op.num_profile,
-                   aup_info.name_op.okco.name_okco, aup_info.name_op.name_spec, aup_info.faculty.name_faculty],
+        "header": [aup_info.spec.okco.program_code + '.' + aup_info.spec.num_profile,
+                   aup_info.spec.okco.name_okco, aup_info.spec.name_spec, aup_info.faculty.name_faculty],
         "year": aup_info.year_beg,
     }
 

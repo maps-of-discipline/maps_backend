@@ -40,7 +40,8 @@ class Users(db.Model, SerializationMixin):
 
     roles = db.relationship(
         "Roles",
-        secondary=user_roles_table
+        secondary=user_roles_table,
+        back_populates='users'
     )
 
     faculties = db.Relationship(
@@ -94,7 +95,7 @@ class Roles(db.Model, SerializationMixin):
         secondary=permissions_table,
     )
 
-    users = db.relationship("Users", secondary=user_roles_table)
+    users = db.relationship("Users", secondary=user_roles_table, back_populates='roles')
 
     def __repr__(self):
         return "<Role %r>" % self.name_role
