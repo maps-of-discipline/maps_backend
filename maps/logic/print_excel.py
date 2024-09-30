@@ -435,7 +435,7 @@ def get_aup_data_excel(aup: str) -> tuple[io.BytesIO, str]:
             el.part.title,
             el.module.title,
             el.type_record.title,
-            el.discipline,
+            el.discipline.title,
             periods[el.id_period],
             el.type_control.title,
             el.amount / 100,

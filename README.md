@@ -25,4 +25,4 @@
 
 `pip install -r requirements.txt`
 
-`flask run --reload`
+`flask run --reload --debug`

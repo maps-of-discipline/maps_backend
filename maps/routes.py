@@ -3,18 +3,15 @@ import json
 import os
 from itertools import chain
 
-import xlsxwriter
 from flask import Blueprint, make_response, jsonify, request, send_file
 
 from auth.logic import login_required, aup_require, verify_jwt_token
 from auth.models import Mode
-from maps.logic.excel_check import excel_check
 from maps.logic.print_excel import saveMap, get_aup_data_excel
-from maps.logic.save_into_bd import SaveCard, update_fields, \
-    create_changes_revision
-from maps.logic.take_from_bd import (control_type_r,
-                                     create_json, getAupData)
-from maps.logic.tools import take_aup_from_excel_file, timeit, getAupInfo
+from maps.logic.save_excel_data import save_excel_files
+from maps.logic.save_into_bd import update_fields, create_changes_revision
+from maps.logic.take_from_bd import control_type_r, create_json
+from maps.logic.tools import timeit
 from maps.logic.upload_xml import create_xml
 from maps.models import *
 
@@ -42,12 +39,14 @@ def save_map(aup):
     aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
     aup_data_id_map = {el.id: el for el in aup_info.aup_data}
 
+    disciplines = {el.title: el.id for el in SprDiscipline.query.all()}
+
     changes = []
     for discipline in data:
         for load in chain(*discipline['type'].values()):
             if "id" not in load:
                 aup_data = AupData()
-                aup_data.discipline = discipline['discipline']
+                aup_data.id_discipline = disciplines[discipline['discipline']]
                 aup_info.aup_data.append(aup_data)
             else:
                 aup_data = aup_data_id_map.pop(load['id'])
@@ -109,42 +108,12 @@ def get_id_edizm():
 
 @maps.route('/upload', methods=["POST"])
 @timeit
-# @login_required(request)
+@login_required(request)
 def upload():
-    files = request.files.getlist("file")
-    result_list = list()
-    for f in files:
-        options_check = json.loads(request.form['options'])
-        print(options_check)
-
-        path = os.path.join(maps.static_folder, 'temp', f.filename)
-        f.save(path)
-        aup = take_aup_from_excel_file(path)
-
-        result = {
-            'aup': aup,
-            'filename': f.filename,
-            'errors': excel_check(path, aup, options_check)
-        }
-
-        result_list.append(result)
-
-        if result['errors']:
-            os.remove(path)
-            continue
-
-        # словарь с содержимым 1 листа
-        aupInfo = getAupInfo(path, f.filename)
-
-        # массив с содержимым 2 листа
-        aupData = getAupData(path)
-
-        SaveCard(db, aupInfo, aupData)
-        f.close()
-
-        os.remove(path)
-
-    return make_response(jsonify(result_list), 200)
+    options = json.loads(request.form['options'])
+    print(options)
+    res = save_excel_files(request.files, options)
+    return jsonify(res), 200
 
 
 @maps.route("/save_excel/<string:aup>", methods=["GET"])
@@ -198,8 +167,8 @@ def get_modules():
 
 
 @maps.route('/add-module', methods=['POST'])
-# @login_required(request)
-# @aup_require(request)
+@login_required(request)
+@aup_require(request)
 def add_module():
     module = request.get_json()
     if not module['name']:
@@ -220,8 +189,8 @@ def add_module():
 
 
 @maps.route('/modules/<int:id>', methods=['PUT', 'DELETE'])
-# @login_required(request)
-# @aup_require(request)
+@login_required(request)
+@aup_require(request)
 def edit_or_delete_module(id: int):
     module = D_Modules.query.get(id)
     if not module:
@@ -372,12 +341,6 @@ def getControlTypes():
     return make_response(jsonify(control_types), 200)
 
 
-@maps.route("/test")
-def test():
-    a = 1 / 0
-    return jsonify(), 200
-
-
 @maps.route("/upload-xml/<string:aup>")
 def upload_xml(aup):
     filename = create_xml(aup)
@@ -436,7 +399,6 @@ def aup_crud(aup: str | None):
         return jsonify({'status': 'ok', 'aup_num': aup.num_aup}), 200
 
 
-
 @maps.route("/exprort-aup/<string:aup>", methods=['GET'])
 def export_aup_excel(aup: str):
     file, filename = get_aup_data_excel(aup)
@@ -448,4 +410,3 @@ def export_aup_excel(aup: str):
         as_attachment=True,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
-

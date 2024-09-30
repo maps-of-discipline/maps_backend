@@ -43,6 +43,7 @@ def create_json(aup: str) -> dict | None:
         el: AupData = loads[0]
         data_element = {
             "id": el.id,
+            "id_discipline": el.id_discipline,
             "discipline": discipline,
             "id_group": el.id_group,
             "id_block": el.id_block,
@@ -54,7 +55,7 @@ def create_json(aup: str) -> dict | None:
             "num_col": id_period - 1,
             "num_row": el.num_row,
             'id_type_record': el.id_type_record,
-            "is_skip": not check_skiplist(el.zet, el.discipline, el.type_record.title, el.block.title),
+            "is_skip": not check_skiplist(el.zet, el.discipline.title, el.type_record.title, el.block.title),
             'type': {
                 'session': [],
                 'value': [],
@@ -143,7 +144,7 @@ def create_json_print(aup_data):
             "id_group": el.id_group,
             "num_col": id_period,
             "num_row": el.num_row,
-            "is_skip": not check_skiplist(el.zet, el.discipline, el.type_record.title, el.block.title),
+            "is_skip": not check_skiplist(el.zet, el.discipline.title, el.type_record.title, el.block.title),
             "zet": zet / 36
         }
 
@@ -153,148 +154,6 @@ def create_json_print(aup_data):
         data.append(data_element)
 
     return {"data": data}
-
-
-@timeit
-def getAupData(file):
-    weight = {
-        'Проектная деятельность': 10,
-        'Введение в проектную деятельность': 10,
-        'Управление проектами': 10,
-        'Иностранный язык': 1
-    }
-
-    data = pd.read_excel(file, sheet_name="Лист2")
-    #             Наименование
-    # 0                   Блок.
-    # 1                   Шифр.
-    # 2                  Часть.
-    # 3                 Модуль.
-    # 4             Тип записи.
-    # 5             Дисциплина.
-    # 6        Период контроля.
-    # 7               Нагрузка----
-    # 8             Количество----
-    # 9               Ед. изм.----
-    # 10                   ЗЕТ----
-    # 11              групп ID.
-    # 12    Позиция в семестре.
-    # 13                   Вес.
-
-    allRow = []
-    modules = {}
-    groups = {}
-    for i in range(len(data)):
-        row = []
-        for column in data.columns:
-            row.append(data[column][i])
-
-        row[1] = prepare_shifr(row[1])
-
-        val = row[0]
-        row[0] = blocks.get(val)
-        if row[0] == None:
-            id = addGlobalVariable(db, D_Blocks, val)
-            blocks[val] = id
-            blocks_r[id] = val
-            row[0] = id
-
-        val = row[2]
-        row[2] = chast.get(val)
-        if row[2] == None:
-            id = addGlobalVariable(db, D_Part, val)
-            chast[val] = id
-            chast_r[id] = val
-            row[2] = id
-
-        if pd.isna(row[3]):
-            row[3] = "Без названия"
-        val = row[3]
-        row[3] = modules.get(val)
-        if row[3] == None:
-            id = getModuleId(db, val)
-            modules[val] = id
-            row[3] = id
-
-        if 'Модуль' in val:
-            val = val.strip()
-            val = val[8:-1].strip()
-        row.append(groups.get(val))
-        if row[11] == None:
-            id = getGroupId(db, val)
-            groups[val] = id
-            row[11] = id
-
-        val = row[4]
-        row[4] = type_record.get(val)
-        if row[4] == None:
-            id = addGlobalVariable(db, D_TypeRecord, val)
-            type_record[val] = id
-            type_record_r[id] = val
-            row[4] = id
-
-        val = row[6]
-        row[6] = period.get(val)
-        if row[6] == None:
-            id = addGlobalVariable(db, D_Period, val)
-            period[val] = id
-            period_r[id] = val
-            row[6] = id
-
-        val = row[7]
-        row[7] = control_type.get(val)
-        if row[7] == None:
-            id = addGlobalVariable(db, D_ControlType, val)
-            control_type[val] = id
-            control_type_r[id] = val
-            row[7] = id
-
-        val = row[9]
-        row[9] = ed_izmereniya.get(val)
-        if row[9] == None:
-            id = addGlobalVariable(db, D_EdIzmereniya, val)
-            ed_izmereniya[val] = id
-            ed_izmereniya_r[id] = val
-            row[9] = id
-
-        if pd.isna(row[8]):
-            row[8] = 0
-        else:
-            try:
-                row[8] = int(float(row[8].replace(',', '.')) * 100)
-            except:
-                row[8] = int(float(row[8]) * 100)
-
-        if pd.isna(row[10]):
-            row[10] = 0
-        else:
-            try:
-                row[10] = int(float(row[10].replace(',', '.')) * 100)
-            except:
-                row[10] = int(float(row[10]) * 100)
-
-        row.append("позиция")
-        row.append(weight.get(row[5], 5))
-
-        allRow.append(row)
-
-    allRow.sort(key=lambda x: (x[6], x[13], x[5]))
-
-    counter = 0
-    semestr = allRow[0][6]
-    disc = allRow[0][5]
-    for i in range(len(allRow)):
-        if allRow[i][6] != semestr:
-            semestr = allRow[i][6]
-            counter = -1
-        if allRow[i][5] != disc:
-            disc = allRow[i][5]
-            counter += 1
-
-        allRow[i][12] = counter
-
-    print(allRow)
-    return allRow
 
 
 def elective_disciplines(aup_info: AupInfo) -> dict:
@@ -307,8 +166,8 @@ def elective_disciplines(aup_info: AupInfo) -> dict:
     for el in aup_info.aup_data:
         if el.id_type_record in ELECTIVE_TYPE_ID:
             try:
-                elective_disciplines[el.discipline] += el.amount // 100
+                elective_disciplines[el.discipline.title] += el.amount // 100
             except:
-                elective_disciplines[el.discipline] = el.amount // 100
+                elective_disciplines[el.discipline.title] = el.amount // 100
 
     return elective_disciplines
