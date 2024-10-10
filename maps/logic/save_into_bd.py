@@ -51,6 +51,7 @@ def update_fields(aup_data: AupData, discipline: dict, load: dict) -> list[Chang
         update_field(aup_data, 'id_edizm', 1 if load['amount_type'] == 'hour' else 2),
         update_field(aup_data, 'id_type_control', load['control_type_id']),
         update_field(aup_data, 'id_discipline', discipline['id_discipline']),
+        update_field(aup_data, '_discipline', discipline['discipline']),
         update_field(aup_data, 'zet', zet),
     ]))
 

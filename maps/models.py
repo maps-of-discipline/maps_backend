@@ -66,7 +66,7 @@ class SprOKCO(db.Model):
     program_code = db.Column(db.String(255), primary_key=True)
     name_okco = db.Column(db.String(255), nullable=False)
 
-    profiles = db.relationship('NameOP', lazy='joined')
+    profiles = db.relationship('NameOP', lazy='joined', back_populates='okco')
 
     def __repr__(self):
         return "<OKCO %r>" % self.name_okco
@@ -198,7 +198,7 @@ class NameOP(db.Model):
     num_profile = db.Column(db.String(255), nullable=False)
     name_spec = db.Column(db.String(255), nullable=False)
 
-    okco = db.relationship("SprOKCO")
+    okco = db.relationship("SprOKCO", back_populates='profiles')
 
     def __repr__(self):
         return "<NameOP %r>" % self.id_spec
