@@ -367,9 +367,13 @@ def getControlTypes():
     control_types = []
     for k, v in control_type_r.items():
         is_control = v == 'Экзамен' or v == 'Зачет' or v == 'Дифференцированный зачет'
-        control_types.append({"id": k, "name": v, "is_control": is_control})
+        is_course = v == 'Курсовой проект' or v == 'Курсовая работа'
+        control_types.append({"id": k, "name": v, "is_control": is_control, "is_course": is_course})
 
     return make_response(jsonify(control_types), 200)
+
+
+
 
 
 @maps.route("/test")
