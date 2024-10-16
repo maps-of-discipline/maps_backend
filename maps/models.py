@@ -41,7 +41,7 @@ class SprFaculty(db.Model, SerializationMixin):
     branch = db.relationship("SprBranch")
 
 
-    aup_infos = db.relationship("AupInfo", back_populates="faculty", lazy="joined")
+    aup_infos = db.relationship("AupInfo", back_populates="faculty")
 
     def __repr__(self):
         return "<Faculty %r>" % self.name_faculty
@@ -65,6 +65,8 @@ class SprOKCO(db.Model):
 
     program_code = db.Column(db.String(255), primary_key=True)
     name_okco = db.Column(db.String(255), nullable=False)
+
+    profiles = db.relationship('NameOP', lazy='joined', back_populates='okco')
 
     def __repr__(self):
         return "<OKCO %r>" % self.name_okco
@@ -131,7 +133,6 @@ class AupInfo(db.Model, SerializationMixin):
 
     degree = db.relationship("SprDegreeEducation")
     form = db.relationship("SprFormEducation")
-    name_op = db.relationship("NameOP")
     faculty = db.relationship("SprFaculty")
     rop = db.relationship("SprRop")
     department = db.relationship("Department")
@@ -197,7 +198,7 @@ class NameOP(db.Model):
     num_profile = db.Column(db.String(255), nullable=False)
     name_spec = db.Column(db.String(255), nullable=False)
 
-    okco = db.relationship("SprOKCO")
+    okco = db.relationship("SprOKCO", back_populates='profiles')
 
     def __repr__(self):
         return "<NameOP %r>" % self.id_spec
@@ -362,30 +363,16 @@ class AupData(db.Model):
     )
     zet = db.Column(db.Integer, nullable=False)
 
+    aup = db.relationship("AupInfo", back_populates="aup_data",)
     block = db.relationship("D_Blocks", lazy="joined")
     part = db.relationship("D_Part")
     module = db.relationship("D_Modules", lazy="joined")
     type_record = db.relationship("D_TypeRecord", lazy="joined")
     type_control = db.relationship("D_ControlType", lazy="joined")
-    aup = db.relationship("AupInfo", back_populates="aup_data")
     ed_izmereniya = db.relationship("D_EdIzmereniya", lazy="joined")
     group = db.relationship("Groups", lazy="joined")
+    discipline = db.relationship("SprDiscipline", lazy='joined')
 
-    @property
-    def discipline(self) -> str:
-        return self._discipline
-
-    @discipline.setter
-    def discipline(self, value: str):
-        discipline = SprDiscipline.query.filter_by(title=value).first()
-
-        if not discipline:
-            discipline = SprDiscipline(title=value)
-            db.session.add(discipline)
-            db.session.commit()
-
-        self.id_discipline = discipline.id
-        self._discipline = value
 
     def __repr__(self):
         return "<AupData %r>" % self.aup.num_aup
@@ -399,7 +386,7 @@ class AupData(db.Model):
             id_module=self.id_module,
             id_group=self.id_group,
             id_type_record=self.id_type_record,
-            discipline=self.discipline,
+            id_discipline=self.id_discipline,
             id_period=self.id_period,
             num_row=self.num_row,
             id_type_control=self.id_type_control,
@@ -423,8 +410,7 @@ class Revision(db.Model):
     date = db.Column(db.DateTime)
     isActual = db.Column(db.Boolean)
     user_id = db.Column(db.Integer, db.ForeignKey("tbl_users.id_user"), nullable=False)
-    aup_id = db.Column(db.Integer, db.ForeignKey("tbl_aup.id_aup"), nullable=False)
-
+    aup_id = db.Column(db.Integer, db.ForeignKey("tbl_aup.id_aup", ondelete='CASCADE'), nullable=False)
 
     logs = db.relationship("ChangeLog", lazy="joined")
 

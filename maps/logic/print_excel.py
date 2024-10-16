@@ -169,7 +169,7 @@ def saveMap(aup, static, papper_size, orientation, **kwargs):
     if papper_size == "3":
         ws.page_setup.papperSize = ws.PAPERSIZE_A3
     elif papper_size == "4":
-        ws.page_setup.papperSize = ws.PAPERSIZE_A3
+        ws.page_setup.papperSize = ws.PAPERSIZE_A4
     if orientation == "land":
         ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
     elif orientation == "port":
@@ -265,9 +265,9 @@ def Header(aup):
         Возвращает данные для шапки карты
     """
     year_begin = aup.year_beg
-    program = aup.name_op.program_code + ' ' + aup.name_op.okco.name_okco
+    program = aup.spec.program_code + ' ' + aup.spec.okco.name_okco
     form = aup.form.form + " форма обучения"
-    spec = aup.name_op.name_spec
+    spec = aup.spec.name_spec
     # date_file = aup.file.split(' ')[-4]
     return [program, spec, year_begin, form]
 
@@ -435,7 +435,7 @@ def get_aup_data_excel(aup: str) -> tuple[io.BytesIO, str]:
             el.part.title,
             el.module.title,
             el.type_record.title,
-            el.discipline,
+            el.discipline.title,
             periods[el.id_period],
             el.type_control.title,
             el.amount / 100,
