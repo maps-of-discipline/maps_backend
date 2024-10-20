@@ -410,3 +410,32 @@ def export_aup_excel(aup: str):
         as_attachment=True,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
+
+
+@maps.route('/weeks/<string:aup>/save', methods=["POST"])
+@login_required(request)
+@aup_require(request)
+def save_weeks(aup: str):
+    data: dict = dict(request.get_json())
+    data = {int(k): int(v) for k, v in data.items()}
+
+    aup_info = AupInfo.query.filter_by(num_aup=aup).first()
+    for week in aup_info.weeks:
+        if week.period_id in data:
+            amount = data.pop(week.period_id)
+            if amount != week.amount:
+                week.amount = amount
+                db.session.add(week)
+
+    for period_id, week_amount in data.items():
+        week = Weeks(period_id=period_id, aup_id=aup_info.id_aup, amount=week_amount)
+        db.session.add(week)
+
+    db.session.commit()
+    return {'status': 'ok'}
+
+
+@maps.route('/weeks/<string:aup>')
+def get_weeks(aup: str):
+    aup_info = AupInfo.query.filter_by(num_aup=aup).first()
+    return {el.period_id: el.amount for el in aup_info.weeks}

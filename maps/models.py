@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+
 db = SQLAlchemy()
 
 
@@ -39,7 +40,6 @@ class SprFaculty(db.Model, SerializationMixin):
     dean = db.Column(db.String(255), nullable=True)
     admin_only = db.Column(db.Boolean, default=0)
     branch = db.relationship("SprBranch")
-
 
     aup_infos = db.relationship("AupInfo", back_populates="faculty")
 
@@ -138,6 +138,7 @@ class AupInfo(db.Model, SerializationMixin):
     department = db.relationship("Department")
     aup_data = db.relationship("AupData", back_populates="aup")
     spec = db.relationship("NameOP")
+    weeks = db.relationship("Weeks")
 
     def __repr__(self):
         return "<№ AUP %r>" % self.num_aup
@@ -333,9 +334,9 @@ class AupData(db.Model):
 
     id_part = db.Column(db.Integer, db.ForeignKey("d_part.id", ondelete="SET NULL"))
 
-    id_module = db.Column(db.Integer, db.ForeignKey("d_modules.id", ondelete="SET DEFAULT"), default=1)
+    id_module = db.Column(db.Integer, db.ForeignKey("d_modules.id"), default=1)
 
-    id_group = db.Column(db.Integer, db.ForeignKey("groups.id_group", ondelete='SET DEFAULT'), default=1)
+    id_group = db.Column(db.Integer, db.ForeignKey("groups.id_group"), default=1)
 
     id_type_record = db.Column(
         db.Integer,
@@ -363,7 +364,7 @@ class AupData(db.Model):
     )
     zet = db.Column(db.Integer, nullable=False)
 
-    aup = db.relationship("AupInfo", back_populates="aup_data",)
+    aup = db.relationship("AupInfo", back_populates="aup_data")
     block = db.relationship("D_Blocks", lazy="joined")
     part = db.relationship("D_Part")
     module = db.relationship("D_Modules", lazy="joined")
@@ -372,7 +373,6 @@ class AupData(db.Model):
     ed_izmereniya = db.relationship("D_EdIzmereniya", lazy="joined")
     group = db.relationship("Groups", lazy="joined")
     discipline = db.relationship("SprDiscipline", lazy='joined')
-
 
     def __repr__(self):
         return "<AupData %r>" % self.aup.num_aup
@@ -425,3 +425,11 @@ class ChangeLog(db.Model):
     new = db.Column(db.String(500))
     revision_id = db.Column(db.Integer, db.ForeignKey("Revision.id", ondelete='CASCADE'), nullable=False)
 
+
+class Weeks(db.Model):
+    __tablename__ = "weeks"
+    aup_id = db.Column(db.Integer, db.ForeignKey("tbl_aup.id_aup", ondelete="CASCADE"), nullable=False,
+                       primary_key=True)
+    period_id = db.Column(db.Integer, db.ForeignKey("d_period.id", ondelete="CASCADE"), nullable=False,
+                          primary_key=True)
+    amount = db.Column(db.Integer)
