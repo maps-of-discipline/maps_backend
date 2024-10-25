@@ -136,7 +136,7 @@ class AupInfo(db.Model, SerializationMixin):
     faculty = db.relationship("SprFaculty")
     rop = db.relationship("SprRop")
     department = db.relationship("Department")
-    aup_data = db.relationship("AupData", back_populates="aup")
+    aup_data = db.relationship("AupData", back_populates="aup", passive_deletes=True)
     spec = db.relationship("NameOP")
     weeks = db.relationship("Weeks")
 
