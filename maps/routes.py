@@ -448,3 +448,61 @@ def save_weeks(aup: str):
 def get_weeks(aup: str):
     aup_info = AupInfo.query.filter_by(num_aup=aup).first()
     return {el.period_id: el.amount for el in aup_info.weeks}
+
+@maps.route('/revisions/<string:num_aup>', methods=['GET'])
+def get_revisions_by_aup(num_aup):
+    aup = db.session.query(AupInfo).filter_by(num_aup=num_aup).first()
+    
+    if not aup:
+        return jsonify({'error': 'Учебный план с таким num_aup не найден'}), 404
+    
+    revisions = Revision.query.filter_by(aup_id=aup.id_aup).all()
+
+    revisions_data = []
+    for revision in revisions:
+        revision_data = {
+            'id': revision.id,
+            'title': revision.title,
+            'date': revision.date,
+            'isActual': revision.isActual,
+            'user_id': revision.user_id,
+            'aup_id': revision.aup_id
+        }
+        revisions_data.append(revision_data)
+
+    return jsonify(revisions_data)
+
+@maps.route('/revisions/<string:num_aup>/revert/<int:id_revision>', methods=['POST'])
+def revert_revision(id_revision, num_aup):
+    current_revision = db.session.query(Revision).filter_by(id=id_revision).first()
+
+    if not current_revision:
+        return jsonify({'error': 'Ревизия не найдена'}), 404
+
+    subsequent_revisions = db.session.query(Revision).filter(
+        Revision.id > id_revision,
+        Revision.aup_id == current_revision.aup_id
+    ).order_by(Revision.id.desc()).all()
+
+    # получаем айдишники всех аупово, чтобы получить по каждому AupData
+    aup_ids = [el.aup_id for el in subsequent_revisions]
+
+    # получаем сразу всю AupData чтобы не делать лишних запросов
+    aup_data_mapper = {el.id: el for el in AupData.query.filter(AupData.id_aup.in_(aup_ids)).all()}
+
+    for revision in subsequent_revisions:
+        for change in revision.logs:
+            change: ChangeLog
+
+            aup_data_row = aup_data_mapper[change.row_id]
+            setattr(aup_data_row, change.field, change.old)
+            db.session.add(aup_data_row)
+        
+        # Вместе с ревизией должны удалиться и записи в ChangeLog благодаря каскадному удалению
+        db.session.delete(revision)
+
+    current_revision.isActual = True
+    db.session.add(current_revision)
+    db.session.commit()
+
+    return jsonify({'result': 'ok'}), 200
