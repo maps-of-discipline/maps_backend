@@ -266,10 +266,18 @@ class D_ControlType(db.Model):
     __tablename__ = "d_control_type"
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
+    default_shortname = db.Column(db.String(255))
 
     def __repr__(self):
         return "<D_ControlType %r>" % self.title
 
+
+class ControlTypeShortName(db.Model, SerializationMixin):
+    __tablename__ = "control_type_short_name"
+
+    user_id = db.Column(db.Integer, db.ForeignKey('tbl_users.id_user', ondelete='CASCADE'), primary_key=True)
+    control_type_id = db.Column(db.Integer, db.ForeignKey('d_control_type.id', ondelete='CASCADE'), primary_key=True)
+    shortname = db.Column(db.String(255))
 
 class D_EdIzmereniya(db.Model):
     __tablename__ = "d_ed_izmereniya"
