@@ -121,11 +121,15 @@ def save_excel(aup):
     try:
         paper_size = json.loads(request.form['paper_size'])
         orientation = json.loads(request.form['orientation'])
+        control = json.loads(request.form['control'])  
+        load = json.loads(request.form['load'])  
     except:
         paper_size = "3"
         orientation = "land"
-    filename = saveMap(aup, maps.static_folder, paper_size, orientation, expo=60)
-
+        control = False
+        load = False
+    filename = saveMap(aup, maps.static_folder, paper_size, orientation, control, load, expo=60)
+    
     # Upload xlxs file in memory and delete file from storage
     return_data = io.BytesIO()
     with open(filename, 'rb') as fo:

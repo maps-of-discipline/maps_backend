@@ -145,12 +145,31 @@ def create_json_print(aup_data):
             "num_col": id_period,
             "num_row": el.num_row,
             "is_skip": not check_skiplist(el.zet, el.discipline.title, el.type_record.title, el.block.title),
-            "zet": zet / 36
+            "zet": zet / 36,
+            'type': {
+                'session': [],
+                'value': [],
+            }
         }
 
         if data_element['is_skip']:
             continue
 
+        # Нагрузка
+        for load in loads:
+            load = {
+                "amount": load.amount / 100,
+                "amount_type": 'ч.' if load.ed_izmereniya.id == 1 else 'нед.',
+                "id": load.id,
+                "control_type_id": load.id_type_control,
+                "type": "control" if load.id_type_control in [1, 5, 9] else 'load',
+                "control_type_title": D_ControlType.query.get(load.id_type_control)
+            }
+
+            if load['type'] == 'control':
+                data_element['type']['session'].append(load)
+            else:
+                data_element['type']['value'].append(load)
         data.append(data_element)
 
     return {"data": data}
