@@ -121,15 +121,11 @@ def save_excel(aup):
     try:
         paper_size = json.loads(request.form['paper_size'])
         orientation = json.loads(request.form['orientation'])
-        control = json.loads(request.form['control'])  
-        load = json.loads(request.form['load'])  
     except:
         paper_size = "3"
         orientation = "land"
-        control = False
-        load = False
-    filename = saveMap(aup, maps.static_folder, paper_size, orientation, control, load, expo=60)
-    
+    filename = saveMap(aup, maps.static_folder, paper_size, orientation, expo=60)
+
     # Upload xlxs file in memory and delete file from storage
     return_data = io.BytesIO()
     with open(filename, 'rb') as fo:
@@ -366,16 +362,13 @@ def upload_xml(aup):
     return send_file(data, download_name="sample.txt")
 
 
-@maps.route('/aup-info/<int:aup>', methods=['GET', 'POST', 'PATCH', 'DELETE'])
+@maps.route('/aup-info/<int:aup>', methods=['POST', 'PATCH', 'DELETE'])
 @login_required(request)
 @aup_require(request)
 def aup_crud(aup: str | None):
     aup: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
     if not aup:
         return jsonify({'status': 'not found'}), 404
-
-    if request.method == "GET":
-        return jsonify(aup.as_dict()), 200
 
     if request.method == "DELETE":
         db.session.delete(aup)
@@ -510,3 +503,31 @@ def revert_revision(id_revision, num_aup):
     db.session.commit()
 
     return jsonify({'result': 'ok'}), 200
+
+
+@maps.get('/faculties')
+def get_faculties():
+    faculties: list[SprFaculty] = SprFaculty.query.all()
+    res = [el.as_dict() for el in faculties]
+    return jsonify(res), 200
+
+@maps.get('/departments')
+def get_departments():
+    departments: list[Department] = Department.query.all()
+    res = [el.as_dict() for el in departments]
+    return jsonify(res), 200
+
+@maps.get('/degree-educations')
+def get_degree_educations():
+    degree_educations: list[SprDegreeEducation] = SprDegreeEducation.query.all()
+    res = [el.as_dict() for el in degree_educations]
+    return jsonify(res), 200
+
+@maps.get('/op-names')
+def get_op_names():
+    names: list[NameOP] = NameOP.query.all()
+    res = [el.as_dict() for el in names]
+    return jsonify(res), 200
+
+
+

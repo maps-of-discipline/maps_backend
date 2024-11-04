@@ -19,7 +19,7 @@ class SprBranch(db.Model):
         return "<Branch %r>" % self.location
 
 
-class SprDegreeEducation(db.Model):
+class SprDegreeEducation(db.Model, SerializationMixin):
     __tablename__ = "spr_degree_education"
 
     id_degree = db.Column(db.Integer, primary_key=True)
@@ -187,7 +187,7 @@ class Department(db.Model, SerializationMixin):
         return f"{self.name_department}"
 
 
-class NameOP(db.Model):
+class NameOP(db.Model, SerializationMixin):
     __tablename__ = "spr_name_op"
 
     id_spec = db.Column(db.Integer, primary_key=True)
