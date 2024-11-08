@@ -420,7 +420,7 @@ class Revision(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("tbl_users.id_user"), nullable=False)
     aup_id = db.Column(db.Integer, db.ForeignKey("tbl_aup.id_aup", ondelete='CASCADE'), nullable=False)
 
-    logs = db.relationship("ChangeLog", lazy="joined")
+    logs = db.relationship("ChangeLog", lazy="joined", passive_deletes=True)
 
 
 class ChangeLog(db.Model):
