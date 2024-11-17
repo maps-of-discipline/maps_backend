@@ -1,7 +1,9 @@
 import io
 import json
 import os
+from collections import defaultdict
 from itertools import chain
+from pprint import pprint
 
 from flask import Blueprint, make_response, jsonify, request, send_file
 
@@ -342,9 +344,6 @@ def getControlTypes():
     return make_response(jsonify(control_types), 200)
 
 
-
-
-
 @maps.route("/test")
 def test():
     return jsonify(), 200
@@ -446,13 +445,14 @@ def get_weeks(aup: str):
     aup_info = AupInfo.query.filter_by(num_aup=aup).first()
     return {el.period_id: el.amount for el in aup_info.weeks}
 
+
 @maps.route('/revisions/<string:num_aup>', methods=['GET'])
 def get_revisions_by_aup(num_aup):
     aup = db.session.query(AupInfo).filter_by(num_aup=num_aup).first()
-    
+
     if not aup:
         return jsonify({'error': 'Учебный план с таким num_aup не найден'}), 404
-    
+
     revisions = Revision.query.filter_by(aup_id=aup.id_aup).all()
 
     revisions_data = []
@@ -469,23 +469,23 @@ def get_revisions_by_aup(num_aup):
 
     return jsonify(revisions_data)
 
-@maps.route('/revisions/<string:num_aup>/revert/<int:id_revision>', methods=['POST'])
-def revert_revision(id_revision, num_aup):
+
+@maps.route('/revisions/revert/<int:id_revision>', methods=['POST'])
+def revert_revision(id_revision):
     current_revision = db.session.query(Revision).filter_by(id=id_revision).first()
 
     if not current_revision:
         return jsonify({'error': 'Ревизия не найдена'}), 404
 
     subsequent_revisions = db.session.query(Revision).filter(
-        Revision.id > id_revision,
+        Revision.id >= id_revision,
         Revision.aup_id == current_revision.aup_id
     ).order_by(Revision.id.desc()).all()
 
-    # получаем айдишники всех аупово, чтобы получить по каждому AupData
-    aup_ids = [el.aup_id for el in subsequent_revisions]
-
     # получаем сразу всю AupData чтобы не делать лишних запросов
-    aup_data_mapper = {el.id: el for el in AupData.query.filter(AupData.id_aup.in_(aup_ids)).all()}
+    aup_data_mapper = {el.id: el for el in AupData.query.filter(AupData.id_aup == current_revision.aup_id).all()}
+
+    to_delete = []
 
     for revision in subsequent_revisions:
         for change in revision.logs:
@@ -494,14 +494,20 @@ def revert_revision(id_revision, num_aup):
             aup_data_row = aup_data_mapper[change.row_id]
             setattr(aup_data_row, change.field, change.old)
             db.session.add(aup_data_row)
-        
-        # Вместе с ревизией должны удалиться и записи в ChangeLog благодаря каскадному удалению
-        db.session.delete(revision)
 
-    current_revision.isActual = True
-    db.session.add(current_revision)
+        to_delete.append(revision.id)
+
+    current_revision = db.session.query(Revision).filter(
+        Revision.id < current_revision.id,
+        Revision.aup_id == current_revision.aup_id
+    ).order_by(Revision.id.desc()).first()
+
+    if current_revision:
+        current_revision.isActual = True
+        db.session.add(current_revision)
+
+    db.session.query(Revision).filter(Revision.id.in_(to_delete)).delete()
     db.session.commit()
-
     return jsonify({'result': 'ok'}), 200
 
 
@@ -511,11 +517,13 @@ def get_faculties():
     res = [el.as_dict() for el in faculties]
     return jsonify(res), 200
 
+
 @maps.get('/departments')
 def get_departments():
     departments: list[Department] = Department.query.all()
     res = [el.as_dict() for el in departments]
     return jsonify(res), 200
+
 
 @maps.get('/degree-educations')
 def get_degree_educations():
@@ -523,11 +531,9 @@ def get_degree_educations():
     res = [el.as_dict() for el in degree_educations]
     return jsonify(res), 200
 
+
 @maps.get('/op-names')
 def get_op_names():
     names: list[NameOP] = NameOP.query.all()
     res = [el.as_dict() for el in names]
     return jsonify(res), 200
-
-
-
