@@ -60,6 +60,13 @@ def create_changes_revision(user_id: int, aup_info_id: int, changes: list[Change
     """
         Функция для создания Ревизии изменений.
     """
+    # Поиск последней ревизии по дате, где значение isActual == True
+    last_revision = db.session.query(Revision).filter_by(isActual=True, aup_id=aup_info_id).first()
+    if last_revision:
+        # Последняя актуальная ревизия перестаёт быть актуальной  
+        last_revision.isActual = False
+        db.session.commit()
+
     revision = Revision(
         title="",
         date=datetime.now(),
@@ -67,6 +74,7 @@ def create_changes_revision(user_id: int, aup_info_id: int, changes: list[Change
         user_id=user_id,
         aup_id=aup_info_id,
     )
+
     db.session.add(revision)
     db.session.commit()
     for i in range(len(changes)):
