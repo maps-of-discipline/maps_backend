@@ -357,6 +357,7 @@ class AupData(db.Model):
         db.ForeignKey("spr_discipline.id", ondelete="SET NULL"),
         nullable=True,
     )
+    used_for_report = db.Column(db.Boolean)
 
     _discipline = db.Column("discipline", db.String(350), nullable=False)
     id_period = db.Column(
