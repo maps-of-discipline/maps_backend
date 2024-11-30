@@ -164,7 +164,7 @@ def create_json_print(aup_data):
                 "id": load.id,
                 "control_type_id": load.id_type_control,
                 "type": "control" if load.id_type_control in [1, 5, 9] else 'load',
-                "control_type_title": D_ControlType.query.get(load.id_type_control)
+                "control_type_title": load.type_control.title
             }
 
             if load['type'] == 'control':

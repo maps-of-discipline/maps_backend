@@ -94,7 +94,7 @@ def makeLegend(wb, table, aup):
     ws['A' + str(last_row)].value = f'Итого: {sum}'
 
 
-def saveMap(aup, static, papper_size, orientation, control, load, **kwargs):
+def saveMap(aup, static, papper_size, orientation, control: bool = False, load: bool = False):
     aup = AupInfo.query.filter_by(num_aup=aup).first()
     data = AupData.query.filter_by(id_aup=aup.id_aup).order_by(AupData.shifr, AupData.id_discipline,
                                                                AupData.id_period).all()
@@ -143,7 +143,7 @@ def saveMap(aup, static, papper_size, orientation, control, load, **kwargs):
             column = chr(ord("B") + i)
             cell = f"{column}{ROW_START_DISCIPLINES + merged}"
 
-            ws[cell] = el['discipline'] + load_and_control(el)
+            ws[cell] = el['discipline'] + load_and_control(el, load, control)
             color = el['color'].replace('#', '')
 
             color_text_cell(ws, cell, color)
@@ -446,9 +446,10 @@ def get_aup_data_excel(aup: str) -> tuple[io.BytesIO, str]:
     book.close()
     return in_memory_file, F"{aup_info.num_aup} {aup_info.degree.name_deg} {aup_info.spec.name_spec} {aup_info.form.form}"
 
-def load_and_control(el):
+
+def load_and_control(el, load: bool, control: bool):
     '''
-    Форматирование нагрузки и котроля
+    Форматирование нагрузки и контроля
     '''
     cuts = {"Лабораторные работы": "Лаб.", "Семинарские и практические занятия": "Сем. и прак."}
     control = ""

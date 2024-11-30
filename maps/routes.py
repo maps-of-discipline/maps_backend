@@ -126,7 +126,7 @@ def save_excel(aup):
     except:
         paper_size = "3"
         orientation = "land"
-    filename = saveMap(aup, maps.static_folder, paper_size, orientation, expo=60)
+    filename = saveMap(aup, maps.static_folder, paper_size, orientation)
 
     # Upload xlxs file in memory and delete file from storage
     return_data = io.BytesIO()
