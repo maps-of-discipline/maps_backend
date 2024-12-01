@@ -446,9 +446,10 @@ def get_aup_data_excel(aup: str) -> tuple[io.BytesIO, str]:
     book.close()
     return in_memory_file, F"{aup_info.num_aup} {aup_info.degree.name_deg} {aup_info.spec.name_spec} {aup_info.form.form}"
 
-def load_and_control(el, load_b, control_b):
+
+def load_and_control(el, load: bool, control: bool):
     '''
-    Форматирование нагрузки и котроля
+    Форматирование нагрузки и контроля
     '''
     cuts = { "Экзамен": "Экз",
             "Лекции": "ЛК",
@@ -472,19 +473,19 @@ def load_and_control(el, load_b, control_b):
             "Научно-исследовательская работа": "НИР",
             "Практика": "Прак",
             "Консультации": "Консул"}
-    control = "\n"
+    control_result = "\n"
     value = "\n\n"
-    if control_b:
+    if control:
         for element in el['type']['session']:
             temp = str(element['control_type_title'])
-            control += (temp if temp not in cuts else cuts[temp])
-    if load_b:        
+            control_result += (temp if temp not in cuts else cuts[temp])
+    if load:        
         temp = ""
         for element in el['type']['value']:
             temp = str(element['control_type_title'])
             if (temp == "Курсовой проект"): 
-                control += (", КП " if control_b else " КП ")
+                control_result += (", КП " if control else " КП ")
             else:    
                 value += (temp if temp not in cuts else cuts[temp]) + " " + str(int(element['amount'])) + " " + str(element['amount_type']) + "\t"
 
-    return value + control
+    return value + control_result
