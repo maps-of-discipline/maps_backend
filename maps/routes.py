@@ -123,10 +123,14 @@ def save_excel(aup):
     try:
         paper_size = json.loads(request.form['paper_size'])
         orientation = json.loads(request.form['orientation'])
+        load = False
+        control = False
     except:
         paper_size = "3"
         orientation = "land"
-    filename = saveMap(aup, maps.static_folder, paper_size, orientation, expo=60)
+        load = False
+        control = False
+    filename = saveMap(aup, maps.static_folder, paper_size, orientation, control, load)
 
     # Upload xlxs file in memory and delete file from storage
     return_data = io.BytesIO()
@@ -537,3 +541,59 @@ def get_op_names():
     names: list[NameOP] = NameOP.query.all()
     res = [el.as_dict() for el in names]
     return jsonify(res), 200
+
+
+@maps.route('/reports/save-choosen-displines', methods = ['POST'])
+@login_required(request)
+@aup_require(request)
+def save_choosen_displines():
+    data: dict = dict(request.get_json())
+    data['aup_id'] = int(data['aup_id'])
+    data['disciplines'] = [int(i) for i in data['disciplines']]
+    data['control_types'] = [int(i) for i in data['control_types']]
+
+    query = db.session.query(AupData).filter(AupData.id == data['aup_id'], AupData.id_discipline.in_(data['disciplines']), AupData.id_type_control.in_(data['control_types'])).first()
+    if query:
+        query.used_for_report = True
+    db.session.commit()    
+
+@maps.route('/cacheTime')
+@login_required(request)
+def data_monitoring_of_practical_training():
+
+    query = db.session.query(
+        AupInfo.id_aup,
+        SprOKCO.program_code,
+        SprOKCO.name_okco,
+        NameOP.name_spec).join(
+        NameOP, NameOP.program_code == AupInfo.program_code).join(  
+        SprOKCO, SprOKCO.program_code == NameOP.program_code).group_by(
+        AupInfo.id_aup).all()
+    
+
+    aup_data = AupData.query.all()
+    aup_data_dict = {el.id: [el.aup_id, 
+                            el.amount/3600 if el.id_edizm == 1 else el.amount/15, #Вычичисляю ЗЕТ для всех AupData
+                            el.id_type_control in [11, 12]] # Проверка на Практику
+                            for el in aup_data}
+
+    data = [
+    {
+        "id_aup": el.id_aup,
+        "program_code": el.program_code,
+        "name_okco": el.name_okco,
+        "name_spec": el.name_spec,
+        "load_with_practice": 0,
+        "load_without": 0
+    }
+    for el in query]
+
+    for el in data:
+        for i in aup_data_dict:
+            if aup_data_dict[i][0] == el["id_aup"]:
+                el["load_with_practice"] += aup_data_dict[i][1]
+                if not aup_data_dict[i][2]:
+                    el["load_without"] += aup_data_dict[i][1]
+
+    return jsonify(data)
+

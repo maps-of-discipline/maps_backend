@@ -94,7 +94,7 @@ def makeLegend(wb, table, aup):
     ws['A' + str(last_row)].value = f'Итого: {sum}'
 
 
-def saveMap(aup, static, papper_size, orientation, control, load, **kwargs):
+def saveMap(aup, static, papper_size, orientation, control: bool = False, load: bool = False):
     aup = AupInfo.query.filter_by(num_aup=aup).first()
     data = AupData.query.filter_by(id_aup=aup.id_aup).order_by(AupData.shifr, AupData.id_discipline,
                                                                AupData.id_period).all()
@@ -143,7 +143,7 @@ def saveMap(aup, static, papper_size, orientation, control, load, **kwargs):
             column = chr(ord("B") + i)
             cell = f"{column}{ROW_START_DISCIPLINES + merged}"
 
-            ws[cell] = el['discipline'] + load_and_control(el)
+            ws[cell] = el['discipline'] + load_and_control(el, load, control)
             color = el['color'].replace('#', '')
 
             color_text_cell(ws, cell, color)
@@ -446,20 +446,45 @@ def get_aup_data_excel(aup: str) -> tuple[io.BytesIO, str]:
     book.close()
     return in_memory_file, F"{aup_info.num_aup} {aup_info.degree.name_deg} {aup_info.spec.name_spec} {aup_info.form.form}"
 
-def load_and_control(el):
+def load_and_control(el, load_b, control_b):
     '''
     Форматирование нагрузки и котроля
     '''
-    cuts = {"Лабораторные работы": "Лаб.", "Семинарские и практические занятия": "Сем. и прак."}
-    control = ""
+    cuts = { "Экзамен": "Экз",
+            "Лекции": "ЛК",
+            "Семинарские занятия": "C3",
+            "СРС": "СРС",
+            "Зачет": "Зач",
+            "Лабораторные работы": "ЛР",
+            #"Курсовой проект": "КП",
+            "Практические занятия": "ПЗ",
+            "Дифференцированный зачет": "Диф. зач",
+            "Учебная практика": "уп",
+            "Производственная практика": "Произ. п",
+            "ГЭК (Государственный экзамен)": "ГЭК",
+            "Преддипломная практика": "ПДП",
+            "ГАК": "ГАК",
+            "Защита ВКР (ГЭК)": "ГЭК",
+            "Научно-исследовательская практика": "НИП",
+            "Семинарские и практические занятия": "Сем-Прак",
+            "Курсовая работа": "КР",
+            "Прочая практика": "Проч. п",
+            "Научно-исследовательская работа": "НИР",
+            "Практика": "Прак",
+            "Консультации": "Консул"}
+    control = "\n"
+    value = "\n\n"
+    if control_b:
+        for element in el['type']['session']:
+            temp = str(element['control_type_title'])
+            control += (temp if temp not in cuts else cuts[temp])
+    if load_b:        
+        temp = ""
+        for element in el['type']['value']:
+            temp = str(element['control_type_title'])
+            if (temp == "Курсовой проект"): 
+                control += (", КП " if control_b else " КП ")
+            else:    
+                value += (temp if temp not in cuts else cuts[temp]) + " " + str(int(element['amount'])) + " " + str(element['amount_type']) + "\t"
 
-    for element in el['type']['session']:
-        control += "|\t"+ str(element['control_type_title']).replace("<D_ControlType '", "").replace("'>", "") + "\t|"
-            
-    value = ""
-    temp = ""
-    for element in el['type']['value']:
-        temp = str(element['control_type_title']).replace("<D_ControlType '", "").replace("'>", "")
-        value += (temp if temp not in cuts else cuts[temp]) + " " + str(int(element['amount'])) + " " + str(element['amount_type']) + "\t"
-
-    return "\n-------\n" + control + "\n-------\n"+ value
+    return value + control

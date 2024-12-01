@@ -383,6 +383,8 @@ class AupData(db.Model):
     group = db.relationship("Groups", lazy="joined")
     discipline = db.relationship("SprDiscipline", lazy='joined')
 
+    type_control = db.relationship("D_ControlType", lazy="joined")
+
     def __repr__(self):
         return "<AupData %r>" % self.aup.num_aup
 
