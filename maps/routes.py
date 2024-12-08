@@ -7,6 +7,8 @@ from pprint import pprint
 
 from flask import Blueprint, make_response, jsonify, request, send_file
 
+from app import cache
+
 from auth.logic import login_required, aup_require, verify_jwt_token
 from auth.models import Mode
 from maps.logic.print_excel import saveMap, get_aup_data_excel
@@ -128,7 +130,9 @@ def save_excel(aup):
     except:
         paper_size = "3"
         orientation = "land"
-    filename = saveMap(aup, maps.static_folder, paper_size, orientation)
+        load = False
+        control = False
+    filename = saveMap(aup, maps.static_folder, paper_size, orientation, control, load)
 
     # Upload xlxs file in memory and delete file from storage
     return_data = io.BytesIO()
@@ -555,8 +559,9 @@ def save_choosen_displines():
         query.used_for_report = True
     db.session.commit()    
 
-@maps.route('/cacheTime')
+@maps.route('/practical_training_report')
 @login_required(request)
+@cache.cached(timeout = 0)
 def data_monitoring_of_practical_training():
 
     query = db.session.query(

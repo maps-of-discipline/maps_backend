@@ -3,7 +3,7 @@ import pandas as pd
 from maps.logic.global_variables import addGlobalVariable, getGroupId, getModuleId
 from maps.logic.tools import check_skiplist, prepare_shifr, timeit, get_grouped_disciplines
 from maps.models import AupData, AupInfo, Groups, db, D_Blocks, D_Part, D_TypeRecord, D_Period, D_ControlType, \
-    D_EdIzmereniya
+    D_EdIzmereniya, ControlTypeShortName
 
 blocks = {}
 blocks_r = {}
@@ -191,3 +191,30 @@ def elective_disciplines(aup_info: AupInfo) -> dict:
                 elective_disciplines[el.discipline.title] = el.amount // 100
 
     return elective_disciplines
+
+
+def get_default_shortcuts():
+    """
+        Функция для получения сокращений нагрузки по умолчанию
+    """
+    data = D_ControlType.query.all()
+
+    if data:
+        shortcuts = {el.id: el.default_shortname for el in data}
+        return shortcuts
+     
+    return None
+
+def get_user_shortcuts(user_id: int):
+    """
+        Функция для получения пользовательских сокращений нагрузки 
+    """
+    shortcuts = get_default_shortcuts()
+
+    data = {el.control_type_id: el.shortname for el in ControlTypeShortName.query.filter(user_id = user_id).all()}
+
+    if data:
+        for control_type_id, shortname in data.items():
+            shortcuts[control_type_id] = shortname
+
+    return shortcuts    

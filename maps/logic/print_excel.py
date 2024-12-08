@@ -7,7 +7,7 @@ import xlsxwriter
 from openpyxl.styles import (Alignment, Border, Font, NamedStyle, PatternFill,
                              Side)
 
-from maps.logic.take_from_bd import create_json_print, elective_disciplines
+from maps.logic.take_from_bd import create_json_print, elective_disciplines, get_default_shortcuts, get_user_shortcuts
 from maps.logic.tools import get_maximum_rows
 from maps.models import (AupInfo, AupData, Groups, D_Period)
 
@@ -451,39 +451,18 @@ def load_and_control(el, load: bool, control: bool):
     '''
     Форматирование нагрузки и контроля
     '''
-    cuts = { "Экзамен": "Экз",
-            "Лекции": "ЛК",
-            "Семинарские занятия": "C3",
-            "СРС": "СРС",
-            "Зачет": "Зач",
-            "Лабораторные работы": "ЛР",
-            #"Курсовой проект": "КП",
-            "Практические занятия": "ПЗ",
-            "Дифференцированный зачет": "Диф. зач",
-            "Учебная практика": "уп",
-            "Производственная практика": "Произ. п",
-            "ГЭК (Государственный экзамен)": "ГЭК",
-            "Преддипломная практика": "ПДП",
-            "ГАК": "ГАК",
-            "Защита ВКР (ГЭК)": "ГЭК",
-            "Научно-исследовательская практика": "НИП",
-            "Семинарские и практические занятия": "Сем-Прак",
-            "Курсовая работа": "КР",
-            "Прочая практика": "Проч. п",
-            "Научно-исследовательская работа": "НИР",
-            "Практика": "Прак",
-            "Консультации": "Консул"}
+    cuts = get_default_shortcuts()
     control_result = "\n"
     value = "\n\n"
     if control:
         for element in el['type']['session']:
-            temp = str(element['control_type_title'])
+            temp = int(element['control_type_id'])
             control_result += (temp if temp not in cuts else cuts[temp])
     if load:        
         temp = ""
         for element in el['type']['value']:
-            temp = str(element['control_type_title'])
-            if (temp == "Курсовой проект"): 
+            temp = int(element['control_type_id'])
+            if (temp == 7): 
                 control_result += (", КП " if control else " КП ")
             else:    
                 value += (temp if temp not in cuts else cuts[temp]) + " " + str(int(element['amount'])) + " " + str(element['amount_type']) + "\t"

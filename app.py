@@ -5,6 +5,7 @@ from flask_migrate import Migrate
 from sqlalchemy import MetaData
 from flask_mail import Mail
 from dotenv import load_dotenv
+from flask_caching import Cache
 
 
 from maps.logic.global_variables import setGlobalVariables
@@ -18,8 +19,16 @@ from utils.handlers import handle_exception
 
 load_dotenv()
 
+config = {
+    "DEBUG": True,          # some Flask specific configs
+    "CACHE_TYPE": "SimpleCache",  # Flask-Caching related configs
+    "CACHE_DEFAULT_TIMEOUT": 300
+}
+
 app = Flask(__name__)
 
+app.config.from_mapping(config)
+cache = Cache(app)
 
 application = app
 cors = CORS(app, resources={r"*": {"origins": "*"}}, supports_credentials=True)
