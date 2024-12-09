@@ -223,24 +223,34 @@ def edit_or_delete_module(id: int):
 
         return jsonify(module.as_dict()), 200
 
-
 @maps.route("/getAllMaps")
 def getAllMaps():
     specialization_names = {}
     for el in NameOP.query.all():
         el: NameOP
-        specialization_names.update({el.id_spec: el.name_spec})
+        specialization_names[el.id_spec] = {
+            "name_spec": el.name_spec,
+            "okco_code": el.okco.program_code,
+            "okco_name": el.okco.name_okco,
+        }
 
     faculties = SprFaculty.query.all()
     li = []
+    
+    #NameOP - spr_name_op
+    #SprOKCO - sspr_okco
+    #
 
     for fac in faculties:
         fac: SprFaculty
         maps = []
         for row in fac.aup_infos:
             row: AupInfo
+            specialization = specialization_names[row.id_spec]
             maps.append({
-                "name": specialization_names[row.id_spec],
+                "name": specialization["name_spec"],
+                "okco_code": specialization["okco_code"],
+                "okco_name": specialization["okco_name"],
                 "code": row.num_aup,
                 "year": row.year_beg,
                 "form_educ": row.id_form,
@@ -253,6 +263,7 @@ def getAllMaps():
             "directions": maps,
         })
     return jsonify(li)
+
 
 
 @maps.route('/add-group', methods=["POST"])
@@ -600,3 +611,68 @@ def data_monitoring_of_practical_training():
 
     return jsonify(data)
 
+
+@maps.route('/short-control-types', methods=['GET'])
+@login_required(request)
+def get_short_control_types():
+
+    payload, _ = verify_jwt_token(request.headers["Authorization"])
+    user_id = payload['user_id']
+    
+    # сокращённые формы, созданные пользователем
+    user_shortnames = {
+        item.control_type_id: {"control_type_id": item.control_type_id, "shortname": item.shortname}
+        for item in db.session.query(ControlTypeShortName).filter_by(user_id=user_id).all()
+    }
+
+    #добавляем дефолтные формы, которых нет у пользователя
+    combined_result = [
+        user_shortnames.get( 
+            #мы берем айти записи которую сейчас сраниваем и передаем ее как ключ в user_shortnames если этот ключ есть get выдаст значение 
+            item.id, 
+            #если нет get выдаст значение из дефолтных сокр форм
+            {"control_type_id": item.id, "shortname": item.default_shortname})
+        for item in db.session.query(D_ControlType).all()
+    ]
+
+    return jsonify(combined_result)
+
+
+
+
+@maps.route('/short-control-types', methods=['POST'])
+@login_required(request)
+def update_short_control_types():
+    payload, _ = verify_jwt_token(request.headers["Authorization"])
+    user_id = payload['user_id']
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'status': 'error', 'message': 'no data'}), 400
+
+    for new_short_form in data:
+        control_type_id = new_short_form.get("id")
+        title = new_short_form.get("title")
+        
+        if control_type_id is None or title is None:
+            continue
+
+        # существует ли запись c текущими данными
+        current_user_short_form = db.session.query(ControlTypeShortName).filter(ControlTypeShortName.control_type_id == control_type_id,ControlTypeShortName.user_id == user_id).first()
+
+        if current_user_short_form:
+            # запись существует, обновляем поле `shortname`
+            current_user_short_form.shortname = title
+        else:
+            # запись не существует, создаем новую
+            new_form = ControlTypeShortName(
+                user_id=user_id,
+                control_type_id=control_type_id,
+                shortname=title
+            )
+            db.session.add(new_form)
+
+
+    db.session.commit()
+
+    return jsonify({'status': 'ok'}), 200
