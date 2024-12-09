@@ -404,6 +404,7 @@ class AupData(db.Model):
             amount=self.amount,
             id_edizm=self.id_edizm,
             zet=self.zet,
+            _discipline = self._discipline 
         )
 
 
