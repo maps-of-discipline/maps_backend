@@ -569,14 +569,13 @@ def data_monitoring_of_practical_training():
         SprOKCO.program_code,
         SprOKCO.name_okco,
         NameOP.name_spec).join(
-        NameOP, NameOP.program_code == AupInfo.program_code).join(  
+        NameOP, NameOP.id_spec == AupInfo.id_spec).join(
         SprOKCO, SprOKCO.program_code == NameOP.program_code).group_by(
-        AupInfo.id_aup).all()
-    
+        AupInfo.id_aup).order_by(AupInfo.id_aup).all()
 
     aup_data = AupData.query.all()
-    aup_data_dict = {el.id: [el.aup_id, 
-                            el.amount/3600 if el.id_edizm == 1 else el.amount/15, #Вычичисляю ЗЕТ для всех AupData
+    aup_data_dict = {el.id: [el.id_aup, 
+                            int(el.amount/3600) if el.id_edizm == 1 else int(el.amount/15), #Вычичисляю ЗЕТ для всех AupData
                             el.id_type_control in [11, 12]] # Проверка на Практику
                             for el in aup_data}
 
