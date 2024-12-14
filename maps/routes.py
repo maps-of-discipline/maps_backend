@@ -579,7 +579,9 @@ def data_monitoring_of_practical_training():
         AupInfo.id_aup,
         SprOKCO.program_code,
         SprOKCO.name_okco,
-        NameOP.name_spec).join(
+        NameOP.name_spec,
+        AupInfo.id_form
+        ).join(
         NameOP, NameOP.id_spec == AupInfo.id_spec).join(
         SprOKCO, SprOKCO.program_code == NameOP.program_code).group_by(
         AupInfo.id_aup).order_by(AupInfo.id_aup).all()
@@ -597,7 +599,10 @@ def data_monitoring_of_practical_training():
         "name_okco": el.name_okco,
         "name_spec": el.name_spec,
         "load_with_practice": 0,
-        "load_without": 0
+        "load_without": 0,
+        "form": ("Очная" if el.id_form == 1 else
+            "Очно-заочная" if el.id_form == 2 else
+            "Заочная" if el.id_form == 3 else None)    
     }
     for el in query]
 
