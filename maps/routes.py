@@ -570,7 +570,7 @@ def save_choosen_displines():
         query.used_for_report = True
     db.session.commit()    
 
-@maps.route('/practical_training_report', methods = ['POST'])
+@maps.route('/practical_training_report', methods = ['GET'])
 @login_required(request)
 @cache.cached(timeout = 0)
 def data_monitoring_of_practical_training():
