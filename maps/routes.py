@@ -368,14 +368,14 @@ def test():
 
 @maps.route("/upload-xml/<string:aup>")
 def upload_xml(aup):
-    filename = create_xml(aup)
 
-    data = io.BytesIO()
-    with open(filename, 'rb') as res:
-        data.write(res.read())
-    data.seek(0)
+    xml_buffer = create_xml(aup)
+    
+    if not xml_buffer:
+        return "не удалось создать XML", 400
+    
+    return send_file(xml_buffer, download_name="done.xml", mimetype='application/xml')
 
-    return send_file(data, download_name="sample.txt")
 
 
 @maps.route('/aup-info/<int:aup>', methods=['POST', 'PATCH', 'DELETE'])
