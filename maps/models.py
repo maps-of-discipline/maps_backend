@@ -130,6 +130,8 @@ class AupInfo(db.Model, SerializationMixin):
     year_beg = db.Column(db.Integer, nullable=False)
     year_end = db.Column(db.Integer, nullable=False)
     is_actual = db.Column(db.Boolean, nullable=False)
+    is_delete = db.Column(db.Boolean, nullable=True)
+    date_delete = db.Column(db.DateTime, nullable=True)
 
     degree = db.relationship("SprDegreeEducation")
     form = db.relationship("SprFormEducation")
