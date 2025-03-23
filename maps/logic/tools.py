@@ -6,6 +6,7 @@ from openpyxl import load_workbook
 
 
 from maps.models import AupData
+import config 
 
 # # Условия фильтра, если добавлять категорию, то нужно исправить if
 skiplist = {
@@ -33,6 +34,10 @@ def timeit(func):
     def timeit_wrapper(*args, **kwargs):
         start_time = time.perf_counter()
         result = func(*args, **kwargs)
+
+        if not config.SHOW_DEBUG_EXECUTION_TIME:
+            return result
+
         end_time = time.perf_counter()
         total_time = end_time - start_time
         print(f'\033[94m[TIME]\033[0m Function \033[96m{func.__name__: <32}()\033[0m Took {total_time:.4f} seconds')

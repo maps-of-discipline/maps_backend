@@ -1,7 +1,12 @@
 import os
+import logging
 from dotenv import load_dotenv
 
+
 load_dotenv(".env")
+
+SHOW_DEBUG_EXECUTION_TIME = False
+LOG_LEVEL=logging.INFO
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")

@@ -40,7 +40,7 @@ class ExcelValidator:
 
             if error and required:
                 return errors
-        logger.debug(f"End of excel validation. Errors: {errors}")
+        logger.info(f"End of excel validation.")
         return errors
 
 

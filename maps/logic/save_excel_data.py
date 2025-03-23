@@ -6,7 +6,7 @@ from pandas import DataFrame
 from maps.logic.excel_check import ExcelValidator
 from maps.logic.read_excel import read_excel
 from maps.logic.tools import timeit
-
+from utils.logging import logger
 
 from maps.models import (
     db,
@@ -32,8 +32,11 @@ from maps.models import (
 
 @timeit
 def save_excel_files(files, options):
+    files = files.getlist("file")
+    logger.info(f"prcessing {len(files)} files...")
     all_files_check_result = []
-    for _, file in files.items():
+    for file in files:
+        logger.info(f"processing file: {file.filename}")
         try:
             header, data = read_excel(file)
         except Exception as e:
@@ -43,6 +46,7 @@ def save_excel_files(files, options):
                 "errors": [{"message": "Некорректная структура выгрузки."}],
             }
             all_files_check_result.append(res)
+            logger.warning(f"Structure error in excel file: {res['errors']}")
             continue
 
         aup = header["Содержание"][0]
@@ -55,7 +59,10 @@ def save_excel_files(files, options):
         all_files_check_result.append(res)
 
         if res["errors"]:
+            logger.warning(f"Validation errors in file: {res['errors']}")
             continue
+        else: 
+            logger.info('Excel file is valid')
 
         save_excel_data(
             file.filename,
@@ -63,6 +70,7 @@ def save_excel_files(files, options):
             data,
             use_other_modules=options.get("checkboxFillNullModulesModel", False),
         )
+    logger.debug("all aups has been processed")
     return all_files_check_result
 
 
@@ -70,6 +78,7 @@ def save_excel_files(files, options):
 def save_excel_data(
     filename, header: DataFrame, data: DataFrame, use_other_modules: bool = True
 ):
+    logger.debug("saving excel file: {filename}")
     header = header.set_index("Наименование")["Содержание"].to_dict()
     groups = None
     try:
@@ -87,9 +96,11 @@ def save_excel_data(
         db.session.bulk_save_objects(aup_data)
     except Exception as e:
         db.session.rollback()
+        logger.error(e)
         raise e
 
     finally:
+        logger.debug("excel file succesfully saved.")
         db.session.commit()
 
 

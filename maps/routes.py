@@ -114,8 +114,9 @@ def get_id_edizm():
 # @timeit
 # @login_required(request)
 def upload():
+    logger.info('/upload - processing files uploading')
     options = dict(json.loads(request.form["options"]))
-    logger.debug(f"/upload options: {options}")
+    logger.debug(f"/upload - options: {options}")
     res = save_excel_files(request.files, options)
     return jsonify(res), 200
 
@@ -388,7 +389,7 @@ def upload_xml(aup):
     return send_file(data, download_name="sample.txt")
 
 
-@maps.route("/aup-info/<int:aup>", methods=["POST", "PATCH", "DELETE"])
+@maps.route("/aup-info/<string:aup>", methods=["POST", "PATCH", "DELETE"])
 @login_required(request)
 @aup_require(request)
 def aup_crud(aup: str | None):
@@ -600,7 +601,7 @@ def save_choosen_displines():
 
 
 @maps.route("/practical_training_report", methods=["GET"])
-@login_required(request)
+# @login_required(request)
 @cache.cached(timeout=0)
 def data_monitoring_of_practical_training():
     query = (
@@ -618,14 +619,14 @@ def data_monitoring_of_practical_training():
         .all()
     )
 
-    aup_data = AupData.query.all()
+    aup_data = AupData.query.filter(AupData.id_type_control.in_([6, 7, 11, 12, 13]))
     aup_data_dict = {
         el.id: [
             el.id_aup,
             int(el.amount / 3600)
             if el.id_edizm == 1
-            else int(el.amount / 15),  # Вычичисляю ЗЕТ для всех AupData
-            el.id_type_control in [11, 12],
+            else int(el.amount * 0.015),  # Вычичисляю ЗЕТ для всех AupData
+            el.id_type_control in [11, 12, 13],
         ]  # Проверка на Практику
         for el in aup_data
     }
