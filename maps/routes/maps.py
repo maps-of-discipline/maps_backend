@@ -257,6 +257,7 @@ def getAllMaps():
                     "code": row.num_aup,
                     "year": row.year_beg,
                     "form_educ": row.id_form,
+                    "is_delete": row.is_delete
                 }
             )
 
@@ -387,49 +388,6 @@ def upload_xml(aup):
     data.seek(0)
 
     return send_file(data, download_name="sample.txt")
-
-
-@maps.route("/aup-info/<string:aup>", methods=["POST", "PATCH", "DELETE"])
-@login_required(request)
-@aup_require(request)
-def aup_crud(aup: str | None):
-    aup: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
-    if not aup:
-        return jsonify({"status": "not found"}), 404
-
-    if request.method == "DELETE":
-        db.session.delete(aup)
-        db.session.commit()
-        return jsonify({"status": "ok"})
-
-    if request.method == "POST":
-        match dict(request.args):
-            case {"copy_with_num": new_aup_num}:
-                if AupInfo.query.filter_by(num_aup=new_aup_num).first():
-                    return jsonify({"status": "already exists"}), 400
-
-                aup.copy(new_aup_num)
-                return jsonify({"status": "ok", "aup_num": new_aup_num})
-            case _:
-                return jsonify({"result": "failed"}), 400
-
-    if request.method == "PATCH":
-        data = request.get_json()
-
-        for field, value in data.items():
-            if field in AupInfo.__dict__:
-                aup.__setattr__(field, value)
-
-        db.session.add(aup)
-
-        try:
-            db.session.commit()
-        except Exception as ex:
-            print(ex)
-            db.session.rollback()
-            return jsonify({"status": "failed", "aup_num": aup.num_aup}), 403
-
-        return jsonify({"status": "ok", "aup_num": aup.num_aup}), 200
 
 
 @maps.route("/exprort-aup/<string:aup>", methods=["GET"])
