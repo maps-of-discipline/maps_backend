@@ -1,12 +1,16 @@
 # competencies_matrix/logic.py
-from maps.models import db, AupData, SprDiscipline, TblAup # Импорт из основного модуля
-from .models import ( # Импорт моделей нашего модуля
+from maps.models import db, AupData, SprDiscipline, AupInfo
+from .models import (
     EducationalProgram, Competency, Indicator, CompetencyMatrix,
-    ProfStandard, FgosVo, FgosRecommendedPs, EducationalProgramPs,
-    CompetencyType, LaborFunction # и т.д.
+    ProfStandard, FgosVo, FgosRecommendedPs, EducationalProgramPs, EducationalProgramAup,
+    CompetencyType, LaborFunction, GeneralizedLaborFunction, LaborAction, RequiredSkill, RequiredKnowledge, IndicatorPsLink
 )
-# from .parsers import parse_html_to_structured_data # Импорт функции парсера
-# from .nlp_service import suggest_links_nlp, suggest_ipk_nlp # Заглушки для NLP
+import re
+import os
+import datetime
+import tempfile
+from typing import Dict, List, Any, Optional, Tuple, Union
+# from .parsers import html_to_markdown_parser_enhanced, detect_encoding
 
 def get_educational_programs_list():
     """Возвращает список всех ОП."""
@@ -38,7 +42,6 @@ def get_program_details(program_id):
     else:
          details['recommended_ps_list'] = []
 
-
     return details
 
 def get_matrix_for_aup(aup_id):
@@ -50,7 +53,7 @@ def get_matrix_for_aup(aup_id):
     - Существующие связи из CompetencyMatrix
     - Опционально: Предложения от NLP
     """
-    aup_info = TblAup.query.get(aup_id)
+    aup_info = AupInfo.query.get(aup_id)
     if not aup_info:
         return None
 
@@ -105,7 +108,6 @@ def get_matrix_for_aup(aup_id):
         ]
         competencies_data.append(comp_dict)
 
-
     # 3. Получаем существующие связи в матрице для этого АУП
     aup_data_ids = [d['aup_data_id'] for d in disciplines_list]
     existing_links_db = CompetencyMatrix.query.filter(
@@ -151,88 +153,76 @@ def update_matrix_link(aup_data_id, indicator_id, create=True):
         return True # Связи и так не было
 
 def create_competency(data):
-     """Создает новую компетенцию."""
-     # TODO: Добавить валидацию и получение competency_type_id
-     comp_type = CompetencyType.query.filter_by(code=data.get('type_code', 'ПК')).first()
-     if not comp_type:
-         return None # Неверный тип
+    """Создает новую компетенцию."""
+    # TODO: Добавить валидацию и получение competency_type_id
+    comp_type = CompetencyType.query.filter_by(code=data.get('type_code', 'ПК')).first()
+    if not comp_type:
+        return None # Неверный тип
 
-     competency = Competency(
-         competency_type_id=comp_type.id,
-         code=data['code'],
-         name=data['name'],
-         based_on_labor_function_id=data.get('based_on_tf_id') # Может быть None
-         # TODO: Добавить связь с ФГОС, если это УК/ОПК
-     )
-     db.session.add(competency)
-     db.session.commit()
-     return competency
-
+    competency = Competency(
+        competency_type_id=comp_type.id,
+        code=data['code'],
+        name=data['name'],
+        based_on_labor_function_id=data.get('based_on_tf_id') # Может быть None
+        # TODO: Добавить связь с ФГОС, если это УК/ОПК
+    )
+    db.session.add(competency)
+    db.session.commit()
+    return competency
 
 def parse_prof_standard_file(html_content_bytes):
     """
     Обертка для вызова парсера и сохранения результата в БД.
     Возвращает dict с результатом {"success": True/False, ...}
     """
-    from .parsers import html_to_markdown_parser_enhanced, detect_encoding
+    from .parsers import html_to_markdown_parser_enhanced, detect_encoding, parse_prof_standard_file as parser_func
 
-    # 1. Определяем кодировку
-    # Записываем во временный файл или используем BytesIO, если парсер поддерживает
-    import tempfile
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as temp_file:
-        temp_file.write(html_content_bytes)
-        temp_filepath = temp_file.name
+    # Используем функцию из parsers.py для обработки файла
+    result = parser_func(html_content_bytes)
+    
+    if result.get("success"):
+        try:
+            # Сохраняем/Обновляем ПС в БД
+            prof_standard = ProfStandard.query.filter_by(code=result["code"]).first()
+            if not prof_standard:
+                prof_standard = ProfStandard(
+                    code=result["code"], 
+                    name=result["name"], 
+                    parsed_content=result["markdown"]
+                )
+                db.session.add(prof_standard)
+            else:
+                prof_standard.name = result["name"]
+                prof_standard.parsed_content = result["markdown"]
+                prof_standard.updated_at = datetime.datetime.utcnow()
 
-    try:
-        encoding = detect_encoding(temp_filepath) or 'windows-1251' # Запасной вариант
+            # Если есть структурированные данные, можно сохранить их тоже
+            if "structure" in result and prof_standard.id:
+                # Здесь можно добавить логику для сохранения ОТФ/ТФ/действий и т.д.
+                # Например:
+                # save_ps_structure(prof_standard.id, result["structure"])
+                pass
+                
+            db.session.commit()
+            
+            result["prof_standard_id"] = prof_standard.id
+        except Exception as e:
+            db.session.rollback()
+            result["success"] = False
+            result["error"] = f"Ошибка при сохранении в БД: {str(e)}"
+    
+    return result
 
-        # 2. Парсим в Markdown (пока только Markdown)
-        # TODO: Адаптировать парсер, чтобы он возвращал СТРУКТУРУ данных, а не только Markdown
-        markdown_text = html_to_markdown_parser_enhanced(
-            temp_filepath,
-            output_filepath=None, # Возвращаем текст, не пишем в файл
-            default_encoding=encoding
-        )
-
-        if not markdown_text:
-             return {"success": False, "error": "Парсер не вернул текст"}
-
-        # 3. Извлекаем код и название ПС из Markdown (или лучше из HTML до конвертации)
-        # TODO: Улучшить извлечение метаданных
-        code_match = re.search(r'###\s+(\d{2}\.\d{3})', markdown_text) # Примерный поиск кода
-        name_match = re.search(r'ПРОФЕССИОНАЛЬНЫЙ СТАНДАРТ\s*\n*(.*?)\n', markdown_text, re.IGNORECASE)
-        prof_standard_code = code_match.group(1) if code_match else "UNKNOWN"
-        prof_standard_name = name_match.group(1).strip() if name_match else "Название не найдено"
-
-        # 4. Сохраняем/Обновляем ПС в БД
-        prof_standard = ProfStandard.query.filter_by(code=prof_standard_code).first()
-        if not prof_standard:
-            prof_standard = ProfStandard(code=prof_standard_code, name=prof_standard_name, parsed_content=markdown_text)
-            db.session.add(prof_standard)
-        else:
-            prof_standard.name = prof_standard_name # Обновляем имя и контент
-            prof_standard.parsed_content = markdown_text
-            prof_standard.updated_at = datetime.datetime.utcnow()
-
-        # TODO: Реализовать парсинг ОТФ, ТФ, действий, знаний, умений из Markdown/HTML
-        # и сохранение их в связанные таблицы
-
-        db.session.commit()
-
-        return {
-            "success": True,
-            "prof_standard_id": prof_standard.id,
-            "code": prof_standard.code,
-            "name": prof_standard.name,
-            "markdown": markdown_text
-        }
-
-    except Exception as e:
-        db.session.rollback() # Откатываем транзакцию в случае ошибки
-        return {"success": False, "error": f"Ошибка при парсинге или сохранении: {str(e)}"}
-    finally:
-        # Удаляем временный файл
-        if 'temp_filepath' in locals() and os.path.exists(temp_filepath):
-            os.remove(temp_filepath)
+# Вспомогательная функция для сохранения структуры ПС (можно реализовать позже)
+def save_ps_structure(ps_id, structure):
+    """
+    Сохраняет структуру ПС в соответствующие таблицы.
+    
+    Args:
+        ps_id (int): ID профстандарта в БД
+        structure (dict): Структурированные данные ПС
+    """
+    # TODO: Реализовать сохранение ОТФ, ТФ, действий, знаний, умений
+    pass
 
 # ... другие функции бизнес-логики ...

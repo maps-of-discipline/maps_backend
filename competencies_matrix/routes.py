@@ -11,12 +11,14 @@ from .logic import ( # Импортируем функции бизнес-лог
     parse_prof_standard_file # Функция для парсинга
 )
 # Важно: импортируем db и модели из основного приложения или общего места
-from maps.models import db, AupData, SprDiscipline, TblAup # Предполагаем, что они доступны
+# from maps.models import db, AupData, SprDiscipline, TblAup # Предполагаем, что они доступны
+from maps.models import db, AupData, SprDiscipline # Предполагаем, что они доступны
 # Импортируем модели нашего модуля
 from .models import EducationalProgram, Competency, Indicator, CompetencyMatrix
 
 # Защита роутов (пример, может быть реализовано через декораторы в logic.py или middleware)
-from auth.logic import login_required, check_permission # Импортируем из модуля auth
+# from auth.logic import login_required, check_permission # Импортируем из модуля auth
+from auth.logic import login_required # Импортируем из модуля auth
 
 # --- Роуты для Образовательных Программ ---
 @competencies_matrix_bp.route('/programs', methods=['GET'])

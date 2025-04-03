@@ -1,17 +1,17 @@
 import json
 
 import requests
-from flask import Blueprint, make_response, request, jsonify, url_for
+from flask import Blueprint, make_response, request, jsonify, url_for, current_app
 import time
 import secrets
-from flask_mail import Mail, Message
+from flask_mail import Message # Removed Mail import as it's accessed via current_app
 from auth.logic import verify_jwt_token, verify_refresh_token, get_access_token, get_refresh_token
 from auth.models import Users, Roles
 from cabinet.models import StudyGroups
 from maps.models import db
 from .cli import register_commands
 from pprint import pprint
-from app import mail, app
+# Removed: from app import mail, app
 
 auth = Blueprint("auth", __name__, url_prefix='/api')
 register_commands(auth)
@@ -115,7 +115,8 @@ def request_reset():
     msg = Message("Password Reset", recipients=[email])
     msg.body = f"To reset your password, visit the following link: {reset_url}"
 
-    mail.send(msg)
+    # Access mail extension via current_app
+    current_app.extensions['mail'].send(msg)
     print(password_reset_tokens)
     return jsonify({"message": "Instructions to reset your password have been sent to your email."}), 200
 
@@ -139,20 +140,23 @@ def reset_with_token(token):
     return jsonify({'result': 'ok'}), 200
 
 
-@app.route('/api/login/lk', methods=['POST'])
+# Changed @app.route to @auth.route
+@auth.route('/login/lk', methods=['POST'])
 def lk_login():
     request_data = request.get_json()
 
     if 'username' not in request_data or 'password' not in request_data:
         return make_response("Username and password are required", 401)
 
-    response = requests.post(app.config.get('LK_URL'), data={
+    # Use current_app.config
+    response = requests.post(current_app.config.get('LK_URL'), data={
         'ulogin': request_data['username'],
         'upassword': request_data['password'],
     }).json()
 
 
-    res = requests.get(app.config.get('LK_URL'), params={'getUser': '', 'token': response['token']}).json()
+    # Use current_app.config
+    res = requests.get(current_app.config.get('LK_URL'), params={'getUser': '', 'token': response['token']}).json()
     res = res['user']
     name = ' '.join([res['surname'], res['name'], res['patronymic']])
     email = res['email']
