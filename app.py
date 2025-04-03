@@ -5,6 +5,8 @@ from flask_migrate import Migrate
 from sqlalchemy import MetaData
 from flask_mail import Mail
 from dotenv import load_dotenv
+import os
+from flask_sqlalchemy import SQLAlchemy
 
 from cabinet.cabinet import cabinet
 from maps.logic.global_variables import setGlobalVariables
@@ -28,6 +30,11 @@ cors = CORS(app, resources={r"*": {"origins": "*"}}, supports_credentials=True)
 app.config.from_pyfile('config.py')
 app.json.sort_keys = False
 
+# Настройки приложения
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-key-change-me')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
 # Регистрация blueprints
 app.register_blueprint(cabinet, url_prefix=app.config['URL_PREFIX_CABINET'])
 app.register_blueprint(maps_blueprint)
@@ -38,6 +45,8 @@ app.register_blueprint(competencies_matrix_bp)  # Регистрируем на�
 
 # Инициализация расширений
 mail = Mail(app)
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 
 # Настройка SQLAlchemy
 convention = {
@@ -59,3 +68,11 @@ setGlobalVariables(app, blocks, blocks_r, period, period_r, control_type, contro
 # Обработка ошибок только в production
 if not app.config['DEBUG']:
     app.register_error_handler(Exception, handle_exception)
+
+# Простой маршрут для проверки, что приложение работает
+@app.route('/')
+def index():
+    return {'message': 'Competencies Matrix API is running'}, 200
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0')
