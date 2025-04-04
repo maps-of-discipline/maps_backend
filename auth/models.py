@@ -38,12 +38,6 @@ class Users(db.Model, SerializationMixin):
             ondelete='SET NULL'),
     )
 
-    roles = db.relationship(
-        "Roles",
-        secondary=user_roles_table,
-        back_populates='users'
-    )
-
     faculties = db.Relationship(
         "SprFaculty",
         secondary=users_faculty_table,
@@ -68,56 +62,3 @@ class Users(db.Model, SerializationMixin):
 
     def __str__(self):
         return self.login
-
-
-class Token(db.Model):
-    __tablename__ = "tbl_token"
-
-    id = db.Column(db.Integer(), primary_key=True)
-    user_id = db.Column(
-        db.Integer(), 
-        db.ForeignKey(
-            "tbl_users.id_user",
-            ondelete="CASCADE"),
-            nullable=False
-    )
-    refresh_token = db.Column(db.String(256), nullable=False)
-    user_agent = db.Column(db.String(256), nullable=False)
-    ttl = db.Column(db.Integer(), nullable=False)
-
-    user = db.relationship("Users")
-
-
-class Roles(db.Model, SerializationMixin):
-    __tablename__ = "roles"
-
-    id_role = db.Column(db.Integer, primary_key=True)
-    name_role = db.Column(db.String(100), nullable=False)
-
-    modes = db.relationship(
-        "Mode",
-        secondary=permissions_table,
-    )
-
-    users = db.relationship("Users", secondary=user_roles_table, back_populates='roles')
-
-    def __repr__(self):
-        return "<Role %r>" % self.name_role
-
-    def __str__(self):
-        return self.name_role
-
-
-class Mode(db.Model, SerializationMixin):
-    __tablename__ = "Mode"
-
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(255), nullable=False)
-    action = db.Column(db.String(255), nullable=False)
-
-    roles = db.relationship(
-        "Roles", secondary=permissions_table, back_populates="modes", lazy="joined"
-    )
-
-    def __repr__(self):
-        return f"{self.title}.{self.action}"

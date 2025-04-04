@@ -32,3 +32,5 @@ REFRESH_TOKEN_LIFETIME = 7 * 24 * 3600  # 7 days in seconds
 TELEGRAM_URL = "https://api.telegram.org"
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = -4226743295
+
+GRPC_URL = os.getenv("GRPC_URL")
