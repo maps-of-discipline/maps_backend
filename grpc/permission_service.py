@@ -10,8 +10,8 @@ class permissionGRPCService:
     def get_permission(self, service:str) -> list[Permission]:
         pass
 
-    def update_permission(self, service_name: str, permission: str):
+    def update_permission(self, service_name: str, permission: str) -> Permission:
         pass    
 
-    def update_permission(self, service_name: str, permission: str):
+    def update_permission(self, service_name: str, permission: str) -> None:
         pass
