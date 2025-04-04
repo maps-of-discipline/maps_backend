@@ -1,71 +1,52 @@
 # competencies_matrix/models.py
 from maps.models import db, AupInfo, AupData, SprDiscipline
 from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
+from sqlalchemy import inspect
+from typing import List, Dict, Any, Optional, Set, Union
 import datetime
 
-# Базовый класс с полезными полями и методами
+# Базовый класс для всех моделей
 class BaseModel:
-    id = db.Column(db.Integer, primary_key=True)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    """Базовый класс для моделей с общей функциональностью"""
+    
+    @declared_attr
+    def __tablename__(cls):
+        return cls.__name__.lower()
 
-    def to_dict(self, only=None, rules=None):
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(), 
+                           onupdate=db.func.current_timestamp())
+    
+    def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None) -> Dict[str, Any]:
         """
-        Сериализация модели в словарь.
+        Сериализует модель в словарь.
         
         Args:
-            only (tuple, optional): Кортеж с именами полей, которые нужно включить
-            rules (list, optional): Список правил включения/исключения полей
-        
+            rules: Правила сериализации (напр. ['-password', '-tokens'])
+            only: Если указано, возвращает только перечисленные поля
+            
         Returns:
-            dict: Словарь с полями модели
+            Словарь с данными модели
         """
         result = {}
         
-        if only:
-            # Ограничиваем выборку только указанными полями
-            attrs = [col for col in dir(self) if col in only and not col.startswith('_') and col != 'to_dict']
-        else:
-            # Берем все публичные поля и отношения
-            attrs = [col for col in dir(self) 
-                    if not col.startswith('_') and col != 'to_dict' and col != 'query' 
-                    and col != 'metadata' and col != 'query_class']
+        # Обрабатываем список исключений
+        exclude_columns = set()
+        if rules:
+            for rule in rules:
+                if rule.startswith('-'):
+                    exclude_columns.add(rule[1:])
         
-        # Обрабатываем каждое поле с учетом правил
-        for attr in attrs:
-            if rules:
-                # Проверяем правила исключения (начинаются с -)
-                if any(rule == f'-{attr}' for rule in rules):
-                    continue
-                
-                # Проверяем вложенные правила для отношений (например, -user.posts)
-                nested_rules = []
-                for rule in rules:
-                    if rule.startswith(f'{attr}.') or rule.startswith(f'-{attr}.'):
-                        nested_rule = rule[len(f'{attr}.'):]
-                        nested_rules.append(nested_rule)
+        # Получаем атрибуты модели
+        for c in inspect(self).mapper.column_attrs:
+            if only and c.key not in only:
+                continue
+            if c.key in exclude_columns:
+                continue
+            result[c.key] = getattr(self, c.key)
             
-            # Получаем значение атрибута
-            value = getattr(self, attr)
-            
-            # Для отношений один-ко-многим или многие-ко-многим
-            if isinstance(value, list) and value and hasattr(value[0], 'to_dict'):
-                # Сериализуем каждый элемент списка
-                if rules and nested_rules:
-                    result[attr] = [item.to_dict(rules=nested_rules) for item in value]
-                else:
-                    result[attr] = [item.to_dict() for item in value]
-            # Для отношений один-к-одному
-            elif hasattr(value, 'to_dict'):
-                if rules and nested_rules:
-                    result[attr] = value.to_dict(rules=nested_rules)
-                else:
-                    result[attr] = value.to_dict()
-            # Для простых типов
-            elif not callable(value):
-                result[attr] = value
-        
         return result
 
 
@@ -95,28 +76,23 @@ class FgosVo(db.Model, BaseModel):
 
 
 class EducationalProgram(db.Model, BaseModel):
-    """Образовательная программа"""
+    """Образовательная программа (направление подготовки)"""
     __tablename__ = 'competencies_educational_program'
     
-    # Основные поля
-    name = db.Column(db.String(255), nullable=False, comment='Название образовательной программы')
-    short_name = db.Column(db.String(100), nullable=True, comment='Сокращенное название')
-    program_code = db.Column(db.String(50), nullable=False, comment='Код программы')
-    faculty = db.Column(db.String(255), nullable=True, comment='Название факультета')
-    department = db.Column(db.String(255), nullable=True, comment='Название кафедры')
-    year = db.Column(db.Integer, nullable=True, comment='Год набора')
-    education_form = db.Column(db.String(50), nullable=True, comment='Форма обучения (очная/заочная/очно-заочная)')
-    
-    # Связи с ФГОС
+    title = db.Column(db.String(255), nullable=False)
+    code = db.Column(db.String(50), nullable=False, comment='Код направления, например 09.03.01')
+    profile = db.Column(db.String(255), nullable=True)
+    qualification = db.Column(db.String(50), nullable=True)
+    form_of_education = db.Column(db.String(50), nullable=True)
     fgos_vo_id = db.Column(db.Integer, db.ForeignKey('competencies_fgos_vo.id'), nullable=True)
-    fgos = relationship('FgosVo', back_populates='educational_programs')
     
-    # Связи с АУП и ПС через ассоциативные таблицы
+    # Relationships
+    fgos = relationship('FgosVo', back_populates='educational_programs')
     aup_assoc = relationship('EducationalProgramAup', back_populates='educational_program')
     selected_ps_assoc = relationship('EducationalProgramPs', back_populates='educational_program')
     
     def __repr__(self):
-        return f"<ОП {self.name} ({self.program_code})>"
+        return f"<EducationalProgram {self.code} {self.title}>"
 
 
 class EducationalProgramAup(db.Model, BaseModel):
@@ -124,7 +100,7 @@ class EducationalProgramAup(db.Model, BaseModel):
     __tablename__ = 'competencies_educational_program_aup'
     
     educational_program_id = db.Column(db.Integer, db.ForeignKey('competencies_educational_program.id'), nullable=False)
-    aup_id = db.Column(db.Integer, db.ForeignKey('tbl_aup.id'), nullable=False)
+    aup_id = db.Column(db.Integer, db.ForeignKey('tbl_aup.id_aup'), nullable=False)
     # Дополнительные мета-данные о связи (приоритет, основной АУП и т.д.)
     is_primary = db.Column(db.Boolean, default=False, comment='Является ли этот АУП основным для программы')
     
@@ -366,7 +342,13 @@ class Indicator(db.Model, BaseModel):
     labor_functions = relationship('LaborFunction', secondary='competencies_indicator_ps_link', back_populates='indicators')
     
     # Связь с дисциплинами через матрицу компетенций
-    aup_data_entries = relationship('AupData', secondary='competencies_matrix', back_populates='indicators')
+    aup_data_entries = relationship('AupData', 
+                                  secondary='competencies_matrix',
+                                  back_populates='indicators',
+                                  lazy='dynamic')
+    
+    # Связь с матрицей компетенций
+    matrix_entries = relationship('CompetencyMatrix', back_populates='indicator')
     
     __table_args__ = (
         db.UniqueConstraint('code', 'competency_id', name='uq_indicator_code_competency'),
@@ -399,14 +381,32 @@ class CompetencyMatrix(db.Model, BaseModel):
     aup_data_id = db.Column(db.Integer, db.ForeignKey('aup_data.id'), nullable=False)
     indicator_id = db.Column(db.Integer, db.ForeignKey('competencies_indicator.id'), nullable=False)
     
-    # Дополнительные поля - вес, степень влияния и т.д.
-    weight = db.Column(db.Float, default=1.0, comment='Вес влияния дисциплины на формирование ИДК')
-    is_manual = db.Column(db.Boolean, default=True, comment='Связь установлена вручную (не алгоритмом)')
+    # Мета-данные связи
+    relevance_score = db.Column(db.Float, nullable=True, comment='Оценка релевантности (от 0 до 1)')
+    is_manual = db.Column(db.Boolean, default=False, comment='Связь установлена вручную')
+    created_by = db.Column(db.Integer, nullable=True, comment='ID пользователя, создавшего связь')
+    
+    # Отношения
+    indicator = relationship('Indicator', back_populates='matrix_entries')
     
     __table_args__ = (
-        db.UniqueConstraint('aup_data_id', 'indicator_id', name='uq_matrix_aup_data_indicator'),
+        db.UniqueConstraint('aup_data_id', 'indicator_id', name='uq_matrix_aup_indicator'),
     )
+    
+    def __repr__(self):
+        return f"<Связь AupData({self.aup_data_id})<->Indicator({self.indicator_id})>"
 
+# Определяем отношения для моделей AupData из maps.models
+# Добавляем атрибут indicators в модель AupData
+from maps.models import AupData
 
-# Определяем отношения для моделей AupData (из maps.models)
-AupData.indicators = relationship('Indicator', secondary='competencies_matrix', back_populates='aup_data_entries')
+# Используем event listener для добавления relationship к существующей модели AupData
+@db.event.listens_for(AupData, 'mapper_configured')
+def add_aupdata_relationships(mapper, class_):
+    if not hasattr(class_, 'indicators'):
+        class_.indicators = relationship(
+            'Indicator', 
+            secondary='competencies_matrix',
+            back_populates='aup_data_entries',  # Changed from backref to match Indicator's relationship
+            lazy='dynamic'
+        )

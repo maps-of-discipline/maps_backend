@@ -2,13 +2,10 @@
 from flask import Blueprint, jsonify
 
 # Создаем Blueprint для нашего модуля
-# 'competencies_matrix_bp' - уникальное имя для Blueprint
-# __name__ - имя текущего модуля Python
-# url_prefix='/api/competencies' - базовый URL для всех роутов этого модуля
 competencies_matrix_bp = Blueprint(
     'competencies_matrix_bp',
     __name__,
-    url_prefix='/api/competencies' # Префикс для всех API этого модуля
+    url_prefix='/api/competencies'  # Префикс для всех API этого модуля
 )
 
 # Настраиваем обработчики ошибок для нашего blueprint
@@ -29,6 +26,5 @@ def init_app(app):
     Инициализация модуля при подключении к основному приложению.
     Здесь можно добавить дополнительные настройки.
     """
+    # Например, добавить обработчики событий для app или настроить логирование
     pass
-
-# Здесь можно добавить обработчики ошибок, контекстные процессоры и т.д., специфичные для модуля

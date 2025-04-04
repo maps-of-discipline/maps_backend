@@ -1,177 +1,194 @@
 # competencies_matrix/parsers.py
 """
-Модуль для парсинга профессиональных стандартов.
-Содержит функции для извлечения структурированных данных из HTML/Markdown файлов профстандартов.
+Module for parsing Professional Standards into structured data.
 """
 import re
-import os
-import chardet
+import pandas as pd
+import io
 from bs4 import BeautifulSoup
-from markdownify import markdownify as md
+from typing import Dict, List, Any, Optional, Tuple
 import tempfile
-from typing import Dict, List, Optional, Union, Any, Tuple
+import os
 
-
-def detect_encoding(file_path: str) -> str:
+def detect_encoding(file_bytes: bytes) -> str:
     """
-    Определяет кодировку файла.
+    Detect the encoding of a file.
     
     Args:
-        file_path (str): Путь к файлу
+        file_bytes: Bytes of the file to detect encoding for
         
     Returns:
-        str: Определённая кодировка (например, 'utf-8', 'windows-1251')
+        str: Detected encoding
     """
-    with open(file_path, 'rb') as f:
-        raw_data = f.read()
-        result = chardet.detect(raw_data)
-        return result['encoding']
+    # Try common encodings
+    encodings = ['utf-8', 'cp1251', 'iso-8859-1', 'utf-16']
+    
+    for enc in encodings:
+        try:
+            file_bytes.decode(enc)
+            return enc
+        except UnicodeDecodeError:
+            continue
+    
+    # Default to utf-8 if detection fails
+    return 'utf-8'
 
-
-def html_to_markdown_parser_enhanced(
-    input_filepath: str,
-    output_filepath: Optional[str] = None,
-    default_encoding: str = 'utf-8'
-) -> Optional[str]:
+def html_to_markdown_parser_enhanced(html_content: str) -> str:
     """
-    Преобразует HTML файл профстандарта в Markdown с улучшенным форматированием.
+    Convert HTML content to enhanced Markdown with proper structure for PS.
     
     Args:
-        input_filepath (str): Путь к входному HTML файлу
-        output_filepath (Optional[str]): Путь для сохранения результата (если None, не сохраняется)
-        default_encoding (str): Кодировка по умолчанию, если не удается определить
+        html_content: HTML content of professional standard
         
     Returns:
-        Optional[str]: Текст в формате Markdown или None в случае ошибки
+        str: Markdown formatted content
     """
-    try:
-        # Определяем кодировку, если не указана явно
-        encoding = detect_encoding(input_filepath) or default_encoding
-        
-        # Читаем HTML файл
-        with open(input_filepath, 'r', encoding=encoding, errors='replace') as f:
-            html_content = f.read()
-        
-        # Парсим HTML с помощью BeautifulSoup
-        soup = BeautifulSoup(html_content, 'html.parser')
-        
-        # Предобработка: удаляем ненужные элементы
-        for tag in soup.find_all(['script', 'style']):
-            tag.decompose()
-        
-        # Преобразуем в Markdown
-        markdown_text = md(str(soup), heading_style="ATX")
-        
-        # Постобработка: удаляем лишние переносы, улучшаем форматирование
-        markdown_text = re.sub(r'\n{3,}', '\n\n', markdown_text)
-        
-        # Сохраняем результат, если указан выходной файл
-        if output_filepath:
-            with open(output_filepath, 'w', encoding='utf-8') as f:
-                f.write(markdown_text)
-        
-        return markdown_text
+    # Basic implementation - would need to be expanded for real use
+    # This would use libraries like markdownify or custom conversion logic
+    from bs4 import BeautifulSoup
     
-    except Exception as e:
-        print(f"Ошибка при парсинге HTML: {str(e)}")
-        return None
-
+    # Implement a real conversion from HTML to Markdown for PS
+    # For now, just a simplified version for demonstration
+    soup = BeautifulSoup(html_content, 'html.parser')
+    text = soup.get_text()
+    
+    # Basic formatting: headers
+    text = re.sub(r'(Обобщенная трудовая функция|ОТФУНКЦИЯ)\s+([А-Я])[.\s]+(.*)', r'## \2. \3', text)
+    text = re.sub(r'(Трудовая функция|ФУНКЦИЯ)\s+([А-Я])/(\d+\.\d+)[.\s]+(.*)', r'### \2/\3. \4', text)
+    
+    # Basic formatting: sections
+    text = re.sub(r'Трудовые действия', r'#### Трудовые действия', text)
+    text = re.sub(r'Необходимые умения', r'#### Необходимые умения', text)
+    text = re.sub(r'Необходимые знания', r'#### Необходимые знания', text)
+    
+    return text
 
 def extract_ps_structure(markdown_text: str) -> Dict[str, Any]:
     """
-    Извлекает структурированные данные из Markdown текста профстандарта.
+    Extract structured data from a Markdown formatted PS.
     
     Args:
-        markdown_text (str): Текст профстандарта в формате Markdown
+        markdown_text: Markdown text of the professional standard
         
     Returns:
-        Dict[str, Any]: Словарь с структурированными данными профстандарта
+        dict: Structured data of the PS
     """
-    # Извлекаем метаданные (код, название)
-    ps_data = {}
-    
-    # Поиск кода ПС - обычно это число XX.XXX
-    code_match = re.search(r'###\s+(\d{2}\.\d{3})', markdown_text)
-    ps_data['code'] = code_match.group(1) if code_match else "UNKNOWN"
-    
-    # Поиск названия ПС - обычно после "ПРОФЕССИОНАЛЬНЫЙ СТАНДАРТ"
-    name_match = re.search(r'ПРОФЕССИОНАЛЬНЫЙ СТАНДАРТ\s*\n*(.*?)\n', markdown_text, re.IGNORECASE)
-    ps_data['name'] = name_match.group(1).strip() if name_match else "Название не найдено"
-    
-    # Извлечение ОТФ/ТФ/действий/знаний/умений - базовая реализация
-    # Здесь должен быть более сложный алгоритм для полного разбора структуры ПС
+    # Initialize result structure
+    ps_data = {
+        'code': '',  # Will be filled later or from filename
+        'name': '',  # Will be filled later or from metadata
+        'generalized_labor_functions': []
+    }
     
     otf_list = []
-    # Простой паттерн для поиска ОТФ (нужно будет уточнить)
-    otf_pattern = r'## [А-Я]\. (.*?)\n'
+    # Паттерн для поиска ОТФ
+    otf_pattern = r'## ([А-Я])\. (.*?)\n'
     otf_matches = re.finditer(otf_pattern, markdown_text)
     
     for match in otf_matches:
-        otf_name = match.group(1).strip()
+        otf_code = match.group(1).strip()
+        otf_name = match.group(2).strip()
         otf_data = {
-            'code': match.group(0)[3].strip(),  # Обычно это буква (A, B, C, ...)
+            'code': otf_code,
             'name': otf_name,
             'labor_functions': []  # Здесь будут ТФ
         }
         otf_list.append(otf_data)
+        
+        # Найдем ТФ внутри этой ОТФ
+        # Это упрощенная логика, в реальности нужно учитывать границы ОТФ
+        tf_pattern = r'### ' + otf_code + r'/(\d+\.\d+)\. (.*?)\n'
+        tf_matches = re.finditer(tf_pattern, markdown_text)
+        
+        for tf_match in tf_matches:
+            tf_code = otf_code + '/' + tf_match.group(1)
+            tf_name = tf_match.group(2).strip()
+            tf_data = {
+                'code': tf_code,
+                'name': tf_name,
+                'labor_actions': [],
+                'required_skills': [],
+                'required_knowledge': []
+            }
+            otf_data['labor_functions'].append(tf_data)
     
     ps_data['generalized_labor_functions'] = otf_list
     
     return ps_data
 
-
-def parse_prof_standard_file(html_content: bytes) -> Dict[str, Any]:
+def parse_prof_standard(file_path: str) -> Dict[str, Any]:
     """
-    Комплексная функция для парсинга и обработки HTML файла профстандарта.
+    Parse a professional standard file and extract its structure.
     
     Args:
-        html_content (bytes): Содержимое HTML файла в байтах
+        file_path: Path to the professional standard file
         
     Returns:
-        Dict[str, Any]: Результат парсинга с ключами:
-            - success (bool): Успешен ли парсинг
-            - prof_standard_id (Optional[int]): ID профстандарта в БД (если сохранен)
-            - code (str): Код профстандарта
-            - name (str): Название профстандарта
-            - markdown (str): Текст в формате Markdown
-            - structure (Dict): Структурированные данные ПС
-            - error (Optional[str]): Текст ошибки (если была)
+        dict: Structured data from the professional standard
     """
-    # Создаем временный файл для работы с HTML
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as temp_file:
-        temp_file.write(html_content)
-        temp_filepath = temp_file.name
+    # Read file
+    with open(file_path, 'rb') as f:
+        file_bytes = f.read()
     
+    # Detect encoding
+    encoding = detect_encoding(file_bytes)
+    
+    # Decode the file
+    file_content = file_bytes.decode(encoding)
+    
+    # Convert to markdown if it's HTML
+    if file_path.lower().endswith('.html'):
+        markdown_text = html_to_markdown_parser_enhanced(file_content)
+    else:
+        # Assume it's already markdown or plain text
+        markdown_text = file_content
+    
+    # Extract structure
+    ps_structure = extract_ps_structure(markdown_text)
+    
+    # Add metadata
+    ps_structure['parsed_content'] = markdown_text
+    
+    return ps_structure
+
+# Функция, вызываемая из routes.py для парсинга загруженного файла
+def parse_uploaded_prof_standard(file_bytes: bytes, filename: str) -> Dict[str, Any]:
+    """
+    Parse an uploaded professional standard file.
+    
+    Args:
+        file_bytes: Bytes of the uploaded file
+        filename: Name of the uploaded file
+        
+    Returns:
+        dict: Structured data from the professional standard
+    """
+    # Detect encoding
+    encoding = detect_encoding(file_bytes)
+    
+    # Decode the file
     try:
-        # 1. Определяем кодировку
-        encoding = detect_encoding(temp_filepath) or 'windows-1251'
-        
-        # 2. Парсим в Markdown
-        markdown_text = html_to_markdown_parser_enhanced(
-            temp_filepath,
-            output_filepath=None,
-            default_encoding=encoding
-        )
-        
-        if not markdown_text:
-            return {"success": False, "error": "Парсер не вернул текст"}
-        
-        # 3. Извлекаем структурированные данные
-        ps_structure = extract_ps_structure(markdown_text)
-        
-        # 4. Формируем результат
-        return {
-            "success": True,
-            "code": ps_structure['code'],
-            "name": ps_structure['name'],
-            "markdown": markdown_text,
-            "structure": ps_structure
-        }
-        
-    except Exception as e:
-        return {"success": False, "error": f"Ошибка при парсинге или обработке: {str(e)}"}
+        file_content = file_bytes.decode(encoding)
+    except UnicodeDecodeError:
+        # Fallback to latin-1 which usually doesn't fail
+        file_content = file_bytes.decode('latin-1')
     
-    finally:
-        # Удаляем временный файл
-        if os.path.exists(temp_filepath):
-            os.remove(temp_filepath)
+    # Convert to markdown if it's HTML
+    if filename.lower().endswith('.html'):
+        markdown_text = html_to_markdown_parser_enhanced(file_content)
+    else:
+        # Assume it's already markdown or plain text
+        markdown_text = file_content
+    
+    # Extract structure
+    ps_structure = extract_ps_structure(markdown_text)
+    
+    # Add metadata
+    ps_structure['parsed_content'] = markdown_text
+    
+    # Try to extract code from filename (e.g., "ps_06.001.html" -> "06.001")
+    code_match = re.search(r'ps[_-]?(\d+\.\d+)', filename.lower())
+    if code_match:
+        ps_structure['code'] = code_match.group(1)
+    
+    return ps_structure

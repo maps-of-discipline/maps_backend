@@ -50,4 +50,4 @@ WTForms==3.0.1
 XlsxWriter==3.1.2
 marshmallow>=3.14.0
 markdownify>=0.11.0
-cryptography>=3.4.0  # Required for PyMySQL
+cryptography>=3.4.0  # Для PyMySQL

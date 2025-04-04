@@ -7,7 +7,6 @@ from flask_mail import Mail
 from dotenv import load_dotenv
 import os
 from flask_sqlalchemy import SQLAlchemy
-
 from cabinet.cabinet import cabinet
 from maps.logic.global_variables import setGlobalVariables
 from maps.logic.take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
@@ -21,20 +20,17 @@ from competencies_matrix import competencies_matrix_bp  # Импортируем
 from utils.handlers import handle_exception
 
 load_dotenv()
-
 app = Flask(__name__)
 application = app
-
 # Настройка CORS
 cors = CORS(app, resources={r"*": {"origins": "*"}}, supports_credentials=True)
 app.config.from_pyfile('config.py')
 app.json.sort_keys = False
-
 # Настройки приложения
+
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-key-change-me')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
 # Регистрация blueprints
 app.register_blueprint(cabinet, url_prefix=app.config['URL_PREFIX_CABINET'])
 app.register_blueprint(maps_blueprint)
@@ -42,10 +38,9 @@ app.register_blueprint(auth_blueprint)
 app.register_blueprint(unification_blueprint)
 app.register_blueprint(admin_blueprint)
 app.register_blueprint(competencies_matrix_bp)  # Регистрируем наш blueprint
-
 # Инициализация расширений
 mail = Mail(app)
-db = SQLAlchemy(app)
+# db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
 # Настройка SQLAlchemy
