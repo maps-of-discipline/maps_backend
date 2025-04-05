@@ -8,7 +8,32 @@ class AuthGRPCService:
         self.stub = get_auth_service()
 
     async def get_payload(jwt: str) -> TokenPayload:
-        pass
+        request = auth_pb2.GetPayloadRequest(token=jwt)
+
+        response = self.stub.GetPayload(request)
+
+        return TokenPayload(
+            user_id=response.user_id,
+            role=response.role,
+            expires_at=response.expires_at,
+            service_name=response.service_name,
+            permissions=response.permissions,
+        )
     
     async def get_user_data(self, jwt:str) -> UserData:
-        pass
+        request = auth_pb2.GetUserRequest(jwt)
+
+        response = self.stub.GetUser(
+            id=response.id,
+            external_id=response.external_id,
+            role=response.role,
+            external_role=response.external_role,
+            name=response.name,
+            surname=response.surname,
+            patronymic=response.patronymic,
+            email=response.email,
+            faculty=response.faculty,
+            login=response.login,
+            last_login=response.last_login,
+            created_at=response.created_at,
+        )
