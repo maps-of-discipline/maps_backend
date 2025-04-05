@@ -5,10 +5,10 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from maps.models import db
 from sqlalchemy_serializer import SerializerMixin
 
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy_serializer import SerializerMixin
-
-db = SQLAlchemy() 
+# Remove duplicate SQLAlchemy instance
+# from flask_sqlalchemy import SQLAlchemy
+# from sqlalchemy_serializer import SerializerMixin
+# db = SQLAlchemy() 
 
 users_faculty_table = db.Table(
     "users_faculty",

@@ -3,6 +3,31 @@ from sqlalchemy_serializer import SerializerMixin
 
 db = SQLAlchemy()
 
+# Temporary function to check if tables exist, to be used with "minimal_schema.sql".
+# To be deleted after sorting out issues with "competencies_matrix".
+def init_db():
+    """Initialize database tables only if they don't exist"""
+    with db.engine.connect() as conn:
+        # Check if critical tables exist
+        table_exists = db.engine.dialect.has_table(conn, 'd_blocks')
+        if not table_exists:
+            # Create minimal required tables for startup by executing the minimal_schema.sql
+            with open('minimal_schema.sql', 'r') as f:
+                sql_commands = f.read()
+                # Split SQL commands properly on semicolons but not inside string literals
+                from sqlalchemy import text
+                # Execute each SQL command separately
+                for command in sql_commands.split(';'):
+                    if command.strip():
+                        try:
+                            conn.execute(text(command))
+                        except Exception as e:
+                            print(f"Error executing SQL: {e}")
+                            print(f"Failed command: {command}")
+                
+                # Explicitly commit after all commands
+                conn.commit()
+
 
 class SprBranch(db.Model, SerializerMixin):
     __tablename__ = 'spr_branch'

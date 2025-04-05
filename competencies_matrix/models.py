@@ -6,6 +6,40 @@ from sqlalchemy import inspect
 from typing import List, Dict, Any, Optional, Set, Union
 import datetime
 
+# Add this function at the top, before model definitions
+def create_tables_if_needed():
+    """Create the tables specific to the competencies_matrix module if they don't exist"""
+    from sqlalchemy import text
+    
+    # Check if our core tables exist
+    with db.engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT COUNT(*)
+            FROM information_schema.tables 
+            WHERE table_name = 'competencies_matrix'
+        """))
+        if result.scalar() == 0:
+            # Tables don't exist, create them
+            db.create_all()
+            # Initialize any required lookup data
+            initialize_lookup_data()
+
+def initialize_lookup_data():
+    """Initialize any required lookup data for the competencies_matrix module"""
+    try:
+        # Example: Initialize competency types if needed
+        from .models import CompetencyType
+        if not CompetencyType.query.first():
+            types = [
+                CompetencyType(code='УК', name='Универсальная компетенция'),
+                CompetencyType(code='ОПК', name='Общепрофессиональная компетенция'),
+                CompetencyType(code='ПК', name='Профессиональная компетенция')
+            ]
+            db.session.add_all(types)
+            db.session.commit()
+    except Exception as e:
+        print(f"Warning: Could not initialize lookup data: {e}")
+
 # Базовый класс для всех моделей
 class BaseModel:
     """Базовый класс для моделей с общей функциональностью"""

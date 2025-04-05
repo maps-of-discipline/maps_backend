@@ -11,7 +11,7 @@ from cabinet.cabinet import cabinet
 from maps.logic.global_variables import setGlobalVariables
 from maps.logic.take_from_bd import (blocks, blocks_r, period, period_r, control_type, control_type_r,
                                      ed_izmereniya, ed_izmereniya_r, chast, chast_r, type_record, type_record_r)
-from maps.models import db
+from maps.models import db, init_db  # Add init_db import
 from maps.routes import maps as maps_blueprint
 from unification import unification_blueprint
 from auth.routes import auth as auth_blueprint
@@ -33,7 +33,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Регистрация blueprints
 app.register_blueprint(cabinet, url_prefix=app.config['URL_PREFIX_CABINET'])
-app.register_blueprint(maps_blueprint)
+# app.register_blueprint(maps_blueprint)
 app.register_blueprint(auth_blueprint)
 app.register_blueprint(unification_blueprint)
 app.register_blueprint(admin_blueprint)
@@ -54,6 +54,8 @@ convention = {
 
 metadata = MetaData(naming_convention=convention)
 db.init_app(app)
+with app.app_context():
+    init_db()  # Initialize minimal DB structure
 migrate = Migrate(app, db)
 
 # Глобальные переменные

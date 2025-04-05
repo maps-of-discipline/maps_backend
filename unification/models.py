@@ -9,7 +9,7 @@ faculty_discipline_period_assoc = db.Table(
 unification_okso_assoc = db.Table(
     'unification_okso_assoc',
     db.Column('unification_id', db.ForeignKey('unification_discipline.id', ondelete='CASCADE')),
-    db.Column('okso_id', db.String(255, collation='utf8mb4_unicode_ci'), db.ForeignKey("spr_okco.program_code", ondelete='CASCADE'))
+    db.Column('okso_id', db.String(255), db.ForeignKey("spr_okco.program_code", ondelete='CASCADE'))
 )
 
 
