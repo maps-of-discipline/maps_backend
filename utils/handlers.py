@@ -12,15 +12,15 @@ def escapte_special(message: str) -> str:
         message = message.replace(el, '\\' + el)
     return message
 
-def send_telegram_message(message: str) -> requests.Response:
-    response: requests.Response = requests.get(
-        url=f'{TELEGRAM_URL}/bot{TELEGRAM_TOKEN}/sendMessage', 
-        params={
-            'chat_id': TELEGRAM_CHAT_ID, 
-            'text': message, 
-            'parse_mode': "MarkdownV2"
-        })
-    return response
+# def send_telegram_message(message: str) -> requests.Response:
+#     response: requests.Response = requests.get(
+#         url=f'{TELEGRAM_URL}/bot{TELEGRAM_TOKEN}/sendMessage', 
+#         params={
+#             'chat_id': TELEGRAM_CHAT_ID, 
+#             'text': message, 
+#             'parse_mode': "MarkdownV2"
+#         })
+#     return response
 
 
 def handle_exception(e):
@@ -33,12 +33,12 @@ def handle_exception(e):
     tb = escapte_special(traceback.format_exc())
     message += f"```python\n{tb}```"
 
-    response = send_telegram_message(message)
+    # response = send_telegram_message(message)
 
-    if not response.json()['ok']:
-        message = '*ErrorHandler error*\n\n'
-        message += f'```json\n{response.json()}```'
-        send_telegram_message(message)
+    # if not response.json()['ok']:
+    #     message = '*ErrorHandler error*\n\n'
+    #     message += f'```json\n{response.json()}```'
+    #     send_telegram_message(message)
 
     print(e)
 
