@@ -1,234 +1,459 @@
 # competencies_matrix/logic.py
-from maps.models import db, AupData, SprDiscipline, AupInfo  # Импортирование существующих БД
+from typing import Dict, List, Any, Optional
+from sqlalchemy.orm import joinedload, selectinload # Для эффективной загрузки связей
+from sqlalchemy.exc import SQLAlchemyError # Для обработки ошибок БД
+
+# Импорты из основного приложения (адаптируй пути, если нужно)
+from maps.models import db, AupData, SprDiscipline, AupInfo
+# Импорты моделей нашего модуля
 from .models import (
     EducationalProgram, Competency, Indicator, CompetencyMatrix,
     ProfStandard, FgosVo, FgosRecommendedPs, EducationalProgramPs, EducationalProgramAup,
-    CompetencyType, LaborFunction, GeneralizedLaborFunction, LaborAction, RequiredSkill, RequiredKnowledge, IndicatorPsLink
+    CompetencyType # ... и другие по необходимости ...
 )
-import re
-import os
-import datetime
-import tempfile
-from typing import Dict, List, Any, Optional, Tuple, Union
-from .parsers import parse_uploaded_prof_standard  # Импортируем функцию из parsers.py
+# from .parsers import parse_prof_standard_structure # Импорт парсера (для будущего)
+# from .nlp_service import suggest_links_nlp # Импорт NLP-сервиса (для будущего)
 
-def get_educational_programs_list():
-    """Возвращает список всех ОП."""
-    return EducationalProgram.query.all()
+# --- Функции для получения данных для отображения ---
 
-def get_program_details(program_id):
-    """Возвращает детали ОП, включая ФГОС, АУП, ПС."""
-    program = EducationalProgram.query.get(program_id)
-    if not program:
-        return None
-    
-    # Получаем связанные данные
-    program_data = program.to_dict()
-    
-    # Добавляем информацию о ФГОС
-    if program.fgos_vo_id:
-        program_data['fgos'] = program.fgos.to_dict()
-    
-    # Добавляем информацию о выбранных ПС
-    program_data['selected_ps'] = []
-    for link in EducationalProgramPs.query.filter_by(educational_program_id=program_id).all():
-        ps_data = link.prof_standard.to_dict()
-        ps_data['link_id'] = link.id
-        program_data['selected_ps'].append(ps_data)
-    
-    # Добавляем информацию об АУП
-    program_data['aups'] = []
-    for link in EducationalProgramAup.query.filter_by(educational_program_id=program_id).all():
-        aup_info = AupInfo.query.get(link.aup_id)
-        if aup_info:
-            aup_data = aup_info.to_dict()
-            aup_data['link_id'] = link.id
-            program_data['aups'].append(aup_data)
-    
-    return program_data
-
-def get_matrix_for_aup(aup_id):
+def get_educational_programs_list() -> List[EducationalProgram]:
     """
-    Возвращает данные для матрицы компетенций по указанному АУП.
-    Включает:
-    - Информацию об АУП
-    - Список дисциплин
-    - Список компетенций и их индикаторов
-    - Существующие связи дисциплин с индикаторами
-    - (Опционально) Предложения по связям
+    Получает список всех образовательных программ из БД.
+
+    Returns:
+        List[EducationalProgram]: Список объектов SQLAlchemy EducationalProgram.
     """
-    # 0. Получаем инфо об АУП
-    aup_info = AupInfo.query.get(aup_id)
-    if not aup_info:
-        return None
-    
-    # Получаем ОП по этому АУП
-    aup_program_link = EducationalProgramAup.query.filter_by(aup_id=aup_id).first()
-    if not aup_program_link:
-        return None
-    
-    program = EducationalProgram.query.get(aup_program_link.educational_program_id)
-    
-    # 1. Получаем список дисциплин для этого АУП
-    aup_data_entries = AupData.query.filter_by(id_aup=aup_id).all()
-    disciplines_list = [
-        {
-            "aup_data_id": entry.id, # ID из aup_data, нужен для связи в матрице
-            "discipline_id": entry.id_discipline,
-            "title": entry.unique_discipline.title if hasattr(entry, 'unique_discipline') else f"Дисциплина ID:{entry.id_discipline}",
-            "semester": entry.semester
-            # Можно добавить ZET, часы и т.д.
-        } for entry in aup_data_entries if hasattr(entry, 'id_discipline')
-    ]
+    try:
+        # Просто возвращаем все программы, можно добавить фильтры/пагинацию позже
+        programs = EducationalProgram.query.order_by(EducationalProgram.name).all()
+        return programs
+    except SQLAlchemyError as e:
+        # Логирование ошибки
+        print(f"Database error in get_educational_programs_list: {e}")
+        # В реальном приложении здесь может быть более сложное логирование
+        return [] # Возвращаем пустой список в случае ошибки
 
-    # 2. Получаем все компетенции (УК, ОПК, ПК) и их ИДК, связанные с этой ОП
-    # УК/ОПК берем из ФГОС программы
-    competencies = []
-    if program and program.fgos_vo_id:
-        fgos_competencies = Competency.query.join(CompetencyType).filter(
-            Competency.fgos_vo_id == program.fgos_vo_id,
-            CompetencyType.code.in_(['УК', 'ОПК'])
-        ).options(db.joinedload(Competency.indicators)).all()
-        competencies.extend(fgos_competencies)
+def get_program_details(program_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Получает детальную информацию по ОП, включая связанные сущности.
 
-    # ПК берем те, что связаны с выбранными для ОП профстандартами
-    # TODO: Уточнить, как ПК связаны с ОП (возможно, через based_on_labor_function_id и EducationalProgramPs?)
-    # Пока для примера возьмем все ПК
-    pk_competencies = Competency.query.join(CompetencyType).filter(
-        CompetencyType.code == 'ПК'
-        # TODO: Добавить фильтр по program_id или связанным ПС
-    ).options(db.joinedload(Competency.indicators)).all()
-    competencies.extend(pk_competencies)
+    Args:
+        program_id: ID образовательной программы.
 
-    # Форматируем компетенции и ИДК
-    competencies_data = []
-    for comp in sorted(competencies, key=lambda c: (c.competency_type.code, c.code)):
-        comp_dict = comp.to_dict(rules=['-indicators']) # Сериализуем без индикаторов сначала
-        comp_dict['type_code'] = comp.competency_type.code if hasattr(comp, 'competency_type') else "УК"
-        comp_dict['indicators'] = [
-            ind.to_dict(rules=['-competency']) # Сериализуем индикаторы без обратной ссылки
-            for ind in sorted(comp.indicators, key=lambda i: i.code) if hasattr(comp, 'indicators')
+    Returns:
+        Optional[Dict[str, Any]]: Словарь с данными программы или None, если не найдена.
+                                   Структура должна включать детали ФГОС, список АУП,
+                                   список выбранных и рекомендованных ПС.
+    """
+    try:
+        program = EducationalProgram.query.options(
+            # Эффективно загружаем связанные данные одним запросом
+            selectinload(EducationalProgram.fgos),
+            selectinload(EducationalProgram.aup_assoc).selectinload(EducationalProgramAup.aup),
+            selectinload(EducationalProgram.selected_ps_assoc).selectinload(EducationalProgramPs.prof_standard)
+        ).get(program_id)
+
+        if not program:
+            return None
+
+        # Сериализуем программу и связанные объекты
+        details = program.to_dict(rules=[
+            '-selected_ps_assoc', # Убираем ассоциативные таблицы из основного объекта
+            '-aup_assoc',
+            '-fgos.educational_programs' # Предотвращаем цикл
+        ])
+
+        # Добавляем детали в нужном формате
+        details['fgos_details'] = program.fgos.to_dict(rules=['-educational_programs','-recommended_ps_assoc']) if program.fgos else None
+        details['aup_list'] = [assoc.aup.to_dict() for assoc in program.aup_assoc if assoc.aup]
+        details['selected_ps_list'] = [
+            assoc.prof_standard.to_dict(only=('id', 'code', 'name'))
+            for assoc in program.selected_ps_assoc if assoc.prof_standard
         ]
-        competencies_data.append(comp_dict)
 
-    # 3. Получаем существующие связи в матрице для этого АУП
-    aup_data_ids = [d['aup_data_id'] for d in disciplines_list]
-    existing_links_db = CompetencyMatrix.query.filter(
-        CompetencyMatrix.aup_data_id.in_(aup_data_ids)
-    ).all()
-    existing_links_data = [link.to_dict(only=('aup_data_id', 'indicator_id')) for link in existing_links_db]
+        # Получаем рекомендованные ПС для связанного ФГОС
+        recommended_ps_list = []
+        if program.fgos and program.fgos.recommended_ps_assoc:
+            # Здесь может быть эффективнее сделать отдельный запрос, если ФГОС уже загружен
+            # Мы уже загрузили связи, так что можем использовать их
+             recommended_ps_list = [
+                 assoc.prof_standard.to_dict(only=('id', 'code', 'name'))
+                 for assoc in program.fgos.recommended_ps_assoc if assoc.prof_standard
+             ]
+        details['recommended_ps_list'] = recommended_ps_list
 
-    # 4. Получаем предложения от NLP (заглушка)
-    suggestions = [] # suggest_links_nlp(disciplines_list, competencies_data)
+        return details
+    except SQLAlchemyError as e:
+        print(f"Database error in get_program_details for program_id {program_id}: {e}")
+        return None
 
-    return {
-        "aup_info": aup_info.to_dict(), # Используем модель из maps.models
-        "disciplines": disciplines_list,
-        "competencies": competencies_data,
-        "links": existing_links_data,
-        "suggestions": suggestions
-    }
+def get_matrix_for_aup(aup_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Собирает все данные для отображения матрицы компетенций для АУП.
+    КЛЮЧЕВАЯ ФУНКЦИЯ ДЛЯ MVP.
+
+    Args:
+        aup_id: ID Академического учебного плана (из таблицы tbl_aup).
+
+    Returns:
+        Optional[Dict[str, Any]]: Словарь с данными для фронтенда или None.
+        Структура словаря:
+        {
+            "aup_info": { ... данные АУП из AupInfo ... },
+            "disciplines": [ { "aup_data_id": ..., "discipline_id": ..., "title": ..., "semester": ... }, ...],
+            "competencies": [
+                { "id": ..., "code": ..., "name": ..., "type_code": ...,
+                  "indicators": [ { "id": ..., "code": ..., "formulation": ... }, ...]
+                }, ...
+            ],
+            "links": [ { "aup_data_id": ..., "indicator_id": ... }, ... ], // Существующие связи
+            "suggestions": [] // Заглушка для NLP предложений (MVP)
+        }
+    """
+    try:
+        # 1. Получаем инфо об АУП (из maps.models)
+        aup_info = AupInfo.query.get(aup_id)
+        if not aup_info:
+            print(f"AUP with id {aup_id} not found.")
+            return None
+
+        # 2. Находим ОП, связанную с этим АУП
+        #    Предполагаем, что связь AupInfo -> EducationalProgramAup -> EducationalProgram настроена
+        #    Если нет, то делаем запрос через EducationalProgramAup
+        program_assoc = EducationalProgramAup.query.filter_by(aup_id=aup_id).first()
+        if not program_assoc:
+            print(f"Warning: AUP {aup_id} is not linked to any Educational Program.")
+            # Возможно, стоит вернуть ошибку или пустую матрицу? Зависит от требований.
+            return None
+        program = EducationalProgram.query.options(selectinload(EducationalProgram.fgos)).get(program_assoc.educational_program_id)
+        if not program:
+            print(f"Educational Program with id {program_assoc.educational_program_id} not found.")
+            return None
+
+        # 3. Получаем дисциплины АУП из AupData (из maps.models)
+        #    Используем joinedload для подгрузки названий дисциплин
+        aup_data_entries = AupData.query.options(
+            joinedload(AupData.unique_discipline) # Загружаем связанный SprDiscipline
+        ).filter_by(id_aup=aup_id).order_by(AupData.id_period, AupData.num_row).all()
+
+        disciplines_list = []
+        aup_data_ids_map = {} # Для быстрого получения связей
+        for entry in aup_data_entries:
+            discipline_title = entry.unique_discipline.title if entry.unique_discipline else f"Дисциплина ID:{entry.id_discipline} (нет в спр.)"
+            discipline_data = {
+                "aup_data_id": entry.id,
+                "discipline_id": entry.id_discipline,
+                "title": discipline_title,
+                "semester": entry.id_period
+            }
+            disciplines_list.append(discipline_data)
+            aup_data_ids_map[entry.id] = discipline_data # Сохраняем ссылку
+
+        # 4. Получаем ВСЕ компетенции (УК, ОПК, ПК) и ИХ ИНДИКАТОРЫ, релевантные для ОП
+        competencies_query = Competency.query.options(
+            selectinload(Competency.indicators), # Загружаем индикаторы
+            joinedload(Competency.competency_type) # Загружаем тип
+        )
+
+        relevant_competencies = []
+        # УК/ОПК из связанного ФГОС
+        if program.fgos:
+            # TODO: В модели Competency НУЖНО поле fgos_vo_id для этой фильтрации!
+            # relevant_competencies.extend(
+            #     competencies_query.filter(
+            #         Competency.fgos_vo_id == program.fgos.id, # Предполагаем, что такое поле есть
+            #         Competency.competency_type.has(CompetencyType.code.in_(['УК', 'ОПК']))
+            #     ).all()
+            # )
+            # ВРЕМЕННО: Берем все УК/ОПК, пока нет связи с ФГОС в модели
+             relevant_competencies.extend(
+                competencies_query.join(CompetencyType).filter(
+                    CompetencyType.code.in_(['УК', 'ОПК'])
+                ).all()
+            )
+
+        # ПК, связанные с ОП (как? пока берем все ПК для примера)
+        # TODO: Уточнить логику выборки ПК для конкретной ОП (через ПС? через отдельную связь ОП-ПК?)
+        relevant_competencies.extend(
+            competencies_query.join(CompetencyType).filter(
+                CompetencyType.code == 'ПК'
+            ).all()
+        )
+
+        # Форматируем результат
+        competencies_data = []
+        indicator_ids_set = set() # Собираем ID всех релевантных индикаторов
+        for comp in sorted(relevant_competencies, key=lambda c: (c.competency_type.code, c.code)):
+            comp_dict = comp.to_dict(rules=['-indicators', '-competency_type'])
+            comp_dict['type_code'] = comp.competency_type.code
+            comp_dict['indicators'] = []
+            for ind in sorted(comp.indicators, key=lambda i: i.code):
+                indicator_ids_set.add(ind.id)
+                comp_dict['indicators'].append(
+                    ind.to_dict(only=('id', 'code', 'formulation', 'source_description')) # Добавил source
+                )
+            competencies_data.append(comp_dict)
+
+        # 5. Получаем существующие связи из CompetencyMatrix ТОЛЬКО для дисциплин этого АУП
+        #    и ТОЛЬКО для релевантных индикаторов
+        existing_links_data = []
+        if aup_data_ids_map and indicator_ids_set:
+            existing_links_db = CompetencyMatrix.query.filter(
+                CompetencyMatrix.aup_data_id.in_(aup_data_ids_map.keys()),
+                CompetencyMatrix.indicator_id.in_(indicator_ids_set)
+            ).all()
+            existing_links_data = [
+                link.to_dict(only=('aup_data_id', 'indicator_id'))
+                for link in existing_links_db
+            ]
+
+        # 6. Предложения от NLP (заглушка для MVP)
+        suggestions_data = []
+        # if aup_data_entries and competencies_data:
+        #    suggestions_data = suggest_links_nlp(disciplines_list, competencies_data) # Вызов NLP
+
+        # 7. Сборка итогового словаря
+        return {
+            "aup_info": aup_info.to_dict(),
+            "disciplines": disciplines_list,
+            "competencies": competencies_data,
+            "links": existing_links_data,
+            "suggestions": suggestions_data
+        }
+
+    except SQLAlchemyError as e:
+        print(f"Database error in get_matrix_for_aup for aup_id {aup_id}: {e}")
+        return None
+    except Exception as e: # Ловим другие возможные ошибки
+        print(f"Unexpected error in get_matrix_for_aup for aup_id {aup_id}: {e}")
+        return None
+
+# --- Функции для изменения данных ---
 
 def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True) -> bool:
     """
-    Создает или удаляет связь между дисциплиной (AupData) и индикатором компетенции.
-    
+    Создает или удаляет связь Дисциплина(АУП)-ИДК в матрице.
+
     Args:
-        aup_data_id: ID дисциплины в рамках АУП (из таблицы aup_data)
-        indicator_id: ID индикатора компетенции
-        create: True - создать связь, False - удалить связь
-        
+        aup_data_id: ID записи из таблицы aup_data.
+        indicator_id: ID индикатора из таблицы indicators.
+        create (bool): True для создания связи, False для удаления.
+
     Returns:
-        bool: True если операция успешна, False если нет
+        bool: True в случае успеха, False если AupData или Indicator не найдены.
     """
-    # Проверяем существование дисциплины и индикатора
-    aup_data_entry = AupData.query.get(aup_data_id)
-    indicator = Indicator.query.get(indicator_id)
-    
-    if not aup_data_entry or not indicator:
+    try:
+        # 1. Проверяем, существуют ли AupData и Indicator
+        #    Используем exists() для оптимизации - нам не нужны сами объекты
+        aup_data_exists = db.session.query(AupData.id).filter_by(id=aup_data_id).first() is not None
+        indicator_exists = db.session.query(Indicator.id).filter_by(id=indicator_id).first() is not None
+
+        if not aup_data_exists:
+            print(f"AupData entry with id {aup_data_id} not found.")
+            return False
+        if not indicator_exists:
+            print(f"Indicator with id {indicator_id} not found.")
+            return False
+
+        # 2. Находим существующую связь (если она есть)
+        existing_link = CompetencyMatrix.query.filter_by(
+            aup_data_id=aup_data_id,
+            indicator_id=indicator_id
+        ).first()
+
+        if create:
+            # 3. Создаем, если связи нет
+            if not existing_link:
+                link = CompetencyMatrix(
+                    aup_data_id=aup_data_id,
+                    indicator_id=indicator_id
+                    # TODO: Возможно, добавить is_manual=True и created_by=current_user.id
+                )
+                db.session.add(link)
+                db.session.commit()
+                print(f"Link created: AupData {aup_data_id} <-> Indicator {indicator_id}")
+            else:
+                print(f"Link already exists: AupData {aup_data_id} <-> Indicator {indicator_id}")
+            return True
+        else:
+            # 4. Удаляем, если связь есть
+            if existing_link:
+                db.session.delete(existing_link)
+                db.session.commit()
+                print(f"Link deleted: AupData {aup_data_id} <-> Indicator {indicator_id}")
+            else:
+                 print(f"Link not found for deletion: AupData {aup_data_id} <-> Indicator {indicator_id}")
+            return True
+
+    except SQLAlchemyError as e:
+        db.session.rollback() # Откатываем изменения в случае ошибки БД
+        print(f"Database error in update_matrix_link: {e}")
         return False
-    
-    # Проверяем существование записи в матрице
-    existing_link = CompetencyMatrix.query.filter_by(
-        aup_data_id=aup_data_id,
-        indicator_id=indicator_id
-    ).first()
-    
-    if create:
-        # Создаем связь, если ее еще нет
-        if not existing_link:
-            new_link = CompetencyMatrix(
-                aup_data_id=aup_data_id,
-                indicator_id=indicator_id,
-                is_manual=True
-            )
-            db.session.add(new_link)
-            db.session.commit()
-        return True
-    else:
-        # Удаляем связь, если она существует
-        if existing_link:
-            db.session.delete(existing_link)
-            db.session.commit()
-        return True
+    except Exception as e:
+        db.session.rollback()
+        print(f"Unexpected error in update_matrix_link: {e}")
+        return False
+
 
 def create_competency(data: Dict[str, Any]) -> Optional[Competency]:
     """
-    Создает новую компетенцию (обычно ПК на основе ТФ).
-    
+    Создает новую компетенцию (обычно ПК). Базовая реализация для MVP.
+
     Args:
-        data: Словарь с данными компетенции
-        
+        data: Словарь с данными {'type_code': 'ПК', 'code': 'ПК-1', 'name': '...', ...}.
+
     Returns:
-        Competency: Созданная компетенция или None в случае ошибки
+        Optional[Competency]: Созданный объект компетенции или None.
     """
+    # TODO: Добавить валидацию входных данных (через schemas.py)
+    required_fields = ['type_code', 'code', 'name']
+    if not all(field in data for field in required_fields):
+        print("Missing required fields for competency creation.")
+        return None
+
     try:
-        # Находим тип компетенции по коду
         comp_type = CompetencyType.query.filter_by(code=data['type_code']).first()
         if not comp_type:
+            print(f"Competency type with code {data['type_code']} not found.")
             return None
-        
-        # Создаем компетенцию
-        new_competency = Competency(
+
+        # Проверка на уникальность кода компетенции (в рамках типа? ФГОС?)
+        # TODO: Уточнить правила уникальности
+
+        competency = Competency(
             competency_type_id=comp_type.id,
             code=data['code'],
             name=data['name'],
-            description=data.get('description', None)
+            # TODO: Добавить поля based_on_labor_function_id, fgos_vo_id и др.
+            # based_on_labor_function_id=data.get('based_on_tf_id'),
+            # fgos_vo_id=data.get('fgos_vo_id')
         )
-        
-        # Если это ПК на основе ТФ - добавляем связь
-        if 'based_on_tf_id' in data and data['based_on_tf_id']:
-            new_competency.based_on_labor_function_id = data['based_on_tf_id']
-        
-        # Если указан ФГОС - добавляем связь
-        if 'fgos_vo_id' in data and data['fgos_vo_id']:
-            new_competency.fgos_vo_id = data['fgos_vo_id']
-        
-        db.session.add(new_competency)
+        db.session.add(competency)
         db.session.commit()
-        return new_competency
-    except Exception as e:
-        print(f"Ошибка при создании компетенции: {str(e)}")
+        print(f"Competency created: {competency.code}")
+        return competency
+    except SQLAlchemyError as e:
         db.session.rollback()
+        print(f"Database error creating competency: {e}")
+        return None
+    except Exception as e:
+        db.session.rollback()
+        print(f"Unexpected error creating competency: {e}")
         return None
 
-def parse_prof_standard_file(file_data: bytes, filename: str) -> Optional[Dict[str, Any]]:
+def create_indicator(data: Dict[str, Any]) -> Optional[Indicator]:
     """
-    Парсинг файла профстандарта с использованием функции из parsers.py.
-    
+    Создает новый индикатор (ИДК). Базовая реализация для MVP.
+
     Args:
-        file_data: Байты загруженного файла
-        filename: Имя файла
-    
+        data: Словарь с данными {'competency_id': ..., 'code': 'ИПК-1.1', 'formulation': '...', ...}
+
     Returns:
-        Dict: Данные профстандарта или None в случае ошибки
+        Optional[Indicator]: Созданный объект индикатора или None.
     """
-    try:
-        # Используем функцию из модуля parsers
-        return parse_uploaded_prof_standard(file_data, filename)
-    except Exception as e:
-        print(f"Ошибка при парсинге профстандарта: {str(e)}")
+    # TODO: Добавить валидацию входных данных
+    required_fields = ['competency_id', 'code', 'formulation']
+    if not all(field in data for field in required_fields):
+        print("Missing required fields for indicator creation.")
         return None
+
+    try:
+        # Проверяем существование родительской компетенции
+        competency_exists = db.session.query(Competency.id).filter_by(id=data['competency_id']).first() is not None
+        if not competency_exists:
+            print(f"Parent competency with id {data['competency_id']} not found.")
+            return None
+
+        # TODO: Проверка на уникальность кода индикатора в рамках компетенции
+
+        indicator = Indicator(
+            competency_id=data['competency_id'],
+            code=data['code'],
+            formulation=data['formulation'],
+            source_description=data.get('source_description') # Добавил source
+            # TODO: Реализовать сохранение связей с ПС (IndicatorPsLink)
+        )
+        db.session.add(indicator)
+        db.session.commit()
+        print(f"Indicator created: {indicator.code} for competency {indicator.competency_id}")
+        return indicator
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        print(f"Database error creating indicator: {e}")
+        return None
+    except Exception as e:
+        db.session.rollback()
+        print(f"Unexpected error creating indicator: {e}")
+        return None
+
+
+def parse_prof_standard_file(file_bytes: bytes, filename: str) -> Optional[Dict[str, Any]]:
+    """
+    Обрабатывает загруженный файл ПС, парсит и сохраняет в БД.
+    Базовая реализация для MVP: сохраняет только сам стандарт и Markdown.
+
+    Args:
+        file_bytes: Содержимое файла в байтах.
+        filename: Имя файла.
+
+    Returns:
+        Optional[Dict[str, Any]]: Словарь с результатом или None.
+                                  Структура успеха: {'success': True, 'prof_standard_id': ..., 'code': ..., 'name': ...}
+                                  Структура ошибки: {'success': False, 'error': '...'}
+    """
+    from .parsers import parse_uploaded_prof_standard # Импортируем здесь, чтобы избежать цикличности при старте
+
+    try:
+        # 1. Вызов парсера для получения структурированных данных
+        #    В MVP парсер может возвращать только код, имя и markdown
+        parsed_data = parse_uploaded_prof_standard(file_bytes, filename)
+        if not parsed_data or not parsed_data.get('code') or not parsed_data.get('name'):
+            return {'success': False, 'error': 'Не удалось извлечь код или имя из файла'}
+
+        prof_standard_code = parsed_data['code']
+        prof_standard_name = parsed_data['name']
+        markdown_content = parsed_data.get('parsed_content', '')
+        # TODO: Получить структурированные ОТФ, ТФ и т.д. из parsed_data, когда парсер будет их возвращать
+
+        # 2. Поиск или создание записи ProfStandard
+        prof_standard = ProfStandard.query.filter_by(code=prof_standard_code).first()
+        if not prof_standard:
+            prof_standard = ProfStandard(
+                code=prof_standard_code,
+                name=prof_standard_name,
+                parsed_content=markdown_content
+                # TODO: Добавить даты, приказы, если парсер их извлекает
+            )
+            db.session.add(prof_standard)
+            action = "создан"
+        else:
+            # Обновляем существующий
+            prof_standard.name = prof_standard_name
+            prof_standard.parsed_content = markdown_content
+            prof_standard.updated_at = datetime.datetime.utcnow()
+            action = "обновлен"
+            # TODO: Реализовать обновление ОТФ, ТФ и т.д.
+
+        # TODO: Реализовать сохранение ОТФ, ТФ и их элементов, когда парсер будет их возвращать
+
+        db.session.commit()
+        print(f"Профстандарт {prof_standard.code} {action}.")
+
+        return {
+            'success': True,
+            'prof_standard_id': prof_standard.id,
+            'code': prof_standard.code,
+            'name': prof_standard.name
+        }
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        print(f"Database error saving parsed prof standard: {e}")
+        return {'success': False, 'error': f'Ошибка базы данных: {e}'}
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error parsing or saving prof standard file {filename}: {e}")
+        return {'success': False, 'error': f'Ошибка обработки файла: {e}'}
 
 # Вспомогательные функции (для будущей имплементации)
 

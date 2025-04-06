@@ -56,6 +56,12 @@ metadata = MetaData(naming_convention=convention)
 db.init_app(app)
 with app.app_context():
     init_db()  # Initialize minimal DB structure
+    # # uncomment this if you want to drop all tables, 
+    # # then comment these lines back after running "flask db init" once
+    # # "flask db init" should output an error
+    # meta = MetaData()
+    # meta.reflect(bind=db.engine)
+    # meta.drop_all(db.engine)
 migrate = Migrate(app, db)
 
 # Глобальные переменные
