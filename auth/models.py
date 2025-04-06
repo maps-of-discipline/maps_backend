@@ -118,6 +118,7 @@ class Roles(db.Model):
 
 class Mode(db.Model, SerializerMixin):
     __tablename__ = "Mode"
+    __table_args__ = {'extend_existing': True}  # Tell SQLAlchemy this table may already exist
 
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)

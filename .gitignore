@@ -7,3 +7,4 @@ venv
 .prettierrc
 competencies
 migrations/__pycache__
+migrations/versions/__pycache__
