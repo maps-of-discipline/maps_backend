@@ -23,7 +23,9 @@ class AuthGRPCService:
     async def get_user_data(self, jwt:str) -> UserData:
         request = auth_pb2.GetUserRequest(jwt)
 
-        response = self.stub.GetUser(
+        response = self.stub.GetUser(request)
+
+        return UserData(
             id=response.id,
             external_id=response.external_id,
             role=response.role,
@@ -35,5 +37,4 @@ class AuthGRPCService:
             faculty=response.faculty,
             login=response.login,
             last_login=response.last_login,
-            created_at=response.created_at,
-        )
+            created_at=response.created_at,)
