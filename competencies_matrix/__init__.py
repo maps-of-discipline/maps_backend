@@ -27,13 +27,14 @@ def internal_error(error):
 def init_app(app):
     """
     Initialize module when connecting to main application.
-    This tries to set up the database tables if they don't exist.
+    
+    Note: Table creation is handled by Alembic migrations,
+    not dynamically at runtime.
     """
     try:
-        # Attempt to create tables for this module
-        from . import models  # Import models only when needed
-        with app.app_context():
-            models.create_tables_if_needed()
+        # Import models to ensure they're registered with SQLAlchemy
+        from . import models
+        # We don't create tables dynamically anymore - using Alembic migrations instead
     except Exception as e:
         handle_initialization_error(e)
 

@@ -21,7 +21,7 @@ class DisciplinePeriodAssoc(db.Model):
     period_id = db.Column(db.Integer, db.ForeignKey('d_period.id', ondelete='CASCADE'))
 
     faculties = db.relationship('SprFaculty', secondary=faculty_discipline_period_assoc, lazy='subquery')
-    unification_discipline = db.relationship("UnificationDiscipline")
+    unification_discipline = db.relationship("UnificationDiscipline", back_populates='periods')
     period = db.relationship("D_Period", lazy='subquery')
     load = db.relationship("UnificationLoad", lazy='subquery')
 
@@ -77,6 +77,6 @@ class UnificationDiscipline(db.Model):
     amount = db.Column(db.Integer)
     measure_id = db.Column(db.Integer, db.ForeignKey('d_ed_izmereniya.id', ondelete='CASCADE'))
 
-    periods = db.relationship('DisciplinePeriodAssoc', lazy='subquery')
+    periods = db.relationship('DisciplinePeriodAssoc', back_populates='unification_discipline')
     related_okso = db.relationship("SprOKCO", secondary=unification_okso_assoc)
     measure = db.relationship("D_EdIzmereniya", lazy='subquery')

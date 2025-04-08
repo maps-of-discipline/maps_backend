@@ -1,215 +1,189 @@
 # competencies_matrix/routes.py
-from flask import jsonify, request, Response, abort
+"""
+Маршруты (API endpoints) для модуля матрицы компетенций.
+Здесь определены все API-точки входа для работы с матрицами компетенций,
+образовательными программами, ФГОС, профстандартами и т.д.
+"""
+
+from flask import request, jsonify
 from . import competencies_matrix_bp
-# Импортируем все необходимые функции из logic
 from .logic import (
-    get_educational_programs_list,
-    get_program_details,
-    get_matrix_for_aup,
-    update_matrix_link,
-    create_competency,
-    create_indicator, # Добавили импорт
+    get_educational_programs_list, get_program_details, 
+    get_matrix_for_aup, update_matrix_link,
+    create_competency, create_indicator,
     parse_prof_standard_file
 )
-# Импортируем декоратор аутентификации
-from auth.logic import login_required
+from auth.logic import login_required, approved_required
+import logging
 
-# --- Роуты для Образовательных Программ ---
+# Настройка логирования
+logger = logging.getLogger(__name__)
+
+# Группа эндпоинтов для работы с образовательными программами (ОП)
 @competencies_matrix_bp.route('/programs', methods=['GET'])
 @login_required(request)
-def list_programs():
-    """
-    GET /api/competencies/programs
-    Возвращает список образовательных программ.
-    """
-    try:
-        programs = get_educational_programs_list()
-        # Используем .to_dict() из моделей (если он там есть и настроен)
-        return jsonify([p.to_dict() for p in programs])
-    except Exception as e:
-        print(f"Error in list_programs: {e}")
-        abort(500, description="Ошибка сервера при получении списка программ")
+@approved_required(request)
+def get_programs():
+    """Получение списка всех образовательных программ"""
+    # Используем функцию из logic.py
+    programs = get_educational_programs_list()
+    
+    # Сериализуем результат в список словарей
+    result = [p.to_dict(rules=['-fgos.educational_programs']) for p in programs]
+    
+    return jsonify(result)
 
 @competencies_matrix_bp.route('/programs/<int:program_id>', methods=['GET'])
 @login_required(request)
+@approved_required(request)
 def get_program(program_id):
-    """
-    GET /api/competencies/programs/<program_id>
-    Возвращает детальную информацию по ОП.
-    """
-    try:
-        program_data = get_program_details(program_id)
-        if not program_data:
-            abort(404, description="Образовательная программа не найдена")
-        return jsonify(program_data)
-    except Exception as e:
-        print(f"Error in get_program for id {program_id}: {e}")
-        abort(500, description="Ошибка сервера при получении деталей программы")
+    """Получение детальной информации по образовательной программе (ОП)"""
+    details = get_program_details(program_id)
+    if not details:
+        return jsonify({"error": "Образовательная программа не найдена"}), 404
+        
+    return jsonify(details)
 
-# --- Роуты для Матрицы Компетенций ---
+# Группа эндпоинтов для работы с матрицей компетенций
 @competencies_matrix_bp.route('/matrix/<int:aup_id>', methods=['GET'])
 @login_required(request)
-# @check_permission('view_matrix') # TODO: Добавить проверку прав
+@approved_required(request)
 def get_matrix(aup_id):
     """
-    GET /api/competencies/matrix/<aup_id>
-    Возвращает данные для построения матрицы для АУП.
+    Получение данных для матрицы компетенций конкретного АУП.
+    Этот эндпоинт возвращает все необходимые данные для отображения 
+    и редактирования матрицы в UI: дисциплины, компетенции, индикаторы и их связи.
     """
-    try:
-        matrix_data = get_matrix_for_aup(aup_id)
-        if matrix_data is None:
-             abort(404, description="АУП не найден или нет данных для матрицы")
-        # Структура ответа определяется функцией get_matrix_for_aup
-        return jsonify(matrix_data)
-    except Exception as e:
-        print(f"Error in get_matrix for aup_id {aup_id}: {e}")
-        abort(500, description="Ошибка сервера при получении данных матрицы")
+    matrix_data = get_matrix_for_aup(aup_id)
+    if not matrix_data:
+        return jsonify({"error": "АУП не найден или не связан с образовательной программой"}), 404
+        
+    return jsonify(matrix_data)
 
-@competencies_matrix_bp.route('/matrix/link', methods=['POST', 'DELETE'])
+@competencies_matrix_bp.route('/matrix/link', methods=['POST'])
 @login_required(request)
-# @check_permission('edit_matrix') # TODO: Добавить проверку прав
-def manage_matrix_link():
+@approved_required(request)
+def create_matrix_link():
     """
-    POST /api/competencies/matrix/link - Создает связь Дисциплина(АУП)-ИДК
-    DELETE /api/competencies/matrix/link - Удаляет связь Дисциплина(АУП)-ИДК
-    Тело запроса (JSON): { "aup_data_id": <int>, "indicator_id": <int> }
+    Создание связи между дисциплиной (AupData) и индикатором (Indicator) в матрице.
+    Принимает JSON с полями:
+    - aup_data_id: ID записи в AupData (дисциплина в АУП)
+    - indicator_id: ID индикатора достижения компетенции
     """
-    try:
-        data = request.get_json()
-        if not data or 'aup_data_id' not in data or 'indicator_id' not in data:
-            abort(400, description="Необходимы 'aup_data_id' и 'indicator_id' в теле запроса")
+    data = request.get_json()
+    
+    # Проверка необходимых полей
+    if not data or 'aup_data_id' not in data or 'indicator_id' not in data:
+        return jsonify({"error": "Отсутствуют обязательные поля: aup_data_id, indicator_id"}), 400
+    
+    success = update_matrix_link(data['aup_data_id'], data['indicator_id'], create=True)
+    if not success:
+        return jsonify({"error": "Не удалось создать связь"}), 400
+    
+    return jsonify({"message": "Связь успешно создана"}), 201
 
-        # Проверка типов данных (можно улучшить схемами валидации)
-        try:
-            aup_data_id = int(data['aup_data_id'])
-            indicator_id = int(data['indicator_id'])
-        except (ValueError, TypeError):
-             abort(400, description="'aup_data_id' и 'indicator_id' должны быть целыми числами")
+@competencies_matrix_bp.route('/matrix/link', methods=['DELETE'])
+@login_required(request)
+@approved_required(request)
+def delete_matrix_link():
+    """
+    Удаление связи между дисциплиной и индикатором в матрице.
+    Принимает JSON с полями:
+    - aup_data_id: ID записи в AupData
+    - indicator_id: ID индикатора
+    """
+    data = request.get_json()
+    
+    # Проверка необходимых полей
+    if not data or 'aup_data_id' not in data or 'indicator_id' not in data:
+        return jsonify({"error": "Отсутствуют обязательные поля: aup_data_id, indicator_id"}), 400
+    
+    success = update_matrix_link(data['aup_data_id'], data['indicator_id'], create=False)
+    if not success:
+        return jsonify({"error": "Не удалось удалить связь"}), 400
+    
+    return jsonify({"message": "Связь успешно удалена"}), 200
 
-        is_creating = (request.method == 'POST')
-        success = update_matrix_link(aup_data_id, indicator_id, create=is_creating)
-
-        if success:
-            # Возвращаем 200 для POST (успешно создано или уже существовало)
-            # Возвращаем 204 для DELETE (успешно удалено или уже не существовало)
-            status_code = 200 if is_creating else 204
-            response_body = {"status": "success"} if is_creating else ''
-            return jsonify(response_body) if response_body else ('', status_code)
-        else:
-            # Если logic вернул False, значит не найдены aup_data_id или indicator_id
-            abort(404, description="Не удалось выполнить операцию: AupData или Indicator не найдены")
-
-    except Exception as e:
-        print(f"Error in manage_matrix_link: {e}")
-        abort(500, description="Ошибка сервера при обновлении связи в матрице")
-
-
-# --- Роуты для управления Компетенциями ---
+# Группа эндпоинтов для работы с компетенциями и индикаторами
 @competencies_matrix_bp.route('/competencies', methods=['POST'])
 @login_required(request)
-# @check_permission('manage_competencies') # TODO: Добавить проверку прав
-def add_competency():
+@approved_required(request)
+def create_new_competency():
     """
-    POST /api/competencies/competencies
-    Создает новую компетенцию.
-    Тело запроса (JSON): { "type_code": "ПК", "code": "ПК-5", "name": "...", ... }
+    Создание новой компетенции (обычно ПК на основе профстандарта).
+    Принимает JSON с полями компетенции:
+    - type_code: Код типа (УК, ОПК, ПК)
+    - code: Код компетенции (ПК-1, ...)
+    - name: Формулировка компетенции
+    - based_on_labor_function_id: (опционально) ID трудовой функции из ПС
+    - fgos_vo_id: (опционально) ID ФГОС ВО
     """
-    try:
-        data = request.get_json()
-        if not data:
-            abort(400, description="Тело запроса не может быть пустым")
+    data = request.get_json()
+    
+    # Проверка необходимых полей
+    if not data or 'type_code' not in data or 'code' not in data or 'name' not in data:
+        return jsonify({"error": "Отсутствуют обязательные поля"}), 400
+    
+    competency = create_competency(data)
+    if not competency:
+        return jsonify({"error": "Не удалось создать компетенцию"}), 400
+    
+    return jsonify(competency.to_dict()), 201
 
-        # TODO: Валидация данных с использованием schemas.py
-
-        new_competency = create_competency(data) # Вызов функции логики
-
-        if new_competency:
-            # Возвращаем созданный объект и статус 201 Created
-            return jsonify(new_competency.to_dict()), 201
-        else:
-            # Если logic вернул None, значит были проблемы с данными (напр., не найден тип)
-            abort(400, description="Не удалось создать компетенцию. Проверьте входные данные (тип, код, имя).")
-    except Exception as e:
-        print(f"Error in add_competency: {e}")
-        abort(500, description="Ошибка сервера при создании компетенции")
-
-# --- Роуты для управления Индикаторами ---
 @competencies_matrix_bp.route('/indicators', methods=['POST'])
 @login_required(request)
-# @check_permission('manage_competencies') # TODO: Добавить проверку прав
-def add_indicator():
+@approved_required(request)
+def create_new_indicator():
     """
-    POST /api/competencies/indicators
-    Создает новый индикатор достижения компетенции (ИДК).
-    Тело запроса (JSON): { "competency_id": ..., "code": "ИПК-1.1", "formulation": "...", ... }
+    Создание нового индикатора достижения компетенции (ИДК).
+    Принимает JSON с полями:
+    - competency_id: ID родительской компетенции
+    - code: Код индикатора (ИУК-1.1, ИОПК-2.3, ИПК-3.2 и т.д.)
+    - formulation: Формулировка индикатора
+    - source_description: (опционально) Описание источника
+    - labor_function_ids: (опционально) Список ID трудовых функций
     """
-    try:
-        data = request.get_json()
-        if not data:
-            abort(400, description="Тело запроса не может быть пустым")
+    data = request.get_json()
+    
+    # Проверка необходимых полей
+    if not data or 'competency_id' not in data or 'code' not in data or 'formulation' not in data:
+        return jsonify({"error": "Отсутствуют обязательные поля"}), 400
+    
+    indicator = create_indicator(data)
+    if not indicator:
+        return jsonify({"error": "Не удалось создать индикатор"}), 400
+    
+    return jsonify(indicator.to_dict()), 201
 
-        # TODO: Валидация данных с использованием schemas.py
-
-        new_indicator = create_indicator(data) # Вызов функции логики
-
-        if new_indicator:
-            # Возвращаем созданный объект и статус 201 Created
-            return jsonify(new_indicator.to_dict()), 201
-        else:
-            # Если logic вернул None, значит были проблемы (напр., не найдена компетенция)
-             abort(400, description="Не удалось создать индикатор. Проверьте competency_id и другие данные.")
-    except Exception as e:
-        print(f"Error in add_indicator: {e}")
-        abort(500, description="Ошибка сервера при создании индикатора")
-
-# --- Роут для парсинга ПС ---
-@competencies_matrix_bp.route('/prof-standards/parse', methods=['POST'])
+# Группа эндпоинтов для работы с профессиональными стандартами (ПС)
+@competencies_matrix_bp.route('/profstandards/upload', methods=['POST'])
 @login_required(request)
-# @check_permission('manage_prof_standards') # TODO: Добавить проверку прав
-def parse_prof_standard():
+@approved_required(request)
+def upload_profstandard():
     """
-    POST /api/competencies/prof-standards/parse
-    Принимает файл профстандарта (HTML/Markdown), парсит его
-    и сохраняет/обновляет основную информацию и текст в БД.
-    Ожидает файл в поле 'file'.
+    Загрузка файла профессионального стандарта (HTML/Markdown).
+    Парсит и сохраняет в БД профстандарт и его структуру.
+    Принимает multipart/form-data с файлом.
     """
-    try:
-        if 'file' not in request.files:
-            abort(400, description="Файл не найден в данных формы (ожидается поле 'file')")
+    if 'file' not in request.files:
+        return jsonify({"error": "Файл не найден в запросе"}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "Файл не выбран"}), 400
+    
+    # Читаем содержимое файла
+    file_bytes = file.read()
+    result = parse_prof_standard_file(file_bytes, file.filename)
+    
+    if not result or not result.get('success'):
+        return jsonify({"error": result.get('error', 'Ошибка при обработке файла')}), 400
+    
+    return jsonify(result), 201
 
-        file = request.files['file']
-        if file.filename == '':
-            abort(400, description="Имя файла не должно быть пустым")
-
-        # Читаем файл в байтах
-        file_bytes = file.read()
-        filename = file.filename # Сохраняем оригинальное имя файла
-
-        # Вызываем функцию логики для парсинга и сохранения
-        result = parse_prof_standard_file(file_bytes, filename) # Передаем байты
-
-        if result and result.get('success'):
-            # Возвращаем результат с ID созданного/обновленного ПС
-            return jsonify(result), 201
-        else:
-            error_message = result.get('error', 'Неизвестная ошибка парсинга') if result else 'Ошибка парсинга'
-            abort(400, description=error_message) # 400, т.к. проблема скорее всего в файле
-
-    except Exception as e:
-        print(f"Error in parse_prof_standard: {e}")
-        abort(500, description=f"Ошибка сервера при обработке файла профстандарта: {e}")
-
-
-# --- Health Check ---
-@competencies_matrix_bp.route('/health-check', methods=['GET'])
-def health_check():
-    """Проверка доступности модуля."""
-    return jsonify({"status": "ok", "module": "competencies_matrix"})
-
-# TODO: Добавить остальные CRUD эндпоинты для:
-# - EducationalProgram (POST, PATCH, DELETE)
-# - FgosVo (GET list, GET by id, POST, PATCH, DELETE)
-# - ProfStandard (GET list, GET by id/code, PATCH, DELETE)
-# - Competency (GET list, GET by id/code, PATCH, DELETE)
-# - Indicator (GET list by competency, GET by id/code, PATCH, DELETE)
-# - Связей (ПС-ОП, ПС-ФГОС, АУП-ОП, ИДК-ПС_элемент)
+# Дальнейшие эндпоинты можно добавить по мере необходимости:
+# - CRUD для образовательных программ
+# - Управление связями ОП-АУП и ОП-ПС
+# - API для NLP-модуля
+# - Генерация отчетов
+# - и т.д.

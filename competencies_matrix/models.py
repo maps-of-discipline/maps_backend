@@ -1,4 +1,5 @@
 # competencies_matrix/models.py
+# При изменении моделей в этом файле, не забудьте обновить Alembic миграции
 from maps.models import db, AupInfo, AupData, SprDiscipline
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import relationship, backref
@@ -6,39 +7,8 @@ from sqlalchemy import inspect
 from typing import List, Dict, Any, Optional, Set, Union
 import datetime
 
-# Add this function at the top, before model definitions
-def create_tables_if_needed():
-    """Create the tables specific to the competencies_matrix module if they don't exist"""
-    from sqlalchemy import text
-    
-    # Check if our core tables exist
-    with db.engine.connect() as conn:
-        result = conn.execute(text("""
-            SELECT COUNT(*)
-            FROM information_schema.tables 
-            WHERE table_name = 'competencies_matrix'
-        """))
-        if result.scalar() == 0:
-            # Tables don't exist, create them
-            db.create_all()
-            # Initialize any required lookup data
-            initialize_lookup_data()
-
-def initialize_lookup_data():
-    """Initialize any required lookup data for the competencies_matrix module"""
-    try:
-        # Example: Initialize competency types if needed
-        from .models import CompetencyType
-        if not CompetencyType.query.first():
-            types = [
-                CompetencyType(code='УК', name='Универсальная компетенция'),
-                CompetencyType(code='ОПК', name='Общепрофессиональная компетенция'),
-                CompetencyType(code='ПК', name='Профессиональная компетенция')
-            ]
-            db.session.add_all(types)
-            db.session.commit()
-    except Exception as e:
-        print(f"Warning: Could not initialize lookup data: {e}")
+# Note: The create_tables_if_needed() and initialize_lookup_data() functions
+# have been removed as they are not needed with Alembic migrations
 
 # Базовый класс для всех моделей
 class BaseModel:
@@ -118,6 +88,7 @@ class EducationalProgram(db.Model, BaseModel):
     profile = db.Column(db.String(255), nullable=True)
     qualification = db.Column(db.String(50), nullable=True)
     form_of_education = db.Column(db.String(50), nullable=True)
+    enrollment_year = db.Column(db.Integer, nullable=True, comment='Год набора')
     fgos_vo_id = db.Column(db.Integer, db.ForeignKey('competencies_fgos_vo.id'), nullable=True)
     
     # Relationships
@@ -375,14 +346,8 @@ class Indicator(db.Model, BaseModel):
     # Связь с ТФ в профстандартах (многие-ко-многим)
     labor_functions = relationship('LaborFunction', secondary='competencies_indicator_ps_link', back_populates='indicators')
     
-    # Связь с дисциплинами через матрицу компетенций
-    aup_data_entries = relationship('AupData', 
-                                  secondary='competencies_matrix',
-                                  back_populates='indicators',
-                                  lazy='dynamic')
-    
-    # Связь с матрицей компетенций
-    matrix_entries = relationship('CompetencyMatrix', back_populates='indicator')
+    # Связь с матрицей компетенций - ИСПРАВЛЕНО: убираем прямую связь с AupData
+    matrix_entries = relationship('CompetencyMatrix', back_populates='indicator', cascade="all, delete-orphan")
     
     __table_args__ = (
         db.UniqueConstraint('code', 'competency_id', name='uq_indicator_code_competency'),
@@ -422,6 +387,7 @@ class CompetencyMatrix(db.Model, BaseModel):
     
     # Отношения
     indicator = relationship('Indicator', back_populates='matrix_entries')
+    aup_data_entry = relationship('AupData', back_populates='matrix_entries')
     
     __table_args__ = (
         db.UniqueConstraint('aup_data_id', 'indicator_id', name='uq_matrix_aup_indicator'),
@@ -431,16 +397,22 @@ class CompetencyMatrix(db.Model, BaseModel):
         return f"<Связь AupData({self.aup_data_id})<->Indicator({self.indicator_id})>"
 
 # Определяем отношения для моделей AupData из maps.models
-# Добавляем атрибут indicators в модель AupData
+# Добавляем атрибут matrix_entries в модель AupData
 from maps.models import AupData
 
 # Используем event listener для добавления relationship к существующей модели AupData
-@db.event.listens_for(AupData, 'mapper_configured')
+@db.event.listens_for(AupData, 'mapper_configured', once=True)
 def add_aupdata_relationships(mapper, class_):
-    if not hasattr(class_, 'indicators'):
-        class_.indicators = relationship(
-            'Indicator', 
-            secondary='competencies_matrix',
-            back_populates='aup_data_entries',  # Changed from backref to match Indicator's relationship
+    if not hasattr(class_, 'matrix_entries'):
+        class_.matrix_entries = relationship(
+            'CompetencyMatrix', 
+            back_populates='aup_data_entry',
+            cascade="all, delete-orphan",
             lazy='dynamic'
         )
+        print(f"Dynamically added 'matrix_entries' relationship to AupData")
+    
+    # Remove the old indicators relationship if it exists
+    if hasattr(class_, 'indicators'):
+        delattr(class_, 'indicators')
+        print(f"Removed 'indicators' relationship from AupData")

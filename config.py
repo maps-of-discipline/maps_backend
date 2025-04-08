@@ -25,6 +25,7 @@ CORS_HEADERS = 'Content-Type'
 # Префиксы URL для разных частей приложения
 URL_PREFIX_CABINET = '/api/cabinet'
 URL_PREFIX_COMPETENCIES = '/api/competencies'
+URL_PREFIX_COMPETENCIES_MATRIX = '/api/competencies_matrix'
 
 # Настройки для работы с файлами
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
