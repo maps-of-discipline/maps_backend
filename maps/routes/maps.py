@@ -257,7 +257,7 @@ def getAllMaps():
                     "code": row.num_aup,
                     "year": row.year_beg,
                     "form_educ": row.id_form,
-                    "is_delete": row.is_delete
+                    "is_delete": bool(row.is_delete) if row.is_delete is not None else False
                 }
             )
 
