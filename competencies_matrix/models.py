@@ -7,9 +7,6 @@ from sqlalchemy import inspect
 from typing import List, Dict, Any, Optional, Set, Union
 import datetime
 
-# Note: The create_tables_if_needed() and initialize_lookup_data() functions
-# have been removed as they are not needed with Alembic migrations
-
 # Базовый класс для всех моделей
 class BaseModel:
     """Базовый класс для моделей с общей функциональностью"""
