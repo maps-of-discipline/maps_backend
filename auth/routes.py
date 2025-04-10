@@ -1,26 +1,27 @@
 import json
-
-import requests
-from flask import Blueprint, make_response, request, jsonify, url_for, current_app
 import time
 import secrets
-from flask_mail import Message # Removed Mail import as it's accessed via current_app
-from auth.logic import verify_jwt_token, verify_refresh_token, get_access_token, get_refresh_token
+import requests
+from flask import Blueprint, make_response, request, jsonify, url_for, current_app
+from flask_mail import Message
+from pprint import pprint
+
+# Import the new decorators for protected endpoints
+from auth.logic import verify_jwt_token, verify_refresh_token, get_access_token, get_refresh_token, login_required, approved_required
 from auth.models import Users, Roles
 from cabinet.models import StudyGroups
 from maps.models import db
 from .cli import register_commands
-from pprint import pprint
-# Removed: from app import mail, app
 
 auth = Blueprint("auth", __name__, url_prefix='/api')
 register_commands(auth)
 
-# время жизни токена
 PASSWORD_RESET_TOKEN_EXPIRATION = 3600 * 24
 
-
+# Now protected with @login_required and @approved_required
 @auth.route('/user/<int:user_id>')
+@login_required  # New decorator: requires a valid authenticated user
+@approved_required  # New decorator: requires the user to be approved
 def get_user_info(user_id):
     user = Users.query.filter_by(id_user=user_id).first()
     return make_response(json.dumps({
@@ -63,25 +64,32 @@ def refresh_view():
 def login():
     request_data = request.get_json()
 
-    if 'username' not in request_data:
-        return make_response("Username is required", 401)
+    if 'login' not in request_data:
+        print("Login key missing, returning 401/400")
+        return make_response("Login is required", 400)
 
     if 'password' not in request_data:
-        return make_response("Password is required", 401)
+        print("Password key missing, returning 401/400")
+        return make_response("Password is required", 400)
 
-    user = Users.query.filter_by(login=request_data['username']).first()
+    user = Users.query.filter_by(login=request_data['login']).first()
 
     if not user:
-        return make_response("No such user", 400)  # 400?
+        print("User not found, returning 400")
+        return make_response("No such user", 400)
 
-    if not user.check_password(request_data['password']):
+    password_correct = user.check_password(request_data['password'])
+
+    if not password_correct:
+        print("Incorrect password, returning 400")
         return make_response('Incorrect password', 400)
 
     response = {
         'access': get_access_token(user.id_user),
-        'refresh': get_refresh_token(user.id_user, request.headers['User-Agent']),
+        'refresh': get_refresh_token(user.id_user, request.headers.get('User-Agent', 'Unknown')),
     }
 
+    print(f"Login successful for user {user.id_user}, returning 200")
     return make_response(json.dumps(response, ensure_ascii=False), 200)
 
 
@@ -90,8 +98,8 @@ password_reset_tokens = {}
 
 @auth.route('/request-reset', methods=['POST'])
 def request_reset():
-
-    for token, token_data in password_reset_tokens.items():
+    # Clean expired tokens
+    for token, token_data in list(password_reset_tokens.items()):
         if token_data['ttl'] < time.time():
             password_reset_tokens.pop(token)
 
@@ -104,18 +112,16 @@ def request_reset():
     if not user:
         return jsonify({"error": "User not found"}), 400
 
-    # Генерация токена безопасности
     reset_token = secrets.token_urlsafe(16)
+    password_reset_tokens[reset_token] = {
+        "user_id": user.id_user,
+        "ttl": PASSWORD_RESET_TOKEN_EXPIRATION + round(time.time())
+    }
 
-    password_reset_tokens[reset_token] = {"user_id": user.id_user,
-                                          "ttl": PASSWORD_RESET_TOKEN_EXPIRATION + round(time.time())}
-
-    # Отправка письма со ссылкой для сброса пароля
     reset_url = url_for('auth.reset_with_token', token=reset_token, _external=True)
     msg = Message("Password Reset", recipients=[email])
     msg.body = f"To reset your password, visit the following link: {reset_url}"
 
-    # Access mail extension via current_app
     current_app.extensions['mail'].send(msg)
     print(password_reset_tokens)
     return jsonify({"message": "Instructions to reset your password have been sent to your email."}), 200
@@ -128,11 +134,9 @@ def reset_with_token(token):
         return jsonify({"error": "Invalid or expired token"}), 400
 
     token_data = password_reset_tokens.pop(token)
-
     user: Users = Users.query.get(token_data['user_id'])
 
     password = request.get_json()['password']
-
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
@@ -140,7 +144,6 @@ def reset_with_token(token):
     return jsonify({'result': 'ok'}), 200
 
 
-# Changed @app.route to @auth.route
 @auth.route('/login/lk', methods=['POST'])
 def lk_login():
     request_data = request.get_json()
@@ -148,14 +151,11 @@ def lk_login():
     if 'username' not in request_data or 'password' not in request_data:
         return make_response("Username and password are required", 401)
 
-    # Use current_app.config
     response = requests.post(current_app.config.get('LK_URL'), data={
         'ulogin': request_data['username'],
         'upassword': request_data['password'],
     }).json()
 
-
-    # Use current_app.config
     res = requests.get(current_app.config.get('LK_URL'), params={'getUser': '', 'token': response['token']}).json()
     res = res['user']
     name = ' '.join([res['surname'], res['name'], res['patronymic']])
@@ -172,7 +172,6 @@ def lk_login():
             name_role = 'student'
 
         guest_role = Roles.query.filter_by(name_role=name_role).first()
-
         if guest_role:
             user.roles.append(guest_role)
 

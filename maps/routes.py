@@ -9,10 +9,8 @@ from auth.logic import login_required, aup_require, verify_jwt_token
 from auth.models import Mode
 from maps.logic.excel_check import excel_check
 from maps.logic.print_excel import saveMap
-from maps.logic.save_into_bd import SaveCard, update_fields, \
-    create_changes_revision
-from maps.logic.take_from_bd import (control_type_r,
-                                     create_json, getAupData)
+from maps.logic.save_into_bd import SaveCard, update_fields, create_changes_revision
+from maps.logic.take_from_bd import (control_type_r, create_json, getAupData)
 from maps.logic.tools import take_aup_from_excel_file, timeit, getAupInfo
 from maps.logic.upload_xml import create_xml
 from maps.models import *
@@ -25,16 +23,16 @@ if not os.path.exists(maps.static_folder + '/temp'):
 
 @maps.route("/map/<string:aup>")
 def getMap(aup):
-    json = create_json(aup)
-    if not json:
+    json_data = create_json(aup)
+    if not json_data:
         return make_response(jsonify({'error': "not found"}), 404)
 
-    return make_response(jsonify(json), 200)
+    return make_response(jsonify(json_data), 200)
 
 
 @maps.route('/save/<string:aup>', methods=["POST"])
-@login_required(request)
-@aup_require(request)
+@login_required
+@aup_require
 def save_map(aup):
     data = request.get_json()
 
@@ -87,7 +85,6 @@ def get_id_edizm():
 
     modes = []
     for mode in Mode.query.all():
-        mode: Mode
         roles = [{
             "id": role.id_role,
             "title": role.name_role,
@@ -108,7 +105,6 @@ def get_id_edizm():
 
 @maps.route('/upload', methods=["POST"])
 @timeit
-# @login_required(request)
 def upload():
     files = request.files.getlist("file")
     result_list = list()
@@ -156,12 +152,9 @@ def save_excel(aup):
         orientation = "land"
     filename = saveMap(aup, maps.static_folder, paper_size, orientation, expo=60)
 
-    # Upload xlxs file in memory and delete file from storage
     return_data = io.BytesIO()
     with open(filename, 'rb') as fo:
         return_data.write(fo.read())
-
-    # after writing, cursor will be at last byte, so move it to start
     return_data.seek(0)
 
     os.remove(filename)
@@ -174,14 +167,15 @@ def save_excel(aup):
 @maps.route("/getGroups", methods=["GET"])
 def get_colors():
     q = Groups.query.all()
-    l = list()
+    l = []
     for row in q:
-        d = dict()
-        d["id"] = row.id_group
-        d["name"] = row.name_group
-        d["color"] = row.color
+        d = {
+            "id": row.id_group,
+            "name": row.name_group,
+            "color": row.color
+        }
         l.append(d)
-    return l
+    return jsonify(l)
 
 
 @maps.route('/get-modules', methods=['GET'])
@@ -189,16 +183,13 @@ def get_modules():
     modules = D_Modules.query.all()
     res = []
     for module in modules:
-        module_as_dict: dict = module.as_dict()
-        module_as_dict['name'] = module_as_dict['title']
-        module_as_dict.pop('title')
+        module_as_dict = module.as_dict()
+        module_as_dict['name'] = module_as_dict.pop('title')
         res.append(module_as_dict)
     return jsonify(res)
 
 
 @maps.route('/add-module', methods=['POST'])
-# @login_required(request)
-# @aup_require(request)
 def add_module():
     module = request.get_json()
     if not module['name']:
@@ -219,8 +210,6 @@ def add_module():
 
 
 @maps.route('/modules/<int:id>', methods=['PUT', 'DELETE'])
-# @login_required(request)
-# @aup_require(request)
 def edit_or_delete_module(id: int):
     module = D_Modules.query.get(id)
     if not module:
@@ -250,18 +239,15 @@ def edit_or_delete_module(id: int):
 def getAllMaps():
     specialization_names = {}
     for el in NameOP.query.all():
-        el: NameOP
-        specialization_names.update({el.id_spec: el.name_spec})
+        specialization_names[el.id_spec] = el.name_spec
 
     faculties = SprFaculty.query.all()
     li = []
 
     for fac in faculties:
-        fac: SprFaculty
-        maps = []
+        maps_list = []
         for row in fac.aup_infos:
-            row: AupInfo
-            maps.append({
+            maps_list.append({
                 "name": specialization_names[row.id_spec],
                 "code": row.num_aup,
                 "year": row.year_beg,
@@ -272,14 +258,14 @@ def getAllMaps():
             "faculty_id": fac.id_faculty,
             "faculty_name": fac.name_faculty,
             "admin_only": fac.admin_only == 1,
-            "directions": maps,
+            "directions": maps_list,
         })
     return jsonify(li)
 
 
 @maps.route('/add-group', methods=["POST"])
-@login_required(request)
-@aup_require(request)
+@login_required
+@aup_require
 def AddNewGroup():
     request_data = request.get_json()
     if request_data['name'] == '':
@@ -287,21 +273,21 @@ def AddNewGroup():
     data = Groups(name_group=request_data['name'], color=request_data['color'])
     db.session.add(data)
     db.session.commit()
-    d = dict()
-    d["id"] = data.id_group
-    d["name"] = data.name_group
-    d["name"] = data.name_group
-    d["color"] = data.color
+    d = {
+        "id": data.id_group,
+        "name": data.name_group,
+        "color": data.color
+    }
     return make_response(jsonify(d), 200)
 
 
 @maps.route('/delete-group', methods=["POST"])
-@login_required(request)
-@aup_require(request)
+@login_required
+@aup_require
 def DeleteGroup():
     request_data = request.get_json()
-    d = AupData.query.filter_by(id_group=request_data['id']).all()
-    for row in d:
+    groups_data = AupData.query.filter_by(id_group=request_data['id']).all()
+    for row in groups_data:
         row.id_group = 1
         db.session.add(row)
     db.session.commit()
@@ -315,9 +301,7 @@ def GetGroupByAup(aup):
     aupId = AupInfo.query.filter_by(num_aup=aup).first().id_aup
     aupData = AupData.query.filter_by(id_aup=aupId).all()
 
-    groups_id = set()
-    for elem in aupData:
-        groups_id.add(elem.id_group)
+    groups_id = {elem.id_group for elem in aupData}
 
     groups = []
     for g in Groups.query.filter(Groups.id_group.in_(groups_id)).all():
@@ -333,9 +317,7 @@ def GetGroupByAup(aup):
 def GetModulesByAup(aup):
     aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
 
-    modules_set = set()
-    for elem in aup_info.aup_data:
-        modules_set.add(elem.module)
+    modules_set = {elem.module for elem in aup_info.aup_data}
 
     modules = []
     for m in modules_set:
@@ -343,14 +325,14 @@ def GetModulesByAup(aup):
             modules.append({
                 "id": m.id,
                 "name": m.title,
-                'color': m.color,
+                "color": m.color,
             })
     return make_response(jsonify(modules), 200)
 
 
 @maps.route('/update-group', methods=["POST"])
-@login_required(request)
-@aup_require(request)
+@login_required
+@aup_require
 def UpdateGroup():
     request_data = request.get_json()
     gr = Groups.query.filter_by(id_group=request_data['id']).first()
@@ -365,7 +347,7 @@ def UpdateGroup():
 def getControlTypes():
     control_types = []
     for k, v in control_type_r.items():
-        is_control = v == 'Экзамен' or v == 'Зачет' or v == 'Дифференцированный зачет'
+        is_control = v in ['Экзамен', 'Зачет', 'Дифференцированный зачет']
         control_types.append({"id": k, "name": v, "is_control": is_control})
 
     return make_response(jsonify(control_types), 200)
@@ -389,18 +371,18 @@ def upload_xml(aup):
 
 
 @maps.route('/aup-info/<int:aup>', methods=['GET', 'POST', 'PATCH', 'DELETE'])
-@login_required(request)
-@aup_require(request)
+@login_required
+@aup_require
 def aup_crud(aup: str | None):
-    aup: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
-    if not aup:
+    aup_instance: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
+    if not aup_instance:
         return jsonify({'status': 'not found'}), 404
 
     if request.method == "GET":
-        return jsonify(aup.as_dict()), 200
+        return jsonify(aup_instance.as_dict()), 200
 
     if request.method == "DELETE":
-        db.session.delete(aup)
+        db.session.delete(aup_instance)
         db.session.commit()
         return jsonify({'status': 'ok'})
 
@@ -410,7 +392,7 @@ def aup_crud(aup: str | None):
                 if AupInfo.query.filter_by(num_aup=new_aup_num).first():
                     return jsonify({'status': 'already exists'}), 400
 
-                aup.copy(new_aup_num)
+                aup_instance.copy(new_aup_num)
                 return jsonify({'status': 'ok', 'aup_num': new_aup_num})
             case _:
                 return jsonify({"result": "failed"}), 400
@@ -420,15 +402,15 @@ def aup_crud(aup: str | None):
 
         for field, value in data.items():
             if field in AupInfo.__dict__:
-                aup.__setattr__(field, value)
+                aup_instance.__setattr__(field, value)
 
-        db.session.add(aup)
+        db.session.add(aup_instance)
 
         try:
             db.session.commit()
         except Exception as ex:
             print(ex)
             db.session.rollback()
-            return jsonify({'status': 'failed', 'aup_num': aup.num_aup}), 403
+            return jsonify({'status': 'failed', 'aup_num': aup_instance.num_aup}), 403
 
-        return jsonify({'status': 'ok', 'aup_num': aup.num_aup}), 200
+        return jsonify({'status': 'ok', 'aup_num': aup_instance.num_aup}), 200

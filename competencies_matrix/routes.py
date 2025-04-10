@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 # Группа эндпоинтов для работы с образовательными программами (ОП)
 @competencies_matrix_bp.route('/programs', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def get_programs():
     """Получение списка всех образовательных программ"""
     # Используем функцию из logic.py
@@ -34,8 +34,8 @@ def get_programs():
     return jsonify(result)
 
 @competencies_matrix_bp.route('/programs/<int:program_id>', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def get_program(program_id):
     """Получение детальной информации по образовательной программе (ОП)"""
     details = get_program_details(program_id)
@@ -46,8 +46,8 @@ def get_program(program_id):
 
 # Группа эндпоинтов для работы с матрицей компетенций
 @competencies_matrix_bp.route('/matrix/<int:aup_id>', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def get_matrix(aup_id):
     """
     Получение данных для матрицы компетенций конкретного АУП.
@@ -61,8 +61,8 @@ def get_matrix(aup_id):
     return jsonify(matrix_data)
 
 @competencies_matrix_bp.route('/matrix/link', methods=['POST'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def create_matrix_link():
     """
     Создание связи между дисциплиной (AupData) и индикатором (Indicator) в матрице.
@@ -83,8 +83,8 @@ def create_matrix_link():
     return jsonify({"message": "Связь успешно создана"}), 201
 
 @competencies_matrix_bp.route('/matrix/link', methods=['DELETE'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def delete_matrix_link():
     """
     Удаление связи между дисциплиной и индикатором в матрице.
@@ -106,8 +106,8 @@ def delete_matrix_link():
 
 # Группа эндпоинтов для работы с компетенциями и индикаторами
 @competencies_matrix_bp.route('/competencies', methods=['POST'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def create_new_competency():
     """
     Создание новой компетенции (обычно ПК на основе профстандарта).
@@ -131,8 +131,8 @@ def create_new_competency():
     return jsonify(competency.to_dict()), 201
 
 @competencies_matrix_bp.route('/indicators', methods=['POST'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def create_new_indicator():
     """
     Создание нового индикатора достижения компетенции (ИДК).
@@ -157,8 +157,8 @@ def create_new_indicator():
 
 # Группа эндпоинтов для работы с профессиональными стандартами (ПС)
 @competencies_matrix_bp.route('/profstandards/upload', methods=['POST'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def upload_profstandard():
     """
     Загрузка файла профессионального стандарта (HTML/Markdown).

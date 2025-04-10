@@ -42,8 +42,8 @@ from time import time
 
 # Получение данных таблицы "Задания"
 @cabinet.route('/lessons', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def getLessons():
     num_aup = request.args.get('aup')
     id_discipline = request.args.get('id')
@@ -89,8 +89,8 @@ def getLessons():
 
 
 @cabinet.route('/lessons-excel', methods=['GET'])
-# @login_required(request)
-# @approved_required(request)
+# @login_required
+# @approved_required
 def get_lessons_as_xlsx():
     num_aup = request.args.get('aup')
     id_discipline = request.args.get('id')
@@ -122,8 +122,8 @@ def get_lessons_as_xlsx():
 
 # Создание строки "Задания"
 @cabinet.route('/lesson', methods=['POST'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def createLesson():
     data = request.get_json()
 
@@ -153,8 +153,8 @@ def createLesson():
 
 # Редактирование строки "Задания"
 @cabinet.route('/lesson', methods=['PATCH'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def editLesson():
     data = request.get_json()
 
@@ -227,8 +227,8 @@ def editLesson():
 
 # Удаление строки "Задания"
 @cabinet.route('/lesson', methods=['DELETE'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def deleteLesson():
     id = request.args.get('id')
 
@@ -282,8 +282,8 @@ def bulkInsertStudentsByGroup(group):
 
 # Получение данных таблицы "Успеваемость"
 @cabinet.route('/grades', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def getGrades():
     if 'aup' not in request.args:
         return make_response('Отсутствует параметр "aup"', 400)
@@ -355,8 +355,8 @@ def getGrades():
 
 # Редактирование оценки
 @cabinet.route('/grade', methods=['PATCH'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def updateGrade():
     data = request.get_json()
 
@@ -384,8 +384,8 @@ def updateGrade():
 ### Столбцы оценок
 
 @cabinet.route('/grade-column-visible', methods=['PATCH'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def updateGradeColumn():
     data = request.get_json()
 
@@ -420,8 +420,8 @@ def updateGradeColumn():
 
 # Получение видов оценивания
 @cabinet.route('/grade-type', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def getGradeType():
     num_aup = request.args.get('aup')
     id_discipline = request.args.get('id')
@@ -443,8 +443,8 @@ def getGradeType():
 
 # Создание нового вида оценивания
 @cabinet.route('/grade-type', methods=['POST'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def createGradeType():
     data = request.get_json()
 
@@ -475,8 +475,8 @@ def createGradeType():
 
 # Редактирование видов оценивания
 @cabinet.route('/grade-type', methods=['PATCH'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def updateGradeType():
     data = request.get_json()
 
@@ -496,8 +496,8 @@ def updateGradeType():
     return jsonify(res)
 
 @cabinet.route('/grade-type', methods=['DELETE'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def deleteGradeType():
     id = request.args.get('id')
 
@@ -514,8 +514,8 @@ def deleteGradeType():
 
 # Получение данных о пользователе
 @cabinet.route('/user', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def getUser():
     token = request.args.get('token')
 
@@ -562,8 +562,8 @@ def getUser():
 
 # Получение пользователей системы
 @cabinet.route('/lk-users', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def getLKUsers():
     users = Users.query.filter_by(auth_type='lk').all()
 
@@ -588,8 +588,8 @@ def getLKUsers():
 
 # Выдача доступа для пользователя
 @cabinet.route('/approve-user', methods=['PATCH'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def updateApproveUser():
     data = request.get_json()
 
@@ -607,8 +607,8 @@ def updateApproveUser():
 # Загрузка файла выгрузки из 1С "Соответствие групп и учебных планов"
 # и формирование на его основе таблицы в базе данных
 @cabinet.route('/groups', methods=['PATCH'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def uploadGroups():
     files = request.files.getlist("file")
     file = files[0]
@@ -645,8 +645,8 @@ def uploadGroups():
 
 # Получение списка доступных групп
 @cabinet.route('/groups', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def getGroups():
     num_aup = request.args.get('aup')
 
@@ -665,16 +665,16 @@ def getGroups():
 
 # Получение расписания звонков
 @cabinet.route('/bells', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def getBells():
     bells = SprBells.query.all()
     return jsonify(serialize(bells))
 
 # Обновление звонков
 @cabinet.route('/bells', methods=['PATCH'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def updateBells():
     data = request.get_json()
 
@@ -689,8 +689,8 @@ def updateBells():
 
 # Получить отчет по дисциплине
 @cabinet.route('/report-by-discipline', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def getReportByDiscipline():
     id_discipline = request.args.get('id_discipline')
 
@@ -714,8 +714,8 @@ def getReportByDiscipline():
 
 # Получение отчета по группе
 @cabinet.route('/report', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def getReport():
     num_aup = request.args.get('aup')
     id_discipline = request.args.get('id')
@@ -823,16 +823,16 @@ def getControlTypes(id_aup, id_unique_discipline, semester):
 
 # Получение всех нагрузок дисциплины
 @cabinet.route('/place', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def getPlace():
     faculties = SprPlace.query.all()
     return jsonify(serialize(faculties))
 
 # Получение данных об учебном плане по поиску
 @cabinet.route('/aup', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def getAup():
     num_aup = request.args.get('aup')
     search = request.args.get('search')
@@ -861,8 +861,8 @@ def getAup():
 
 # Получение списка дисциплин учебного плана
 @cabinet.route('/disciplines', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def disciplines():
     q_num_aup = request.args.get('aup')
     aup = AupInfo.query.filter(AupInfo.num_aup == q_num_aup).first()
@@ -874,8 +874,8 @@ def disciplines():
 
 # Получение списка дисциплин учебного плана (вариант для студентов)
 @cabinet.route('/disciplines-new', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def disciplinesNew():
     num_aup = request.args.get('aup')
 
@@ -909,8 +909,8 @@ def disciplinesNew():
 
 # Получение информации о дисциплине
 @cabinet.route('/discipline', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def discipline():
     id = request.args.get('id')
     
@@ -921,8 +921,8 @@ def discipline():
 
 # Скачать распоряжение тьюторов
 @cabinet.route('/download-tutor-order', methods=['POST'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def downloadTutorOrder():
     body = request.get_json()
 
@@ -955,8 +955,8 @@ def downloadTutorOrder():
 
 # Получение списка факультетов
 @cabinet.route('/faculties', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def getFaculties():
     faculties = SprFaculty.query.all()
 
@@ -966,16 +966,16 @@ def getFaculties():
 
 # Получение списка кафедр
 @cabinet.route('/departments', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def getDepartments():
     departments = Department.query.all()
     return jsonify(serialize(departments))
 
 # Получение списка сотрудников
 @cabinet.route('/staff', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def getStaff():
     name_department = request.args.get('division')
 
@@ -1057,8 +1057,8 @@ def get_discipline_by_aup():
 
 # Получение распоряжения
 @cabinet.route('/tutor-orders', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def tutorOrders():
     faculty_id = request.args.get('id')
 
@@ -1102,8 +1102,8 @@ def tutorOrders():
 
 # Редактирование распоряжение тьюторов
 @cabinet.route('/tutor-order', methods=['PATCH'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def editTutorOrder():
     data = request.get_json()
     print(data)
@@ -1215,16 +1215,16 @@ def editTutorOrder():
 
 # Получение формы обучения
 @cabinet.route('/form-of-educations', methods=['GET'])
-@login_required(request)
-@approved_required(request)
+@login_required
+@approved_required
 def getFormOfEducations():
     form_of_educations = SprFormEducation.query.all()
     return jsonify(serialize(form_of_educations))
 
 
 @cabinet.route('/performance-excel', methods=['GET'])
-# @login_required(request)
-# @approved_required(request)
+# @login_required
+# @approved_required
 def get_performance_excel_report():
     num_aup = request.args.get('aup')
     id_discipline = request.args.get('id')

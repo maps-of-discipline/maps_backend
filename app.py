@@ -12,15 +12,19 @@ import click
 from flask.cli import with_appcontext
 import datetime
 import traceback # Для вывода трейсбека в сидере
+from werkzeug.security import generate_password_hash # Для хеширования пароля тестового пользователя
 
 # --- Импорты моделей для seed_command и приложения ---
+# Основные модели из maps
 from maps.models import (
     db, SprDiscipline, AupInfo, AupData, SprFaculty, Department,
-    SprDegreeEducation, SprFormEducation, SprRop, NameOP, Groups, SprOKCO, 
-    D_Blocks, D_Part, D_TypeRecord, D_ControlType, D_EdIzmereniya, D_Period, SprBranch, D_Modules  # Добавлены все нужные
+    SprDegreeEducation, SprFormEducation, SprRop, NameOP, Groups, SprOKCO,
+    D_Blocks, D_Part, D_TypeRecord, D_ControlType, D_EdIzmereniya, D_Period, SprBranch, D_Modules
     # SprBells, SprPlace # Добавь, если используются в сидере
 )
-from auth.models import Roles, Users # Добавлен Users, если понадобится
+
+from auth.models import Roles, Users
+# Модели из competencies_matrix
 from competencies_matrix.models import (
     CompetencyType, FgosVo, EducationalProgram, Competency, Indicator,
     CompetencyMatrix, EducationalProgramAup, EducationalProgramPs,
@@ -119,10 +123,10 @@ def seed_command():
         db.session.merge(Roles(id_role=5, name_role='student'))
 
         # Справочники для АУП (ID как в сидере)
-        db.session.merge(SprBranch(id_branch=1, city='Москва', location='Основное подразделение')) # Исправлено поле name_branch
-        db.session.merge(SprDegreeEducation(id_degree=1, name_deg="Высшее образование - бакалавриат")) # Убедись, что поле name_deg, а не name_degree
-        db.session.merge(SprFormEducation(id_form=1, form="Очная")) # Убедись, что поле form, а не name_form
-        db.session.merge(SprRop(id_rop=1, last_name='Иванов', first_name='Иван', middle_name='Иванович', email='rop@example.com', telephone='+70000000000')) # Пример для РОП
+        db.session.merge(SprBranch(id_branch=1, city='Москва', location='Основное подразделение')) # Имя поля уточнено
+        db.session.merge(SprDegreeEducation(id_degree=1, name_deg="Высшее образование - бакалавриат")) # Имя поля уточнено
+        db.session.merge(SprFormEducation(id_form=1, form="Очная")) # Имя поля уточнено
+        db.session.merge(SprRop(id_rop=1, last_name='Иванов', first_name='Иван', middle_name='Иванович', email='rop@example.com', telephone='+70000000000'))
         # Замени на реальные данные для SprOKCO и NameOP если они используются как FK
         db.session.merge(SprOKCO(program_code='09.03.01', name_okco='Информатика и ВТ')) # Пример ОКСО
         db.session.merge(NameOP(id_spec=1, program_code='09.03.01', num_profile='01', name_spec='Веб-технологии')) # Пример NameOP
@@ -135,11 +139,10 @@ def seed_command():
         # Справочники для AupData (ID как в сидере)
         db.session.merge(D_Blocks(id=1, title="Блок 1. Дисциплины (модули)"))
         db.session.merge(D_Part(id=1, title="Обязательная часть"))
-        # Add D_Modules entry (required for AupData foreign key constraint)
-        db.session.merge(D_Modules(id=1, title="Базовый модуль", color="#FFFFFF"))
-        db.session.merge(Groups(id_group=1, name_group="Основные", color="#FFFFFF", weight=1)) # name_group, а не title
+        db.session.merge(D_Modules(id=1, title="Базовый модуль", color="#FFFFFF")) # Добавлен цвет
+        db.session.merge(Groups(id_group=1, name_group="Основные", color="#FFFFFF", weight=1)) # Имя поля уточнено
         db.session.merge(D_TypeRecord(id=1, title="Дисциплина"))
-        db.session.merge(D_ControlType(id=1, title="Экзамен", shortname="Экз")) # Добавил shortname
+        db.session.merge(D_ControlType(id=1, title="Экзамен", shortname="Экз"))
         db.session.merge(D_ControlType(id=5, title="Зачет", shortname="Зач"))
         db.session.merge(D_EdIzmereniya(id=1, title="Академ. час"))
         db.session.merge(D_Period(id=1, title="Семестр 1"))
@@ -163,7 +166,7 @@ def seed_command():
         print("  - FGOS 09.03.01 checked/merged.")
 
         print("Seeding Educational Program...")
-        # ИСПРАВЛЕНО: Используем 'title' вместо 'name'
+        # ИСПОЛЬЗУЕМ title
         program1 = db.session.merge(EducationalProgram(id=1, fgos_vo_id=1, code='09.03.01', title='Веб-технологии (09.03.01)',
                                                      profile='Веб-технологии', qualification='Бакалавр', form_of_education='очная', enrollment_year=2024))
         db.session.commit()
@@ -195,20 +198,20 @@ def seed_command():
         # merge вернет объекты AupData - добавляем discipline (строковое имя дисциплины)
         ad501 = db.session.merge(AupData(
             id=501, id_aup=101, id_discipline=1001, discipline='Основы программирования',
-            id_block=1, shifr='Б1.1.07', id_part=1, id_module=1, id_group=1, 
-            id_type_record=1, id_period=1, num_row=7, id_type_control=1, 
+            id_block=1, shifr='Б1.1.07', id_part=1, id_module=1, id_group=1,
+            id_type_record=1, id_period=1, num_row=7, id_type_control=1,
             amount=14400, id_edizm=1, zet=4
         ))
         ad502 = db.session.merge(AupData(
             id=502, id_aup=101, id_discipline=1002, discipline='Базы данных',
-            id_block=1, shifr='Б1.1.10', id_part=1, id_module=1, id_group=1, 
-            id_type_record=1, id_period=1, num_row=10, id_type_control=5, 
+            id_block=1, shifr='Б1.1.10', id_part=1, id_module=1, id_group=1,
+            id_type_record=1, id_period=1, num_row=10, id_type_control=5,
             amount=10800, id_edizm=1, zet=3
         ))
         ad503 = db.session.merge(AupData(
             id=503, id_aup=101, id_discipline=1003, discipline='История России',
-            id_block=1, shifr='Б1.1.01', id_part=1, id_module=1, id_group=1, 
-            id_type_record=1, id_period=1, num_row=1, id_type_control=5, 
+            id_block=1, shifr='Б1.1.01', id_part=1, id_module=1, id_group=1,
+            id_type_record=1, id_period=1, num_row=1, id_type_control=5,
             amount=7200, id_edizm=1, zet=2
         ))
         db.session.commit()
@@ -217,6 +220,7 @@ def seed_command():
         # === БЛОК 4: Компетенции и Индикаторы ===
         print("Seeding Competencies & Indicators...")
         # Используем merge
+        # ВАЖНО: Убедись, что поле fgos_vo_id добавлено в модель Competency и миграцию!
         comp_uk1 = db.session.merge(Competency(id=1, competency_type_id=1, fgos_vo_id=1, code='УК-1', name='Способен осуществлять поиск, критический анализ и синтез информации, применять системный подход для решения поставленных задач'))
         comp_uk5 = db.session.merge(Competency(id=5, competency_type_id=1, fgos_vo_id=1, code='УК-5', name='Способен воспринимать межкультурное разнообразие общества...'))
         comp_opk7 = db.session.merge(Competency(id=107, competency_type_id=2, fgos_vo_id=1, code='ОПК-7', name='Способен участвовать в настройке и наладке программно-аппаратных комплексов'))
@@ -239,25 +243,21 @@ def seed_command():
 
         # === БЛОК 5: Связи Матрицы Компетенций ===
         print("Seeding Competency Matrix links...")
-        # Используем проверку + add для ассоциативной таблицы
+        # Используем функцию для проверки и добавления
         def add_link_if_not_exists(aup_data_id, indicator_id):
-            # Сначала проверяем, существуют ли родительские записи, иначе FK сработает
             aup_data_rec = AupData.query.get(aup_data_id)
             indicator_rec = Indicator.query.get(indicator_id)
             if not aup_data_rec or not indicator_rec:
                  print(f"    - SKIPPED link ({aup_data_id} <-> {indicator_id}): AupData or Indicator missing!")
-                 return False # Возвращаем False, если не смогли добавить
+                 return False
 
-            # Проверяем саму связь
             exists = CompetencyMatrix.query.filter_by(aup_data_id=aup_data_id, indicator_id=indicator_id).first()
             if not exists:
                 link = CompetencyMatrix(aup_data_id=aup_data_id, indicator_id=indicator_id, is_manual=True)
                 db.session.add(link)
                 print(f"    - Added link ({aup_data_id} <-> {indicator_id})")
-                return True # Возвращаем True, если добавили
-            # else: # Не будем выводить сообщение о существующей связи
-            #    pass
-            return True # Возвращаем True, если связь уже есть
+                return True
+            return True
 
         # Основы программирования (501) -> ИУК-1.1(10), ИУК-1.2(11), ИУК-1.3(12), ИОПК-7.1(170)
         add_link_if_not_exists(501, 10)
@@ -272,7 +272,45 @@ def seed_command():
         db.session.commit() # Коммитим связи
         print("  - Matrix links checked/added based on Excel example.")
 
-        print("Database seeding finished successfully.")
+        # === БЛОК 6: Тестовый Пользователь ===
+        print("Seeding Test User...")
+        test_user = Users.query.filter_by(login='testuser').first()
+        if not test_user:
+            test_user = Users(
+                # id_user=999, # Позволим БД самой назначить ID через auto-increment
+                login='testuser',
+                # Устанавливаем хеш пароля 'password'
+                password_hash=generate_password_hash('password', method='pbkdf2:sha256'),
+                name='Тестовый Методист',
+                email='testuser@example.com',
+                approved_lk=True # Предполагаем, что для тестов одобрение ЛК не нужно
+                # Добавь department_id, если оно обязательно
+            )
+            db.session.add(test_user)
+            db.session.commit() # Коммитим пользователя ПЕРЕД назначением роли
+            print(f"  - Added test user 'testuser' with id {test_user.id_user}.")
+
+            # Назначаем роль methodologist (ID=2)
+            methodologist_role = Roles.query.get(2)
+            if methodologist_role:
+                # if not user_role_link:
+                #     user_role_link = UserRoles(user_id=test_user.id_user, role_id=methodologist_role.id_role)
+                #     db.session.add(user_role_link)
+                #     db.session.commit()
+                #     print("  - Assigned 'methodologist' role to 'testuser'.")
+                if methodologist_role not in test_user.roles:
+                    test_user.roles.append(methodologist_role)
+                    db.session.commit()
+                    print("  - Assigned 'methodologist' role to 'testuser'.")
+                else:
+                    print("  - Role 'methodologist' already assigned to 'testuser'.")
+            else:
+                print("  - WARNING: Role 'methodologist' (ID=2) not found, skipping role assignment.")
+        else:
+            print("  - Test user 'testuser' already exists.")
+
+
+        print("\nDatabase seeding finished successfully.")
 
     except (IntegrityError, SQLAlchemyError) as e: # Ловим конкретные ошибки БД
         db.session.rollback()

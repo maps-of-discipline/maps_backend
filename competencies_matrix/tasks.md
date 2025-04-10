@@ -1,249 +1,187 @@
-Нужно исправить текущие ошибки, сделать `seed_db` рабочим и идемпотентным, и наметить дальнейшие шаги по реализации MVP (`logic.py`, `routes.py`) с фокусом на предоставление контекста для "агентной LLM" или разработчика.
-
-**Подход:** Представим это как задачу в таск-трекере для разработчика (или LLM-агента).
-
----
-
-## Задача: Исправление Сидера и Реализация Ядра API Матрицы Компетенций (MVP)
+```markdown
+# Задачи по Разработке Модуля `competencies_matrix`
 
 **Проект:** Академический Прогресс / Карты Дисциплин (Бэкенд)
 **Модуль:** `competencies_matrix`
-**Исполнитель:** [AI Agent / Developer]
-**Статус:** К выполнению
-**Приоритет:** Высокий
-
-### 1. Общее Описание (Big Picture)
-
-**Цель:** Довести модуль `competencies_matrix` до состояния, когда он корректно инициализируется, его структура БД соответствует миграции `a388922067b4...py`, тестовые данные успешно добавляются через `flask seed_db`, и реализован основной API-эндпоинт для получения данных матрицы (`GET /api/competencies/matrix/<aup_id>`).
-
-**Архитектура:** Модуль `competencies_matrix` является Flask Blueprint, интегрированным в основной бэкенд `maps_backend`. Он использует общую БД (`db` из `maps.models`), аутентификацию (`auth`) и модели учебных планов (`AupInfo`, `AupData`, `SprDiscipline` из `maps.models`). Новые таблицы, специфичные для компетенций и матриц, определены в `competencies_matrix/models.py` и создаются через Alembic миграцию `a388922067b4...py`.
-
-**Ключевой элемент MVP:** Обеспечить возможность **просмотра** матрицы компетенций для выбранного АУП, где строки - дисциплины АУП, столбцы - Компетенции, а ячейки показывают связанные **Индикаторы Достижения Компетенций (ИДК)**. Редактирование связей - следующий шаг.
-
-**Definition of Done (DoD) для этой задачи:**
-
-1.  Исправлены ошибки `TypeError` и `SAWarning` при запуске `flask seed_db`.
-2.  Команда `flask seed_db` успешно выполняется, является идемпотентной и добавляет тестовые данные для таблиц `competencies_*` (ОП, ФГОС, АУП-ОП, Компетенции, ИДК, Матрица).
-3.  Модели в `competencies_matrix/models.py` **полностью соответствуют** структуре таблиц, создаваемой миграцией `a388922067b4...py`.
-4.  Функция `competencies_matrix.logic.get_matrix_for_aup(aup_id)` реализована: корректно извлекает данные из БД (включая связанные модели из `maps.models`) и возвращает структурированный словарь для API.
-5.  Эндпоинт `GET /api/competencies/matrix/<aup_id>` в `competencies_matrix.routes` работает, вызывает `logic.get_matrix_for_aup`, защищен аутентификацией и возвращает корректный JSON (или 404).
-6.  Избыточные файлы (`app_to_integrate.py`) и функции инициализации таблиц (`create_tables_if_needed`) удалены.
+**Версия Документа:** 1.2
+**Дата:** [Текущая дата]
 
 ---
 
-### 2. Подзадачи и Реализация
+## 1. Цель и Определение MVP (Minimum Viable Product)
 
-#### 2.1. Исправление Ошибок в `app.py` (`seed_db`) и Моделях
+**Глобальная цель:** Создать подсистему для управления матрицами распределения компетенций для образовательных программ (ОП) Московского Политеха, интегрированную с существующим бэкендом "Карт Дисциплин" и системой аутентификации.
 
-**Проблема:** `TypeError` при создании `EducationalProgram` (используется `name` вместо `title`). Многочисленные `SAWarning` из-за конфликтующих определений `relationship`.
+**Цель MVP:** Предоставить пользователям (методистам, администраторам) возможность **просматривать** матрицу компетенций для выбранного Академического Учебного Плана (АУП) и **вручную управлять связями** между дисциплинами этого АУП и Индикаторами Достижения Компетенций (ИДК).
 
-**Решение:**
+**Definition of Done (DoD) для MVP:**
 
-1.  **Исправить `TypeError` в `app.py :: seed_command`:**
-    *   Заменить `name='Веб-технологии (09.03.01)'` на `title='Веб-технологии (09.03.01)'` при создании экземпляра `EducationalProgram`.
+1.  [x] Модуль `competencies_matrix` интегрирован в основной бэкенд (`app.py`).
+2.  [x] Структура БД соответствует актуальным миграциям Alembic (включая `a388922067b4...` и миграцию для `fgos_vo_id`).
+3.  [x] Команда `flask seed_db` выполняется и добавляет тестовые данные.
+4.  [x] API эндпоинт `GET /api/competencies/matrix/<aup_id>` возвращает `200 OK` и JSON с ожидаемой структурой.
+5.  [ ] **Проверить корректность данных** от `GET /matrix/<aup_id>` на тестовом АУП.
+6.  [ ] API эндпоинты `POST /api/competencies/matrix/link` и `DELETE /api/competencies/matrix/link` реализованы и позволяют создавать/удалять связи.
+7.  [ ] Реализован **минимальный** UI (Frontend), позволяющий выбрать АУП, отобразить матрицу и управлять связями.
+8.  [x] API защищено базовой аутентификацией (`@login_required`).
 
-    ```python
-    # app.py - внутри seed_command
-    print("Seeding Educational Program...")
-    program1 = EducationalProgram.query.get(1)
-    if not program1:
-        # ИСПРАВЛЕНО: Используем title вместо name
-        program1 = EducationalProgram(id=1, fgos_vo_id=1, code='09.03.01', title='Веб-технологии (09.03.01)',
-                                     profile='Веб-технологии', qualification='Бакалавр', form_of_education='очная', enrollment_year=2024)
-        db.session.add(program1)
-        print("  - Added Educational Program 'Веб-технологии'.")
-    else:
-        print("  - Educational Program 'Веб-технологии' already exists.")
-    db.session.commit() # Коммитим сразу после merge/add
-    ```
+---
 
-2.  **Исправить `SAWarning` (Roles/Users):**
-    *   Открыть `auth/models.py`.
-    *   Найти определения `relationship` между `Users` и `Roles` (через `user_roles`).
-    *   Убедиться, что **на обеих сторонах** используется `back_populates`.
+## 2. Подготовка и Настройка Окружения
 
-    ```python
-    # auth/models.py (Пример, проверь реальный код)
-    class Roles(db.Model):
-        # ...
-        # users = db.relationship("Users", secondary="user_roles", lazy='subquery', backref=db.backref('roles', lazy=True)) # СТАРЫЙ вариант с backref
-        # НОВЫЙ вариант:
-        users = db.relationship("Users", secondary="user_roles", back_populates="roles")
-        # ...
+*   **Задача:** Настроить локальное окружение.
+    *   **Статус:** [x] Выполнено.
+*   **Задача:** Применить все миграции Alembic.
+    *   **Статус:** [x] Выполнено.
+*   **Задача:** Добавить FK `fgos_vo_id` в модель `Competency` и миграцию.
+    *   **Статус:** [x] Выполнено (Предполагается, что сделано для успешного сидинга).
+*   **Задача:** Исправить проблемы инициализации.
+    *   **Статус:** [x] Выполнено (Ошибка `RuntimeError` исправлена).
 
-    class Users(db.Model):
-        # ...
-        # roles = db.relationship('Roles', secondary='user_roles', lazy='subquery', backref=db.backref('users', lazy=True)) # СТАРЫЙ вариант с backref
-        # НОВЫЙ вариант:
-        roles = db.relationship("Roles", secondary="user_roles", back_populates="users")
-        # ...
-    ```
+---
 
-3.  **Исправить `SAWarning` (Indicator/Matrix/AupData):**
-    *   Открыть `competencies_matrix/models.py`.
-    *   **В классе `Indicator`:** Удалить `relationship('AupData', secondary='competencies_matrix', back_populates='indicators', lazy='dynamic')`. Оставить только `matrix_entries = relationship('CompetencyMatrix', back_populates='indicator')`.
-    *   **В классе `CompetencyMatrix`:** Добавить связь с `AupData`: `aup_data_entry = relationship('AupData', back_populates='matrix_entries')`. Убедиться, что `indicator = relationship('Indicator', back_populates='matrix_entries')` существует.
-    *   **В классе `AupData` (Динамическое добавление):** Изменить код в `add_aupdata_relationships`, чтобы он соответствовал новым связям.
+## 3. Верификация Сидера и Данных MVP
 
-    ```python
-    # competencies_matrix/models.py
+*   **Задача:** Сделать команду `seed_db` идемпотентной и полной для MVP.
+    *   **Статус:** [x] Выполнено (Реализовано с `merge` и проверками).
+*   **Задача:** **Верифицировать** данные после `flask seed_db`.
+    *   **Статус:** [-] **К выполнению**.
+    *   **Приоритет:** Высокий.
+    *   **Подзадачи:**
+        *   [ ] Проверить наличие и корректность данных для AUP 101, ОП 1, ФГОС 1, дисциплин 1001-1003 (`spr_discipline`, `aup_data`), компетенций 1, 5, 107, 201, индикаторов 10-12, 50, 170, 210 и связей в `competencies_matrix` **непосредственно в базе данных**.
+        *   [ ] Убедиться, что повторный запуск `flask seed_db` не вызывает ошибок и не дублирует/изменяет данные.
+        *   [ ] Убедиться, что тестовый пользователь 'testuser' создан с ролью 'methodologist' (или 'admin').
 
-    class Indicator(db.Model, BaseModel):
-        # ... (остальные поля)
-        competency = relationship('Competency', back_populates='indicators')
-        matrix_entries = relationship('CompetencyMatrix', back_populates='indicator', cascade="all, delete-orphan") # Связь с матрицей
-        # УДАЛЕНО: aup_data_entries = relationship(...) - доступ будет через matrix_entries
-        labor_functions = relationship('LaborFunction', secondary='competencies_indicator_ps_link', back_populates='indicators') # Связь с ПС
+---
 
-    class CompetencyMatrix(db.Model, BaseModel):
-        # ... (остальные поля)
-        aup_data_id = db.Column(db.Integer, db.ForeignKey('aup_data.id'), nullable=False)
-        indicator_id = db.Column(db.Integer, db.ForeignKey('competencies_indicator.id'), nullable=False)
+## 4. Отладка и Доработка API Матрицы (MVP)
 
-        # ИСПРАВЛЕНО/ДОБАВЛЕНО: Четкие back_populates
-        indicator = relationship('Indicator', back_populates='matrix_entries')
-        aup_data_entry = relationship('AupData', back_populates='matrix_entries') # Добавлена связь с AupData
+*   **Задача:** Отладить и **проверить корректность данных** от `GET /matrix/<aup_id>`.
+    *   **Статус:** [-] **К выполнению**.
+    *   **Приоритет:** Высокий.
+    *   **Зависимости:** Верифицированный сидер.
+    *   **Подзадачи:**
+        *   [ ] Сравнить JSON-ответ от API с тестовыми данными в БД и ожидаемыми результатами (названия, коды, формулировки, ID связей).
+        *   [ ] Проверить и исправить **сортировку** `disciplines` (по семестру, затем по названию/shifr) и `competencies` (по типу, затем по коду).
+        *   [ ] Доработать **фильтрацию ПК**: реализовать логику выборки только тех ПК, которые релевантны для ОП (например, на основе связанных с ОП профстандартов). **Для MVP можно пока оставить получение всех ПК.**
+        *   [ ] Убедиться, что фильтрация УК/ОПК по `fgos_vo_id` работает (если поле добавлено и заполнено сидером).
+*   **Задача:** Реализовать API для **управления связями** в матрице.
+    *   **Статус:** [-] **К выполнению**.
+    *   **Приоритет:** Высокий (для MVP).
+    *   **Подзадачи:**
+        *   [ ] Протестировать и отладить `logic.update_matrix_link(...)`.
+        *   [ ] Реализовать и протестировать `POST /matrix/link` и `DELETE /matrix/link` в `routes.py` (используя `curl` или Postman).
 
-    # Исправляем динамическое добавление в AupData
-    @db.event.listens_for(AupData, 'mapper_configured', once=True) # Добавлен once=True для надежности
-    def add_aupdata_relationships(mapper, class_):
-        # Проверяем наличие перед добавлением
-        if not hasattr(class_, 'matrix_entries'):
-            class_.matrix_entries = relationship(
-                'CompetencyMatrix',
-                # ИСПРАВЛЕНО: back_populates указывает на атрибут в CompetencyMatrix
-                back_populates='aup_data_entry',
-                cascade="all, delete-orphan", # Возможно, каскадное удаление нужно здесь?
-                lazy='dynamic' # Оставляем dynamic, если нужен QueryableAttribute
-            )
-            print(f"Dynamically added 'matrix_entries' relationship to AupData")
-        # Старую связь 'indicators' больше не добавляем
-    ```
+---
 
-4.  **Исправить `SAWarning` (UnificationDiscipline):**
-    *   Предположительно, модели находятся в `unification/models.py`.
-    *   Найти `UnificationDiscipline` и `DisciplinePeriodAssoc`.
-    *   Установить `back_populates` на обеих сторонах (`periods` в `UnificationDiscipline` и `unification_discipline` в `DisciplinePeriodAssoc`).
+## 5. Frontend Разработка (MVP)
 
-5.  **Удалить Избыточный Код:**
-    *   Удалить файл `competencies_matrix/app_to_integrate.py`.
-    *   Удалить функции `create_tables_if_needed` и `initialize_lookup_data` из `competencies_matrix/models.py`.
+*   **Задача:** Создать базовый UI для отображения и редактирования матрицы.
+    *   **Статус:** [-] **К выполнению**.
+    *   **Приоритет:** Высокий (для MVP).
+    *   **Подзадачи:**
+        *   [ ] **Выбор АУП:** Реализовать механизм выбора АУП (например, через выпадающий список, получая ОП и их АУП из API `/programs/<id>`).
+        *   [ ] **Маршрутизация:** Настроить Vue Router для страницы матрицы (например, `/matrix/:aupId`).
+        *   [ ] **Состояние (Pinia):** Создать стор(ы) для хранения выбранного `aup_id`, загруженных данных матрицы (`disciplines`, `competencies`, `links`), статуса загрузки и ошибок.
+        *   [ ] **Компонент Матрицы:** Создать Vue-компонент, который:
+            *   Принимает `aup_id`.
+            *   Вызывает действие стора для загрузки данных через `GET /matrix/<aup_id>`.
+            *   Отображает таблицу: строки - `disciplines`, столбцы - `competencies` (сгруппированные), ячейки - `indicators`.
+            *   В ячейках на пересечении Дисциплина-Индикатор отображает чекбокс, состояние которого (`checked`) соответствует наличию связи в `links`.
+        *   [ ] **Редактирование Связей:** Реализовать обработчик изменения состояния чекбокса, который вызывает действия стора для отправки `POST /matrix/link` (при установке) или `DELETE /matrix/link` (при снятии). Обновить состояние `links` в сторе после успешного ответа API.
 
-#### 2.2. Доработка `app.py :: seed_command`
+---
 
-**Проблема:** Сидер не идемпотентный и неполный.
+## 6. Базовый CRUD API (Вне MVP, но нужно для управления)
 
-**Решение:**
+*   **Задача:** Реализовать CRUD для Образовательных Программ (ОП).
+    *   **Статус:** [-] К выполнению.
+    *   **Приоритет:** Средний.
+    *   **Подзадачи:**
+        *   [ ] `logic`: Функции `create_program`, `get_program`, `update_program`, `delete_program`.
+        *   [ ] `routes`: Эндпоинты `POST /programs`, `GET /programs/<id>`, `PATCH /programs/<id>`, `DELETE /programs/<id>`.
+        *   [ ] Добавить защиту и базовую валидацию.
+*   **Задача:** Реализовать CRUD для Компетенций.
+    *   **Статус:** [-] К выполнению.
+    *   **Приоритет:** Средний.
+    *   **Подзадачи:**
+        *   [ ] `logic`: Функции `get_competencies` (с фильтрами), `get_competency`, `update_competency`, `delete_competency`.
+        *   [ ] `routes`: Эндпоинты `GET /competencies`, `GET /competencies/<id>`, `PATCH /competencies/<id>`, `DELETE /competencies/<id>`. (POST уже частично есть).
+        *   [ ] Добавить защиту и валидацию.
+*   **Задача:** Реализовать CRUD для Индикаторов.
+    *   **Статус:** [-] К выполнению.
+    *   **Приоритет:** Средний.
+    *   **Подзадачи:**
+        *   [ ] `logic`: Функции `get_indicators` (с фильтром по competency_id), `get_indicator`, `update_indicator`, `delete_indicator`.
+        *   [ ] `routes`: Эндпоинты `GET /indicators`, `GET /indicators/<id>`, `PATCH /indicators/<id>`, `DELETE /indicators/<id>`. (POST уже частично есть).
+        *   [ ] Добавить защиту и валидацию.
 
-*   **Идемпотентность:** Использовать `db.session.merge(object)` вместо `db.session.add(object)`. `merge` либо добавляет новый объект (если PK нет в сессии/БД), либо обновляет существующий объект в сессии данными из переданного объекта. Это безопаснее для сидера.
-*   **Полнота:** Пройти по коду `seed_command` (пример в предыдущем ответе) и **добавить `merge()`** для *всех* тестовых данных, которые должны присутствовать в MVP: ФГОС, ОП, АУП, Связь ОП-АУП, Дисциплины, Записи AupData, Компетенции, Индикаторы, Связи в Матрице.
-*   **Коммиты:** Делать `db.session.commit()` после логических блоков добавления данных (например, после всех типов компетенций, потом после ОП, потом после АУП и т.д.), чтобы зафиксировать изменения и избежать слишком больших транзакций.
+---
 
-```python
-# app.py - Фрагмент seed_command с использованием merge
-@click.command(name='seed_db')
-@with_appcontext
-def seed_command():
-    """Заполняет базу данных начальными/тестовыми данными (Идемпотентно)."""
-    print("Starting database seeding...")
-    try:
-        # --- 1. Базовые справочники ---
-        print("Seeding Competency Types...")
-        db.session.merge(CompetencyType(id=1, code='УК', name='Универсальная'))
-        db.session.merge(CompetencyType(id=2, code='ОПК', name='Общепрофессиональная'))
-        db.session.merge(CompetencyType(id=3, code='ПК', name='Профессиональная'))
-        db.session.commit() # Коммит после блока
-        print("  - Competency types checked/merged.")
+## 7. Профессиональные Стандарты (ПС)
 
-        # ... (Аналогично для Roles) ...
-        db.session.commit() # Коммит после блока
+*   **Задача:** Доработка парсера ПС для извлечения структуры.
+    *   **Статус:** [-] К выполнению.
+    *   **Приоритет:** Низкий (для MVP), Средний (для полной функциональности).
+    *   **Подзадачи:**
+        *   [ ] Модифицировать `parsers.py :: parse_uploaded_prof_standard` для возврата словаря со структурой (ОТФ, ТФ, Действия, Знания, Умения).
+        *   [ ] Модифицировать `logic.py :: parse_prof_standard_file` для сохранения этой структуры в связанные таблицы БД (`competencies_generalized_labor_function` и т.д.).
+*   **Задача:** Реализовать API для работы с ПС.
+    *   **Статус:** [-] К выполнению.
+    *   **Приоритет:** Низкий (для MVP).
+    *   **Подзадачи:**
+        *   [ ] `GET /profstandards`: Список ПС.
+        *   [ ] `GET /profstandards/<code>`: Получение ПС по коду (включая структуру ОТФ/ТФ).
+        *   [ ] (Возможно) CRUD для ручного редактирования ПС/ТФ.
+*   **Задача:** Реализовать связь ПК/ИДК с элементами ПС.
+    *   **Статус:** [-] К выполнению.
+    *   **Приоритет:** Низкий (для MVP), Высокий (для соответствия требованиям ОП).
+    *   **Подзадачи:**
+        *   [ ] Доработать `logic.create_competency` для установки `based_on_labor_function_id`.
+        *   [ ] Доработать `logic.create_indicator` (и `update`) для сохранения связей в `IndicatorPsLink`.
+        *   [ ] Реализовать API для управления связями `IndicatorPsLink`.
+        *   [ ] Реализовать UI для выбора ТФ при создании ПК и для привязки ИДК к элементам ПС.
 
-        # --- 3. Основные тестовые данные ---
-        print("Seeding FGOS...")
-        fgos1 = FgosVo(id=1, ...) # Как раньше
-        db.session.merge(fgos1)
-        db.session.commit()
+---
 
-        print("Seeding Educational Program...")
-        # ИСПОЛЬЗУЕМ title
-        program1 = EducationalProgram(id=1, fgos_vo_id=1, code='09.03.01', title='Веб-технологии (09.03.01)', ...)
-        db.session.merge(program1)
-        db.session.commit()
+## 8. Рефакторинг, Тестирование и Документация
 
-        # ... (AUP, AUP-Program Link, Disciplines, AupData - используем merge) ...
-        db.session.commit() # Коммит после блока AupData
+*   **Задача:** Внедрить схемы валидации API (Pydantic/Marshmallow).
+    *   **Статус:** [-] К выполнению.
+    *   **Приоритет:** Средний.
+*   **Задача:** Реализовать ролевую модель доступа (`@check_permission`).
+    *   **Статус:** [-] К выполнению.
+    *   **Приоритет:** Средний.
+*   **Задача:** Написать Unit и Интеграционные тесты (pytest).
+    *   **Статус:** [-] К выполнению.
+    *   **Приоритет:** Средний/Высокий.
+*   **Задача:** Улучшить логирование и обработку ошибок.
+    *   **Статус:** [-] К выполнению (Постоянно).
+*   **Задача:** Написать/Обновить документацию API (Swagger/OpenAPI).
+    *   **Статус:** [-] К выполнению.
+    *   **Приоритет:** Средний.
+*   **Задача:** Написать руководство пользователя/методиста.
+    *   **Статус:** [-] К выполнению.
+    *   **Приоритет:** Средний/Низкий.
 
-        print("Seeding Competencies & Indicators...")
-        # Используем merge для компетенций
-        comp_uk1 = Competency(id=1, competency_type_id=1, fgos_vo_id=1, code='УК-1', name='...')
-        db.session.merge(comp_uk1)
-        # ... (другие компетенции) ...
-        db.session.commit() # Коммит компетенций ПЕРЕД индикаторами
+---
 
-        # Используем merge для индикаторов
-        # ВАЖНО: merge работает по Primary Key. Если ID уже занят, он обновит запись.
-        ind_iuk1_1 = Indicator(id=10, competency_id=1, code='ИУК-1.1', formulation='...')
-        db.session.merge(ind_iuk1_1)
-        # ... (другие индикаторы) ...
-        db.session.commit() # Коммит индикаторов
+## 9. Будущие Возможности (Post-MVP)
 
-        print("Seeding Competency Matrix links...")
-        # Используем merge для связей (у CompetencyMatrix должен быть свой PK - 'id')
-        # Убедись, что ID AupData и Indicator корректны
-        link1 = CompetencyMatrix(aup_data_id=501, indicator_id=10, is_manual=True) # Пример
-        # Проверяем существование перед merge, т.к. у нас нет уникального PK для merge по FK
-        existing_link1 = CompetencyMatrix.query.filter_by(aup_data_id=501, indicator_id=10).first()
-        if not existing_link1:
-            db.session.add(link1) # Используем add, если проверяем вручную
-        # ... (другие связи) ...
-        db.session.commit() # Коммит связей
+*   [ ] Интеграция с NLP-сервисом для предложений связей в матрице.
+*   [ ] Интеграция с NLP для помощи в формулировании ИДК на основе ПС.
+*   [ ] Генерация отчетов (покрытие ИДК, соответствие ПС и т.д.).
+*   [ ] Управление версиями ОП, ФГОС, ПС, Матриц.
+*   [ ] Более глубокая интеграция с модулем `cabinet` (учет успеваемости по ИДК).
+*   [ ] Визуализация матриц и связей.
 
-        print("Database seeding finished successfully.")
-    except Exception as e:
-        db.session.rollback()
-        print(f"ERROR during database seeding: {e}")
-        import traceback
-        traceback.print_exc()
+---
 
-# Не забудь зарегистрировать команду
-# app.cli.add_command(seed_command)
+**Комментарий о `proper_schema.md`:**
 
+Файл `proper_schema.md` (или аналогичный `.sql` файл со схемой) был полезен на **этапе проектирования** базы данных. Он служил "чертежом". Сейчас, когда структура БД создана и управляется через модели SQLAlchemy (`*.models.py`) и миграции Alembic (`migrations/versions/*.py`), **именно код моделей и файлы миграций являются актуальным источником истины** о структуре БД.
+
+**Нужно ли обновлять `proper_schema.md`?** Не обязательно. Его можно оставить как артефакт проектирования или обновить вручную, если хочется иметь актуальное *визуальное* представление схемы (например, для документации). Но он **не используется** непосредственно при разработке или управлении БД. При любых сомнениях или изменениях нужно смотреть в код моделей и миграций.
+
+**Дальнейшие действия:** Сфокусируйся на **пункте 3 (Верификация Сидера)** и **пункте 4 (Отладка API Матрицы)**. Как только ты уверен, что API `GET /matrix/<aup_id>` возвращает *правильные* данные, можно параллельно начинать **пункт 5 (Frontend Разработка)** и доделывать API для редактирования связей (`POST/DELETE /matrix/link`).
 ```
-
-#### 2.3. Реализация Логики `get_matrix_for_aup`
-
-**Проблема:** Функция `logic.get_matrix_for_aup` написана, но требует проверки и, возможно, доработки связей с моделями, соответствующими миграции.
-
-**Решение:** Код функции `get_matrix_for_aup` из предыдущего ответа уже довольно близок к цели. Основные моменты для проверки и доработки:
-
-*   **Связь `Competency` с `FgosVo`:** Добавить FK `fgos_vo_id` в модель `Competency`, сгенерировать миграцию, применить ее, и раскомментировать блок фильтрации УК/ОПК в `get_matrix_for_aup`.
-*   **Выборка ПК:** Определиться с логикой связи ПК с ОП. **Для MVP:** оставить текущую логику (брать все ПК). **Полноценное решение:** фильтровать ПК по ТФ (`based_on_labor_function_id`), которые принадлежат ПС (`ProfStandard`), выбранным для данной ОП (`EducationalProgramPs`). Это потребует запроса с JOIN'ами через `EducationalProgramPs -> ProfStandard -> GeneralizedLaborFunction -> LaborFunction -> Competency`.
-*   **Производительность:** Для больших матриц использовать `selectinload` и `joinedload` критически важно. Текущий код уже их использует, это хорошо.
-*   **Сериализация:** Проверить `to_dict` и `rules`/`only`, чтобы API возвращал только нужные поля и не было циклических ссылок.
-
-#### 2.4. Реализация API Роута `GET /matrix/<aup_id>`
-
-**Проблема:** Роут есть, но нужно убедиться, что он корректно вызывает логику и обрабатывает результаты/ошибки.
-
-**Решение:** Код в `routes.py` из предыдущего ответа в целом корректен. Нужно:
-
-*   Убедиться, что декоратор `@login_required(request)` (или его аналог из `auth.logic`) правильно импортирован и используется.
-*   Добавить (когда будет готова система прав) декоратор `@check_permission('view_matrix')`.
-*   Протестировать возврат 404, если `get_matrix_for_aup` вернул `None`.
-*   Протестировать возврат 500 при возникновении исключений в `logic.py`.
-
----
-
-### 3. Контекст для LLM/Разработчика
-
-*   **Главная Цель:** Создать API для отображения Матрицы Компетенций. Матрица связывает **Дисциплины** (из существующего модуля `maps`, таблицы `aup_data`) с **Индикаторами Достижения Компетенций (ИДК)** (из нового модуля `competencies_matrix`, таблица `competencies_indicator`).
-*   **Источник Данных:**
-    *   **Дисциплины и АУП:** Модели `AupInfo`, `AupData`, `SprDiscipline` из `maps.models`.
-    *   **УК/ОПК и их ИДК:** Модели `Competency`, `Indicator` из `competencies_matrix.models`, связанные с `FgosVo`. Данные берутся из ФГОС и Распоряжения 505-Р.
-    *   **ПК и их ИДК:** Модели `Competency`, `Indicator` из `competencies_matrix.models`. ПК создаются пользователем (методистом) на основе ТФ из ПС. ИДК для ПК также создаются пользователем.
-    *   **Матрица Связей:** Таблица `competencies_matrix` хранит пары (`aup_data_id`, `indicator_id`).
-*   **Управление Схемой:** Используется **Alembic**. Все изменения схемы делаются через миграции (`flask db migrate`, `flask db upgrade`). Миграция `a388922067b4...py` уже создает основные таблицы.
-*   **Наполнение Данными:** Используется команда **`flask seed_db`**. Она должна быть **идемпотентной** (использовать `db.session.merge()` или проверки на существование) и содержать **все необходимые тестовые данные** для MVP.
-*   **Текущий Фокус:** Реализовать чтение данных для матрицы (`GET /matrix/<aup_id>`) и базовое добавление/удаление связей (`POST/DELETE /matrix/link`).
-*   **Взаимодействие:** Код `competencies_matrix` должен корректно импортировать `db` и модели из `maps.models`.
-*   **Будущее:** Парсинг ПС (`parsers.py`), интеграция NLP, CRUD для всех сущностей, система прав доступа.

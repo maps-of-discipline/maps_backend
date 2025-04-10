@@ -5,12 +5,15 @@ from typing import Any
 
 import jwt
 import sqlalchemy.exc
-from flask import make_response
+# Add g and current_app imports
+from flask import make_response, g, current_app, request as flask_request
 
 from auth.models import Users, Token
 from maps.models import db, AupInfo
 
-from config import SECRET_KEY, ACCESS_TOKEN_LIFETIME, REFRESH_TOKEN_LIFETIME
+# Get config values from current_app
+ACCESS_TOKEN_LIFETIME = 3600  # Default value
+REFRESH_TOKEN_LIFETIME = 86400*30  # Default value
 
 def get_access_token(user_id) -> str:
     user: Users = Users.query.filter_by(id_user=user_id).first()
@@ -23,7 +26,7 @@ def get_access_token(user_id) -> str:
             for aup in aup_infos:
                 can_edit.append(aup.num_aup)
 
-    elif 3 in [role.id_role for role in user.roles] :  # department
+    elif 3 in [role.id_role for role in user.roles]:  # department
         aup_infos = AupInfo.query.filter_by(id_department=user.department_id)
         for aup in aup_infos:
             can_edit.append(aup.num_aup)
@@ -42,10 +45,12 @@ def get_access_token(user_id) -> str:
         'faculties': [faq.id_faculty for faq in user.faculties],
         'exp': round(time()) + ACCESS_TOKEN_LIFETIME,
         'can_edit': can_edit,
-        'approved_lk': user.approved_lk
+        'approved_lk': bool(user.approved_lk)
     }
 
-    return str(jwt.encode(payload, SECRET_KEY, algorithm='HS256'))
+    secret_for_encoding = current_app.config['SECRET_KEY']
+    print(f"DEBUG: Encoding token with SECRET_KEY: '{secret_for_encoding}'") 
+    return str(jwt.encode(payload, secret_for_encoding, algorithm='HS256'))
 
 
 def get_refresh_token(user_id: int, user_agent: str) -> str:
@@ -68,19 +73,31 @@ def get_refresh_token(user_id: int, user_agent: str) -> str:
 
     return refresh_token
 
-
-def verify_jwt_token(jwt_token) -> tuple[Any, bool] | tuple[None, bool]:
+def verify_jwt_token(jwt_token) -> tuple[Any, bool]:
+    secret_for_decoding = current_app.config['SECRET_KEY']
+    print(f"DEBUG: Decoding token with SECRET_KEY: '{secret_for_decoding}'")
     try:
-        return jwt.decode(
+        payload = jwt.decode(
             jwt=jwt_token,
-            key=SECRET_KEY,
+            key=secret_for_decoding,
             algorithms=['HS256'],
-            options={"verify_exp": False}
-        ), True
+            # Verify expiration when decoding
+            options={"verify_exp": True}
+        )
+        print(f"DEBUG: Token decoded successfully. Payload user_id: {payload.get('user_id')}")
+        return payload, True
 
-    except jwt.exceptions.InvalidSignatureError:
+    except jwt.ExpiredSignatureError:
+        print("DEBUG: Token verification failed: Expired")
         return None, False
-    except jwt.exceptions.DecodeError:
+    except jwt.InvalidSignatureError:
+        print("DEBUG: Token verification failed: Invalid Signature")
+        return None, False
+    except jwt.DecodeError:
+        print("DEBUG: Token verification failed: Decode Error")
+        return None, False
+    except Exception as e:
+        print(f"DEBUG: Token verification failed: Unexpected error {e}")
         return None, False
 
 
@@ -89,86 +106,105 @@ def verify_refresh_token(token: str) -> bool:
     return current_token and current_token.refresh_token == token and current_token.ttl > time()
 
 
-def login_required(request):
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if 'Authorization' not in request.headers or request.headers['Authorization'] is None:
-                return make_response('Authorization header is required', 401)
+# This function extracts and verifies the token, and sets the user in g
+def _verify_token_and_set_user(request_obj):
+    auth_header = request_obj.headers.get("Authorization")
+    g.user = None  # Reset user for each request
+    g.auth_payload = None
 
-            payload, verify_result = verify_jwt_token(request.headers["Authorization"])
-            if not payload or not verify_result:
-                return make_response('Authorization token is invalid', 401)
+    if not auth_header or not auth_header.startswith("Bearer "):
+        print("DEBUG: _verify_token: No/Invalid Bearer token format.")
+        return False
 
-            result = f(*args, **kwargs)
-            return result
-        return decorated_function
-    return decorator
+    token = auth_header.split(" ")[1]
 
-def approved_required(request):
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            payload, verify_result = verify_jwt_token(request.headers["Authorization"])
+    payload, verify_result = verify_jwt_token(token)
+    print(f"DEBUG: _verify_token: verify_jwt_token result: payload is None? {payload is None}, verify_result: {verify_result}")
 
-            if not payload['approved_lk']:
-                return make_response('Need approved', 403)
-
-            result = f(*args, **kwargs)
-            return result
-
-        return decorated_function
-
-    return decorator
+    if payload and verify_result:
+        # Find user in DB by ID from token
+        user = Users.query.get(payload.get('user_id'))
+        if user:
+            g.user = user  # Save user object
+            g.auth_payload = payload  # Save payload
+            print(f"DEBUG: _verify_token: Verification successful for user_id {g.user.id_user}. User set in g.")
+            return True
+        else:
+            print(f"DEBUG: _verify_token: User ID {payload.get('user_id')} from token not found in DB.")
+            return False
+    else:
+        print("DEBUG: _verify_token: Token verification failed.")
+        return False
 
 
-def aup_require(request):
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            payload, verify_result = verify_jwt_token(request.headers["Authorization"])
-
-            user = Users.query.filter_by(id_user=payload['user_id']).one()
-            if not ('Aup' in request.headers and request.headers['Aup']):
-                return make_response('aup is required', 401)
-            try:
-                aup_info: AupInfo = AupInfo.query.filter_by(num_aup=request.headers['Aup']).one()
-            except sqlalchemy.exc.NoResultFound:
-                return make_response("No such aup found", 404)
-
-            if 2 in payload['roles']:
-                if aup_info.id_faculty not in [faq.id_faculty for faq in user.faculties]:
-                    return make_response('Forbidden', 403)
-
-            elif 3 in payload['roles']:
-                if not user.department_id or aup_info.id_department != user.department_id:
-                    return make_response('Forbidden', 403)
-
-            result = f(*args, **kwargs)
-            return result
-
-        return decorated_function
-
-    return decorator
+# Authentication decorator
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not _verify_token_and_set_user(flask_request):
+            print("DEBUG: login_required: Verification failed. Returning 401.")
+            return make_response('Invalid or missing Authorization token', 401)
+        # If _verify_token_and_set_user returned True, then g.user is set
+        print(f"DEBUG: login_required: Access granted for user {g.user.id_user}. Proceeding.")
+        return f(*args, **kwargs)
+    return decorated_function
 
 
-def admin_only(request):
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if 'Authorization' not in request.headers or request.headers['Authorization'] is None:
-                return make_response('Authorization header is required', 401)
+# Approval required decorator
+def approved_required(f):
+    # This decorator should be used AFTER @login_required
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not hasattr(g, 'user') or g.user is None or not hasattr(g, 'auth_payload') or g.auth_payload is None:
+            print("DEBUG: approved_required: g.user or g.auth_payload not set! Misconfigured decorators? Returning 401.")
+            return make_response('Authentication required', 401)
 
-            payload, verify_result = verify_jwt_token(request.headers["Authorization"])
-            if not payload or not verify_result:
-                return make_response('Authorization token is invalid', 401)
+        if not g.auth_payload.get('approved_lk', False):
+            print(f"DEBUG: approved_required: User {g.user.id_user} not approved (approved_lk is {g.auth_payload.get('approved_lk')}). Returning 403.")
+            return make_response('User approval required', 403)
 
-            if 1 not in payload['roles']:
+        print(f"DEBUG: approved_required: User {g.user.id_user} approved. Proceeding.")
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+# Admin only decorator
+def admin_only(f):
+    # This decorator should be used AFTER @login_required
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not hasattr(g, 'user') or g.user is None:
+            return make_response('Authentication required', 401)
+
+        if not any(role.id_role == 1 for role in g.user.roles):
+            print(f"DEBUG: admin_only: User {g.user.id_user} does not have 'admin' role. Returning 403.")
+            return make_response('Admin privileges required', 403)
+
+        print(f"DEBUG: admin_only: User {g.user.id_user} has 'admin' role. Proceeding.")
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def aup_require(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not hasattr(g, 'user') or g.user is None:
+            return make_response('Authentication required', 401)
+
+        if not ('Aup' in flask_request.headers and flask_request.headers['Aup']):
+            return make_response('aup is required', 401)
+        try:
+            aup_info: AupInfo = AupInfo.query.filter_by(num_aup=flask_request.headers['Aup']).one()
+        except sqlalchemy.exc.NoResultFound:
+            return make_response("No such aup found", 404)
+
+        if 2 in [role.id_role for role in g.user.roles]:  # faculty
+            if aup_info.id_faculty not in [faq.id_faculty for faq in g.user.faculties]:
                 return make_response('Forbidden', 403)
 
-            result = f(*args, **kwargs)
-            return result
+        elif 3 in [role.id_role for role in g.user.roles]:  # department
+            if not g.user.department_id or aup_info.id_department != g.user.department_id:
+                return make_response('Forbidden', 403)
 
-        return decorated_function
-
-    return decorator
+        return f(*args, **kwargs)
+    return decorated_function
