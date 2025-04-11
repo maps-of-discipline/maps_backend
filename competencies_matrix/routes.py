@@ -66,7 +66,7 @@ def get_matrix(aup_id):
 def manage_matrix_link():
     """
     Создает или удаляет связь Дисциплина(АУП)-ИДК в матрице.
-    (Версия с улучшенной обработкой ответа)
+    Возвращает подробный статус операции вместе с соответствующим HTTP-кодом.
     """
     data = request.get_json()
     if not data or 'aup_data_id' not in data or 'indicator_id' not in data:
@@ -76,19 +76,39 @@ def manage_matrix_link():
     indicator_id = data['indicator_id']
     is_creating = (request.method == 'POST')
 
-    success = update_matrix_link(
+    result = update_matrix_link(
         aup_data_id,
         indicator_id,
         create=is_creating
     )
 
-    if success:
+    # Формируем ответ в зависимости от статуса результата
+    if result['success']:
         if is_creating:
-            return jsonify({"message": "Связь успешно создана"}), 201
-        else:
-            return jsonify({"message": "Связь успешно удалена (или не существовала)"}), 200
-    else:
-        abort(400, description="Не удалось создать/удалить связь: возможно, AupData или Indicator не найдены, или произошла ошибка БД.")
+            if result['status'] == 'created':
+                return jsonify({"status": "created", "message": "Связь успешно создана"}), 201
+            elif result['status'] == 'already_exists':
+                return jsonify({"status": "already_exists", "message": "Связь уже существует"}), 200
+        else:  # DELETE
+            if result['status'] == 'deleted':
+                return jsonify({"status": "deleted", "message": "Связь успешно удалена"}), 200
+            elif result['status'] == 'not_found':
+                return jsonify({"status": "not_found", "message": "Связь для удаления не найдена"}), 404
+    else:  # Обработка ошибок
+        error_msg = "Не удалось выполнить операцию"
+        status_code = 400
+        
+        if result.get('error') == 'aup_data_not_found':
+            error_msg = f"Запись AupData (id: {aup_data_id}) не найдена"
+            status_code = 404
+        elif result.get('error') == 'indicator_not_found':
+            error_msg = f"Индикатор (id: {indicator_id}) не найден"
+            status_code = 404
+        elif result.get('error') == 'database_error':
+            error_msg = "Ошибка базы данных при выполнении операции"
+            status_code = 500
+            
+        return jsonify({"status": "error", "message": error_msg}), status_code
 
 # Группа эндпоинтов для работы с компетенциями и индикаторами
 @competencies_matrix_bp.route('/competencies', methods=['POST'])

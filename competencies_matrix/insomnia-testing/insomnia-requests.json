@@ -1,0 +1,359 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2025-04-11T11:00:00.000Z",
+  "__export_source": "insomnia.desktop.app:v2023.x.x",
+  "resources": [
+    {
+      "_id": "wrk_competencies",
+      "parentId": null,
+      "modified": 1744399200000,
+      "created": 1744399100000,
+      "name": "Competencies Matrix API Tests",
+      "description": "",
+      "scope": "collection",
+      "_type": "workspace"
+    },
+    {
+      "_id": "env_base",
+      "parentId": "wrk_competencies",
+      "modified": 1744399210000,
+      "created": 1744399110000,
+      "name": "Base Environment",
+      "data": {
+        "base_url": "http://127.0.0.1:5000",
+        "auth_token": "",
+        "test_program_id": 1,
+        "test_aup_id": 101,
+        "test_competency_id": 201,
+        "test_aup_data_id_1": 501,
+        "test_aup_data_id_2": 502,
+        "test_indicator_id_1": 10,
+        "test_indicator_id_2": 210
+      },
+      "dataPropertyOrder": {
+        "&": [
+          "base_url",
+          "auth_token",
+          "test_program_id",
+          "test_aup_id",
+          "test_competency_id",
+          "test_aup_data_id_1",
+          "test_aup_data_id_2",
+          "test_indicator_id_1",
+          "test_indicator_id_2"
+        ]
+      },
+      "color": null,
+      "isPrivate": false,
+      "metaSortKey": 1744399110000,
+      "_type": "environment"
+    },
+    {
+      "_id": "req_login",
+      "parentId": "wrk_competencies",
+      "modified": 1744399250000,
+      "created": 1744399150000,
+      "url": "{{ base_url }}/api/auth/login",
+      "name": "1. Login Test User",
+      "description": "Получает access и refresh токены для пользователя testuser/password",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n\t\"login\": \"testuser\",\n\t\"password\": \"password\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json",
+          "id": "pair_h1"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1000,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_get_matrix",
+      "parentId": "wrk_competencies",
+      "modified": 1744399300000,
+      "created": 1744399200000,
+      "url": "{{ base_url }}/api/competencies/matrix/{{ test_aup_id }}",
+      "name": "2. Get Matrix Data (Test AUP)",
+      "description": "Получает данные для матрицы тестового АУП (ID: {{ test_aup_id }})",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {
+        "type": "bearer",
+        "token": "{{ auth_token }}",
+        "disabled": false,
+        "prefix": "Bearer"
+      },
+      "metaSortKey": -900,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_add_link",
+      "parentId": "wrk_competencies",
+      "modified": 1744399350000,
+      "created": 1744399250000,
+      "url": "{{ base_url }}/api/competencies/matrix/link",
+      "name": "3. Add Matrix Link (Test)",
+      "description": "Добавляет связь: Дисциплина (AupData ID={{ test_aup_data_id_2 }}) <-> Индикатор (ID={{ test_indicator_id_1 }})",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n\t\"aup_data_id\": {{ test_aup_data_id_2 }},\n\t\"indicator_id\": {{ test_indicator_id_1 }}\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json",
+          "id": "pair_h2"
+        }
+      ],
+      "authentication": {
+        "type": "bearer",
+        "token": "{{ auth_token }}",
+        "disabled": false,
+        "prefix": "Bearer"
+      },
+      "metaSortKey": -800,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_delete_link",
+      "parentId": "wrk_competencies",
+      "modified": 1744399400000,
+      "created": 1744399300000,
+      "url": "{{ base_url }}/api/competencies/matrix/link",
+      "name": "4. Delete Matrix Link (Test)",
+      "description": "Удаляет связь: Дисциплина (AupData ID={{ test_aup_data_id_1 }}) <-> Индикатор (ID={{ test_indicator_id_1 }})",
+      "method": "DELETE",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n\t\"aup_data_id\": {{ test_aup_data_id_1 }},\n\t\"indicator_id\": {{ test_indicator_id_1 }}\n}"
+      },
+      "parameters": [],
+      "headers": [
+         {
+          "name": "Content-Type",
+          "value": "application/json",
+          "id": "pair_h3"
+        }
+      ],
+      "authentication": {
+        "type": "bearer",
+        "token": "{{ auth_token }}",
+        "disabled": false,
+        "prefix": "Bearer"
+      },
+      "metaSortKey": -700,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_get_programs",
+      "parentId": "wrk_competencies",
+      "modified": 1744400000000,
+      "created": 1744399500000,
+      "url": "{{ base_url }}/api/competencies/programs",
+      "name": "5. Get All Programs",
+      "description": "Получает список всех образовательных программ",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {
+        "type": "bearer",
+        "token": "{{ auth_token }}",
+        "disabled": false,
+        "prefix": "Bearer"
+      },
+      "metaSortKey": -600,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_get_program_details",
+      "parentId": "wrk_competencies",
+      "modified": 1744400100000,
+      "created": 1744399600000,
+      "url": "{{ base_url }}/api/competencies/programs/{{ test_program_id }}",
+      "name": "6. Get Program Details (Test)",
+      "description": "Получает детали тестовой ОП (ID: {{ test_program_id }})",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {
+        "type": "bearer",
+        "token": "{{ auth_token }}",
+        "disabled": false,
+        "prefix": "Bearer"
+      },
+      "metaSortKey": -500,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_create_competency",
+      "parentId": "wrk_competencies",
+      "modified": 1744400200000,
+      "created": 1744399700000,
+      "url": "{{ base_url }}/api/competencies/competencies",
+      "name": "7. Create Competency (Test PC)",
+      "description": "Создает новую тестовую ПК",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"type_code\": \"ПК\",\n  \"code\": \"ПК-Тест99\",\n  \"name\": \"Тестовая компетенция для Insomnia\",\n  \"description\": \"Создана через API тест\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json",
+          "id": "pair_h4"
+        }
+      ],
+      "authentication": {
+        "type": "bearer",
+        "token": "{{ auth_token }}",
+        "disabled": false,
+        "prefix": "Bearer"
+      },
+      "metaSortKey": -400,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_create_indicator",
+      "parentId": "wrk_competencies",
+      "modified": 1744400300000,
+      "created": 1744399800000,
+      "url": "{{ base_url }}/api/competencies/indicators",
+      "name": "8. Create Indicator (Test)",
+      "description": "Создает новый тестовый индикатор для компетенции ПК-1 (ID: {{ test_competency_id }})",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"competency_id\": {{ test_competency_id }},\n  \"code\": \"ИПК-Тест99.1\",\n  \"formulation\": \"Тестовая формулировка индикатора из Insomnia\",\n  \"source\": \"Insomnia Test\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json",
+          "id": "pair_h5"
+        }
+      ],
+      "authentication": {
+        "type": "bearer",
+        "token": "{{ auth_token }}",
+        "disabled": false,
+        "prefix": "Bearer"
+      },
+      "metaSortKey": -300,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_upload_ps",
+      "parentId": "wrk_competencies",
+      "modified": 1744400400000,
+      "created": 1744399900000,
+      "url": "{{ base_url }}/api/competencies/profstandards/upload",
+      "name": "9. Upload ProfStandard (Test)",
+      "description": "Загружает файл профстандарта (выберите файл вручную)",
+      "method": "POST",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "id": "file_ps_1",
+            "name": "file",
+            "value": "",
+            "description": "",
+            "type": "file",
+            "disabled": false,
+            "multiline": false,
+             "fileName": ""
+          }
+        ]
+      },
+      "parameters": [],
+      "headers": [], 
+      "authentication": {
+        "type": "bearer",
+        "token": "{{ auth_token }}",
+        "disabled": false,
+        "prefix": "Bearer"
+      },
+      "metaSortKey": -200,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    }
+  ]
+}

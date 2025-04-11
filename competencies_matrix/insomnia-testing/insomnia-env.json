@@ -1,0 +1,35 @@
+{
+  "_id": "env_base",
+  "parentId": "wrk_competencies",
+  "modified": 1744399210000,
+  "created": 1744399110000,
+  "name": "Base Environment",
+  "data": {
+    "base_url": "http://127.0.0.1:5000",
+    "auth_token": "",         // <--- ЗНАЧЕНИЕ ПОЯВИТСЯ ПОСЛЕ ЛОГИНА
+    "test_program_id": 1,    // ID образовательной программы "Веб-технологии (09.03.01)"
+    "test_aup_id": 101,        // ID академического учебного плана "B093011451"
+    "test_competency_id": 201,   // ID компетенции "ПК-1"
+    "test_aup_data_id_1": 501,   // ID aup_data для "Основы программирования"
+    "test_aup_data_id_2": 502,   // ID aup_data для "Базы данных"
+    "test_indicator_id_1": 10,  // ID индикатора "ИУК-1.1" (для УК-1)
+    "test_indicator_id_2": 210   // ID индикатора "ИПК-1.1" (для ПК-1)
+  },
+  "dataPropertyOrder": {
+    "&": [
+      "base_url",
+      "auth_token",
+      "test_program_id",
+      "test_aup_id",
+      "test_competency_id",
+      "test_aup_data_id_1",
+      "test_aup_data_id_2",
+      "test_indicator_id_1",
+      "test_indicator_id_2"
+    ]
+  },
+  "color": null,
+  "isPrivate": false,
+  "metaSortKey": 1744399110000,
+  "_type": "environment"
+}

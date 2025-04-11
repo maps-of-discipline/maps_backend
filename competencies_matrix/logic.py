@@ -268,10 +268,10 @@ def get_matrix_for_aup(aup_id: int) -> Optional[Dict[str, Any]]:
 
 # --- Функции для изменения данных ---
 
-def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True) -> bool:
+def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True) -> Dict[str, Any]:
     """
     Создает или удаляет связь Дисциплина(АУП)-ИДК в матрице.
-    (Версия с более явными проверками)
+    (Версия с подробным возвратом статуса)
 
     Args:
         aup_data_id: ID записи из таблицы aup_data.
@@ -279,20 +279,38 @@ def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True)
         create (bool): True для создания связи, False для удаления.
 
     Returns:
-        bool: True в случае успеха, False если AupData/Indicator не найдены или ошибка БД.
+        Dict[str, Any]: Словарь с результатом операции:
+            {
+                'success': True/False,
+                'status': 'created'/'already_exists'/'deleted'/'not_found'/'error',
+                'message': '...' (сообщение для логирования/отладки),
+                'error': '...' (опционально, детали ошибки, если была)
+            }
     """
     session: Session = db.session
     try:
         # 1. Проверяем существование AupData и Indicator более эффективно
         aup_data_exists = session.query(exists().where(AupData.id == aup_data_id)).scalar()
         if not aup_data_exists:
-            print(f"update_matrix_link: AupData entry with id {aup_data_id} not found.")
-            return False
+            message = f"update_matrix_link: AupData entry with id {aup_data_id} not found."
+            print(message)
+            return {
+                'success': False,
+                'status': 'error',
+                'message': message,
+                'error': 'aup_data_not_found'
+            }
 
         indicator_exists = session.query(exists().where(Indicator.id == indicator_id)).scalar()
         if not indicator_exists:
-            print(f"update_matrix_link: Indicator with id {indicator_id} not found.")
-            return False
+            message = f"update_matrix_link: Indicator with id {indicator_id} not found."
+            print(message)
+            return {
+                'success': False,
+                'status': 'error',
+                'message': message,
+                'error': 'indicator_not_found'
+            }
 
         # 2. Находим существующую связь
         existing_link = session.query(CompetencyMatrix).filter_by(
@@ -305,28 +323,62 @@ def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True)
                 link = CompetencyMatrix(aup_data_id=aup_data_id, indicator_id=indicator_id, is_manual=True)
                 session.add(link)
                 session.commit()
-                print(f"Link created: AupData {aup_data_id} <-> Indicator {indicator_id}")
+                message = f"Link created: AupData {aup_data_id} <-> Indicator {indicator_id}"
+                print(message)
+                return {
+                    'success': True,
+                    'status': 'created',
+                    'message': message
+                }
             else:
-                print(f"Link already exists: AupData {aup_data_id} <-> Indicator {indicator_id}")
-            return True
+                message = f"Link already exists: AupData {aup_data_id} <-> Indicator {indicator_id}"
+                print(message)
+                return {
+                    'success': True,
+                    'status': 'already_exists',
+                    'message': message
+                }
         else:
             if existing_link:
                 session.delete(existing_link)
                 session.commit()
-                print(f"Link deleted: AupData {aup_data_id} <-> Indicator {indicator_id}")
+                message = f"Link deleted: AupData {aup_data_id} <-> Indicator {indicator_id}"
+                print(message)
+                return {
+                    'success': True,
+                    'status': 'deleted',
+                    'message': message
+                }
             else:
-                 print(f"Link not found for deletion: AupData {aup_data_id} <-> Indicator {indicator_id}")
-            return True
+                message = f"Link not found for deletion: AupData {aup_data_id} <-> Indicator {indicator_id}"
+                print(message)
+                return {
+                    'success': True,
+                    'status': 'not_found',
+                    'message': message
+                }
 
     except SQLAlchemyError as e:
         session.rollback()
-        print(f"Database error in update_matrix_link: {e}")
-        return False
+        message = f"Database error in update_matrix_link: {e}"
+        print(message)
+        return {
+            'success': False,
+            'status': 'error',
+            'message': message,
+            'error': 'database_error'
+        }
     except Exception as e:
         session.rollback()
-        print(f"Unexpected error in update_matrix_link: {e}")
+        message = f"Unexpected error in update_matrix_link: {e}"
+        print(message)
         traceback.print_exc()
-        return False
+        return {
+            'success': False,
+            'status': 'error',
+            'message': message,
+            'error': 'unexpected_error'
+        }
 
 
 def create_competency(data: Dict[str, Any]) -> Optional[Competency]:
