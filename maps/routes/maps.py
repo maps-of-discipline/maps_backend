@@ -114,7 +114,7 @@ def get_id_edizm():
 # @timeit
 # @login_required(request)
 def upload():
-    logger.info('/upload - processing files uploading')
+    logger.info("/upload - processing files uploading")
     options = dict(json.loads(request.form["options"]))
     logger.debug(f"/upload - options: {options}")
     res = save_excel_files(request.files, options)
@@ -257,7 +257,9 @@ def getAllMaps():
                     "code": row.num_aup,
                     "year": row.year_beg,
                     "form_educ": row.id_form,
-                    "is_delete": bool(row.is_delete) if row.is_delete is not None else False
+                    "is_delete": bool(row.is_delete)
+                    if row.is_delete is not None
+                    else False,
                 }
             )
 
