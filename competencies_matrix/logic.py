@@ -24,7 +24,7 @@ def get_educational_programs_list() -> List[EducationalProgram]:
     """
     try:
         # Просто возвращаем все программы, можно добавить фильтры/пагинацию позже
-        programs = EducationalProgram.query.order_by(EducationalProgram.name).all()
+        programs = EducationalProgram.query.order_by(EducationalProgram.title).all()
         return programs
     except SQLAlchemyError as e:
         # Логирование ошибки
@@ -55,30 +55,65 @@ def get_program_details(program_id: int) -> Optional[Dict[str, Any]]:
         if not program:
             return None
 
-        # Сериализуем программу и связанные объекты
-        details = program.to_dict(rules=[
-            '-selected_ps_assoc', # Убираем ассоциативные таблицы из основного объекта
-            '-aup_assoc',
-            '-fgos.educational_programs' # Предотвращаем цикл
-        ])
+        # Сериализуем программу основные поля без связей
+        details = {
+            'id': program.id,
+            'title': program.title,
+            'code': program.code,
+            'profile': program.profile,
+            'qualification': program.qualification,
+            'form_of_education': program.form_of_education,
+            'enrollment_year': program.enrollment_year,
+            'fgos_vo_id': program.fgos_vo_id,
+            'created_at': program.created_at,
+            'updated_at': program.updated_at
+        }
 
         # Добавляем детали в нужном формате
-        details['fgos_details'] = program.fgos.to_dict(rules=['-educational_programs','-recommended_ps_assoc']) if program.fgos else None
-        details['aup_list'] = [assoc.aup.to_dict() for assoc in program.aup_assoc if assoc.aup]
+        if program.fgos:
+            details['fgos_details'] = {
+                'id': program.fgos.id,
+                'number': program.fgos.number,
+                'date': program.fgos.date,
+                'direction_code': program.fgos.direction_code,
+                'direction_name': program.fgos.direction_name,
+                'education_level': program.fgos.education_level,
+                'generation': program.fgos.generation,
+                'file_path': program.fgos.file_path
+            }
+        else:
+            details['fgos_details'] = None
+            
+        details['aup_list'] = [
+            {
+                'id_aup': assoc.aup.id_aup,
+                'num_aup': assoc.aup.num_aup,
+                'file': assoc.aup.file
+            } 
+            for assoc in program.aup_assoc if assoc.aup
+        ]
+        
         details['selected_ps_list'] = [
-            assoc.prof_standard.to_dict(only=('id', 'code', 'name'))
+            {
+                'id': assoc.prof_standard.id,
+                'code': assoc.prof_standard.code,
+                'name': assoc.prof_standard.name
+            }
             for assoc in program.selected_ps_assoc if assoc.prof_standard
         ]
 
         # Получаем рекомендованные ПС для связанного ФГОС
         recommended_ps_list = []
         if program.fgos and program.fgos.recommended_ps_assoc:
-            # Здесь может быть эффективнее сделать отдельный запрос, если ФГОС уже загружен
-            # Мы уже загрузили связи, так что можем использовать их
-             recommended_ps_list = [
-                 assoc.prof_standard.to_dict(only=('id', 'code', 'name'))
-                 for assoc in program.fgos.recommended_ps_assoc if assoc.prof_standard
-             ]
+            # Бережно обрабатываем каждую связь, извлекая только нужные поля
+            for assoc in program.fgos.recommended_ps_assoc:
+                if assoc.prof_standard:
+                    recommended_ps_list.append({
+                        'id': assoc.prof_standard.id,
+                        'code': assoc.prof_standard.code,
+                        'name': assoc.prof_standard.name
+                    })
+                    
         details['recommended_ps_list'] = recommended_ps_list
 
         return details
