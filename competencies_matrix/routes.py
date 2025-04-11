@@ -5,7 +5,7 @@
 образовательными программами, ФГОС, профстандартами и т.д.
 """
 
-from flask import request, jsonify
+from flask import request, jsonify, abort
 from . import competencies_matrix_bp
 from .logic import (
     get_educational_programs_list, get_program_details, 
@@ -60,49 +60,35 @@ def get_matrix(aup_id):
         
     return jsonify(matrix_data)
 
-@competencies_matrix_bp.route('/matrix/link', methods=['POST'])
+@competencies_matrix_bp.route('/matrix/link', methods=['POST', 'DELETE'])
 @login_required
 @approved_required
-def create_matrix_link():
+def manage_matrix_link():
     """
-    Создание связи между дисциплиной (AupData) и индикатором (Indicator) в матрице.
-    Принимает JSON с полями:
-    - aup_data_id: ID записи в AupData (дисциплина в АУП)
-    - indicator_id: ID индикатора достижения компетенции
+    Создает или удаляет связь Дисциплина(АУП)-ИДК в матрице.
+    (Версия с улучшенной обработкой ответа)
     """
     data = request.get_json()
-    
-    # Проверка необходимых полей
     if not data or 'aup_data_id' not in data or 'indicator_id' not in data:
-        return jsonify({"error": "Отсутствуют обязательные поля: aup_data_id, indicator_id"}), 400
-    
-    success = update_matrix_link(data['aup_data_id'], data['indicator_id'], create=True)
-    if not success:
-        return jsonify({"error": "Не удалось создать связь"}), 400
-    
-    return jsonify({"message": "Связь успешно создана"}), 201
+        abort(400, description="Отсутствуют обязательные поля: aup_data_id, indicator_id")
 
-@competencies_matrix_bp.route('/matrix/link', methods=['DELETE'])
-@login_required
-@approved_required
-def delete_matrix_link():
-    """
-    Удаление связи между дисциплиной и индикатором в матрице.
-    Принимает JSON с полями:
-    - aup_data_id: ID записи в AupData
-    - indicator_id: ID индикатора
-    """
-    data = request.get_json()
-    
-    # Проверка необходимых полей
-    if not data or 'aup_data_id' not in data or 'indicator_id' not in data:
-        return jsonify({"error": "Отсутствуют обязательные поля: aup_data_id, indicator_id"}), 400
-    
-    success = update_matrix_link(data['aup_data_id'], data['indicator_id'], create=False)
-    if not success:
-        return jsonify({"error": "Не удалось удалить связь"}), 400
-    
-    return jsonify({"message": "Связь успешно удалена"}), 200
+    aup_data_id = data['aup_data_id']
+    indicator_id = data['indicator_id']
+    is_creating = (request.method == 'POST')
+
+    success = update_matrix_link(
+        aup_data_id,
+        indicator_id,
+        create=is_creating
+    )
+
+    if success:
+        if is_creating:
+            return jsonify({"message": "Связь успешно создана"}), 201
+        else:
+            return jsonify({"message": "Связь успешно удалена (или не существовала)"}), 200
+    else:
+        abort(400, description="Не удалось создать/удалить связь: возможно, AupData или Indicator не найдены, или произошла ошибка БД.")
 
 # Группа эндпоинтов для работы с компетенциями и индикаторами
 @competencies_matrix_bp.route('/competencies', methods=['POST'])

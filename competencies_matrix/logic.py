@@ -1,8 +1,10 @@
 # competencies_matrix/logic.py
 from typing import Dict, List, Any, Optional
 import datetime
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload, selectinload, Session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import exists
+import traceback
 
 from maps.models import db, AupData, SprDiscipline, AupInfo
 from .models import (
@@ -87,7 +89,7 @@ def get_program_details(program_id: int) -> Optional[Dict[str, Any]]:
 def get_matrix_for_aup(aup_id: int) -> Optional[Dict[str, Any]]:
     """
     Собирает все данные для отображения матрицы компетенций для АУП.
-    КЛЮЧЕВАЯ ФУНКЦИЯ ДЛЯ MVP - Доработанная версия.
+    (Версия с исправлениями сортировки и фильтрации УК/ОПК)
 
     Args:
         aup_id: ID Академического учебного плана (из таблицы tbl_aup).
@@ -96,11 +98,13 @@ def get_matrix_for_aup(aup_id: int) -> Optional[Dict[str, Any]]:
         Словарь с данными для фронтенда или None.
     """
     try:
-        # 1. Получаем инфо об АУП и сразу пытаемся подгрузить связанную ОП и ФГОС
-        aup_info = AupInfo.query.options(
-            selectinload(AupInfo.education_programs_assoc) # Загружаем связь АУП -> ОП_АУП
-                .selectinload(EducationalProgramAup.educational_program) # Загружаем ОП из связи
-                    .selectinload(EducationalProgram.fgos) # Загружаем ФГОС из ОП
+        session: Session = db.session
+
+        # 1. Получаем инфо об АУП, ОП и ФГОС
+        aup_info = session.query(AupInfo).options(
+            selectinload(AupInfo.education_programs_assoc)
+                .selectinload(EducationalProgramAup.educational_program)
+                    .selectinload(EducationalProgram.fgos)
         ).get(aup_id)
 
         if not aup_info:
@@ -111,33 +115,26 @@ def get_matrix_for_aup(aup_id: int) -> Optional[Dict[str, Any]]:
         program = None
         fgos = None
         if aup_info.education_programs_assoc:
-            # Берем первую связанную программу (предполагаем, что АУП связан только с одной ОП)
             program = aup_info.education_programs_assoc[0].educational_program
             if program:
                 fgos = program.fgos
         else:
             print(f"Warning: AUP {aup_id} is not linked to any Educational Program.")
-            # Если нет ОП, матрицу строить бессмысленно? Или искать компетенции по ФГОС, если он указан в АУП?
-            # Для MVP вернем None, если нет связи с ОП
             return None
-
         if not program:
              print(f"Could not retrieve Educational Program for AUP {aup_id}.")
              return None
 
-        # 3. Получаем дисциплины АУП из AupData (из maps.models)
-        aup_data_entries = AupData.query.options(
-            joinedload(AupData.unique_discipline) # Используем joinedload, т.к. связь один-к-одному
+        # 3. Получаем дисциплины АУП из AupData
+        aup_data_entries = session.query(AupData).options(
+            joinedload(AupData.unique_discipline)
         ).filter_by(id_aup=aup_id).order_by(AupData.id_period, AupData.num_row).all()
 
         disciplines_list = []
-        aup_data_ids_in_matrix = set() # Собираем ID записей aup_data для запроса связей
+        aup_data_ids_in_matrix = set()
         for entry in aup_data_entries:
-            # Пропускаем записи без ID дисциплины, если такие есть
             if entry.id_discipline is None:
-                print(f"Warning: Skipping AupData entry id {entry.id} for AUP {aup_id} due to missing discipline_id.")
                 continue
-
             discipline_title = entry.unique_discipline.title if entry.unique_discipline else f"Discipline ID:{entry.id_discipline} (Not in Spr)"
             discipline_data = {
                 "aup_data_id": entry.id,
@@ -148,86 +145,74 @@ def get_matrix_for_aup(aup_id: int) -> Optional[Dict[str, Any]]:
             disciplines_list.append(discipline_data)
             aup_data_ids_in_matrix.add(entry.id)
 
-        # 4. Получаем ВСЕ компетенции (УК, ОПК, ПК) и ИХ ИНДИКАТОРЫ, релевантные для ОП
-        competencies_query = Competency.query.options(
-            selectinload(Competency.indicators), # Загружаем индикаторы сразу
-            joinedload(Competency.competency_type) # Загружаем тип компетенции
+        # Сортировка списка дисциплин
+        disciplines_list.sort(key=lambda d: (d.get('semester', 0), d.get('title', '')))
+
+        # 4. Получаем компетенции и их индикаторы
+        competencies_query = session.query(Competency).options(
+            selectinload(Competency.indicators),
+            joinedload(Competency.competency_type)
         )
 
         relevant_competencies = []
-        # УК/ОПК из связанного ФГОС
         if fgos:
-            # TODO: Раскомментировать, когда поле fgos_vo_id будет в модели Competency
-            # relevant_competencies.extend(
-            #     competencies_query.filter(
-            #         Competency.fgos_vo_id == fgos.id,
-            #         Competency.competency_type.has(CompetencyType.code.in_(['УК', 'ОПК']))
-            #     ).all()
-            # )
-            # ВРЕМЕННО: Берем все УК/ОПК
-             relevant_competencies.extend(
-                competencies_query.join(CompetencyType).filter(
-                    CompetencyType.code.in_(['УК', 'ОПК'])
-                ).all()
-            )
+            uk_opk_competencies = competencies_query.filter(
+                Competency.fgos_vo_id == fgos.id,
+                Competency.competency_type.has(CompetencyType.code.in_(['УК', 'ОПК']))
+            ).all()
+            relevant_competencies.extend(uk_opk_competencies)
         else:
              print(f"Warning: No FGOS linked to Educational Program {program.id}. УК/ОПК might be missing.")
-             # Если ФГОС не привязан, но УК/ОПК все равно нужно показать, убрать этот else
 
-        # ПК, связанные с ОП
-        # TODO: Определить точную логику связи ПК и ОП (через ПС? через EducationalProgram?)
-        # Пока берем ВСЕ ПК для MVP
-        relevant_competencies.extend(
-            competencies_query.join(CompetencyType).filter(
-                CompetencyType.code == 'ПК'
-            ).all()
-        )
+        pk_competencies = competencies_query.join(CompetencyType).filter(
+            CompetencyType.code == 'ПК'
+        ).all()
+        relevant_competencies.extend(pk_competencies)
 
-        # Форматируем результат компетенций и индикаторов
+        # Форматируем результат
         competencies_data = []
-        indicator_ids_in_matrix = set() # Собираем ID всех релевантных индикаторов
-        unique_competency_ids = set() # Чтобы избежать дубликатов компетенций
+        indicator_ids_in_matrix = set()
+        unique_competency_ids = set()
 
         for comp in relevant_competencies:
             if comp.id in unique_competency_ids:
                 continue
             unique_competency_ids.add(comp.id)
 
-            # Проверяем наличие competency_type перед доступом к code
             type_code = comp.competency_type.code if comp.competency_type else "UNKNOWN"
 
-            comp_dict = comp.to_dict(rules=['-indicators', '-competency_type', '-fgos', '-based_on_labor_function']) # Убираем лишние связи
+            comp_dict = comp.to_dict(rules=['-indicators', '-competency_type', '-fgos', '-based_on_labor_function', '-matrix_links'])
             comp_dict['type_code'] = type_code
             comp_dict['indicators'] = []
-            if comp.indicators: # Проверяем, что список индикаторов не пуст
-                for ind in sorted(comp.indicators, key=lambda i: i.code):
+            if comp.indicators:
+                sorted_indicators = sorted(comp.indicators, key=lambda i: i.code)
+                for ind in sorted_indicators:
                     indicator_ids_in_matrix.add(ind.id)
                     comp_dict['indicators'].append(
-                        ind.to_dict(only=('id', 'code', 'formulation', 'source_description'))
+                        ind.to_dict(only=('id', 'code', 'formulation', 'source'))
                     )
             competencies_data.append(comp_dict)
 
-        # Сортируем итоговый список компетенций
+        # Сортировка компетенций
         competencies_data.sort(key=lambda c: (c.get('type_code', ''), c.get('code', '')))
 
-        # 5. Получаем существующие связи из CompetencyMatrix
+        # 5. Получаем существующие связи
         existing_links_data = []
         if aup_data_ids_in_matrix and indicator_ids_in_matrix:
-            existing_links_db = CompetencyMatrix.query.filter(
+            existing_links_db = session.query(CompetencyMatrix).filter(
                 CompetencyMatrix.aup_data_id.in_(aup_data_ids_in_matrix),
                 CompetencyMatrix.indicator_id.in_(indicator_ids_in_matrix)
             ).all()
             existing_links_data = [
-                link.to_dict(only=('aup_data_id', 'indicator_id')) # Только нужные поля
+                link.to_dict(only=('aup_data_id', 'indicator_id'))
                 for link in existing_links_db
             ]
 
         # 6. Предложения от NLP (заглушка для MVP)
         suggestions_data = []
 
-        # 7. Сборка итогового словаря
         return {
-            "aup_info": aup_info.to_dict(rules=['-aup_data', '-department', '-faculty', '-form', '-degree', '-rop', '-name_op']), # Основные поля АУП
+            "aup_info": aup_info.to_dict(rules=['-aup_data', '-department', '-faculty', '-form', '-degree', '-rop', '-name_op', '-education_programs_assoc']),
             "disciplines": disciplines_list,
             "competencies": competencies_data,
             "links": existing_links_data,
@@ -236,15 +221,14 @@ def get_matrix_for_aup(aup_id: int) -> Optional[Dict[str, Any]]:
 
     except SQLAlchemyError as e:
         print(f"Database error in get_matrix_for_aup for aup_id {aup_id}: {e}")
-        # В реальном приложении - логирование ошибки
+        session.rollback()
         return None
     except AttributeError as e:
         print(f"Attribute error likely due to missing relationship/data in get_matrix_for_aup for aup_id {aup_id}: {e}")
-        # Часто возникает из-за отсутствия .unique_discipline или .competency_type
         return None
     except Exception as e:
         print(f"Unexpected error in get_matrix_for_aup for aup_id {aup_id}: {e}")
-        # В реальном приложении - логирование полного traceback
+        traceback.print_exc()
         return None
 
 # --- Функции для изменения данных ---
@@ -252,6 +236,7 @@ def get_matrix_for_aup(aup_id: int) -> Optional[Dict[str, Any]]:
 def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True) -> bool:
     """
     Создает или удаляет связь Дисциплина(АУП)-ИДК в матрице.
+    (Версия с более явными проверками)
 
     Args:
         aup_data_id: ID записи из таблицы aup_data.
@@ -259,58 +244,53 @@ def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True)
         create (bool): True для создания связи, False для удаления.
 
     Returns:
-        bool: True в случае успеха, False если AupData или Indicator не найдены.
+        bool: True в случае успеха, False если AupData/Indicator не найдены или ошибка БД.
     """
+    session: Session = db.session
     try:
-        # 1. Проверяем, существуют ли AupData и Indicator
-        #    Используем exists() для оптимизации - нам не нужны сами объекты
-        aup_data_exists = db.session.query(AupData.id).filter_by(id=aup_data_id).first() is not None
-        indicator_exists = db.session.query(Indicator.id).filter_by(id=indicator_id).first() is not None
-
+        # 1. Проверяем существование AupData и Indicator более эффективно
+        aup_data_exists = session.query(exists().where(AupData.id == aup_data_id)).scalar()
         if not aup_data_exists:
-            print(f"AupData entry with id {aup_data_id} not found.")
-            return False
-        if not indicator_exists:
-            print(f"Indicator with id {indicator_id} not found.")
+            print(f"update_matrix_link: AupData entry with id {aup_data_id} not found.")
             return False
 
-        # 2. Находим существующую связь (если она есть)
-        existing_link = CompetencyMatrix.query.filter_by(
+        indicator_exists = session.query(exists().where(Indicator.id == indicator_id)).scalar()
+        if not indicator_exists:
+            print(f"update_matrix_link: Indicator with id {indicator_id} not found.")
+            return False
+
+        # 2. Находим существующую связь
+        existing_link = session.query(CompetencyMatrix).filter_by(
             aup_data_id=aup_data_id,
             indicator_id=indicator_id
         ).first()
 
         if create:
-            # 3. Создаем, если связи нет
             if not existing_link:
-                link = CompetencyMatrix(
-                    aup_data_id=aup_data_id,
-                    indicator_id=indicator_id
-                    # TODO: Возможно, добавить is_manual=True и created_by=current_user.id
-                )
-                db.session.add(link)
-                db.session.commit()
+                link = CompetencyMatrix(aup_data_id=aup_data_id, indicator_id=indicator_id, is_manual=True)
+                session.add(link)
+                session.commit()
                 print(f"Link created: AupData {aup_data_id} <-> Indicator {indicator_id}")
             else:
                 print(f"Link already exists: AupData {aup_data_id} <-> Indicator {indicator_id}")
             return True
         else:
-            # 4. Удаляем, если связь есть
             if existing_link:
-                db.session.delete(existing_link)
-                db.session.commit()
+                session.delete(existing_link)
+                session.commit()
                 print(f"Link deleted: AupData {aup_data_id} <-> Indicator {indicator_id}")
             else:
                  print(f"Link not found for deletion: AupData {aup_data_id} <-> Indicator {indicator_id}")
             return True
 
     except SQLAlchemyError as e:
-        db.session.rollback() # Откатываем изменения в случае ошибки БД
+        session.rollback()
         print(f"Database error in update_matrix_link: {e}")
         return False
     except Exception as e:
-        db.session.rollback()
+        session.rollback()
         print(f"Unexpected error in update_matrix_link: {e}")
+        traceback.print_exc()
         return False
 
 
