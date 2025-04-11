@@ -55,7 +55,12 @@ app.json.sort_keys = False # Отключаем сортировку ключе�
 
 # Настройка CORS
 # Разрешает запросы со всех доменов - будь осторожен в production!
-cors = CORS(app, resources={r"*": {"origins": "*"}}, supports_credentials=True)
+cors = CORS(app, 
+    resources={r"/*": {"origins": "*"}}, 
+    supports_credentials=True,
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "Aup"]
+)
 
 # Настройки SQLAlchemy (перечитываем из переменных окружения на случай, если они там переопределены)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', app.config.get('SQLALCHEMY_DATABASE_URI'))

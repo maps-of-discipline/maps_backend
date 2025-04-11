@@ -2,7 +2,7 @@ import json
 import time
 import secrets
 import requests
-from flask import Blueprint, make_response, request, jsonify, url_for, current_app
+from flask import Blueprint, make_response, request, jsonify, url_for, current_app, g
 from flask_mail import Message
 from pprint import pprint
 
@@ -30,6 +30,29 @@ def get_user_info(user_id):
         'role': user.id_role,
         'department': user.department_id
     }, sort_keys=False))
+
+
+@auth.route('/user')
+@login_required
+def get_current_user_info():
+    # The user object should be attached to g by the login_required decorator
+    user = g.user
+    if not user:
+        return make_response("User not found", 404)
+    
+    # Construct the user response
+    response = {    
+        'id': user.id_user,
+        'name': user.name or '',
+        'login': user.login,
+        'surname': '',  # Add surname if available in your user model
+        'roles': [{'id': role.id_role, 'name': role.name_role} for role in user.roles],
+        'permissions': {},  # Will be populated if needed
+        'approved_lk': user.approved_lk
+    }
+    
+    print(f"User data response: {response}")
+    return make_response(json.dumps(response, ensure_ascii=False), 200)
 
 
 @auth.route('/refresh', methods=['POST'])
@@ -84,12 +107,28 @@ def login():
         print("Incorrect password, returning 400")
         return make_response('Incorrect password', 400)
 
+    # Generate tokens
+    access_token = get_access_token(user.id_user)
+    refresh_token = get_refresh_token(user.id_user, request.headers.get('User-Agent', 'Unknown'))
+    
+    # Create response with user information
     response = {
-        'access': get_access_token(user.id_user),
-        'refresh': get_refresh_token(user.id_user, request.headers.get('User-Agent', 'Unknown')),
+        'access': access_token,
+        'refresh': refresh_token,
+        'token': access_token,  # Include this for compatibility
+        'user': {
+            'id': user.id_user,
+            'name': user.name or '',
+            'login': user.login,
+            'surname': '',  # Add surname if available in your user model
+            'roles': [{'id': role.id_role, 'name': role.name_role} for role in user.roles],
+            'permissions': {},  # Will be populated if needed
+            'approved': user.approved_lk
+        }
     }
 
     print(f"Login successful for user {user.id_user}, returning 200")
+    print(f"DEBUG Login response: {response}")
     return make_response(json.dumps(response, ensure_ascii=False), 200)
 
 
@@ -151,34 +190,63 @@ def lk_login():
     if 'username' not in request_data or 'password' not in request_data:
         return make_response("Username and password are required", 401)
 
-    response = requests.post(current_app.config.get('LK_URL'), data={
-        'ulogin': request_data['username'],
-        'upassword': request_data['password'],
-    }).json()
-
-    res = requests.get(current_app.config.get('LK_URL'), params={'getUser': '', 'token': response['token']}).json()
-    res = res['user']
-    name = ' '.join([res['surname'], res['name'], res['patronymic']])
-    email = res['email']
-
+    # Check if we can perform direct login (for development/test without LK)
     user = Users.query.filter_by(login=request_data['username']).first()
-    if not user:
-        user = Users()
-        user.auth_type = 'lk'
-        user.lk_id = res['id']
+    lk_url = current_app.config.get('LK_URL')
+    
+    if not lk_url:
+        print("DEBUG: LK_URL not configured, attempting direct login")
+        # LK integration is not available, try direct login
+        if not user:
+            return make_response("No such user", 400)
+        
+        password_correct = user.check_password(request_data['password'])
+        if not password_correct:
+            return make_response('Incorrect password', 400)
+        
+        # Create a minimal response that works for both auth flows
+        response = {
+            'access': get_access_token(user.id_user),
+            'refresh': get_refresh_token(user.id_user, request.headers.get('User-Agent', 'Unknown')),
+            'approved': user.approved_lk or False,
+        }
+        
+        print(f"DEBUG Login response: {response}")
+        return make_response(json.dumps(response, ensure_ascii=False), 200)
+    
+    # If LK_URL is configured, proceed with normal LK auth flow
+    try:
+        response = requests.post(lk_url, data={
+            'ulogin': request_data['username'],
+            'upassword': request_data['password'],
+        }).json()
 
-        name_role = 'Guest'
-        if res['user_status'] == 'stud':
-            name_role = 'student'
+        res = requests.get(lk_url, params={'getUser': '', 'token': response['token']}).json()
+        res = res['user']
+        name = ' '.join([res['surname'], res['name'], res['patronymic']])
+        email = res['email']
 
-        guest_role = Roles.query.filter_by(name_role=name_role).first()
-        if guest_role:
-            user.roles.append(guest_role)
+        user = Users.query.filter_by(login=request_data['username']).first()
+        if not user:
+            user = Users()
+            user.auth_type = 'lk'
+            user.lk_id = res['id']
 
-    user.login = request_data['username']
-    user.set_password(request_data['password'])
-    user.name = name
-    user.email = email
+            name_role = 'Guest'
+            if res['user_status'] == 'stud':
+                name_role = 'student'
+
+            guest_role = Roles.query.filter_by(name_role=name_role).first()
+            if guest_role:
+                user.roles.append(guest_role)
+
+        user.login = request_data['username']
+        user.set_password(request_data['password'])
+        user.name = name
+        user.email = email
+    except Exception as e:
+        print(f"DEBUG: LK authentication failed: {str(e)}")
+        return make_response(f"LK authentication failed: {str(e)}", 500)
 
     db.session.add(user)
     db.session.commit()
@@ -187,7 +255,16 @@ def lk_login():
         'access': get_access_token(user.id_user),
         'refresh': get_refresh_token(user.id_user, request.headers['User-Agent']),
         'token': response['token'],
-        'approved': user.approved_lk,
+        'user': {
+            'id': user.id_user,
+            'name': user.name or '',
+            'login': user.login,
+            'surname': '',
+            'roles': [{'id': role.id_role, 'name': role.name_role} for role in user.roles],
+            'permissions': {},
+            'approved': user.approved_lk
+        }
     }
 
+    print(f"DEBUG Login response: {response}")
     return make_response(json.dumps(response, ensure_ascii=False), 200)
