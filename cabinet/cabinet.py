@@ -552,6 +552,14 @@ def getUser():
                         'title': study_group.title,
                     },
                 }
+        # elif (role.name_role == 'admin'):
+        #     # Add admin-specific permissions
+        #     permissions['admin'] = {
+        #         'isAdmin': True,
+        #         # Add any other admin-specific permissions needed
+        #         'canAccessAdminPanel': True,
+        #         'canManageUsers': True,
+        #     }
 
     return jsonify({
         'name': user['name'],

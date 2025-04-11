@@ -314,6 +314,34 @@ def seed_command():
         else:
             print("  - Test user 'testuser' already exists.")
 
+        # === BLOCK 7: Admin User ===
+        print("Seeding Admin User...")
+        admin_user = Users.query.filter_by(login='admin').first()
+        if not admin_user:
+            admin_user = Users(
+                login='admin',
+                password_hash=generate_password_hash('admin', method='pbkdf2:sha256'),
+                name='Admin User',
+                email='admin@example.com',
+                approved_lk=True
+            )
+            db.session.add(admin_user)
+            db.session.commit()
+            print(f"  - Added admin user 'admin' with id {admin_user.id_user}")
+
+            # Assign admin role (ID=1)
+            admin_role = Roles.query.get(1)
+            if admin_role:
+                if admin_role not in admin_user.roles:
+                    admin_user.roles.append(admin_role)
+                    db.session.commit()
+                    print("  - Assigned 'admin' role to admin user")
+                else:
+                    print("  - Role 'admin' already assigned to admin user")
+            else:
+                print("  - WARNING: Role 'admin' (ID=1) not found, skipping role assignment")
+        else:
+            print("  - Admin user 'admin' already exists")
 
         print("\nDatabase seeding finished successfully.")
 

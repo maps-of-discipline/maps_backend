@@ -35,24 +35,46 @@ def get_user_info(user_id):
 @auth.route('/user')
 @login_required
 def get_current_user_info():
-    # The user object should be attached to g by the login_required decorator
-    user = g.user
-    if not user:
-        return make_response("User not found", 404)
+    # g.user is set by the @login_required decorator
+    # g.auth_payload contains the decoded JWT token payload
     
-    # Construct the user response
-    response = {    
-        'id': user.id_user,
-        'name': user.name or '',
-        'login': user.login,
-        'surname': '',  # Add surname if available in your user model
-        'roles': [{'id': role.id_role, 'name': role.name_role} for role in user.roles],
-        'permissions': {},  # Will be populated if needed
-        'approved_lk': user.approved_lk
-    }
+    print(f"DEBUG: /api/auth/user called for user ID: {g.user.id_user}, login: {g.user.login}")
+    print(f"DEBUG: Original JWT payload (g.auth_payload): {g.auth_payload}")
+
+    # Start with the existing payload
+    response_payload = g.auth_payload.copy()
+    print(f"DEBUG: Initial response payload: {response_payload}")
+
+    # --- CRUTCH FIX START ---
+    # Manually add permissions object if user is admin
+    is_admin = any(role.id_role == 1 for role in g.user.roles) # Check if user has role ID 1 (Admin)
     
-    print(f"User data response: {response}")
-    return make_response(json.dumps(response, ensure_ascii=False), 200)
+    if is_admin:
+        print(f"DEBUG: User {g.user.login} IS an admin. Adding admin permissions.")
+        if 'permissions' not in response_payload:
+            response_payload['permissions'] = {}
+            
+        # Add admin-specific permissions (adjust as needed)
+        response_payload['permissions']['admin'] = {
+            'isAdmin': True,
+            'canAccessAdminPanel': True,
+            'canManageUsers': True,
+        }
+        # You could potentially add permissions for other roles here too if needed for testing
+        # Example: Add student permissions if admin should also see student views
+        # response_payload['permissions']['student'] = { ... } 
+    else:
+        print(f"DEBUG: User {g.user.login} is NOT an admin. No permissions added.")
+        # Ensure permissions object exists even if empty for non-admins
+        if 'permissions' not in response_payload:
+             response_payload['permissions'] = {}
+
+    # --- CRUTCH FIX END ---
+
+    print(f"DEBUG: Final response payload for /api/auth/user: {response_payload}")
+    
+    # Return the modified payload
+    return jsonify(response_payload)
 
 
 @auth.route('/refresh', methods=['POST'])
