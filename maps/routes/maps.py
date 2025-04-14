@@ -114,7 +114,7 @@ def get_id_edizm():
 # @timeit
 # @login_required(request)
 def upload():
-    logger.info('/upload - processing files uploading')
+    logger.info("/upload - processing files uploading")
     options = dict(json.loads(request.form["options"]))
     logger.debug(f"/upload - options: {options}")
     res = save_excel_files(request.files, options)
@@ -181,9 +181,12 @@ def get_modules():
 def add_module():
     module = request.get_json()
     if not module["name"]:
-        return jsonify(
-            {"result": "error", "message": 'поле "name" не должно быть пустым'}
-        ), 400
+        return (
+            jsonify(
+                {"result": "error", "message": 'поле "name" не должно быть пустым'}
+            ),
+            400,
+        )
 
     new_module = D_Modules()
     new_module.title = module["name"]
@@ -192,9 +195,12 @@ def add_module():
     db.session.add(new_module)
     db.session.commit()
 
-    return jsonify(
-        {"id": new_module.id, "name": new_module.title, "color": new_module.color}
-    ), 200
+    return (
+        jsonify(
+            {"id": new_module.id, "name": new_module.title, "color": new_module.color}
+        ),
+        200,
+    )
 
 
 @maps.route("/modules/<int:id>", methods=["PUT", "DELETE"])
@@ -257,7 +263,7 @@ def getAllMaps():
                     "code": row.num_aup,
                     "year": row.year_beg,
                     "form_educ": row.id_form,
-                    "is_delete": row.is_delete
+                    "is_delete": row.is_delete,
                 }
             )
 
@@ -560,13 +566,16 @@ def save_choosen_displines():
 
 
 @maps.route("/practical_training_report", methods=["GET"])
-# @login_required(request)
+@login_required(request)
 @cache.cached(timeout=0)
 def data_monitoring_of_practical_training():
     query = (
         db.session.query(
             AupInfo.id_aup,
             AupInfo.num_aup,
+            AupInfo.year_beg,
+            AupInfo.id_faculty,
+            SprFaculty.name_faculty,
             SprOKCO.program_code,
             SprOKCO.name_okco,
             NameOP.name_spec,
@@ -574,6 +583,7 @@ def data_monitoring_of_practical_training():
         )
         .join(NameOP, NameOP.id_spec == AupInfo.id_spec)
         .join(SprOKCO, SprOKCO.program_code == NameOP.program_code)
+        .join(SprFaculty, SprFaculty.id_faculty == AupInfo.id_faculty)
         .group_by(AupInfo.id_aup)
         .order_by(AupInfo.id_aup)
         .all()
@@ -583,9 +593,9 @@ def data_monitoring_of_practical_training():
     aup_data_dict = {
         el.id: [
             el.id_aup,
-            int(el.amount / 3600)
-            if el.id_edizm == 1
-            else int(el.amount * 0.015),  # Вычичисляю ЗЕТ для всех AupData
+            (
+                int(el.amount / 3600) if el.id_edizm == 1 else int(el.amount * 0.015)
+            ),  # Вычичисляю ЗЕТ для всех AupData
             el.id_type_control in [11, 12, 13],
         ]  # Проверка на Практику
         for el in aup_data
@@ -594,7 +604,9 @@ def data_monitoring_of_practical_training():
     data = [
         {
             "id_aup": el.id_aup,
-            "num_aup": el.num_aup,  
+            "num_aup": el.num_aup,
+            "year_beg": el.year_beg,
+            "faculty": el.name_faculty,
             "program_code": el.program_code,
             "name_okco": el.name_okco,
             "name_spec": el.name_spec,
@@ -603,11 +615,11 @@ def data_monitoring_of_practical_training():
             "form": (
                 "Очная"
                 if el.id_form == 1
-                else "Очно-заочная"
-                if el.id_form == 2
-                else "Заочная"
-                if el.id_form == 3
-                else None
+                else (
+                    "Очно-заочная"
+                    if el.id_form == 2
+                    else "Заочная" if el.id_form == 3 else None
+                )
             ),
         }
         for el in query
