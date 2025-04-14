@@ -343,7 +343,7 @@ class Indicator(db.Model, BaseModel):
     # Связь с ТФ в профстандартах (многие-ко-многим)
     labor_functions = relationship('LaborFunction', secondary='competencies_indicator_ps_link', back_populates='indicators')
     
-    # Связь с матрицей компетенций - ИСПРАВЛЕНО: убираем прямую связь с AupData
+    # Связь с матрицей компетенций
     matrix_entries = relationship('CompetencyMatrix', back_populates='indicator', cascade="all, delete-orphan")
     
     __table_args__ = (

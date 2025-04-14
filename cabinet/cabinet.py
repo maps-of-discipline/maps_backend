@@ -858,12 +858,18 @@ def getAup():
             })
     else:
         found: AupInfo = AupInfo.query.filter_by(num_aup=num_aup).first()
-        res = {
-            'num_aup': found.num_aup,
-            'id': found.id_aup,
-            'title': found.name_op.name_spec,
-            'semesters': [1, 2, 3, 4, 5, 6, 7, 8]
-        }
+        if found:
+            res = {
+                'num_aup': found.num_aup,
+                'id': found.id_aup,
+                'title': found.name_op.name_spec,
+                'semesters': [1, 2, 3, 4, 5, 6, 7, 8]
+            }
+        else:
+            res = {
+                'error': 'АУП не найден',
+                'semesters': []
+            }
 
     return jsonify(res)
 
