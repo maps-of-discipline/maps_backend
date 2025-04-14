@@ -7,7 +7,7 @@ from datetime import datetime
 from maps.models import db, AupInfo, NameOP
 
 aup_info_router = Blueprint(
-    "aup_info_router", __name__, url_prefix="/api/aup_info", static_folder="static"
+    "aup_info_router", __name__, url_prefix="/api/aup-info", static_folder="static"
 )
 
 
@@ -67,7 +67,7 @@ def aup_delete(aup: str | None):
 @aup_info_router.route("/<string:aup>/mark-deleted", methods=["POST"])
 def mark_aup_deleted(aup: str):
     """
-    Принимает текущий статус id_delete и в зависимстости от него устанавливает новое значение.
+    Принимает текущий статус is_delete и в зависимстости от него устанавливает новое значение.
     """
     data = request.get_json()
     if not data or "is_delete" not in data:
