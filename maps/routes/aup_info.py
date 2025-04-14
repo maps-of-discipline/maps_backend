@@ -78,7 +78,7 @@ def mark_aup_deleted(aup: str):
     if not aup_record:
         return jsonify({"status": "not found"}), 404
 
-    aup_record.is_delete = 1 if not bool(is_delete) else 0
+    aup_record.is_delete = not bool(is_delete)
     aup_record.date_delete = datetime.now() if not bool(is_delete) else None
     db.session.add(aup_record)
 
