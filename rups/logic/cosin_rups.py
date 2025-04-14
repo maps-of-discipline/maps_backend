@@ -196,18 +196,59 @@ def compare_disciplines_2(plan_1, plan_2, credits_1, credits_2):
     return df
 
 
-def get_rups(aup_data1: list, aup_data2: list) -> tuple[pd.DataFrame, pd.DataFrame]:
-    # Извлечение учебных планов и дисциплин
+def get_rups(aup_data1: list, aup_data2: list) -> dict:
     aup1 = [item["title"] for item in aup_data1]
     aup2 = [item["title"] for item in aup_data2]
 
-    # Генерация зачетных единиц
     credits_aup1 = {item["title"]: item["zet"] for item in aup_data1}
     credits_aup2 = {item["title"]: item["zet"] for item in aup_data2}
 
-    # Сравнение дисциплин
     diff1, diff2 = remove_same(aup1, aup2)
-    df1 = compare_disciplines(diff1, diff2, credits_aup1, credits_aup2)
-    df2 = compare_disciplines_2(aup1, aup2, credits_aup1, credits_aup2)
+    
+    result = compare_disciplines_extended(diff1, diff2, credits_aup1, credits_aup2)
+    return {"academic_difference": result}
 
-    return df1, df2
+
+def compare_disciplines_extended(
+    plan1: List[str],
+    plan2: List[str],
+    credits1: Dict[str, float],
+    credits2: Dict[str, float],
+    threshold: float = 0.2
+) -> List[Dict]:
+    """Сопоставление дисциплин с возвратом всех вариантов выше порога схожести."""
+    if not plan1 or not plan2:
+        return []
+    
+    vectorizer = TfidfVectorizer().fit(plan1 + plan2)
+    tfidf_plan1 = vectorizer.transform(plan1)
+    tfidf_plan2 = vectorizer.transform(plan2)
+    similarities = cosine_similarity(tfidf_plan1, tfidf_plan2)
+
+    results = []
+    for i, discip1 in enumerate(plan1):
+        options = []
+        for j, discip2 in enumerate(plan2):
+            similarity = similarities[i][j]
+            
+            credit_similarity = (credits1[discip1] + credits2[discip2]) / 2
+            combined_similarity = (similarity + (credit_similarity / 500)) / 2
+            
+            if combined_similarity > threshold:
+                options.append({
+                    "disc_title": discip2,
+                    "disc_id": j + 1,
+                    "sim": round(combined_similarity, 3),
+                    "zet": credits2[discip2]
+                })
+        
+        options.sort(key=lambda x: x["sim"], reverse=True)
+        
+        results.append({
+            "disc_id": i + 1,
+            "disc_title": discip1,
+            "options": options,
+            "zet": credits1[discip1]
+        })
+
+    return results
