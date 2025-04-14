@@ -114,7 +114,7 @@ def get_id_edizm():
 # @timeit
 # @login_required(request)
 def upload():
-    logger.info("/upload - processing files uploading")
+    logger.info('/upload - processing files uploading')
     options = dict(json.loads(request.form["options"]))
     logger.debug(f"/upload - options: {options}")
     res = save_excel_files(request.files, options)
@@ -257,9 +257,7 @@ def getAllMaps():
                     "code": row.num_aup,
                     "year": row.year_beg,
                     "form_educ": row.id_form,
-                    "is_delete": bool(row.is_delete)
-                    if row.is_delete is not None
-                    else False,
+                    "is_delete": row.is_delete
                 }
             )
 
@@ -558,6 +556,7 @@ def save_choosen_displines():
     if query:
         query.used_for_report = True
     db.session.commit()
+    return jsonify(data), 200
 
 
 @maps.route("/practical_training_report", methods=["GET"])
@@ -567,6 +566,7 @@ def data_monitoring_of_practical_training():
     query = (
         db.session.query(
             AupInfo.id_aup,
+            AupInfo.num_aup,
             SprOKCO.program_code,
             SprOKCO.name_okco,
             NameOP.name_spec,
@@ -594,6 +594,7 @@ def data_monitoring_of_practical_training():
     data = [
         {
             "id_aup": el.id_aup,
+            "num_aup": el.num_aup,  
             "program_code": el.program_code,
             "name_okco": el.name_okco,
             "name_spec": el.name_spec,
