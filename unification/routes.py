@@ -4,10 +4,10 @@ from flask import Blueprint, jsonify
 
 from unification.models import *
 
-bp = Blueprint("unification", __name__, url_prefix='/api')
+bp = Blueprint("unification", __name__)
 
 
-@bp.route('/unification-config')
+@bp.route("/unification-config")
 def unification():
     res = []
     for el in UnificationDiscipline.query.all():
@@ -17,13 +17,14 @@ def unification():
             period_assoc: DisciplinePeriodAssoc
             faculties = []
             if el.is_faculties_different:
-                faculties = [{"id": fac.id_faculty, "title": fac.name_faculty} for fac in period_assoc.faculties]
+                faculties = [
+                    {"id": fac.id_faculty, "title": fac.name_faculty}
+                    for fac in period_assoc.faculties
+                ]
 
             periods[period_assoc.period.id] = {
                 "faculties": faculties,
-                "load": [
-                    load.as_dict() for load in period_assoc.load
-                ]
+                "load": [load.as_dict() for load in period_assoc.load],
             }
 
         unification = {
@@ -39,8 +40,10 @@ def unification():
                 "id": el.measure.id,
                 "title": el.measure.title,
             },
-            'okso': [okso.program_code for okso in el.related_okso] if el.direction else [],
-            'periods': periods
+            "okso": [okso.program_code for okso in el.related_okso]
+            if el.direction
+            else [],
+            "periods": periods,
         }
 
         res.append(unification)
