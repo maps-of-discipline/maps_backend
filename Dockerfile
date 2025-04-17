@@ -8,7 +8,4 @@ CMD ["gunicorn", \
         "--preload", \
         "--bind", "0.0.0.0:5000", \
         "--workers", "4", \
-        "--log-file", "/app/logs/gunicorn.log", \
-        "--access-logfile", "/app/logs/access.log", \
-        "--error-logfile", "/app/logs/error.log" \
 ]
