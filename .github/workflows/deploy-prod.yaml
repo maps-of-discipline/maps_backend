@@ -1,35 +1,29 @@
-name: Deploy production
-
+name: Deploy Prod 
 on:
   push:
-    tags:
-      - "*"
+    branches:
+      - main
 
 jobs:
   deploy-dev:
     runs-on: self-hosted
-
-    env:
-      TAG: localhost:5050/maps-back-prod-build:latest
-
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
-
+        uses: actions/checkout@v4
+        
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Build Docker Image
         run: |
-          docker build --no-cache -t $TAG .
+          docker build --no-cache -t localhost:5050/maps-backend:main . 
 
       - name: Push Docker Image to Local Registry
         run: |
-          docker push $TAG
-
-      - name: Restart Services with Docker Compose
-        working-directory: /opt/registry-apps/maps/prod
+          docker push localhost:5050/maps-backend:main
+          
+      - name: Restart Docker Compose
+        working-directory: /home/kdadmin/apps/kd/dev
         run: |
-          docker-compose down
-          docker-compose -d
-
+          docker compose pull
+          docker compose up -d kd_prod_backend
