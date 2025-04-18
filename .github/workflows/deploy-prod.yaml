@@ -23,7 +23,7 @@ jobs:
           docker push localhost:5050/maps-backend:main
           
       - name: Restart Docker Compose
-        working-directory: /home/kdadmin/apps/kd/dev
+        working-directory: /home/kdadmin/apps/kd/prod
         run: |
           docker compose pull
           docker compose up -d kd_prod_backend
