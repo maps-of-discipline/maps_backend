@@ -89,13 +89,16 @@ def mark_aup_deleted(aup: str):
         db.session.rollback()
         return jsonify({"status": "failed", "aup_num": aup_record.num_aup}), 403
 
-    return jsonify(
-        {
-            "status": "ok",
-            "aup_num": aup_record.num_aup,
-            "is_delete": bool(aup_record.is_delete),
-        }
-    ), 200
+    return (
+        jsonify(
+            {
+                "status": "ok",
+                "aup_num": aup_record.num_aup,
+                "is_delete": bool(aup_record.is_delete),
+            }
+        ),
+        200,
+    )
 
 
 @aup_info_router.route("/<string:aup>/confirm_deletion", methods=["DELETE"])
@@ -143,6 +146,8 @@ def all_deleted_aup():
             "num_aup": aup.num_aup,
             "time_delete": aup.date_delete,
             "faculty_id": aup.id_faculty,
+            "is_delete": aup.is_delete,
+            "year_beg": aup.year_beg,
             "name_spec": aup.name_spec,
         }
         for aup in aups
