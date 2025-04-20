@@ -1,10 +1,11 @@
-from flask import Flask, jsonify
+from flask import Blueprint, Flask
 from flask_cors import CORS
 from flask_migrate import Migrate
 from sqlalchemy import MetaData
 from flask_mail import Mail
 from dotenv import load_dotenv
 from flask_caching import Cache
+import config as py_config
 
 
 from maps.logic.global_variables import setGlobalVariables
@@ -48,20 +49,23 @@ app.config.from_pyfile("config.py")
 mail = Mail(app)
 app.json.sort_keys = False
 
-from maps.routes.maps import maps as maps_blueprint
+from maps.routes import maps_module
 from auth.routes import auth as auth_blueprint
 from administration.routes import admin as admin_blueprint
 from rups.routes import rups as rups_blueprint
-from maps.routes.aup_info import aup_info_router as maps_aup_info_router
+
+
+api = Blueprint("api", __name__, url_prefix=py_config.APP_URL_PREFIX)
+
 
 # Register blueprints
-app.register_blueprint(maps_blueprint)
-app.register_blueprint(auth_blueprint)
-app.register_blueprint(unification_blueprint)
-app.register_blueprint(admin_blueprint)
-app.register_blueprint(rups_blueprint)
-app.register_blueprint(maps_aup_info_router)
+api.register_blueprint(maps_module)
+api.register_blueprint(auth_blueprint)
+api.register_blueprint(unification_blueprint)
+api.register_blueprint(admin_blueprint)
+api.register_blueprint(rups_blueprint)
 
+app.register_blueprint(api)
 
 convention = {
     "ix": "ix_%(column_0_label)s",

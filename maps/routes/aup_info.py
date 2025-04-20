@@ -7,7 +7,7 @@ from datetime import datetime
 from maps.models import db, AupInfo, NameOP
 
 aup_info_router = Blueprint(
-    "aup_info_router", __name__, url_prefix="/api/aup-info", static_folder="static"
+    "aup_info", __name__, url_prefix="/aup-info", static_folder="../static"
 )
 
 

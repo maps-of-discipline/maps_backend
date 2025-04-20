@@ -19,7 +19,7 @@ from maps.logic.upload_xml import create_xml
 from maps.models import *
 from utils.logging import logger
 
-maps = Blueprint("maps", __name__, url_prefix="/api", static_folder="static")
+maps = Blueprint("maps", __name__, static_folder="../static")
 
 if not os.path.exists(maps.static_folder + "/temp"):
     os.makedirs(maps.static_folder + "/temp", exist_ok=True)
@@ -620,7 +620,9 @@ def data_monitoring_of_practical_training():
                 else (
                     "Очно-заочная"
                     if el.id_form == 2
-                    else "Заочная" if el.id_form == 3 else None
+                    else "Заочная"
+                    if el.id_form == 3
+                    else None
                 )
             ),
         }

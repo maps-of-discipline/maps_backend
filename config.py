@@ -6,7 +6,9 @@ from dotenv import load_dotenv
 load_dotenv(".env")
 
 SHOW_DEBUG_EXECUTION_TIME = False
-LOG_LEVEL=logging.INFO
+LOG_LEVEL = logging.INFO
+
+APP_URL_PREFIX = os.getenv("APP_URL_PREFIX") or "/api"
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
