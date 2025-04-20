@@ -127,6 +127,8 @@ def all_deleted_aup():
         db.session.query(
             AupInfo.id_aup,
             AupInfo.num_aup,
+            AupInfo.is_delete,
+            AupInfo.year_beg,
             AupInfo.date_delete,
             AupInfo.id_faculty,
             NameOP.name_spec,
