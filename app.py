@@ -97,5 +97,5 @@ setGlobalVariables(
 )
 
 
-if not app.config["DEBUG"]:
-    app.register_error_handler(Exception, handle_exception)
+# if not app.config["DEBUG"]:
+#     app.register_error_handler(Exception, handle_exception)
