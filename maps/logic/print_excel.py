@@ -1,3 +1,4 @@
+import io
 import os
 from math import floor
 
@@ -6,10 +7,9 @@ import xlsxwriter
 from openpyxl.styles import (Alignment, Border, Font, NamedStyle, PatternFill,
                              Side)
 
-
-from maps.logic.take_from_bd import create_json_print, elective_disciplines
+from maps.logic.take_from_bd import create_json_print, elective_disciplines, get_default_shortcuts, get_user_shortcuts
 from maps.logic.tools import get_maximum_rows
-from maps.models import (AupInfo, AupData, Groups)
+from maps.models import (AupInfo, AupData, Groups, D_Period)
 
 ROW_START_DISCIPLINES = 4
 ROW_HEIGHT = 23
@@ -66,14 +66,14 @@ def makeLegend(wb, table, aup):
     last_row += 4
     # --- часть легенды с факультативами ---
 
-    ws['B'+str(last_row)].value = 'Факультативы:'
+    ws['B' + str(last_row)].value = 'Факультативы:'
     ws['B' + str(last_row)].style = 'standart'
     last_row += 1
-    ws['A'+str(last_row)].style = 'standart'
-    ws['B'+str(last_row)].style = 'standart'
-    ws['A'+str(last_row)].value = 'ЗЕТ'
-    ws['B'+str(last_row)].value = 'Название'
-    ws['C'+str(last_row)].value = 'Часы'
+    ws['A' + str(last_row)].style = 'standart'
+    ws['B' + str(last_row)].style = 'standart'
+    ws['A' + str(last_row)].value = 'ЗЕТ'
+    ws['B' + str(last_row)].value = 'Название'
+    ws['C' + str(last_row)].value = 'Часы'
     ws['C' + str(last_row)].style = 'standart'
 
     dis = elective_disciplines(aup)
@@ -94,8 +94,7 @@ def makeLegend(wb, table, aup):
     ws['A' + str(last_row)].value = f'Итого: {sum}'
 
 
-def saveMap(aup, static, papper_size, orientation, **kwargs):
-
+def saveMap(aup, static, papper_size, orientation, control: bool = False, load: bool = False):
     aup = AupInfo.query.filter_by(num_aup=aup).first()
     data = AupData.query.filter_by(id_aup=aup.id_aup).order_by(AupData.shifr, AupData.id_discipline,
                                                                AupData.id_period).all()
@@ -144,8 +143,7 @@ def saveMap(aup, static, papper_size, orientation, **kwargs):
             column = chr(ord("B") + i)
             cell = f"{column}{ROW_START_DISCIPLINES + merged}"
 
-            ws[cell] = el['discipline']
-
+            ws[cell] = el['discipline'] + load_and_control(el, load, control)
             color = el['color'].replace('#', '')
 
             color_text_cell(ws, cell, color)
@@ -170,7 +168,7 @@ def saveMap(aup, static, papper_size, orientation, **kwargs):
     if papper_size == "3":
         ws.page_setup.papperSize = ws.PAPERSIZE_A3
     elif papper_size == "4":
-        ws.page_setup.papperSize = ws.PAPERSIZE_A3
+        ws.page_setup.papperSize = ws.PAPERSIZE_A4
     if orientation == "land":
         ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
     elif orientation == "port":
@@ -220,7 +218,6 @@ def set_print_properties(table, ws, max_zet):
     ws.print_options.horizontalCentered = True
     ws.print_options.verticalCentered = True
 
-
     max_row = get_maximum_rows(sheet_object=ws) * 2
     ws.print_area = 'A1:' + str(alphabet[len(table)]) + str(max_zet * 2 + ROW_START_DISCIPLINES - 1)
     ws.page_margins = openpyxl.worksheet.page.PageMargins(
@@ -267,9 +264,9 @@ def Header(aup):
         Возвращает данные для шапки карты
     """
     year_begin = aup.year_beg
-    program = aup.name_op.program_code + ' ' + aup.name_op.okco.name_okco
+    program = aup.spec.program_code + ' ' + aup.spec.okco.name_okco
     form = aup.form.form + " форма обучения"
-    spec = aup.name_op.name_spec
+    spec = aup.spec.name_spec
     # date_file = aup.file.split(' ')[-4]
     return [program, spec, year_begin, form]
 
@@ -359,3 +356,115 @@ def add_table_to_arr_and_sort(table):
                 if new_table[a][j]['num_row'] > new_table[a][j + 1]['num_row']:
                     new_table[a][j], new_table[a][j + 1] = new_table[a][j + 1], new_table[a][j]
     return (new_table)
+
+
+def get_aup_data_excel(aup: str) -> tuple[io.BytesIO, str]:
+    in_memory_file = io.BytesIO()
+
+    book = xlsxwriter.Workbook(in_memory_file)
+    sheet = book.add_worksheet("Лист1")
+
+    header_format = book.add_format()
+    header_format.set_bold(True)
+
+    sheet.write_row(0, 0, ['Наименование', "Содержание", ], header_format)
+    sheet.write_column(1, 0, [
+        'Номер АУП',
+        'Вид образования',
+        'Уровень образования',
+        'Направление (специальность)',
+        'Код специальности',
+        'Квалификация',
+        'Профиль (специализация)',
+        'Тип стандарта',
+        'Факультет',
+        'Выпускающая кафедра',
+        'Форма обучения',
+        'Год набора',
+        'Период обучения',
+        'На базе',
+        'Фактический срок обучения',
+    ])
+
+    aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
+
+    sheet.write_column(1, 1, [
+        aup_info.num_aup,
+        aup_info.type_educ,
+        aup_info.degree.name_deg,
+        aup_info.spec.okco.name_okco,
+        aup_info.spec.program_code,
+        aup_info.qualification,
+        aup_info.spec.name_spec,
+        aup_info.type_standard,
+        aup_info.faculty.name_faculty,
+        aup_info.department.name_department,
+        aup_info.form.form,
+        str(aup_info.year_beg),
+        aup_info.period_educ,
+        aup_info.base,
+        F"{aup_info.years} года" + (f' {aup_info.months} месяцев' if aup_info.months else ''),
+    ])
+
+    sheet.autofit()
+
+    sheet = book.add_worksheet("Лист2")
+
+    sheet.write_row(0, 0, [
+        'Блок',
+        'Шифр',
+        'Часть',
+        'Модуль',
+        'Тип записи',
+        'Дисциплина',
+        'Период контроля',
+        'Нагрузка',
+        'Количество',
+        'Ед. изм.',
+        'ЗЕТ',
+    ], header_format)
+
+    periods = {el.id: el.title for el in D_Period.query.all()}
+
+    for i, el in enumerate(aup_info.aup_data, start=1):
+        el: AupData
+        sheet.write_row(i, 0, [
+            el.block.title,
+            el.shifr,
+            el.part.title,
+            el.module.title,
+            el.type_record.title,
+            el.discipline.title,
+            periods[el.id_period],
+            el.type_control.title,
+            el.amount / 100,
+            el.ed_izmereniya.title,
+            el.zet / 100,
+        ])
+
+    sheet.autofit()
+    book.close()
+    return in_memory_file, F"{aup_info.num_aup} {aup_info.degree.name_deg} {aup_info.spec.name_spec} {aup_info.form.form}"
+
+
+def load_and_control(el, load: bool, control: bool):
+    '''
+    Форматирование нагрузки и контроля
+    '''
+    cuts = get_default_shortcuts()
+    control_result = "\n"
+    value = "\n\n"
+    if control:
+        for element in el['type']['session']:
+            temp = int(element['control_type_id'])
+            control_result += (temp if temp not in cuts else cuts[temp])
+    if load:        
+        temp = ""
+        for element in el['type']['value']:
+            temp = int(element['control_type_id'])
+            if (temp == 7): 
+                control_result += (", КП " if control else " КП ")
+            else:    
+                value += (temp if temp not in cuts else cuts[temp]) + " " + str(int(element['amount'])) + " " + str(element['amount_type']) + "\t"
+
+    return value + control_result

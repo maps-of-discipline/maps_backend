@@ -6,7 +6,7 @@ from take_from_bd import (create_json)
 
 def create_json_xml(aup):
     aupInfo = AupInfo.query.filter_by(num_aup=aup).first()
-    aupData = AupData.query.filter_by(id_aup=aupInfo.id_aup).order_by(AupData.shifr, AupData.discipline,
+    aupData = AupData.query.filter_by(id_aup=aupInfo.id_aup).order_by(AupData.shifr, AupData.id_discipline,
                                                                       AupData.id_period, AupData.id_type_control).all()
 
     json = dict()
@@ -21,24 +21,24 @@ def create_json_xml(aup):
     load_sem = False
     for i, item in enumerate(aupData):
 
-        if load == True and flag != item.discipline:
+        if load == True and flag != item.discipline.title:
             json["Строка"].append(d)
             d = dict()
             load = False
 
-        if flag != item.discipline:
+        if flag != item.discipline.title:
 
             load = True
             # d['last']=last
-            d["Дис"] = item.discipline
-            flag = item.discipline
+            d["Дис"] = item.discipline.title
+            flag = item.discipline.title
             d["НовЦикл"] = item.type_record.title
             d["НовИдДисциплины"] = d["НовЦикл"] + " что-то (.1.1)"
             d["Цикл"] = d["НовЦикл"] + " что-то (.ДВ8)"
             d["ИдетификаторДисциплины"] = d["НовИдДисциплины"]
             if item.type_control.title == "Зачет":
                 type_control = 5
-                data = AupData.query.filter_by(id_aup=aupInfo.id_aup, discipline=d["Дис"], id_type_control=5).order_by(
+                data = AupData.query.filter_by(id_aup=aupInfo.id_aup, id_discipline=item.id_discipline, id_type_control=5).order_by(
                     AupData.id_period)
                 for j, elem in enumerate(data):
                     try:
@@ -48,7 +48,7 @@ def create_json_xml(aup):
                         d["СемЗач"] += str(elem.id_period)
             if item.type_control.title == "Экзамен":
                 type_control = 5
-                data = AupData.query.filter_by(id_aup=aupInfo.id_aup, discipline=d["Дис"], id_type_control=1).order_by(
+                data = AupData.query.filter_by(id_aup=aupInfo.id_aup, id_discipline=item.id_discipline, id_type_control=1).order_by(
                     AupData.id_period)
                 for j, elem in enumerate(data):
                     try:
@@ -58,7 +58,7 @@ def create_json_xml(aup):
                         d["СемЭкз"] += str(elem.id_period)
             if item.type_control.title == "Дифференцированный зачет":
                 type_control = 5
-                data = AupData.query.filter_by(id_aup=aupInfo.id_aup, discipline=d["Дис"], id_type_control=9).order_by(
+                data = AupData.query.filter_by(id_aup=aupInfo.id_aup, disciplid_discipline=item.id_discipline, id_type_control=9).order_by(
                     AupData.id_period)
                 for j, elem in enumerate(data):
                     try:
@@ -79,7 +79,7 @@ def create_json_xml(aup):
             # if item.id_period!=flag_sem:
             # d["sem"].append(sem)
 
-            data = AupData.query.filter_by(id_aup=aupInfo.id_aup, discipline=d["Дис"]).order_by(AupData.id_period)
+            data = AupData.query.filter_by(id_aup=aupInfo.id_aup, id_discipline=item.id_discipline).order_by(AupData.id_period)
             for j, elem in enumerate(data):
                 data_2 = data.filter_by(id_period=elem.id_period)
                 sem = dict()
