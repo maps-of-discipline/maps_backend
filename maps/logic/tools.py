@@ -45,6 +45,16 @@ def timeit(func):
 
     return timeit_wrapper
 
+class LineTimer:
+    def __init__(self):
+        self.start = time.time()
+
+    def reset(self):
+        self.start = time.time()
+
+    def elapsed(self):
+        return time.time() - self.start
+
 
 def get_maximum_rows(*, sheet_object):  # Взять максимальное значение строк в плане
     rows = 0

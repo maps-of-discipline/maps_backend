@@ -9,6 +9,7 @@ import os
 # --- Импорты моделей для seed_command и приложения ---
 # Keep 'db' import, remove others if ONLY used by seed/unseed
 from maps.models import db
+from utils.cache import cache
 
 
 # --- Импорты блюпринтов ---
@@ -23,6 +24,7 @@ from utils.handlers import handle_exception
 # --- Import CLI Commands ---
 from cli_commands.db_seed import seed_command
 from cli_commands.db_unseed import unseed_command
+from cli_commands.import_aup import import_aup_command
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -34,6 +36,17 @@ application = app # Для совместимости с некоторыми WS
 # Загрузка конфигурации
 app.config.from_pyfile('config.py')
 app.json.sort_keys = False # Отключаем сортировку ключей в JSON ответах
+
+config = {
+    "DEBUG": True,  # some Flask specific configs
+    "CACHE_TYPE": "SimpleCache",  # Flask-Caching related configs
+    "CACHE_DEFAULT_TIMEOUT": 300,
+}
+
+app.config.from_mapping(config)
+# Initialize the cache with the app
+cache.init_app(app)
+
 
 # Настройка CORS
 cors = CORS(app,
@@ -93,6 +106,7 @@ def list_routes():
 # Регистрируем команды сидера и ансидера
 app.cli.add_command(seed_command)
 app.cli.add_command(unseed_command)
+app.cli.add_command(import_aup_command)
 
 # Точка входа для запуска через `python app.py`
 if __name__ == '__main__':

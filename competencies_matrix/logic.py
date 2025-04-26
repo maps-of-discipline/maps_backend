@@ -162,7 +162,7 @@ def get_matrix_for_aup(aup_id: int) -> Optional[Dict[str, Any]]:
 
         # 3. Получаем дисциплины АУП из AupData
         aup_data_entries = session.query(AupData).options(
-            joinedload(AupData.unique_discipline)
+            joinedload(AupData.discipline)  # Change from unique_discipline to discipline
         ).filter_by(id_aup=aup_id).order_by(AupData.id_period, AupData.num_row).all()
 
         disciplines_list = []
@@ -170,7 +170,7 @@ def get_matrix_for_aup(aup_id: int) -> Optional[Dict[str, Any]]:
         for entry in aup_data_entries:
             if entry.id_discipline is None:
                 continue
-            discipline_title = entry.unique_discipline.title if entry.unique_discipline else f"Discipline ID:{entry.id_discipline} (Not in Spr)"
+            discipline_title = entry.discipline.title if entry.discipline else f"Discipline ID:{entry.id_discipline} (Not in Spr)"
             discipline_data = {
                 "aup_data_id": entry.id,
                 "discipline_id": entry.id_discipline,
@@ -247,7 +247,7 @@ def get_matrix_for_aup(aup_id: int) -> Optional[Dict[str, Any]]:
         suggestions_data = []
 
         return {
-            "aup_info": aup_info.to_dict(rules=['-aup_data', '-department', '-faculty', '-form', '-degree', '-rop', '-name_op', '-education_programs_assoc']),
+            "aup_info": aup_info.as_dict(),
             "disciplines": disciplines_list,
             "competencies": competencies_data,
             "links": existing_links_data,

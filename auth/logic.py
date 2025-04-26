@@ -5,15 +5,12 @@ from typing import Any
 
 import jwt
 import sqlalchemy.exc
-# Add g and current_app imports
-from flask import make_response, g, current_app, request as flask_request
+from flask import make_response, request, current_app, g # Added current_app and g
 
 from auth.models import Users, Token
 from maps.models import db, AupInfo
 
-# Get config values from current_app
-ACCESS_TOKEN_LIFETIME = 3600  # Default value
-REFRESH_TOKEN_LIFETIME = 86400*30  # Default value
+from config import SECRET_KEY, ACCESS_TOKEN_LIFETIME, REFRESH_TOKEN_LIFETIME
 
 def get_access_token(user_id) -> str:
     user: Users = Users.query.filter_by(id_user=user_id).first()
@@ -141,12 +138,38 @@ def _verify_token_and_set_user(request_obj):
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not _verify_token_and_set_user(flask_request):
-            print("DEBUG: login_required: Verification failed. Returning 401.")
-            return make_response('Invalid or missing Authorization token', 401)
-        # If _verify_token_and_set_user returned True, then g.user is set
+        # Access request inside the wrapper
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return make_response('Token is missing or invalid format!', 401)
+
+        token = auth_header.split(" ")[1] # Extract token after "Bearer "
+
+        payload, verify_result = verify_jwt_token(token) # Pass only the token
+
+        if not verify_result:
+            return make_response('Token is invalid!', 401)
+
+        # Consider using g.user and g.auth_payload like in _verify_token_and_set_user
+        # for consistency and potential use in subsequent decorators/logic
+        user = Users.query.filter_by(id_user=payload['user_id']).one_or_none() # Use one_or_none for safety
+
+        if not user:
+             print(f"DEBUG: login_required: User ID {payload.get('user_id')} from token not found in DB.")
+             return make_response('Token is invalid!', 401) # User from token doesn't exist
+
+        # The check for user.approved seems redundant if approved_lk is in the token
+        # and checked by approved_required decorator. If keeping, ensure user.approved exists.
+        # if not user.approved:
+        #     return make_response('User is not approved', 403)
+
+        # Set user and payload in g for potential use by other decorators like approved_required
+        g.user = user
+        g.auth_payload = payload
         print(f"DEBUG: login_required: Access granted for user {g.user.id_user}. Proceeding.")
-        return f(*args, **kwargs)
+
+        result = f(*args, **kwargs)
+        return result
     return decorated_function
 
 
@@ -155,8 +178,11 @@ def approved_required(f):
     # This decorator should be used AFTER @login_required
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # Check if login_required successfully set g.user and g.auth_payload
         if not hasattr(g, 'user') or g.user is None or not hasattr(g, 'auth_payload') or g.auth_payload is None:
-            print("DEBUG: approved_required: g.user or g.auth_payload not set! Misconfigured decorators? Returning 401.")
+            print("DEBUG: approved_required: g.user or g.auth_payload not set! Ensure @login_required runs first. Returning 401.")
+            # It's better to rely on login_required to handle the initial auth failure
+            # This path indicates a decorator ordering issue or unexpected state.
             return make_response('Authentication required', 401)
 
         if not g.auth_payload.get('approved_lk', False):
@@ -173,38 +199,64 @@ def admin_only(f):
     # This decorator should be used AFTER @login_required
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not hasattr(g, 'user') or g.user is None:
+        # Check if login_required successfully set g.user and g.auth_payload
+        if not hasattr(g, 'user') or g.user is None or not hasattr(g, 'auth_payload') or g.auth_payload is None:
+            print("DEBUG: admin_only: g.user or g.auth_payload not set! Ensure @login_required runs first. Returning 401.")
             return make_response('Authentication required', 401)
 
-        if not any(role.id_role == 1 for role in g.user.roles):
-            print(f"DEBUG: admin_only: User {g.user.id_user} does not have 'admin' role. Returning 403.")
-            return make_response('Admin privileges required', 403)
+        # Check roles from the verified payload stored in g
+        roles = g.auth_payload.get('roles', [])
+        if not any(role.get('id') == 1 for role in roles): # Check if admin role (ID 1) is present
+            print(f"DEBUG: admin_only: User {g.user.id_user} does not have admin role. Roles: {roles}. Returning 403.")
+            return make_response('Admin role required', 403)
 
-        print(f"DEBUG: admin_only: User {g.user.id_user} has 'admin' role. Proceeding.")
-        return f(*args, **kwargs)
+        print(f"DEBUG: admin_only: User {g.user.id_user} has admin role. Proceeding.")
+        result = f(*args, **kwargs)
+        return result
     return decorated_function
 
 
 def aup_require(f):
+    # This decorator should be used AFTER @login_required
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not hasattr(g, 'user') or g.user is None:
+        # Check if login_required successfully set g.user and g.auth_payload
+        if not hasattr(g, 'user') or g.user is None or not hasattr(g, 'auth_payload') or g.auth_payload is None:
+            print("DEBUG: aup_require: g.user or g.auth_payload not set! Ensure @login_required runs first. Returning 401.")
             return make_response('Authentication required', 401)
 
-        if not ('Aup' in flask_request.headers and flask_request.headers['Aup']):
-            return make_response('aup is required', 401)
+        user = g.user # Use user from g
+        payload = g.auth_payload # Use payload from g
+
+        aup_header = request.headers.get('Aup')
+        if not aup_header:
+            return make_response('Aup header is required', 400) # 400 Bad Request might be more appropriate
+
         try:
-            aup_info: AupInfo = AupInfo.query.filter_by(num_aup=flask_request.headers['Aup']).one()
+            # Ensure Aup header is a valid number if needed, e.g., int(aup_header)
+            aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup_header).one()
         except sqlalchemy.exc.NoResultFound:
-            return make_response("No such aup found", 404)
+            return make_response(f"No such aup found: {aup_header}", 404)
+        except ValueError:
+            return make_response('Invalid Aup header format', 400)
 
-        if 2 in [role.id_role for role in g.user.roles]:  # faculty
-            if aup_info.id_faculty not in [faq.id_faculty for faq in g.user.faculties]:
-                return make_response('Forbidden', 403)
+        user_roles_ids = [role.get('id') for role in payload.get('roles', [])]
 
-        elif 3 in [role.id_role for role in g.user.roles]:  # department
-            if not g.user.department_id or aup_info.id_department != g.user.department_id:
-                return make_response('Forbidden', 403)
+        if 2 in user_roles_ids: # faculty role
+             # Use faculties from payload if available and reliable, otherwise query user.faculties
+            user_faculties = payload.get('faculties', [faq.id_faculty for faq in user.faculties])
+            if aup_info.id_faculty not in user_faculties:
+                print(f"DEBUG: aup_require: User {user.id_user} (Faculty) forbidden for AUP {aup_header}. AUP Faculty: {aup_info.id_faculty}, User Faculties: {user_faculties}")
+                return make_response('Forbidden for this faculty', 403)
 
-        return f(*args, **kwargs)
+        elif 3 in user_roles_ids: # department role
+            user_department_id = payload.get('department_id', user.department_id)
+            if not user_department_id or aup_info.id_department != user_department_id:
+                print(f"DEBUG: aup_require: User {user.id_user} (Department) forbidden for AUP {aup_header}. AUP Department: {aup_info.id_department}, User Department: {user_department_id}")
+                return make_response('Forbidden for this department', 403)
+        # Admin role (1) implicitly has access if not faculty or department
+
+        print(f"DEBUG: aup_require: User {user.id_user} access granted for AUP {aup_header}.")
+        result = f(*args, **kwargs)
+        return result
     return decorated_function

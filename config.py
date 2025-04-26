@@ -1,4 +1,5 @@
 import os
+import logging
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -7,6 +8,9 @@ load_dotenv()
 DEBUG = True
 TESTING = False
 SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+
+SHOW_DEBUG_EXECUTION_TIME = False
+LOG_LEVEL = logging.INFO
 
 # Настройки базы данных
 SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/competencies')
