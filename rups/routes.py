@@ -1,11 +1,12 @@
 from flask import Blueprint, jsonify, Response, request
 from rups.logic.general import get_data_for_rups
+from rups.logic.cosin_rups_v2 import compare_two_aups
 
-rups = Blueprint("rups", __name__, static_folder="static")
+rups = Blueprint("rups", __name__, static_folder="static", url_prefix="/rups")
 
 
 @rups.route("/get-rups-for-two-aups", methods=["GET"])
-def get_aup_for_rups() -> Response:
+def get_aup_for_rups():
     aup1 = request.args.get("aup1")
     aup2 = request.args.get("aup2")
     tr = request.args.get("tr", None)
@@ -24,3 +25,10 @@ def get_aup_for_rups() -> Response:
         return jsonify(data)
     except Exception as e:
         return jsonify({"error": "Internal server error", "message": str(e)}), 500
+
+
+@rups.route("/get-rups-for-two-aups/v2", methods=["POST"])
+def get_rups_for_aup_v2():
+    data = request.get_json()
+    res = compare_two_aups(data["aup1"], data["aup2"], data["sem_num"])
+    return jsonify(res)
