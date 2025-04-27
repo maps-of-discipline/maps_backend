@@ -1,10 +1,10 @@
 from flask import Request, jsonify, Response
 import werkzeug.exceptions as http_exceptions
 
-from auth.models import Roles, Users
+#from auth.models import Roles, Users
 from administration.base import BaseAdminView
 from maps.models import db, SprBranch, SprFaculty
-
+'''
 class UserCrudView(BaseAdminView):
     model = Users
 
@@ -120,4 +120,4 @@ class UserCrudView(BaseAdminView):
         
         db.sesstion.delete(user_instance)
         db.session.commit()
-        return {'resutl': 'ok'}
+        return {'resutl': 'ok'}'''

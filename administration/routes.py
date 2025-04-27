@@ -1,8 +1,8 @@
 from flask import Blueprint, jsonify, request, Request
-from auth.models import Mode, Roles
+#from auth.models import Mode, Roles
 
 from administration.admin_view import SimpleAdminView
-from administration.crud.users import UserCrudView
+#from administration.crud.users import UserCrudView
 from auth.logic import admin_only
 from auth.models import permissions_table
 from maps.models import db
@@ -10,7 +10,7 @@ from maps.models import db
 
 admin = Blueprint("Administration", __name__, url_prefix="/api/admin")
 
-
+'''
 class RolesAdminView(SimpleAdminView):
     model = Roles
     fields = [
@@ -51,7 +51,7 @@ def user_view(id: int | None = None):
     view = UserCrudView()
     print(id)
     return view.handle_request(request, id)
-
+'''
 
 @admin.route('/permissions', methods=['GET', 'POST'])
 @admin_only(request)

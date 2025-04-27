@@ -7,7 +7,7 @@ import jwt
 import sqlalchemy.exc
 from flask import make_response
 
-from auth.models import Users, Token
+from auth.models import Users#, Token
 from maps.models import db, AupInfo
 
 from config import SECRET_KEY, ACCESS_TOKEN_LIFETIME, REFRESH_TOKEN_LIFETIME
@@ -45,7 +45,7 @@ def get_refresh_token(user_id: int, user_agent: str) -> str:
     refresh_token = str(uuid.uuid4())
     lifetime = round(time()) + REFRESH_TOKEN_LIFETIME
 
-    current_tokens = Token.query.filter_by(user_id=user_id).all()
+    '''current_tokens = Token.query.filter_by(user_id=user_id).all()
 
     for token in current_tokens:
         if token.ttl < time() or token.user_agent == user_agent:
@@ -58,7 +58,7 @@ def get_refresh_token(user_id: int, user_agent: str) -> str:
         ttl=lifetime)
     )
     db.session.commit()
-
+'''
     return refresh_token
 
 
@@ -78,7 +78,7 @@ def verify_jwt_token(jwt_token) -> tuple[Any, bool] | tuple[None, bool]:
 
 
 def verify_refresh_token(token: str) -> bool:
-    current_token = Token.query.filter_by(refresh_token=token).first()
+    current_token = "sdfs"#Token.query.filter_by(refresh_token=token).first()
     return current_token and current_token.refresh_token == token and current_token.ttl > time()
 
 

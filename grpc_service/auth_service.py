@@ -1,10 +1,10 @@
-from grpc.dto.auth import UserData, TokenPayload
-from grpc.auth import auth_pb2
-from grpc.grpc_manager import get_auth_service
+from grpc_service.dto.auth import UserData, TokenPayload
+from grpc_service.auth import auth_pb2
+from grpc_service.grpc_manager import get_auth_service
 
 class AuthGRPCService:
 
-    def __init__(self, auth_grpc_stub) -> None:
+    def __init__(self) -> None:
         self.stub = get_auth_service()
 
     async def get_payload(jwt: str) -> TokenPayload:

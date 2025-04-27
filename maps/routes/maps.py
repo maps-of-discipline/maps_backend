@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import asyncio
 from collections import defaultdict
 from itertools import chain
 from pprint import pprint
@@ -10,7 +11,7 @@ from flask import Blueprint, make_response, jsonify, request, send_file
 from app import cache
 
 from auth.logic import login_required, aup_require, verify_jwt_token
-from auth.models import Mode
+#from auth.models import Mode
 from maps.logic.print_excel import saveMap, get_aup_data_excel
 from maps.logic.save_excel_data import save_excel_files
 from maps.logic.save_into_bd import update_fields, create_changes_revision
@@ -18,6 +19,8 @@ from maps.logic.take_from_bd import control_type_r, create_json
 from maps.logic.upload_xml import create_xml
 from maps.models import *
 from utils.logging import logger
+
+from grpc_service.grpc_manager import init_grpc_manager
 
 maps = Blueprint("maps", __name__, url_prefix="/api", static_folder="static")
 
@@ -691,3 +694,27 @@ def update_short_control_types():
     db.session.commit()
 
     return jsonify({"status": "ok"}), 200
+
+
+@maps.route("/checkGRPC")
+def grpc_check():
+    loop = None
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        manager = loop.run_until_complete(init_grpc_manager())
+        result = loop.run_until_complete(manager.check_connection_async())
+        
+        return {
+            "status": "connected" if result else "error",
+            "message": "gRPC connection established" if result 
+                      else "gRPC connection failed"
+        }, 200 if result else 500
+        
+    except Exception as e:
+        return {"error": str(e)}, 500
+    finally:
+        if loop and not loop.is_closed():
+            loop.close()
+        asyncio.set_event_loop(None)

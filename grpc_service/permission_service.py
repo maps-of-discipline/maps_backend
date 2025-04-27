@@ -1,7 +1,7 @@
 from typing import List
-from grpc.permissions import permissions_pb2
-from grpc.dto.permissions import Permission, CreatePermission
-from grpc.grpc_manager import get_permissions_service
+from grpc_service.permissions import permissions_pb2
+from grpc_service.dto.permissions import Permission, CreatePermission
+from grpc_service.grpc_manager import get_permissions_service
 
 class permissionGRPCService:
     
