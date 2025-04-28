@@ -58,7 +58,7 @@ def seed_command():
 
         # Добавляем факультет и кафедру (департамент) - обязательно перед АУП
         faculty_1 = db.session.merge(SprFaculty(id_faculty=1, name_faculty='Факультет информатики', id_branch=1))
-        department_1 = db.session.merge(Department(id_department=1, name_department='Кафедра веб-технологий', faculty_id=1))
+        department_1 = db.session.merge(Department(id_department=1, name_department='Кафедра веб-технологий'))
         db.session.commit()  # Коммитим факультет и кафедру
 
         # Справочники для AupData (ID как в сидере)
@@ -67,8 +67,8 @@ def seed_command():
         db.session.merge(D_Modules(id=1, title="Базовый модуль", color="#FFFFFF")) # Добавлен цвет
         db.session.merge(Groups(id_group=1, name_group="Основные", color="#FFFFFF", weight=1)) # Имя поля уточнено
         db.session.merge(D_TypeRecord(id=1, title="Дисциплина"))
-        db.session.merge(D_ControlType(id=1, title="Экзамен", shortname="Экз"))
-        db.session.merge(D_ControlType(id=5, title="Зачет", shortname="Зач"))
+        db.session.merge(D_ControlType(id=1, title="Экзамен", default_shortname="Экз"))
+        db.session.merge(D_ControlType(id=5, title="Зачет", default_shortname="Зач"))
         db.session.merge(D_EdIzmereniya(id=1, title="Академ. час"))
         db.session.merge(D_Period(id=1, title="Семестр 1"))
         db.session.merge(D_Period(id=2, title="Семестр 2"))
@@ -120,21 +120,21 @@ def seed_command():
             print("  - Link Program 1 - AUP 101 already exists.")
 
         print("Seeding AupData entries...")
-        # merge вернет объекты AupData - добавляем discipline (строковое имя дисциплины)
+        # merge вернет объекты AupData - используем _discipline для имени колонки
         ad501 = db.session.merge(AupData(
-            id=501, id_aup=101, id_discipline=1001, discipline='Основы программирования',
+            id=501, id_aup=101, id_discipline=1001, _discipline='Основы программирования',
             id_block=1, shifr='Б1.1.07', id_part=1, id_module=1, id_group=1,
             id_type_record=1, id_period=1, num_row=7, id_type_control=1,
             amount=14400, id_edizm=1, zet=4
         ))
         ad502 = db.session.merge(AupData(
-            id=502, id_aup=101, id_discipline=1002, discipline='Базы данных',
+            id=502, id_aup=101, id_discipline=1002, _discipline='Базы данных',
             id_block=1, shifr='Б1.1.10', id_part=1, id_module=1, id_group=1,
             id_type_record=1, id_period=1, num_row=10, id_type_control=5,
             amount=10800, id_edizm=1, zet=3
         ))
         ad503 = db.session.merge(AupData(
-            id=503, id_aup=101, id_discipline=1003, discipline='История России',
+            id=503, id_aup=101, id_discipline=1003, _discipline='История России',
             id_block=1, shifr='Б1.1.01', id_part=1, id_module=1, id_group=1,
             id_type_record=1, id_period=1, num_row=1, id_type_control=5,
             amount=7200, id_edizm=1, zet=2

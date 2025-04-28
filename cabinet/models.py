@@ -9,7 +9,8 @@ class DisciplineTable(db.Model, SerializerMixin):
     serialize_only = ('id', 'id_aup', 'id_unique_discipline', 'study_group_id', 'semester')
 
     id: int = db.Column(db.Integer(), primary_key=True)
-    id_aup: int = db.Column(db.Integer(), db.ForeignKey('tbl_aup.id_aup'), nullable=False)
+    # Добавлен ondelete="CASCADE" для id_aup
+    id_aup: int = db.Column(db.Integer(), db.ForeignKey('tbl_aup.id_aup', ondelete="CASCADE"), nullable=False)
     id_unique_discipline: int = db.Column(db.Integer(), db.ForeignKey('spr_discipline.id'), nullable=False)
     study_group_id: int = db.Column(db.Integer(), db.ForeignKey('study_group.id'), nullable=False)
     semester: int = db.Column(db.Integer(), nullable=False)

@@ -15,20 +15,20 @@ Flask CLI команда для импорта данных Академичес
 - Возможность принудительной перезаписи существующего АУП (--force).
 - Опция попытки заполнения пустых модулей на основе использования дисциплин (--fill-null-modules).
 - Опция пропуска проверок целочисленности ZET и общей суммы ZET (--skip-integrity-check, --skip-sum-check).
-- **Режим "пробного запуска" (`--dry-run`), который выполняет чтение и валидацию, но не сохраняет данные в БД.**
+- Режим "пробного запуска" (`--dry-run`), который выполняет чтение и валидацию, но не сохраняет данные в БД.
 
 Пример использования:
-  # Простой импорт
-  flask import-aup "path/to/aup.xlsx"
+    # Простой импорт
+    flask import-aup "path/to/aup.xlsx"
 
-  # Импорт с перезаписью существующего АУП
-  flask import-aup "path/to/aup.xlsx" --force
+    # Импорт с перезаписью существующего АУП
+    flask import-aup "path/to/aup.xlsx" --force
 
-  # Пробный запуск (чтение и валидация без сохранения)
-  flask import-aup "path/to/aup.xlsx" --dry-run
+    # Пробный запуск (чтение и валидация без сохранения)
+    flask import-aup "path/to/aup.xlsx" --dry-run
 
-  # Импорт с пропуском проверки суммы ZET
-  flask import-aup "path/to/aup.xlsx" --skip-sum-check --force
+    # Импорт с пропуском проверки суммы ZET
+    flask import-aup "path/to/aup.xlsx" --skip-sum-check --force
 """
 import click
 from flask.cli import with_appcontext
@@ -38,8 +38,12 @@ import traceback
 # --- Импортируем необходимые компоненты ---
 from maps.logic.read_excel import read_excel
 from maps.logic.excel_check import ExcelValidator
-from maps.logic.save_excel_data import save_excel_data
+from maps.logic.save_excel_data import save_excel_data, delete_aup_by_num
 from maps.models import db
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 @click.command(name='import-aup')
 @click.argument('filepath', type=click.Path(exists=True, dir_okay=False))
@@ -52,9 +56,9 @@ from maps.models import db
 @click.option('--skip-sum-check', is_flag=True, default=False,
               help='Skip total ZET sum check.')
 @click.option('--dry-run', is_flag=True, default=False,
-              help='Perform read and validation without saving to the database.') # <-- Добавлен флаг dry-run
+              help='Perform read and validation without saving to the database.')
 @with_appcontext
-def import_aup_command(filepath, force, fill_null_modules, skip_integrity_check, skip_sum_check, dry_run): # <-- Добавлен параметр dry_run
+def import_aup_command(filepath, force, fill_null_modules, skip_integrity_check, skip_sum_check, dry_run):
     """
     Импортирует данные Академического Учебного Плана (АУП) из Excel-файла (.xlsx).
 
@@ -97,15 +101,30 @@ def import_aup_command(filepath, force, fill_null_modules, skip_integrity_check,
 
         print("   - Validation successful.")
 
+        # --- НОВАЯ ЛОГИКА: Удаление существующего АУП, если force=True ---
+        if force and not dry_run:
+            logger.info(f"Force flag enabled. Attempting to delete existing AUP with number: {header_df.get('Содержание', {}).get('Номер АУП')}")
+            # Передаем сессию в функцию удаления
+            deleted = delete_aup_by_num(header_df.get('Содержание', {}).get('Номер АУП'), db.session)
+            if deleted:
+                logger.info(f"   - Existing AUP deleted successfully.")
+            else:
+                # Если AUP не найден при удалении, это не ошибка, просто он не существовал
+                logger.warning(f"   - AUP not found for deletion (it might not have existed).")
+        # --- Конец НОВОЙ ЛОГИКИ ---
+
         # 3. Сохранение данных в БД (только если не dry-run)
         if not dry_run:
             print("Saving data to database...")
+            # --- Вызов save_excel_data в рамках транзакции ---
             save_excel_data(
                 filename=filename,
                 header=header_df,
                 data=data_df,
-                use_other_modules=fill_null_modules
+                use_other_modules=fill_null_modules,
+                session=db.session
             )
+            db.session.commit()  # Финальный коммит здесь
             print("   - Data saved successfully.")
             print(f"---> AUP from '{filename}' imported successfully!\n")
         else:
@@ -115,16 +134,18 @@ def import_aup_command(filepath, force, fill_null_modules, skip_integrity_check,
     except FileNotFoundError:
         print(f"\n!!! ERROR: File not found at '{filepath}' !!!")
     except ImportError as e:
-         print(f"\n!!! ERROR: Missing dependency for reading Excel files: {e} !!!")
-         print("   - Please ensure 'openpyxl' and potentially 'pyxlsb' or 'calamine' (for .xlsb/.xlsm) are installed.")
+        print(f"\n!!! ERROR: Missing dependency for reading Excel files: {e} !!!")
+        print("   - Please ensure 'openpyxl' and potentially 'pyxlsb' or 'calamine' (for .xlsb/.xlsm) are installed.")
     except KeyError as e:
         print(f"\n!!! ERROR: Missing expected column or sheet in Excel file: {e} !!!")
-        print(f"   - Please check the structure of '{filename}'. It must contain 'Лист1' and 'Лист2' with correct headers.")
-        if not dry_run: # Откатываем только если пытались сохранять
-            db.session.rollback()
+        print(
+            f"   - Please check the structure of '{filename}'. It must contain 'Лист1' и 'Лист2' с корректными заголовками.")
+        if not dry_run:
+            db.session.rollback()  # Откат при ключевой ошибке
     except Exception as e:
-        if not dry_run: # Откатываем только если пытались сохранять
+        if not dry_run:
             db.session.rollback()
             print("   - Database transaction rolled back.")
         print(f"\n!!! UNEXPECTED ERROR during import: {e} !!!")
+        print("   - Database transaction might have been rolled back.")
         traceback.print_exc()

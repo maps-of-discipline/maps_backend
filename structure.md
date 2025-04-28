@@ -1,7 +1,7 @@
 /*M!999999\- enable the sandbox mode */ 
 -- MariaDB dump 10.19  Distrib 10.11.11-MariaDB, for debian-linux-gnu (x86_64)
 --
--- Host: 127.0.0.1    Database: kd_competencies
+-- Host: 127.0.1    Database: kd_competencies
 -- ------------------------------------------------------
 -- Server version	9.2.0
 
@@ -15,14 +15,6 @@
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
-
---
--- Current Database: `kd_competencies`
---
-
-CREATE DATABASE /*!32312 IF NOT EXISTS*/ `kd_competencies` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
-
-USE `kd_competencies`;
 
 --
 -- Table structure for table `ChangeLog`
@@ -92,10 +84,10 @@ CREATE TABLE `Revision` (
   `user_id` int NOT NULL,
   `aup_id` int NOT NULL,
   PRIMARY KEY (`id`),
-  KEY `aup_id` (`aup_id`),
   KEY `user_id` (`user_id`),
-  CONSTRAINT `Revision_ibfk_1` FOREIGN KEY (`aup_id`) REFERENCES `tbl_aup` (`id_aup`),
-  CONSTRAINT `Revision_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `tbl_users` (`id_user`)
+  KEY `aup_id` (`aup_id`),
+  CONSTRAINT `Revision_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `tbl_users` (`id_user`),
+  CONSTRAINT `Revision_ibfk_3` FOREIGN KEY (`aup_id`) REFERENCES `tbl_aup` (`id_aup`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -136,6 +128,7 @@ CREATE TABLE `aup_data` (
   `amount` int NOT NULL,
   `id_edizm` int NOT NULL,
   `zet` int NOT NULL,
+  `used_for_report` tinyint(1) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `id_aup` (`id_aup`),
   KEY `id_block` (`id_block`),
@@ -157,7 +150,7 @@ CREATE TABLE `aup_data` (
   CONSTRAINT `aup_data_ibfk_7` FOREIGN KEY (`id_part`) REFERENCES `d_part` (`id`) ON DELETE SET NULL,
   CONSTRAINT `aup_data_ibfk_8` FOREIGN KEY (`id_period`) REFERENCES `d_period` (`id`),
   CONSTRAINT `aup_data_ibfk_9` FOREIGN KEY (`id_type_control`) REFERENCES `d_control_type` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=504 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=810 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -448,7 +441,7 @@ CREATE TABLE `competencies_matrix` (
   KEY `indicator_id` (`indicator_id`),
   CONSTRAINT `competencies_matrix_ibfk_1` FOREIGN KEY (`aup_data_id`) REFERENCES `aup_data` (`id`),
   CONSTRAINT `competencies_matrix_ibfk_2` FOREIGN KEY (`indicator_id`) REFERENCES `competencies_indicator` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=59 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=63 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -514,6 +507,24 @@ CREATE TABLE `competencies_required_skill` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `control_type_short_name`
+--
+
+DROP TABLE IF EXISTS `control_type_short_name`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `control_type_short_name` (
+  `user_id` int NOT NULL,
+  `control_type_id` int NOT NULL,
+  `shortname` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`user_id`,`control_type_id`),
+  KEY `control_type_id` (`control_type_id`),
+  CONSTRAINT `control_type_short_name_ibfk_1` FOREIGN KEY (`control_type_id`) REFERENCES `d_control_type` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `control_type_short_name_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `tbl_users` (`id_user`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `d_blocks`
 --
 
@@ -524,7 +535,7 @@ CREATE TABLE `d_blocks` (
   `id` int NOT NULL AUTO_INCREMENT,
   `title` varchar(255) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -537,9 +548,9 @@ DROP TABLE IF EXISTS `d_control_type`;
 CREATE TABLE `d_control_type` (
   `id` int NOT NULL AUTO_INCREMENT,
   `title` varchar(255) NOT NULL,
-  `shortname` varchar(255) DEFAULT NULL,
+  `default_shortname` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -553,7 +564,7 @@ CREATE TABLE `d_ed_izmereniya` (
   `id` int NOT NULL AUTO_INCREMENT,
   `title` varchar(255) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -568,7 +579,7 @@ CREATE TABLE `d_modules` (
   `title` varchar(255) NOT NULL,
   `color` varchar(8) NOT NULL DEFAULT '#5f60ec',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -582,7 +593,7 @@ CREATE TABLE `d_part` (
   `id` int NOT NULL AUTO_INCREMENT,
   `title` varchar(255) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -596,7 +607,7 @@ CREATE TABLE `d_period` (
   `id` int NOT NULL AUTO_INCREMENT,
   `title` varchar(255) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -610,7 +621,7 @@ CREATE TABLE `d_type_record` (
   `id` int NOT NULL AUTO_INCREMENT,
   `title` varchar(255) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -776,7 +787,7 @@ CREATE TABLE `groups` (
   `color` varchar(8) NOT NULL,
   `weight` int NOT NULL DEFAULT '5',
   PRIMARY KEY (`id_group`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -834,7 +845,7 @@ CREATE TABLE `spr_degree_education` (
   `id_degree` int NOT NULL AUTO_INCREMENT,
   `name_deg` varchar(255) NOT NULL,
   PRIMARY KEY (`id_degree`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -848,7 +859,7 @@ CREATE TABLE `spr_discipline` (
   `id` int NOT NULL AUTO_INCREMENT,
   `title` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1004 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1070 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -867,7 +878,7 @@ CREATE TABLE `spr_faculty` (
   PRIMARY KEY (`id_faculty`),
   KEY `id_branch` (`id_branch`),
   CONSTRAINT `spr_faculty_ibfk_1` FOREIGN KEY (`id_branch`) REFERENCES `spr_branch` (`id_branch`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -881,7 +892,7 @@ CREATE TABLE `spr_form_education` (
   `id_form` int NOT NULL AUTO_INCREMENT,
   `form` varchar(255) NOT NULL,
   PRIMARY KEY (`id_form`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -899,7 +910,7 @@ CREATE TABLE `spr_name_op` (
   PRIMARY KEY (`id_spec`),
   KEY `program_code` (`program_code`),
   CONSTRAINT `spr_name_op_ibfk_1` FOREIGN KEY (`program_code`) REFERENCES `spr_okco` (`program_code`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1046,7 +1057,10 @@ CREATE TABLE `tbl_aup` (
   `year_beg` int NOT NULL,
   `year_end` int NOT NULL,
   `is_actual` tinyint(1) NOT NULL,
+  `is_delete` tinyint(1) DEFAULT NULL,
+  `date_delete` datetime DEFAULT NULL,
   PRIMARY KEY (`id_aup`),
+  UNIQUE KEY `num_aup` (`num_aup`),
   KEY `id_degree` (`id_degree`),
   KEY `id_department` (`id_department`),
   KEY `id_faculty` (`id_faculty`),
@@ -1059,7 +1073,7 @@ CREATE TABLE `tbl_aup` (
   CONSTRAINT `tbl_aup_ibfk_4` FOREIGN KEY (`id_form`) REFERENCES `spr_form_education` (`id_form`) ON DELETE CASCADE,
   CONSTRAINT `tbl_aup_ibfk_5` FOREIGN KEY (`id_rop`) REFERENCES `spr_rop` (`id_rop`),
   CONSTRAINT `tbl_aup_ibfk_6` FOREIGN KEY (`id_spec`) REFERENCES `spr_name_op` (`id_spec`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=102 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=103 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1072,11 +1086,8 @@ DROP TABLE IF EXISTS `tbl_department`;
 CREATE TABLE `tbl_department` (
   `id_department` int NOT NULL AUTO_INCREMENT,
   `name_department` varchar(255) DEFAULT NULL,
-  `faculty_id` int DEFAULT NULL,
-  PRIMARY KEY (`id_department`),
-  KEY `faculty_id` (`faculty_id`),
-  CONSTRAINT `tbl_department_ibfk_1` FOREIGN KEY (`faculty_id`) REFERENCES `spr_faculty` (`id_faculty`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  PRIMARY KEY (`id_department`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1095,7 +1106,7 @@ CREATE TABLE `tbl_token` (
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
   CONSTRAINT `tbl_token_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `tbl_users` (`id_user`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=53 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=61 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1332,6 +1343,24 @@ CREATE TABLE `users_faculty` (
   CONSTRAINT `users_faculty_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `tbl_users` (`id_user`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `weeks`
+--
+
+DROP TABLE IF EXISTS `weeks`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `weeks` (
+  `aup_id` int NOT NULL,
+  `period_id` int NOT NULL,
+  `amount` int DEFAULT NULL,
+  PRIMARY KEY (`aup_id`,`period_id`),
+  KEY `period_id` (`period_id`),
+  CONSTRAINT `weeks_ibfk_1` FOREIGN KEY (`aup_id`) REFERENCES `tbl_aup` (`id_aup`) ON DELETE CASCADE,
+  CONSTRAINT `weeks_ibfk_2` FOREIGN KEY (`period_id`) REFERENCES `d_period` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -1342,4 +1371,4 @@ CREATE TABLE `users_faculty` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-04-20 15:02:22
+-- Dump completed on 2025-04-26 16:13:56

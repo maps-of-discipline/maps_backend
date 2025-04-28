@@ -1,10 +1,12 @@
-from flask import Blueprint, make_response, jsonify, request
-
+from flask import Blueprint, make_response, jsonify, request, abort
 
 from auth.logic import admin_only
 from datetime import datetime
 
 from maps.models import db, AupInfo, NameOP
+# --- Импортируем функцию удаления ---
+from maps.logic.save_excel_data import delete_aup_by_num  # <--- Импорт
+
 
 aup_info_router = Blueprint(
     "aup_info", __name__, url_prefix="/aup-info", static_folder="../static"
@@ -54,14 +56,41 @@ def aup_change(aup: str | None):
 
 
 @aup_info_router.route("/<string:aup>", methods=["DELETE"])
-def aup_delete(aup: str | None):
-    aup_record: AupInfo | None = AupInfo.query.filter_by(num_aup=aup).first()
-    if not aup_record:
-        return jsonify({"status": "not found"}), 404
+# @admin_only # Возможно, ограничить права
+def aup_delete(aup: str):  # Убираем Optional из типа, т.к. aup всегда в пути
+    # Ищем AUP, чтобы получить ID для delete_aup_by_num
+    aup_info = db.session.query(AupInfo).filter_by(num_aup=aup).first()
+    if not aup_info:
+        abort(404, description=f"АУП с номером {aup} не найден.")  # Используем abort
 
-    db.session.delete(aup_record)
-    db.session.commit()
-    return jsonify({"status": "ok"})
+    aup_id = aup_info.id_aup  # Получаем ID перед удалением
+
+    try:
+        # Вызываем централизованную функцию удаления
+        deleted = delete_aup_by_num(
+            aup, db.session
+        )  # delete_aup_by_num ожидает номер AUP
+
+        if deleted:
+            return (
+                jsonify(
+                    {
+                        "status": "ok",
+                        "message": f"АУП с номером {aup} и все связанные данные успешно удалены.",
+                    }
+                ),
+                200,
+            )
+        else:
+            # Эта ветка, по идее, не должна быть достигнута, если aup_info найден выше
+            abort(
+                500,
+                description=f"Не удалось удалить АУП {aup} по неизвестной причине после его нахождения.",
+            )
+
+    except Exception as e:
+        # Ошибка при удалении (например, ошибка БД)
+        abort(500, description=f"Ошибка при удалении АУП {aup}: {e}")
 
 
 @aup_info_router.route("/<string:aup>/mark-deleted", methods=["POST"])

@@ -100,35 +100,36 @@ class AupInfo(db.Model, SerializationMixin):
     file = db.Column(db.String(255), nullable=False)
     num_aup = db.Column(db.String(255), nullable=False, unique=True)
     base = db.Column(db.String(255), nullable=False)
+    # Updated ForeignKey definitions with ondelete options
     id_faculty = db.Column(
         db.Integer,
-        db.ForeignKey("spr_faculty.id_faculty", ondelete="CASCADE"),
+        db.ForeignKey("spr_faculty.id_faculty", ondelete="CASCADE"), # <-- CASCADE
         nullable=False,
     )
-    id_rop = db.Column(db.Integer, db.ForeignKey("spr_rop.id_rop"), nullable=False)
+    id_rop = db.Column(db.Integer, db.ForeignKey("spr_rop.id_rop", ondelete="CASCADE"), nullable=False) # <-- CASCADE
     type_educ = db.Column(db.String(255), nullable=False)
     qualification = db.Column(db.String(255), nullable=False)
     type_standard = db.Column(db.String(255), nullable=False)
     id_department = db.Column(
         db.Integer,
-        db.ForeignKey("tbl_department.id_department", ondelete="SET NULL"),
+        db.ForeignKey("tbl_department.id_department", ondelete="SET NULL"), # <-- SET NULL
     )
     period_educ = db.Column(db.String(255), nullable=False)
     id_degree = db.Column(
         db.Integer,
-        db.ForeignKey("spr_degree_education.id_degree", ondelete="CASCADE"),
+        db.ForeignKey("spr_degree_education.id_degree", ondelete="CASCADE"), # <-- CASCADE
         nullable=False,
     )
     id_form = db.Column(
         db.Integer,
-        db.ForeignKey("spr_form_education.id_form", ondelete="CASCADE"),
+        db.ForeignKey("spr_form_education.id_form", ondelete="CASCADE"), # <-- CASCADE
         nullable=False,
     )
     years = db.Column(db.Integer, nullable=False)
     months = db.Column(db.Integer, nullable=True)
     id_spec = db.Column(
         db.Integer,
-        db.ForeignKey("spr_name_op.id_spec", ondelete="SET NULL"),
+        db.ForeignKey("spr_name_op.id_spec", ondelete="CASCADE"), # <-- CASCADE (changed from SET NULL)
     )
     year_beg = db.Column(db.Integer, nullable=False)
     year_end = db.Column(db.Integer, nullable=False)
@@ -136,13 +137,14 @@ class AupInfo(db.Model, SerializationMixin):
     is_delete = db.Column(db.Boolean, nullable=True)
     date_delete = db.Column(db.DateTime, nullable=True)
 
+    # Relationships...
     degree = db.relationship("SprDegreeEducation")
     form = db.relationship("SprFormEducation")
-    faculty = db.relationship("SprFaculty")
+    faculty = db.relationship("SprFaculty", back_populates="aup_infos") # Added back_populates
     rop = db.relationship("SprRop")
     department = db.relationship("Department")
     aup_data = db.relationship("AupData", back_populates="aup", passive_deletes=True)
-    spec = db.relationship("NameOP")
+    spec = db.relationship("NameOP") # Note: Relationship name 'spec' vs FK 'id_spec'
     weeks = db.relationship("Weeks")
 
     def __repr__(self):
@@ -392,8 +394,6 @@ class AupData(db.Model):
     ed_izmereniya = db.relationship("D_EdIzmereniya", lazy="joined")
     group = db.relationship("Groups", lazy="joined")
     discipline = db.relationship("SprDiscipline", lazy="joined")
-
-    type_control = db.relationship("D_ControlType", lazy="joined")
 
     # def __repr__(self):
     #     return "<AupData %r>" % self.aup.num_aup
