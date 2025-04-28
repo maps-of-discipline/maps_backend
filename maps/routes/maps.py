@@ -6,7 +6,9 @@ from collections import defaultdict
 from itertools import chain
 from pprint import pprint
 
-from flask import Blueprint, make_response, jsonify, request, send_file
+from flask import Blueprint, make_response, jsonify, request, send_file, g
+
+from grpc import aio
 
 from app import cache
 
@@ -20,7 +22,7 @@ from maps.logic.upload_xml import create_xml
 from maps.models import *
 from utils.logging import logger
 
-from grpc_service.grpc_manager import init_grpc_manager
+#from grpc_service.grpc_manager import init_grpc_manager
 
 maps = Blueprint("maps", __name__, url_prefix="/api", static_folder="static")
 
@@ -698,23 +700,13 @@ def update_short_control_types():
 
 @maps.route("/checkGRPC")
 def grpc_check():
-    loop = None
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        manager = loop.run_until_complete(init_grpc_manager())
-        result = loop.run_until_complete(manager.check_connection_async())
-        
+        result = g.grpc_manager.check_connection_async()
+
         return {
-            "status": "connected" if result else "error",
-            "message": "gRPC connection established" if result 
-                      else "gRPC connection failed"
+                "status": "connected" if result else "error",
+                "message": "gRPC connection established" if result 
+                            else "gRPC connection failed"
         }, 200 if result else 500
-        
-    except Exception as e:
-        return {"error": str(e)}, 500
-    finally:
-        if loop and not loop.is_closed():
-            loop.close()
-        asyncio.set_event_loop(None)
+    except aio.AioRpcError as e:
+        return "error", 500

@@ -1,10 +1,12 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, g, current_app
 from flask_cors import CORS
 from flask_migrate import Migrate
 from sqlalchemy import MetaData
 from flask_mail import Mail
 from dotenv import load_dotenv
 from flask_caching import Cache
+from grpc_service.context import get_grpc_context, teardown_grpc_context
+import asyncio
 
 
 from maps.logic.global_variables import setGlobalVariables
@@ -37,6 +39,11 @@ config = {
 }
 
 app = Flask(__name__)
+
+
+app.before_request(lambda: asyncio.run(get_grpc_context()) or None)
+app.teardown_request(lambda exc: asyncio.run(teardown_grpc_context(exc)) or None)
+
 
 app.config.from_mapping(config)
 cache = Cache(app)
