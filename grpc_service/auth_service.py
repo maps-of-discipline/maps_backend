@@ -1,13 +1,25 @@
+from config import GRPC_URL
+import grpc
 from grpc_service.dto.auth import UserData, TokenPayload
-from grpc_service.auth import auth_pb2
-from grpc_service.grpc_manager import get_auth_service
+from grpc_service.auth import auth_pb2, auth_pb2_grpc
 
 class AuthGRPCService:
 
     def __init__(self) -> None:
-        self.stub = get_auth_service()
+        self.url = GRPC_URL
+        self.channel = None
+        self.stub = None
 
-    async def get_payload(jwt: str) -> TokenPayload:
+    def __enter__(self):
+        self.channel = grpc.insecure_channel(self.url)
+        self.stub = auth_pb2_grpc.AuthServiceStub(self.channel)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        if self.channel:
+            self.channel.close()
+
+    def get_payload(jwt: str) -> TokenPayload:
         request = auth_pb2.GetPayloadRequest(token=jwt)
 
         response = self.stub.GetPayload(request)
@@ -20,8 +32,8 @@ class AuthGRPCService:
             permissions=response.permissions,
         )
     
-    async def get_user_data(self, jwt:str) -> UserData:
-        request = auth_pb2.GetUserRequest(jwt)
+    def get_user_data(self, jwt:str) -> UserData:
+        request = auth_pb2.GetUserRequest(token = jwt)
 
         response = self.stub.GetUser(request)
 
@@ -37,4 +49,15 @@ class AuthGRPCService:
             faculty=response.faculty,
             login=response.login,
             last_login=response.last_login,
-            created_at=response.created_at,)
+            created_at=response.created_at,
+        )
+    
+    def check_conn(self) -> bool:
+        try:
+            grpc.channel_ready_future(self.channel).result(timeout= 15)
+            return True
+        except grpc.FutureTimeoutError:
+            return False    
+        except AttributeError:
+            return False
+    
