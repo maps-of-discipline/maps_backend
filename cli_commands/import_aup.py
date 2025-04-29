@@ -71,7 +71,7 @@ def import_aup_command(filepath, force, fill_null_modules, skip_integrity_check,
 
     # Формируем словарь опций для валидатора и сохранения
     options = {
-        "checkboxForcedUploadModel": not force,
+        "forced_upload": force, # Принудительная загрузка
         "checkboxIntegralityModel": not skip_integrity_check,
         "checkboxSumModel": not skip_sum_check,
         "checkboxFillNullModulesModel": fill_null_modules
@@ -101,17 +101,22 @@ def import_aup_command(filepath, force, fill_null_modules, skip_integrity_check,
 
         print("   - Validation successful.")
 
-        # --- НОВАЯ ЛОГИКА: Удаление существующего АУП, если force=True ---
         if force and not dry_run:
-            logger.info(f"Force flag enabled. Attempting to delete existing AUP with number: {header_df.get('Содержание', {}).get('Номер АУП')}")
+            # Get AUP number from header DataFrame
+            aup_num = None
+            for idx, row in header_df.iterrows():
+                if row['Наименование'] == 'Номер АУП':
+                    aup_num = row['Содержание']
+                    break
+                
+            logger.info(f"Force flag enabled. Attempting to delete existing AUP with number: {aup_num}")
             # Передаем сессию в функцию удаления
-            deleted = delete_aup_by_num(header_df.get('Содержание', {}).get('Номер АУП'), db.session)
+            deleted = delete_aup_by_num(aup_num, db.session)
             if deleted:
                 logger.info(f"   - Existing AUP deleted successfully.")
             else:
                 # Если AUP не найден при удалении, это не ошибка, просто он не существовал
                 logger.warning(f"   - AUP not found for deletion (it might not have existed).")
-        # --- Конец НОВОЙ ЛОГИКИ ---
 
         # 3. Сохранение данных в БД (только если не dry-run)
         if not dry_run:

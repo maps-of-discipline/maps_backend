@@ -10,7 +10,7 @@ from flask import Blueprint, make_response, jsonify, request, send_file, current
 from auth.logic import login_required, aup_require, verify_jwt_token
 from auth.models import Mode
 from maps.logic.print_excel import saveMap, get_aup_data_excel
-from maps.logic.save_excel_data import save_excel_files
+from maps.logic.save_excel_data import process_uploaded_aup_files
 from maps.logic.save_into_bd import update_fields, create_changes_revision
 from maps.logic.take_from_bd import control_type_r, create_json
 from maps.logic.upload_xml import create_xml
@@ -111,14 +111,33 @@ def get_id_edizm():
 
 
 @maps.route("/upload", methods=["POST"])
-# @timeit
-# @login_required
+# @login_required # Раскомментируйте, если нужна аутентификация для загрузки
 def upload():
     logger.info("/upload - processing files uploading")
-    options = dict(json.loads(request.form["options"]))
-    logger.debug(f"/upload - options: {options}")
-    res = save_excel_files(request.files, options)
-    return jsonify(res), 200
+    if 'file' not in request.files:
+        logger.warning("/upload - No files provided in the request.")
+        return jsonify({"errors": [{"message": "Файлы не были переданы"}]}), 400
+    
+    files = request.files.getlist("file")
+    if not files or files[0].filename == '':
+        logger.warning("/upload - No selected files.")
+        return jsonify({"errors": [{"message": "Файлы не выбраны"}]}), 400
+        
+    try:
+        options = dict(json.loads(request.form["options"]))
+        logger.debug(f"/upload - options: {options}")
+    except Exception as e:
+        logger.error(f"/upload - Error parsing options: {e}")
+        return jsonify({"errors": [{"message": f"Ошибка парсинга опций: {e}"}]}), 400
+
+    # ИСПРАВЛЕННЫЙ ВЫЗОВ: Заменяем save_excel_files на process_uploaded_aup_files
+    results = process_uploaded_aup_files(files, options)
+    
+    # Определяем общий статус ответа
+    has_errors = any(res.get('errors') for res in results)
+    status_code = 400 if has_errors else 200 
+    
+    return jsonify(results), status_code
 
 
 @maps.route("/save_excel/<string:aup>", methods=["GET"])
