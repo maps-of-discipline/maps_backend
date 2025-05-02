@@ -255,6 +255,10 @@ def getAllMaps():
         for row in fac.aup_infos:
             row: AupInfo
             specialization = specialization_names[row.id_spec]
+            sem_count = int(row.years) * 2
+            if row.months and int(row.months) > 0:
+                sem_count += 1 if int(row.months) <= 6 else 2
+
             maps.append(
                 {
                     "name": specialization["name_spec"],
@@ -263,6 +267,7 @@ def getAllMaps():
                     "code": row.num_aup,
                     "year": row.year_beg,
                     "form_educ": row.id_form,
+                    "sem_count": sem_count,
                     "is_delete": bool(row.is_delete)
                     if row.is_delete is not None
                     else False,
