@@ -9,20 +9,6 @@ users_faculty_table = db.Table(
 )
 
 
-permissions_table = db.Table(
-    "Permissions",
-    db.Column("role_id", db.ForeignKey("roles.id_role", ondelete="CASCADE"), nullable=False),
-    db.Column("mode_id", db.ForeignKey("Mode.id", ondelete="CASCADE"), nullable=False),
-)
-
-
-user_roles_table = db.Table(
-    "user_roles",
-    db.Column("role_id", db.ForeignKey("roles.id_role", ondelete="CASCADE"), nullable=False),
-    db.Column("user_id", db.ForeignKey("tbl_users.id_user", ondelete="CASCADE"), nullable=False),
-)
-
-
 class Users(db.Model, SerializationMixin):
     __tablename__ = "tbl_users"
 

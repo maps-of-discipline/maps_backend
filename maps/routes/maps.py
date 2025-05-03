@@ -7,11 +7,8 @@ from pprint import pprint
 
 from flask import Blueprint, make_response, jsonify, request, send_file
 
-from grpc import aio
-
 from app import cache
 
-from auth.logic import login_required, aup_require, verify_jwt_token
 from maps.logic.print_excel import saveMap, get_aup_data_excel
 from maps.logic.save_excel_data import save_excel_files
 from maps.logic.save_into_bd import update_fields, create_changes_revision
@@ -39,8 +36,7 @@ def getMap(aup):
 
 
 @maps.route("/save/<string:aup>", methods=["POST"])
-@login_required(request)
-@aup_require(request)
+#@login_required(request)
 def save_map(aup):
     data = request.get_json()
 
@@ -116,7 +112,7 @@ def get_id_edizm():
 
 @maps.route("/upload", methods=["POST"])
 # @timeit
-# @login_required(request)
+# #@login_required(request)
 def upload():
     logger.info('/upload - processing files uploading')
     options = dict(json.loads(request.form["options"]))
@@ -180,8 +176,8 @@ def get_modules():
 
 
 @maps.route("/add-module", methods=["POST"])
-@login_required(request)
-@aup_require(request)
+#@login_required(request)
+#@aup_require(request)
 def add_module():
     module = request.get_json()
     if not module["name"]:
@@ -202,8 +198,8 @@ def add_module():
 
 
 @maps.route("/modules/<int:id>", methods=["PUT", "DELETE"])
-@login_required(request)
-@aup_require(request)
+#@login_required(request)
+#@aup_require(request)
 def edit_or_delete_module(id: int):
     module = D_Modules.query.get(id)
     if not module:
@@ -277,8 +273,8 @@ def getAllMaps():
 
 
 @maps.route("/add-group", methods=["POST"])
-@login_required(request)
-@aup_require(request)
+#@login_required(request)
+#@aup_require(request)
 def AddNewGroup():
     request_data = request.get_json()
     if request_data["name"] == "":
@@ -295,8 +291,8 @@ def AddNewGroup():
 
 
 @maps.route("/delete-group", methods=["POST"])
-@login_required(request)
-@aup_require(request)
+#@login_required(request)
+#@aup_require(request)
 def DeleteGroup():
     request_data = request.get_json()
     d = AupData.query.filter_by(id_group=request_data["id"]).all()
@@ -352,8 +348,8 @@ def GetModulesByAup(aup):
 
 
 @maps.route("/update-group", methods=["POST"])
-@login_required(request)
-@aup_require(request)
+#@login_required(request)
+#@aup_require(request)
 def UpdateGroup():
     request_data = request.get_json()
     gr = Groups.query.filter_by(id_group=request_data["id"]).first()
@@ -408,8 +404,8 @@ def export_aup_excel(aup: str):
 
 
 @maps.route("/weeks/<string:aup>/save", methods=["POST"])
-@login_required(request)
-@aup_require(request)
+#@login_required(request)
+#@aup_require(request)
 def save_weeks(aup: str):
     data: dict = dict(request.get_json())
     data = {int(k): int(v) for k, v in data.items()}
@@ -540,8 +536,8 @@ def get_op_names():
 
 
 @maps.route("/reports/save-choosen-displines", methods=["POST"])
-@login_required(request)
-@aup_require(request)
+#@login_required(request)
+#@aup_require(request)
 def save_choosen_displines():
     data: dict = dict(request.get_json())
     data["aup_id"] = int(data["aup_id"])
@@ -563,7 +559,7 @@ def save_choosen_displines():
 
 
 @maps.route("/practical_training_report", methods=["GET"])
-# @login_required(request)
+# #@login_required(request)
 @cache.cached(timeout=0)
 def data_monitoring_of_practical_training():
     query = (
@@ -625,7 +621,7 @@ def data_monitoring_of_practical_training():
 
 
 @maps.route("/short-control-types", methods=["GET"])
-@login_required(request)
+#@login_required(request)
 def get_short_control_types():
     payload, _ = verify_jwt_token(request.headers["Authorization"])
     user_id = payload["user_id"]
@@ -656,7 +652,7 @@ def get_short_control_types():
 
 
 @maps.route("/short-control-types", methods=["POST"])
-@login_required(request)
+#@login_required(request)
 def update_short_control_types():
     payload, _ = verify_jwt_token(request.headers["Authorization"])
     user_id = payload["user_id"]
