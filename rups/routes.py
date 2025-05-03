@@ -30,5 +30,15 @@ def get_aup_for_rups():
 @rups.route("/get-rups-for-two-aups/v2", methods=["POST"])
 def get_rups_for_aup_v2():
     data = request.get_json()
-    res = compare_two_aups(data["aup1"], data["aup2"], data["sem_num"])
+    aup1 = {
+        "num": data["aup1"]["num"],
+        "sem": int(data["aup1"]["sem"]),
+    }
+
+    aup2 = {
+        "num": data["aup2"]["num"],
+        "sem": int(data["aup2"]["sem"]),
+    }
+
+    res = compare_two_aups(aup1, aup2)
     return jsonify(res)

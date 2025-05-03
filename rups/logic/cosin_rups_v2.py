@@ -194,12 +194,13 @@ def get_best_match(similar: list[dict]) -> dict:
     return best_match
 
 
-def compare_two_aups(aup1: list[dict] | str, aup2: str, sem_num: int | None) -> Any:
+def compare_two_aups(aup1: list[dict] | dict, aup2: dict) -> dict:
     plan1 = aup1
-    if isinstance(aup1, str):
-        plan1 = get_aup(aup1, sem_num=sem_num)
+    if isinstance(aup1, dict):
+        plan1 = get_aup(aup1["num"], sem_num=aup1["sem"])
 
-    plan2 = get_aup(aup2, sem_num=sem_num)
+    plan2 = get_aup(aup2["num"], sem_num=aup2["sem"])
+
     diff1, diff2, same = remove_same(plan1, plan2)
 
     similar = calculate_similar_disciplines(diff1, diff2, top_n=30, threshold=0.001)
