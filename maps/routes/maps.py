@@ -707,3 +707,45 @@ def grpc_check():
         "message": "gRPC connection established" if result 
             else "gRPC connection failed"
         }, 200 if result else 500
+
+            
+
+from grpc_service.auth_logic import AuthManager, AuthError
+
+auth = AuthManager()
+
+
+@maps.route("/api/lox")
+def lox():
+    user = auth.require(['canLooooook'])
+    return jsonify({
+        "message": f"Hello, {user.email}!",
+        "user": {
+            "id": user.id,
+            "login": user.login,
+            "email": user.email
+        }
+    })
+
+
+@maps.route('/api/protect-data', methods=['GET'])
+def get_protected_data():
+    user = auth.get_current_user()
+    
+    return jsonify({
+        "message": f"Добро пожаловать, {user.login}!",
+        "user_details": {
+            "id": user.id_user,
+            "email": user.email,
+            "faculties": user.faculties, 
+            "department": user.department.name if user.department else None
+        },
+        "protected_content": "Это данные только для авторизованных пользователей"
+    })
+    
+@maps.route('/api/my-permissions')
+def my_permissions():
+    try:
+        return jsonify(auth.get_user_permissions())
+    except AuthError as e:
+        return jsonify({"error": e.message}), e.status_code

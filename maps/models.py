@@ -281,8 +281,8 @@ class ControlTypeShortName(db.Model, SerializationMixin):
     __tablename__ = "control_type_short_name"
 
     user_id = db.Column(
-        db.Integer,
-        db.ForeignKey("tbl_users.id_user", ondelete="CASCADE"),
+        db.String(36),
+        db.ForeignKey("tbl_users.id", ondelete="CASCADE"),
         primary_key=True,
     )
     control_type_id = db.Column(
@@ -431,7 +431,7 @@ class Revision(db.Model):
     title = db.Column(db.String(255))
     date = db.Column(db.DateTime)
     isActual = db.Column(db.Boolean)
-    user_id = db.Column(db.Integer, db.ForeignKey("tbl_users.id_user"), nullable=False)
+    user_id = db.Column(db.String(36), db.ForeignKey("tbl_users.id"), nullable=False)
     aup_id = db.Column(
         db.Integer, db.ForeignKey("tbl_aup.id_aup", ondelete="CASCADE"), nullable=False
     )

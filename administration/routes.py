@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify, request, Request
 from administration.admin_view import SimpleAdminView
 #from administration.crud.users import UserCrudView
 from auth.logic import admin_only
-from auth.models import permissions_table
+# from auth.models import permissions_table
 from maps.models import db
 
 

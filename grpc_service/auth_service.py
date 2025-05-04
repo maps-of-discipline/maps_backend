@@ -19,7 +19,7 @@ class AuthGRPCService:
         if self.channel:
             self.channel.close()
 
-    def get_payload(jwt: str) -> TokenPayload:
+    def get_payload(self, jwt: str) -> TokenPayload:
         request = auth_pb2.GetPayloadRequest(token=jwt)
 
         response = self.stub.GetPayload(request)
