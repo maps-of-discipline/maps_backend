@@ -37,7 +37,7 @@ def get_rups_for_aup_v2():
 
     aup2 = {
         "num": data["aup2"]["num"],
-        "sem": int(data["aup2"]["sem"]),
+        "sem": int(data["aup1"]["sem"]),
     }
 
     res = compare_two_aups(aup1, aup2)
