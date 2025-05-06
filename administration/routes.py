@@ -2,13 +2,12 @@ from flask import Blueprint, jsonify, request, Request
 
 from administration.admin_view import SimpleAdminView
 
-from auth.logic import admin_only
 from maps.models import db
 
 
 admin = Blueprint("Administration", __name__, url_prefix="/api/admin")
 
-'''
+"""
 class RolesAdminView(SimpleAdminView):
     model = Roles
     fields = [
@@ -49,5 +48,4 @@ def user_view(id: int | None = None):
     view = UserCrudView()
     print(id)
     return view.handle_request(request, id)
-'''
-
+"""

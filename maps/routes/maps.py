@@ -36,7 +36,7 @@ def getMap(aup):
 
 
 @maps.route("/save/<string:aup>", methods=["POST"])
-#@login_required(request)
+# @login_required(request)
 def save_map(aup):
     data = request.get_json()
 
@@ -114,7 +114,7 @@ def get_id_edizm():
 # @timeit
 # #@login_required(request)
 def upload():
-    logger.info('/upload - processing files uploading')
+    logger.info("/upload - processing files uploading")
     options = dict(json.loads(request.form["options"]))
     logger.debug(f"/upload - options: {options}")
     res = save_excel_files(request.files, options)
@@ -176,8 +176,8 @@ def get_modules():
 
 
 @maps.route("/add-module", methods=["POST"])
-#@login_required(request)
-#@aup_require(request)
+# @login_required(request)
+# @aup_require(request)
 def add_module():
     module = request.get_json()
     if not module["name"]:
@@ -198,8 +198,8 @@ def add_module():
 
 
 @maps.route("/modules/<int:id>", methods=["PUT", "DELETE"])
-#@login_required(request)
-#@aup_require(request)
+# @login_required(request)
+# @aup_require(request)
 def edit_or_delete_module(id: int):
     module = D_Modules.query.get(id)
     if not module:
@@ -257,7 +257,7 @@ def getAllMaps():
                     "code": row.num_aup,
                     "year": row.year_beg,
                     "form_educ": row.id_form,
-                    "is_delete": row.is_delete
+                    "is_delete": row.is_delete,
                 }
             )
 
@@ -273,8 +273,8 @@ def getAllMaps():
 
 
 @maps.route("/add-group", methods=["POST"])
-#@login_required(request)
-#@aup_require(request)
+# @login_required(request)
+# @aup_require(request)
 def AddNewGroup():
     request_data = request.get_json()
     if request_data["name"] == "":
@@ -291,8 +291,8 @@ def AddNewGroup():
 
 
 @maps.route("/delete-group", methods=["POST"])
-#@login_required(request)
-#@aup_require(request)
+# @login_required(request)
+# @aup_require(request)
 def DeleteGroup():
     request_data = request.get_json()
     d = AupData.query.filter_by(id_group=request_data["id"]).all()
@@ -348,8 +348,8 @@ def GetModulesByAup(aup):
 
 
 @maps.route("/update-group", methods=["POST"])
-#@login_required(request)
-#@aup_require(request)
+# @login_required(request)
+# @aup_require(request)
 def UpdateGroup():
     request_data = request.get_json()
     gr = Groups.query.filter_by(id_group=request_data["id"]).first()
@@ -404,8 +404,8 @@ def export_aup_excel(aup: str):
 
 
 @maps.route("/weeks/<string:aup>/save", methods=["POST"])
-#@login_required(request)
-#@aup_require(request)
+# @login_required(request)
+# @aup_require(request)
 def save_weeks(aup: str):
     data: dict = dict(request.get_json())
     data = {int(k): int(v) for k, v in data.items()}
@@ -536,8 +536,8 @@ def get_op_names():
 
 
 @maps.route("/reports/save-choosen-displines", methods=["POST"])
-#@login_required(request)
-#@aup_require(request)
+# @login_required(request)
+# @aup_require(request)
 def save_choosen_displines():
     data: dict = dict(request.get_json())
     data["aup_id"] = int(data["aup_id"])
@@ -621,7 +621,7 @@ def data_monitoring_of_practical_training():
 
 
 @maps.route("/short-control-types", methods=["GET"])
-#@login_required(request)
+# @login_required(request)
 def get_short_control_types():
     payload, _ = verify_jwt_token(request.headers["Authorization"])
     user_id = payload["user_id"]
@@ -652,7 +652,7 @@ def get_short_control_types():
 
 
 @maps.route("/short-control-types", methods=["POST"])
-#@login_required(request)
+# @login_required(request)
 def update_short_control_types():
     payload, _ = verify_jwt_token(request.headers["Authorization"])
     user_id = payload["user_id"]
@@ -700,13 +700,13 @@ def grpc_check():
 
     return {
         "status": "connected" if result else "error",
-        "message": "gRPC connection established" if result 
-            else "gRPC connection failed"
-        }, 200 if result else 500
+        "message": "gRPC connection established"
+        if result
+        else "gRPC connection failed",
+    }, 200 if result else 500
 
-            
 
-from grpc_service.auth_logic import AuthManager, AuthError
+from grpc_service.auth_logic import AuthManager
 
 auth = AuthManager()
 
@@ -714,42 +714,44 @@ auth = AuthManager()
 @maps.route("/lox")
 def lox():
     user = auth.require(["canLook"])
-    return jsonify({
-        "message": f"Hello, {user.email}!",
-        "user": {
-            "id": user.id,
-            "login": user.login,
-            "email": user.email
+    return jsonify(
+        {
+            "message": f"Hello, {user.email}!",
+            "user": {"id": user.id, "login": user.login, "email": user.email},
         }
-    })
-    
+    )
+
+
 # может редактировать только свои карты
 # проверяем пользователя что он с этого фак
 # проверяем что карта с этого факультета
-# 
+#
+
 
 @maps.route("/zzz")
 def zzz():
     user = auth.require(["canEditFaculty"])
     return jsonify({"message": f"Вы, {user.login}, можете редактировать!"})
 
-@maps.route('/api/protect-data', methods=['GET'])
+
+@maps.route("/api/protect-data", methods=["GET"])
 def get_protected_data():
     user = auth.require()
-    
-    return jsonify({
-        "message": f"Добро пожаловать, {user.login}!",
-        "user_details": {
-            "id": user.id,
-            "email": user.email,
-            "faculties": user.faculties
-        },
-        "protected_content": "Это данные только для авторизованных пользователей"
-    })
-    
-@maps.route('/api/my-permissions')
+
+    return jsonify(
+        {
+            "message": f"Добро пожаловать, {user.login}!",
+            "user_details": {
+                "id": user.id,
+                "email": user.email,
+                "faculties": user.faculties,
+            },
+            "protected_content": "Это данные только для авторизованных пользователей",
+        }
+    )
+
+
+@maps.route("/api/my-permissions")
 def my_permissions():
-    try:
-        return jsonify(auth.require())
-    except AuthError as e:
-        return jsonify({"error": e.message}), e.status_code
+    return jsonify(auth.require())
+

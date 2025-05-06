@@ -1,16 +1,16 @@
-from functools import wraps
-from typing import List, Dict, Optional
+from typing import List
 import grpc
-from flask import request, jsonify
+from flask import request
 from sqlalchemy.exc import SQLAlchemyError
 from grpc_service.auth_service import AuthGRPCService
-from grpc_service.permission_service import permissionGRPCService
-from grpc_service.dto.auth import UserData
 from auth.models import db, Users
-from grpc_service.permissions import permissions_pb2
-import werkzeug.exceptions as http_exceptions
 from auth.permission_mapper import PermissionMapper
-from auth.exceptions import AuthError, PermissionDeniedError
+from utils.exceptions import (
+    PermissionsDeniedException,
+    BadRequestException,
+    UnauthorizedException,
+)
+
 
 class AuthManager:
     def __init__(self):
@@ -19,9 +19,11 @@ class AuthManager:
 
     def _get_token_from_header(self) -> str:
         """Извлекает и валидирует токен из заголовка Authorization"""
+
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
-            raise AuthError("Missing or invalid Authorization header")
+            raise BadRequestException("Missing or invalid Authorization header")
+
         return auth_header.replace("Bearer ", "").strip()
 
     def _create_user(self, user_data) -> Users:
@@ -39,11 +41,10 @@ class AuthManager:
 
         except SQLAlchemyError as e:
             db.session.rollback()
-            raise AuthError(f"Database error: {str(e)}", 500)
+            raise BadRequestException(f"Database error: {str(e)}")
         except grpc.RpcError as e:
-            raise AuthError(f"Auth service error: {e.code()}", 500)
+            raise BadRequestException(f"Auth service error: {e.code()}")
 
-    # убрать все что не нужно
     def require(self, required_permissions: List[str] = list()):
         try:
             with self.auth_service as service:
@@ -54,22 +55,16 @@ class AuthManager:
                     user = self._create_user(service.get_user_data(token))
 
                 if any([el not in payload.permissions for el in required_permissions]):
-                    raise PermissionDeniedError()
+                    raise PermissionsDeniedException()
 
-                # Нужно вставить сюда код доп логики пермишенов
-                self._permissions_checker.check_permissions(required_permissions, user, request)
-
-                # Либо обрабатывать тут ошибку. либо райзить сразу http ошибку
+                self._permissions_checker.check_permissions(
+                    required_permissions, user, request
+                )
 
                 return user
 
         except grpc.RpcError as e:
-            code = e.code()
-            if code == grpc.StatusCode.UNAUTHENTICATED:
-                raise AuthError("Invalid token", 401) 
-            raise AuthError(f"Auth service error: {code}", 500)
-
-    # штука для валидации доп логики\
-    # 
-    
-    # отдельный класс который будет заниматься пермишинами 
+            if e.code() == grpc.StatusCode.UNAUTHENTICATED:
+                raise UnauthorizedException("Invalid token")
+            else:
+                raise BadRequestException(f"Auth service error: {e.code()}")

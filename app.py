@@ -26,6 +26,7 @@ from maps.models import db
 
 
 from unification import unification_blueprint
+from utils.exceptions import HttpException
 from utils.handlers import handle_exception
 
 load_dotenv()
@@ -49,6 +50,7 @@ mail = Mail(app)
 app.json.sort_keys = False
 
 from maps.routes.maps import maps as maps_blueprint
+
 # from auth.routes import auth as auth_blueprint
 from auth.new_routes import new_auth as new_auth_blueprint
 from administration.routes import admin as admin_blueprint
@@ -93,6 +95,12 @@ setGlobalVariables(
     type_record,
     type_record_r,
 )
+
+
+def handle_http_exception(err: HttpException):
+    return jsonify({"message": str(err)}), err.status
+
+app.register_error_handler(HttpException, handle_http_exception)
 
 
 if not app.config["DEBUG"]:
