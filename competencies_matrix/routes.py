@@ -11,7 +11,6 @@ from .logic import (
     get_educational_programs_list, get_program_details, 
     get_matrix_for_aup, update_matrix_link,
     create_competency, create_indicator,
-    parse_prof_standard_file,
     parse_fgos_file, save_fgos_data, get_fgos_list, get_fgos_details, delete_fgos
 )
 from auth.logic import login_required, approved_required, admin_only
@@ -298,6 +297,7 @@ def upload_profstandard():
     Парсит и сохраняет в БД профстандарт и его структуру.
     Принимает multipart/form-data с файлом.
     """
+    from .logic import parse_prof_standard_file as parse_prof_standard_logic_function
     if 'file' not in request.files:
         return jsonify({"error": "Файл не найден в запросе"}), 400
     
