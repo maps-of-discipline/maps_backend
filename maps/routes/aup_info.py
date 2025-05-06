@@ -9,7 +9,7 @@ from flask import Blueprint, make_response, jsonify, request, send_file
 
 from app import cache
 
-from auth.logic import login_required, aup_require, verify_jwt_token, admin_only
+from auth.logic import login_required, aup_require, admin_only
 #from auth.models import Mode, Users
 from maps.logic.print_excel import saveMap, get_aup_data_excel
 from maps.logic.save_excel_data import save_excel_files

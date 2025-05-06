@@ -9,22 +9,13 @@ from grpc_service.dto.auth import UserData
 from auth.models import db, Users
 from grpc_service.permissions import permissions_pb2
 import werkzeug.exceptions as http_exceptions
-
-class AuthError(Exception):
-    """Базовое исключение для ошибок авторизации"""
-    def __init__(self, message: str, status_code: int = 401):
-        self.message = message
-        self.status_code = status_code
-
-class PermissionDeniedError(http_exceptions.Forbidden):
-    # мб возвращать json
-    """Ошибка доступа"""
-    def __init__(self):
-        super().__init__("Permission denied")
+from auth.permission_mapper import PermissionMapper
+from auth.exceptions import AuthError, PermissionDeniedError
 
 class AuthManager:
     def __init__(self):
         self.auth_service = AuthGRPCService()
+        self._permissions_checker = PermissionMapper()
 
     def _get_token_from_header(self) -> str:
         """Извлекает и валидирует токен из заголовка Authorization"""
@@ -65,12 +56,20 @@ class AuthManager:
                 if any([el not in payload.permissions for el in required_permissions]):
                     raise PermissionDeniedError()
 
+                # Нужно вставить сюда код доп логики пермишенов
+                self._permissions_checker.check_permissions(required_permissions, user, request)
+
+                # Либо обрабатывать тут ошибку. либо райзить сразу http ошибку
+
                 return user
 
         except grpc.RpcError as e:
             code = e.code()
             if code == grpc.StatusCode.UNAUTHENTICATED:
-                raise AuthError("Invalid token")
+                raise AuthError("Invalid token", 401) 
             raise AuthError(f"Auth service error: {code}", 500)
 
     # штука для валидации доп логики\
+    # 
+    
+    # отдельный класс который будет заниматься пермишинами 

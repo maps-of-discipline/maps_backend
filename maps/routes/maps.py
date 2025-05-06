@@ -711,9 +711,9 @@ from grpc_service.auth_logic import AuthManager, AuthError
 auth = AuthManager()
 
 
-@maps.route("/api/lox")
+@maps.route("/lox")
 def lox():
-    user = auth.require(['canLooooook'])
+    user = auth.require(["canLook"])
     return jsonify({
         "message": f"Hello, {user.email}!",
         "user": {
@@ -722,19 +722,27 @@ def lox():
             "email": user.email
         }
     })
+    
+# может редактировать только свои карты
+# проверяем пользователя что он с этого фак
+# проверяем что карта с этого факультета
+# 
 
+@maps.route("/zzz")
+def zzz():
+    user = auth.require(["canEditFaculty"])
+    return jsonify({"message": f"Вы, {user.login}, можете редактировать!"})
 
 @maps.route('/api/protect-data', methods=['GET'])
 def get_protected_data():
-    user = auth.get_current_user()
+    user = auth.require()
     
     return jsonify({
         "message": f"Добро пожаловать, {user.login}!",
         "user_details": {
-            "id": user.id_user,
+            "id": user.id,
             "email": user.email,
-            "faculties": user.faculties, 
-            "department": user.department.name if user.department else None
+            "faculties": user.faculties
         },
         "protected_content": "Это данные только для авторизованных пользователей"
     })
@@ -742,6 +750,6 @@ def get_protected_data():
 @maps.route('/api/my-permissions')
 def my_permissions():
     try:
-        return jsonify(auth.get_user_permissions())
+        return jsonify(auth.require())
     except AuthError as e:
         return jsonify({"error": e.message}), e.status_code

@@ -49,7 +49,7 @@ mail = Mail(app)
 app.json.sort_keys = False
 
 from maps.routes.maps import maps as maps_blueprint
-from auth.routes import auth as auth_blueprint
+# from auth.routes import auth as auth_blueprint
 from auth.new_routes import new_auth as new_auth_blueprint
 from administration.routes import admin as admin_blueprint
 from rups.routes import rups as rups_blueprint
@@ -57,7 +57,7 @@ from maps.routes.aup_info import aup_info_router as maps_aup_info_router
 
 # Register blueprints
 app.register_blueprint(maps_blueprint)
-app.register_blueprint(auth_blueprint)
+# app.register_blueprint(auth_blueprint)
 app.register_blueprint(new_auth_blueprint)
 app.register_blueprint(unification_blueprint)
 app.register_blueprint(admin_blueprint)
