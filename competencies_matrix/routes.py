@@ -11,9 +11,10 @@ from .logic import (
     get_educational_programs_list, get_program_details, 
     get_matrix_for_aup, update_matrix_link,
     create_competency, create_indicator,
-    parse_prof_standard_file
+    parse_prof_standard_file,
+    parse_fgos_file, save_fgos_data, get_fgos_list, get_fgos_details, delete_fgos
 )
-from auth.logic import login_required, approved_required
+from auth.logic import login_required, approved_required, admin_only
 import logging
 
 # Настройка логирования
@@ -160,6 +161,132 @@ def create_new_indicator():
         return jsonify({"error": "Не удалось создать индикатор"}), 400
     
     return jsonify(indicator.to_dict()), 201
+
+# --- Новая группа эндпоинтов для работы с ФГОС ВО ---
+@competencies_matrix_bp.route('/fgos', methods=['GET'])
+@login_required
+@approved_required
+# @admin_only # Возможно, просмотр доступен не только админам, но и методистам
+def get_all_fgos():
+    """Получение списка всех загруженных ФГОС ВО"""
+    fgos_list = get_fgos_list()
+    # Сериализуем результат в список словарей
+    # Используем to_dict из BaseModel
+    result = [f.to_dict() for f in fgos_list]
+    return jsonify(result)
+
+@competencies_matrix_bp.route('/fgos/<int:fgos_id>', methods=['GET'])
+@login_required
+@approved_required
+# @admin_only # Просмотр деталей тоже может быть шире
+def get_fgos_details_route(fgos_id):
+    """Получение детальной информации по ФГОС ВО"""
+    details = get_fgos_details(fgos_id)
+    if not details:
+        return jsonify({"error": "ФГОС ВО не найден"}), 404
+    return jsonify(details)
+
+@competencies_matrix_bp.route('/fgos/upload', methods=['POST'])
+@login_required
+@approved_required
+@admin_only # Загрузка и парсинг нового ФГОС - действие администратора
+def upload_fgos():
+    """
+    Загрузка PDF файла ФГОС ВО, парсинг и возврат данных для предпросмотра.
+    Не сохраняет данные в БД автоматически.
+    Принимает multipart/form-data с полем 'file'.
+    """
+    if 'file' not in request.files:
+        return jsonify({"error": "Файл не найден в запросе"}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "Файл не выбран"}), 400
+
+    # TODO: Добавить проверку расширения файла на .pdf
+    
+    try:
+        file_bytes = file.read()
+        parsed_data = parse_fgos_file(file_bytes, file.filename)
+
+        if not parsed_data:
+            return jsonify({"error": "Не удалось распарсить файл ФГОС или извлечь основные данные"}), 400
+
+        # TODO: Добавить в ответ информацию о существующем ФГОС, если найден (для сравнения на фронтенде)
+        # Можно вызвать get_fgos_details, если найден ФГОС с такими же ключевыми параметрами
+        
+        return jsonify(parsed_data), 200 # Возвращаем парсенные данные
+
+    except Exception as e:
+        logger.error(f"Error processing FGOS upload for {file.filename}: {e}", exc_info=True)
+        return jsonify({"error": f"Ошибка сервера при обработке файла: {e}"}), 500
+
+
+@competencies_matrix_bp.route('/fgos/save', methods=['POST'])
+@login_required
+@approved_required
+@admin_only # Сохранение ФГОС - действие администратора
+def save_fgos():
+    """
+    Сохранение структурированных данных ФГОС в БД после подтверждения пользователя.
+    Принимает JSON с парсенными данными и опциями.
+    """
+    data = request.get_json()
+    # Ожидаем JSON: {'parsed_data': {...}, 'filename': '...', 'options': {'force_update': true/false}}
+    
+    parsed_data = data.get('parsed_data')
+    filename = data.get('filename')
+    options = data.get('options', {})
+    
+    if not parsed_data or not filename:
+        return jsonify({"error": "Некорректные данные для сохранения"}), 400
+
+    try:
+        # Вызываем функцию сохранения данных
+        # Передаем сессию явно
+        saved_fgos = save_fgos_data(parsed_data, filename, db.session, force_update=options.get('force_update', False))
+
+        if saved_fgos is None:
+            # Если save_fgos_data вернула None, значит произошла ошибка БД или валидации внутри
+            # (логирование ошибки должно быть внутри save_fgos_data)
+            return jsonify({"error": "Ошибка при сохранении данных ФГОС в базу данных"}), 500
+            
+        # Если save_fgos_data вернула объект, который уже существовал и force_update=False,
+        # то это не ошибка, просто дубликат. Фронтенд должен был это обработать на шаге preview.
+        # Но API все равно должен вернуть информацию.
+        # Проверяем, был ли это новый объект или существующий
+        is_new = saved_fgos._sa_instance_state.key is None or saved_fgos._sa_instance_state.key.persistent is None
+
+        return jsonify({
+            "success": True,
+            "fgos_id": saved_fgos.id,
+            "message": "Данные ФГОС успешно сохранены." if is_new else "Данные ФГОС успешно обновлены."
+        }), 201 # 201 Created или 200 OK, 201 более уместен для создания/обновления
+
+
+    except Exception as e:
+        logger.error(f"Error saving FGOS data from file {filename}: {e}", exc_info=True)
+        # Если произошла ошибка, и она не была поймана внутри save_fgos_data с откатом, откатываем здесь
+        db.session.rollback()
+        return jsonify({"error": f"Неожиданная ошибка сервера при сохранении: {e}"}), 500
+
+@competencies_matrix_bp.route('/fgos/<int:fgos_id>', methods=['DELETE'])
+@login_required
+@approved_required
+@admin_only # Удаление ФГОС - действие администратора
+def delete_fgos_route(fgos_id):
+    """Удаление ФГОС ВО по ID"""
+    try:
+        deleted = delete_fgos(fgos_id, db.session)
+        if deleted:
+            return jsonify({"success": True, "message": "ФГОС успешно удален"}), 200
+        else:
+            return jsonify({"success": False, "error": "ФГОС не найден или не удалось удалить"}), 404
+
+    except Exception as e:
+        logger.error(f"Error deleting FGOS {fgos_id}: {e}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"success": False, "error": f"Неожиданная ошибка сервера при удалении: {e}"}), 500
 
 # Группа эндпоинтов для работы с профессиональными стандартами (ПС)
 @competencies_matrix_bp.route('/profstandards/upload', methods=['POST'])

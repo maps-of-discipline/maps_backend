@@ -21,10 +21,11 @@ from administration.routes import admin as admin_blueprint
 from competencies_matrix import competencies_matrix_bp
 from utils.handlers import handle_exception
 
-# --- Import CLI Commands ---
+# --- Импорты консольных команд ---
 from cli_commands.db_seed import seed_command
 from cli_commands.db_unseed import unseed_command
 from cli_commands.import_aup import import_aup_command
+from cli_commands.fgos_import import import_fgos_command
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -107,6 +108,7 @@ def list_routes():
 app.cli.add_command(seed_command)
 app.cli.add_command(unseed_command)
 app.cli.add_command(import_aup_command)
+app.cli.add_command(import_fgos_command)
 
 # Точка входа для запуска через `python app.py`
 if __name__ == '__main__':

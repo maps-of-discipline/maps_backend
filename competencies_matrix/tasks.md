@@ -54,7 +54,7 @@
 10. [x] API эндпоинт `POST /api/competencies/indicators` реализован и позволяет базово создавать Индикаторы.
 11. [x] Реализовано API (`POST /api/competencies/profstandards/upload`) и логика для **загрузки файла ПС**, вызова `profstandard-lean.py` (или аналога) и сохранения результата (Markdown) в `competencies_prof_standard.parsed_content`.
 12. [ ] Реализован **минимальный UI** (Frontend), позволяющий:
-    *   [ ] Загружать файлы АУП (.xlsx) (если решено делать UI для этого, сейчас через CLI). **(Необязательно для защиты)**
+    *   [ ] Загружать файлы АУП (.xlsx) через UI, а не просто через CLI (с flask import-aup).
     *   [x] Просматривать список ОП (`views/competencies/ProgramsView.vue`).
     *   [ ] Выбирать ОП и затем АУП (из импортированных). **(Частично в `MatrixView.vue`, но требует улучшения)**
     *   [x] Отображать таблицу матрицы ("Дисциплины x ИДК") с чекбоксами (`components/competencies/MatrixTable.vue`, `views/competencies/MatrixView.vue`).

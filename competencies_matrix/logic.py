@@ -5,6 +5,7 @@ from sqlalchemy.orm import joinedload, selectinload, Session
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import exists
 import traceback
+from .fgos_parser import parse_fgos_pdf
 
 from maps.models import db, AupData, SprDiscipline, AupInfo
 from .models import (
@@ -472,6 +473,365 @@ def create_indicator(data: Dict[str, Any]) -> Optional[Indicator]:
         print(f"Unexpected error creating indicator: {e}")
         return None
 
+# --- Функции для работы с ФГОС ---
+
+def parse_fgos_file(file_bytes: bytes, filename: str) -> Optional[Dict[str, Any]]:
+    """
+    Оркестрирует парсинг загруженного файла ФГОС ВО.
+
+    Args:
+        file_bytes: Содержимое PDF файла в байтах.
+        filename: Имя файла.
+
+    Returns:
+        Optional[Dict[str, Any]]: Структурированные данные ФГОС или None в случае ошибки парсинга.
+    """
+    try:
+        # TODO: Добавить проверку типа файла (только PDF?)
+        parsed_data = parse_fgos_pdf(file_bytes, filename)
+        
+        # Простая проверка, что извлечены хотя бы базовые метаданные
+        if not parsed_data or not parsed_data.get('metadata'):
+             print(f"parse_fgos_file: Parsing failed or returned no metadata for {filename}")
+             return None
+
+        # TODO: Добавить логику сравнения с существующим ФГОС в БД (если нужно для preview)
+        # На этом этапе возвращаем просто парсенные данные
+        return parsed_data
+        
+    except ValueError as e: # Ловим специфичные ошибки парсера
+        print(f"parse_fgos_file: Parser ValueError for {filename}: {e}")
+        return None
+    except Exception as e:
+        print(f"parse_fgos_file: Unexpected error parsing {filename}: {e}")
+        traceback.print_exc()
+        return None
+
+
+def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session, force_update: bool = False) -> Optional[FgosVo]:
+    """
+    Сохраняет структурированные данные ФГОС из парсера в БД.
+    Обрабатывает обновление существующих записей (FgosVo, Competency, Indicator).
+
+    Args:
+        parsed_data: Структурированные данные, полученные от parse_fgos_file.
+        filename: Имя исходного файла (для сохранения пути).
+        session: Сессия SQLAlchemy.
+        force_update: Если True, удаляет старый ФГОС и связанные сущности перед сохранением нового.
+                      Если False, пытается найти существующий ФГОС и либо обновить его, либо пропустить,
+                      либо вернуть ошибку (в зависимости от логики обновления).
+
+    Returns:
+        Optional[FgosVo]: Сохраненный (или обновленный) объект FgosVo или None в случае ошибки.
+    """
+    if not parsed_data or not parsed_data.get('metadata'):
+        print("save_fgos_data: No parsed data or metadata provided.")
+        return None
+
+    metadata = parsed_data['metadata']
+    fgos_number = metadata.get('order_number')
+    fgos_date = metadata.get('order_date') # Строка в формате DD.MM.YYYY
+    fgos_direction_code = metadata.get('direction_code')
+    fgos_education_level = metadata.get('education_level')
+    fgos_generation = metadata.get('generation')
+
+    if not fgos_number or not fgos_date or not fgos_direction_code or not fgos_education_level:
+        print("save_fgos_data: Missing core metadata for saving.")
+        return None
+
+    # Преобразуем дату из строки в объект Date
+    try:
+        fgos_date_obj = datetime.datetime.strptime(fgos_date, '%d.%m.%Y').date()
+    except (ValueError, TypeError):
+        print(f"save_fgos_data: Could not parse date '{fgos_date}'.")
+        return None
+
+    # --- 1. Ищем существующий ФГОС ---
+    # Считаем ФГОС уникальным по комбинации код направления + уровень + номер + дата
+    # Или только код направления + уровень + поколение? Поколение может быть "не определено".
+    # Давайте использовать код направления, уровень, номер и дату приказа как основной ключ.
+    existing_fgos = session.query(FgosVo).filter_by(
+        direction_code=fgos_direction_code,
+        education_level=fgos_education_level,
+        number=fgos_number,
+        date=fgos_date_obj # Сравниваем с объектом Date
+    ).first()
+
+    if existing_fgos:
+        if force_update:
+            print(f"save_fgos_data: Existing FGOS found ({existing_fgos.id}). Force update requested. Deleting old...")
+            # Удаляем старый ФГОС и все связанные сущности (благодаря CASCADE DELETE)
+            try:
+                session.delete(existing_fgos)
+                session.commit() # Коммит удаления
+                print(f"save_fgos_data: Old FGOS ({existing_fgos.id}) and its dependencies deleted.")
+            except SQLAlchemyError as e:
+                session.rollback()
+                print(f"save_fgos_data: Database error deleting old FGOS {existing_fgos.id}: {e}")
+                return None
+        else:
+            # Если не force_update и ФГОС существует, мы его не перезаписываем
+            print(f"save_fgos_data: FGOS with same code, level, number, date already exists ({existing_fgos.id}). Force update NOT requested. Skipping save.")
+            # Можно вернуть существующий объект или None, в зависимости от требуемого поведения API POST /fgos/save
+            # Если API должен вернуть ошибку 409 Conflict, то нужно выбросить исключение здесь.
+            # Для простоты MVP вернем существующий объект и фронтенд решит, что с этим делать.
+            return existing_fgos # Возвращаем существующий ФГОС
+
+
+    # --- 2. Создаем или обновляем FgosVo ---
+    try:
+        # Создаем новый объект FgosVo
+        fgos_vo = FgosVo(
+            number=fgos_number,
+            date=fgos_date_obj,
+            direction_code=fgos_direction_code,
+            direction_name=metadata.get('direction_name', 'Не указано'),
+            education_level=fgos_education_level,
+            generation=fgos_generation,
+            file_path=filename # Сохраняем имя файла
+            # TODO: Добавить другие поля метаданных, если извлекаются парсером
+        )
+        session.add(fgos_vo)
+        session.commit() # Коммитим FgosVo, чтобы получить ID
+        print(f"save_fgos_data: FGOS {fgos_vo.direction_code} ({fgos_vo.generation}) created with id {fgos_vo.id}.")
+
+    except SQLAlchemyError as e:
+        session.rollback()
+        print(f"save_fgos_data: Database error creating FgosVo: {e}")
+        return None
+
+    # --- 3. Сохраняем Компетенции и Индикаторы ---
+    # Получаем типы компетенций (УК, ОПК) из БД
+    comp_types = {ct.code: ct for ct in session.query(CompetencyType).filter(CompetencyType.code.in_(['УК', 'ОПК'])).all()}
+
+    try:
+        saved_competencies = []
+        # Объединяем УК и ОПК для итерации
+        all_parsed_competencies = parsed_data.get('uk_competencies', []) + parsed_data.get('opk_competencies', [])
+
+        for parsed_comp in all_parsed_competencies:
+            comp_code = parsed_comp.get('code')
+            comp_name = parsed_comp.get('name')
+            parsed_indicators = parsed_comp.get('indicators', [])
+
+            if not comp_code or not comp_name:
+                print(f"save_fgos_data: Skipping competency due to missing code/name: {parsed_comp}")
+                continue
+
+            comp_prefix = comp_code.split('-')[0]
+            comp_type = comp_types.get(comp_prefix)
+
+            if not comp_type:
+                print(f"save_fgos_data: Skipping competency {comp_code}: Competency type {comp_prefix} not found in DB.")
+                continue
+
+            # Создаем компетенцию
+            competency = Competency(
+                competency_type_id=comp_type.id,
+                fgos_vo_id=fgos_vo.id, # Связываем с новым ФГОС
+                code=comp_code,
+                name=comp_name,
+                # description=... # Если есть описание в парсенных данных
+            )
+            session.add(competency)
+            # db.session.flush() # Получим ID компетенции перед сохранением индикаторов
+
+            # Создаем индикаторы для этой компетенции
+            for parsed_ind in parsed_indicators:
+                ind_code = parsed_ind.get('code')
+                ind_formulation = parsed_ind.get('formulation')
+
+                if not ind_code or not ind_formulation:
+                    print(f"save_fgos_data: Skipping indicator due to missing code/formulation: {parsed_ind}")
+                    continue
+
+                indicator = Indicator(
+                    # competency_id будет установлен SQLAlchemy после flush/commit
+                    competency=competency, # Связываем с родителем
+                    code=ind_code,
+                    formulation=ind_formulation,
+                    source=f"ФГОС {fgos_vo.direction_code} ({fgos_vo.generation})" # Указываем источник
+                )
+                session.add(indicator)
+            
+            saved_competencies.append(competency)
+
+        session.commit() # Коммитим компетенции и индикаторы
+        print(f"save_fgos_data: Saved {len(saved_competencies)} competencies and their indicators for FGOS {fgos_vo.id}.")
+
+    except SQLAlchemyError as e:
+        session.rollback()
+        print(f"save_fgos_data: Database error saving competencies/indicators: {e}")
+        return None # Вернем None, чтобы указать на ошибку
+
+    # --- 4. Сохраняем рекомендованные ПС ---
+    try:
+        recommended_ps_codes = parsed_data.get('recommended_ps_codes', [])
+        print(f"save_fgos_data: Found {len(recommended_ps_codes)} recommended PS codes.")
+        
+        # Ищем существующие Профстандарты по кодам
+        existing_prof_standards = session.query(ProfStandard).filter(ProfStandard.code.in_(recommended_ps_codes)).all()
+        ps_by_code = {ps.code: ps for ps in existing_prof_standards}
+
+        for ps_code in recommended_ps_codes:
+            prof_standard = ps_by_code.get(ps_code)
+            if prof_standard:
+                # Создаем связь FgosRecommendedPs
+                link = FgosRecommendedPs(
+                    fgos_vo_id=fgos_vo.id,
+                    prof_standard_id=prof_standard.id,
+                    is_mandatory=False # По умолчанию считаем рекомендованным, не обязательным
+                    # description = ... # Если парсер найдет доп. описание связи
+                )
+                session.add(link)
+            else:
+                print(f"save_fgos_data: Recommended PS with code {ps_code} not found in DB. Skipping link creation.")
+
+        session.commit() # Коммитим связи ПС
+        print(f"save_fgos_data: Linked {len(recommended_ps_codes)} recommended PS (if found in DB).")
+
+    except SQLAlchemyError as e:
+        session.rollback()
+        print(f"save_fgos_data: Database error saving recommended PS links: {e}")
+        return None # Вернем None, чтобы указать на ошибку
+
+
+    # Если дошли сюда, все сохранено успешно
+    return fgos_vo
+
+
+def get_fgos_list() -> List[FgosVo]:
+    """
+    Получает список всех сохраненных ФГОС ВО.
+
+    Returns:
+        List[FgosVo]: Список объектов FgosVo.
+    """
+    try:
+        # Просто возвращаем все ФГОС, можно добавить сортировку/фильтры позже
+        fgos_list = db.session.query(FgosVo).order_by(FgosVo.direction_code, FgosVo.date.desc()).all()
+        return fgos_list
+    except SQLAlchemyError as e:
+        print(f"Database error in get_fgos_list: {e}")
+        return []
+
+
+def get_fgos_details(fgos_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Получает детальную информацию по ФГОС ВО, включая связанные компетенции, индикаторы,
+    и рекомендованные профстандарты.
+
+    Args:
+        fgos_id: ID ФГОС ВО.
+
+    Returns:
+        Optional[Dict[str, Any]]: Словарь с данными ФГОС или None, если не найден.
+    """
+    try:
+        fgos = db.session.query(FgosVo).options(
+            # Загружаем связанные сущности
+            selectinload(FgosVo.competencies).selectinload(Competency.indicators),
+            selectinload(FgosVo.recommended_ps_assoc).selectinload(FgosRecommendedPs.prof_standard)
+        ).get(fgos_id)
+
+        if not fgos:
+            return None
+
+        # Сериализуем основной объект ФГОС
+        details = fgos.to_dict()
+
+        # Сериализуем компетенции и индикаторы (фильтруем только те, что связаны с этим ФГОС)
+        # Хотя relationship FgosVo.competencies уже должен был отфильтровать по FK,
+        # явная проверка делает логику понятнее.
+        uk_competencies_data = []
+        opk_competencies_data = []
+
+        # Сортируем компетенции и индикаторы для консистентности
+        sorted_competencies = sorted(fgos.competencies, key=lambda c: c.code)
+
+        for comp in sorted_competencies:
+            # Убеждаемся, что компетенция относится к этому ФГОС и является УК/ОПК
+            if comp.fgos_vo_id == fgos_id:
+                 comp_dict = comp.to_dict(rules=['-fgos', '-based_on_labor_function']) # Избегаем циклических ссылок и лишних данных
+                 comp_dict['indicators'] = []
+                 if comp.indicators:
+                      sorted_indicators = sorted(comp.indicators, key=lambda i: i.code)
+                      comp_dict['indicators'] = [ind.to_dict() for ind in sorted_indicators]
+
+                 if comp.competency_type and comp.competency_type.code == 'УК':
+                      uk_competencies_data.append(comp_dict)
+                 elif comp.competency_type and comp.competency_type.code == 'ОПК':
+                      opk_competencies_data.append(comp_dict)
+                 # ПК не должны быть напрямую связаны через fgos_vo_id, но могут быть в списке competencies
+                 # Если ПК случайно сюда попали, они не будут добавлены в uk_comp или opk_comp списки
+
+        details['uk_competencies'] = uk_competencies_data
+        details['opk_competencies'] = opk_competencies_data
+
+
+        # Сериализуем рекомендованные профстандарты
+        recommended_ps_list = []
+        if fgos.recommended_ps_assoc:
+            for assoc in fgos.recommended_ps_assoc:
+                if assoc.prof_standard:
+                    recommended_ps_list.append({
+                        'id': assoc.prof_standard.id,
+                        'code': assoc.prof_standard.code,
+                        'name': assoc.prof_standard.name,
+                        'is_mandatory': assoc.is_mandatory,
+                        'description': assoc.description,
+                    })
+        details['recommended_ps_list'] = recommended_ps_list
+
+        return details
+
+    except SQLAlchemyError as e:
+        print(f"Database error in get_fgos_details for fgos_id {fgos_id}: {e}")
+        # Нет необходимости в rollback для GET запросов
+        return None
+    except Exception as e:
+        print(f"Unexpected error in get_fgos_details for fgos_id {fgos_id}: {e}")
+        traceback.print_exc()
+        return None
+
+
+def delete_fgos(fgos_id: int, session: Session) -> bool:
+    """
+    Удаляет ФГОС ВО и все связанные сущности (Компетенции, Индикаторы, связи с ПС).
+    Предполагается, что отношения в моделях настроены на CASCADE DELETE.
+
+    Args:
+        fgos_id: ID ФГОС ВО для удаления.
+        session: Сессия SQLAlchemy.
+
+    Returns:
+        bool: True, если удаление выполнено успешно, False в противном случае.
+    """
+    try:
+        fgos_to_delete = session.query(FgosVo).get(fgos_id)
+        if not fgos_to_delete:
+            print(f"delete_fgos: FGOS with id {fgos_id} not found.")
+            return False
+
+        # SQLAlchemy с CASCADE DELETE должен удалить:
+        # - Competency, связанные с этим FgosVo
+        # - Indicator, связанные с этими Competency (через CASCADE на Competency)
+        # - FgosRecommendedPs, связанные с этим FgosVo
+
+        session.delete(fgos_to_delete)
+        session.commit()
+        print(f"delete_fgos: FGOS with id {fgos_id} deleted successfully (cascading enabled).")
+        return True
+
+    except SQLAlchemyError as e:
+        session.rollback()
+        print(f"delete_fgos: Database error deleting FGOS {fgos_id}: {e}")
+        return False
+    except Exception as e:
+        session.rollback()
+        print(f"delete_fgos: Unexpected error deleting FGOS {fgos_id}: {e}")
+        traceback.print_exc()
+        return False
 
 def parse_prof_standard_file(file_bytes: bytes, filename: str) -> Optional[Dict[str, Any]]:
     """
