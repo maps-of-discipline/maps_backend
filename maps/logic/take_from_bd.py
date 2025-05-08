@@ -90,23 +90,30 @@ def create_json(aup: str) -> dict | None:
         if data_element["is_skip"]:
             continue
 
+        control_types = [
+            "Зачет",
+            "Экзамен",
+            "Дифференцированный зачет",
+            "Курсовой проект",
+            "Курсовая работа",
+        ]
+
         for load in loads:
+            load_type = "load"
+
+            if load.type_control.title in control_types:
+                print(load.type_control.title)
+                load_type = "control"
+
             load = {
                 "amount": load.amount / 100,
                 "amount_type": "hour" if load.ed_izmereniya.id == 1 else "week",
                 "id": load.id,
                 "control_type_id": load.id_type_control,
-                "type": "control"
-                if load.type_control.title
-                in [
-                    "Зачет",
-                    "Экзамен",
-                    "Дифференцированный зачет",
-                ]
-                else "load",
+                "type": load_type,
             }
 
-            if load["type"] == "control":
+            if load["type"] in ["control", "course"]:
                 data_element["type"]["session"].append(load)
             else:
                 data_element["type"]["value"].append(load)
@@ -255,4 +262,3 @@ def get_user_shortcuts(user_id: int):
             shortcuts[control_type_id] = shortname
 
     return shortcuts
-
