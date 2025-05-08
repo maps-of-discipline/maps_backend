@@ -1,716 +1,218 @@
-Отлично, следуя вашему плану и детализированным размышлениям, давайте сфокусируемся на реализации парсера ФГОС ВО (3++) из PDF и связанных с ним функций на бэкенде и фронтенде.
+Окей, давайте разберем эти ошибки и внесем необходимые изменения в код, чтобы исправить их и улучшить процесс.
 
----
-**План действий:**
+**1. Анализ Ошибок:**
 
-1.  **Бэкенд: Реализация Парсера ФГОС ВО из PDF.**
-    *   Выбор библиотеки для парсинга PDF (например, `pdfminer.six` или `pdfplumber`). Начнем с более простой, текстовой (`pdfminer.six`), чтобы минимизировать зависимости и сфокусироваться на извлечении текста и регулярных выражениях.
-    *   Создание нового файла `fgos_parser.py`.
-    *   Написание логики для извлечения:
-        *   Метаданных ФГОС (номер, дата приказа, направление, уровень, поколение) из начальных разделов.
-        *   Таблиц с УК/ОПК и ИУК/ИОПК.
-        *   Списка рекомендованных ПС.
-    *   Форматирование извлеченных данных в структурированный словарь.
-2.  **Бэкенд: Дополнение `competencies_matrix/logic.py`.**
-    *   Добавление функции `parse_fgos_file` для оркестрации вызова парсера.
-    *   Добавление функции `save_fgos_data` для сохранения структурированных данных из парсера в БД (`FgosVo`, `CompetencyType` lookup, `Competency`, `Indicator`, `FgosRecommendedPs`). Эта функция должна уметь обрабатывать существующие записи (обновлять или создавать новые).
-    *   Добавление функций `get_fgos_list` и `get_fgos_details`.
-    *   Добавление функции `delete_fgos`.
-3.  **Бэкенд: Дополнение `competencies_matrix/routes.py`.**
-    *   Добавление эндпоинта `POST /fgos/upload` для загрузки файла ФГОС и вызова `parse_fgos_file` (возвращает данные без сохранения).
-    *   Добавление эндпоинта `POST /fgos/save` для приема структурированных данных (после подтверждения в UI) и вызова `save_fgos_data`.
-    *   Добавление эндпоинтов `GET /fgos` и `GET /fgos/<int:fgos_id>`.
-    *   Добавление эндпоинта `DELETE /fgos/<int:fgos_id>` (для CLI-тестирования и админки).
-    *   Применение соответствующих декораторов (`@login_required`, `@approved_required`, возможно `@admin_only`).
-4.  **Бэкенд: Дополнение `cli_commands/fgos_import.py`.** (Новый файл)
-    *   Создание Flask CLI команды `flask import-fgos <filepath>`.
-    *   Реализация логики команды: чтение файла, вызов `parse_fgos_file`, затем вызов `save_fgos_data` (в рамках транзакции).
-    *   Добавление флагов `--force` (удалить старый перед сохранением нового) и `--delete-only` (только удалить, если существует).
-    *   Включение обработки ошибок и логирования.
-5.  **Frontend: Дополнение Store и API Service.**
-    *   В `competenciesMatrix.ts`: добавить состояние для списка ФГОС, выбранного ФГОС для просмотра деталей, загрузки, ошибки. Добавить экшены `fetchFgosList`, `fetchFgosDetails`, `uploadFgosFile` (вызывает API upload, получает парсенные данные), `saveFgosData` (вызывает API save), `deleteFgos`.
-    *   В `CompetenciesApi.ts`: добавить методы для новых API эндпоинтов.
-6.  **Frontend: Реализация UI для Управления ФГОС.**
-    *   Создание нового компонента `FgosView.vue` (или переименование `ProgramsView.vue` с добавлением вкладок). В вашем макете уже есть `views/competencies/CompetenciesView.vue` с вкладками - добавим функционал туда или создадим новую страницу. Используем `FgosView.vue` как страницу списка и загрузки.
-    *   Создание компонента `FgosPreviewModal.vue` для отображения парсенных данных, их сравнения с существующими (если есть) и подтверждения сохранения.
-    *   Реализация списка ФГОС (используя `DataTable` как в `ProgramsView`).
-    *   Кнопка "Загрузить ФГОС", открывающая окно выбора файла.
-    *   После выбора файла - вызов `uploadFgosFile` из стора.
-    *   При получении парсенных данных - открытие `FgosPreviewModal.vue`.
-    *   В модальном окне: отображение данных, логика сравнения (если ФГОС с таким направлением, уровнем, поколением уже есть в БД). Кнопки "Сохранить" (вызывает `saveFgosData`) и "Отменить".
-    *   Кнопка "Детали" в списке ФГОС, открывающая модальное окно (возможно, тот же `FgosPreviewModal.vue` в режиме просмотра, или отдельное) с полной информацией из БД (`get_fgos_details`).
+*   **Ошибка `NameError: name 'db' is not defined`:** Это классическая ошибка, когда вы пытаетесь использовать объект `db` (инстанс SQLAlchemy) в файле, где он не был импортирован. Из traceback видно, что это происходит в `competencies_matrix/routes.py` и в `except` блоке этого же файла.
+*   **Ошибка парсинга даты в CLI (`save_fgos_data: Failed to parse date '2020-08-07' into a Date object`):** Лог `save_fgos_data: Could not parse date '2020-08-07' in standard format. Attempting other formats.` показывает, что функция `save_fgos_data` пытается повторно парсить дату, которую `fgos_parser.py` уже успешно распарсил в объект `datetime.date` и положил в `parsed_data['metadata']['order_date']`. Проблема в том, что `save_fgos_data` сейчас не использует этот объект напрямую, а пытается снова парсить строку, которая уже не в том формате, который она ожидает для повторного парсинга ('DD.MM.YYYY').
+
+**2. План Действий:**
+
+1.  **Исправить `NameError` в `routes.py`:** Добавить импорт `db` в начало `routes.py`.
+2.  **Исправить парсинг даты в `save_fgos_data`:** Изменить логику в `save_fgos_data`, чтобы она правильно использовала *уже распарсенный* объект `datetime.date` из `parsed_data`, а если получает строку (как из JSON от фронтенда), то парсила ее в стандартном ISO-формате ('YYYY-MM-DD').
+3.  **Улучшить `seed_db`:** Добавить в сидер тестовые данные для ФГОС, УК, ОПК, ИУК, ИОПК, ПС (с базовой структурой ОТФ/ТФ) и связей между ними, чтобы эти справочники были наполнены для тестирования.
+4.  **Обновить `tasks.md`:** Отметить выполненные задачи и уточнить описание оставшихся.
+
+**3. Внедрение Изменений в Код:**
 
 ---
 
-Начнем с бэкенда.
-
-**1. Бэкенд: Реализация Парсера ФГОС ВО из PDF (`fgos_parser.py`)**
-
-Для парсинга PDF текста будем использовать `pdfminer.six`. Установите ее: `pip install pdfminer.six`.
-
 ```python
-# competencies_matrix/fgos_parser.py
-import io
-import re
-from typing import Dict, List, Any, Optional
-from pdfminer.high_level import extract_text
-
-def parse_fgos_pdf(file_bytes: bytes, filename: str) -> Dict[str, Any]:
-    """
-    Парсит содержимое PDF файла ФГОС ВО (для формата 3++)
-    и извлекает структурированные данные.
-
-    Args:
-        file_bytes: Содержимое PDF файла в байтах.
-        filename: Имя файла (для логирования/инфо).
-
-    Returns:
-        Dict[str, Any]: Словарь с извлеченными данными или raise ValueError/Exception.
-                        Структура: {
-                            'metadata': { ... },
-                            'uk_competencies': [{ 'code': 'УК-N', 'name': '...', 'indicators': [{'code': 'ИУК-N.M', 'formulation': '...'}] }],
-                            'opk_competencies': [{ 'code': 'ОПК-N', 'name': '...', 'indicators': [{'code': 'ИОПК-N.M', 'formulation': '...'}] }],
-                            'recommended_ps_codes': ['06.001', '06.015', ...],
-                            'raw_text': '...' # Полный извлеченный текст
-                        }
-    """
-    try:
-        # Извлекаем весь текст из PDF
-        text = extract_text(io.BytesIO(file_bytes))
-        # Удаляем переносы строк в середине слов, дефисы
-        text = re.sub(r'(\w+)-\n(\w+)', r'\1\2', text)
-        text = text.replace('-\n', '') # Удаляем висячие дефисы
-        text = re.sub(r'\n{2,}', '\n\n', text) # Схлопываем множественные переносы строк
-        
-        parsed_data: Dict[str, Any] = {
-            'metadata': {},
-            'uk_competencies': [],
-            'opk_competencies': [],
-            'recommended_ps_codes': [],
-            'raw_text': text # Сохраняем полный текст для отладки
-        }
-
-        # --- 1. Извлечение метаданных ---
-        # Ищем "Федеральный государственный образовательный стандарт высшего образования..."
-        metadata_section_match = re.search(
-            r'Федеральный государственный образовательный стандарт высшего образования'
-            r'.*?'
-            r'(УТВЕРЖДЕН\s+приказом.*?\s+от\s+(\d{2}\.\d{2}\.\d{4})\s+№\s+(\d+))'
-            r'.*?'
-            r'(по\s+направлению\s+подготовки\s+(\d{2}\.\d{2}\.\d{2})\s+(.*?))'
-            r'.*?'
-            r'(уровень\s+(бакалавриата|магистратуры|специалитета))',
-            text,
-            re.DOTALL | re.IGNORECASE
-        )
-
-        if metadata_section_match:
-            parsed_data['metadata']['order_info'] = metadata_section_match.group(1).strip()
-            parsed_data['metadata']['order_date'] = metadata_section_match.group(2)
-            parsed_data['metadata']['order_number'] = metadata_section_match.group(3)
-            parsed_data['metadata']['direction_code'] = metadata_section_match.group(5)
-            parsed_data['metadata']['direction_name'] = metadata_section_match_text = metadata_section_match.group(6).strip()
-            parsed_data['metadata']['education_level'] = metadata_section_match.group(8).strip()
-            
-            # Попытка определить поколение (не всегда явно указано в тексте)
-            # Это требует эвристики или знания структуры документа
-            # В 3++ обычно есть упоминание в преамбуле или названии
-            if re.search(r'ФГОС ВО 3\+\+', filename, re.IGNORECASE) or re.search(r'ФГОС ВО поколения 3\+\+', text, re.IGNORECASE):
-                 parsed_data['metadata']['generation'] = '3++'
-            elif re.search(r'ФГОС ВО 3\+', filename, re.IGNORECASE) or re.search(r'ФГОС ВО поколения 3\+', text, re.IGNORECASE):
-                 parsed_data['metadata']['generation'] = '3+'
-            else:
-                 parsed_data['metadata']['generation'] = 'не определено' # Требует ручной верификации
-
-        # --- 2. Извлечение компетенций и индикаторов ---
-        # Ищем раздел "III. Требования к результатам освоения..."
-        # А затем подразделы с таблицами компетенций (УК, ОПК)
-        competencies_section_match = re.search(
-            r'III\.\s+Требования\s+к\s+результатам\s+освоения\s+программы.*?$(.*?)' # Содержание раздела III
-            r'(^IV\.\s+Требования\s+к\s+условиям\s+реализации\s+программы|\Z)', # До следующего раздела или конца файла
-            text, re.DOTALL | re.MULTILINE
-        )
-
-        if competencies_section_match:
-            comp_section_text = competencies_section_match.group(1)
-
-            # Ищем блок УК
-            uk_block_match = re.search(
-                r'Универсальные\s+компетенции.*?$(.*?)' # Содержание блока УК
-                r'(Общепрофессиональные\s+компетенции|Профессиональные\s+компетенции|\Z)', # До следующего блока или конца раздела
-                comp_section_text, re.DOTALL | re.MULTILINE
-            )
-
-            if uk_block_match:
-                uk_text = uk_block_match.group(1)
-                parsed_data['uk_competencies'] = parse_competency_block(uk_text, 'УК')
-
-            # Ищем блок ОПК
-            opk_block_match = re.search(
-                r'Общепрофессиональные\s+компетенции.*?$(.*?)' # Содержание блока ОПК
-                r'(Профессиональные\s+компетенции|\Z)', # До следующего блока или конца раздела
-                comp_section_text, re.DOTALL | re.MULTILINE
-            )
-             # Если нет отдельного блока ОПК, но есть в общем списке, его может найти парсер parse_competency_block
-            if opk_block_match:
-                opk_text = opk_block_match.group(1)
-                parsed_data['opk_competencies'] = parse_competency_block(opk_text, 'ОПК')
-
-
-            # Если УК и ОПК не были найдены в отдельных блоках (например, они идут сплошным списком)
-            # Можно попробовать пропарсить весь раздел III как единый список, а затем разделить
-            if not parsed_data['uk_competencies'] and not parsed_data['opk_competencies']:
-                 print("Warning: УК/ОПК blocks not found. Attempting to parse entire section III as combined list.")
-                 all_comp_list = parse_competency_block(comp_section_text, 'УК|ОПК') # Ищем и УК, и ОПК
-                 # Разделяем по типу
-                 parsed_data['uk_competencies'] = [c for c in all_comp_list if c.get('code', '').startswith('УК')]
-                 parsed_data['opk_competencies'] = [c for c in all_comp_list if c.get('code', '').startswith('ОПК')]
-
-
-        # --- 3. Извлечение списка рекомендованных ПС ---
-        # Часто находится в приложении или в конце документа
-        ps_section_match = re.search(
-            r'(Приложение.*?^Перечень\s+профессиональных\s+стандартов.*?$|\Z)' # Начало раздела/приложения
-            r'(.*?)' # Содержимое
-            r'(\Z|^)', # Конец файла или другой явный маркер (трудно найти универсальный)
-            text, re.DOTALL | re.MULTILINE
-        )
-
-        if ps_section_match:
-             ps_section_text = ps_section_match.group(2)
-
-             # Ищем коды ПС в формате XX.XXX (например, 06.001)
-             ps_codes = re.findall(r'\b(\d{2}\.\d{3})\b', ps_section_text)
-             parsed_data['recommended_ps_codes'] = list(set(ps_codes)) # Убираем дубликаты
-
-        return parsed_data
-
-    except Exception as e:
-        print(f"Error parsing FGOS PDF file {filename}: {e}")
-        # traceback.print_exc() # Для отладки
-        raise ValueError(f"Ошибка при парсинге файла ФГОС: {e}")
-
-
-def parse_competency_block(text: str, comp_type_prefix: str) -> List[Dict[str, Any]]:
-    """
-    Парсит текст, содержащий список компетенций и индикаторов,
-    используя регулярные выражения.
-
-    Args:
-        text: Текст для парсинга.
-        comp_type_prefix: Префикс типа компетенции ('УК', 'ОПК', 'ПК' или 'УК|ОПК').
-
-    Returns:
-        List[Dict[str, Any]]: Список словарей компетенций с их индикаторами.
-                               Структура: [{ 'code': '...', 'name': '...', 'indicators': [{'code': '...', 'formulation': '...'}] }]
-    """
-    competencies: List[Dict[str, Any]] = []
-
-    # Паттерн для поиска компетенции: начало строки, префикс, номер, точка, пробел, формулировка
-    # Учитываем возможное наличие индикаторов после формулировки (текст до следующей компетенции или конца блока)
-    comp_pattern = re.compile(
-        rf'^\s*({comp_type_prefix})-\s*(\d+)\.\s*(.*?)$' # Группа 1: Префикс, Группа 2: Номер, Группа 3: Формулировка компетенции (до конца строки)
-        r'(.*?)' # Группа 4: Текст после формулировки компетенции (предполагаем, что это индикаторы)
-        rf'(?=\s*({comp_type_prefix})-\s*\d+\.\s*|\Z)', # Positive lookahead: до начала следующей компетенции или конца текста
-        re.DOTALL | re.MULTILINE
-    )
-
-    matches = comp_pattern.finditer(text)
-
-    for match in matches:
-        comp_code = f"{match.group(1)}-{match.group(2)}"
-        comp_name = match.group(3).strip()
-        indicators_text = match.group(4).strip()
-
-        # Парсим индикаторы внутри блока индикаторов
-        indicators: List[Dict[str, Any]] = []
-        # Паттерн для индикатора: начало строки, код ИДК (Префикс-НомерКомпетенции.НомерИндикатора), точка, пробел, формулировка
-        # Учитываем, что формулировка индикатора может быть многострочной (re.DOTALL)
-        ind_pattern = re.compile(
-            rf'^\s*({comp_code})\.\s*(\d+)\.\s*(.*?)$', # Группа 1: Код компетенции, Группа 2: Номер индикатора, Группа 3: Формулировка
-            re.DOTALL | re.MULTILINE
-        )
-
-        ind_matches = ind_pattern.finditer(indicators_text)
-
-        for ind_match in ind_matches:
-            ind_code = f"{ind_match.group(1)}.{ind_match.group(2)}"
-            ind_formulation = ind_match.group(3).strip()
-            indicators.append({
-                'code': ind_code,
-                'formulation': ind_formulation
-            })
-        
-        # Если индикаторы не были найдены в стандартном формате "Компетенция.Номер.",
-        # но текст индикаторов существует, возможно, они просто идут списком.
-        # Это более сложный кейс, требующий дополнительных эвристик, пока оставим как есть.
-        # Если индикаторов не нашлось, но индикаторный текст не пустой, можно его добавить как один индикатор
-        # if not indicators and indicators_text:
-        #      indicators.append({'code': f'{comp_code}.?', 'formulation': indicators_text})
-
-
-        competencies.append({
-            'code': comp_code,
-            'name': comp_name,
-            'indicators': indicators
-        })
-
-    return competencies
-
-if __name__ == '__main__':
-    # Пример использования из командной строки для тестирования
-    # Замените на путь к реальному файлу ФГОС
-    test_file_path = 'path/to/your/fgos_09_03_01_bak_3++.pdf' # <-- CHANGE THIS
-
-    if not os.path.exists(test_file_path):
-        print(f"Тестовый файл не найден: {test_file_path}")
-    else:
-        print(f"Парсинг тестового файла: {test_file_path}")
-        try:
-            with open(test_file_path, 'rb') as f:
-                file_content = f.read()
-            
-            parsed_data = parse_fgos_pdf(file_content, os.path.basename(test_file_path))
-            
-            print("\n--- Результат парсинга ---")
-            print("Метаданные:", parsed_data.get('metadata'))
-            print("\nУК Компетенции:", len(parsed_data.get('uk_competencies', [])))
-            for comp in parsed_data.get('uk_competencies', []):
-                print(f"  - {comp['code']}: {comp['name'][:50]}...")
-                for ind in comp.get('indicators', []):
-                    print(f"    - {ind['code']}: {ind['formulation'][:50]}...")
-
-            print("\nОПК Компетенции:", len(parsed_data.get('opk_competencies', [])))
-            for comp in parsed_data.get('opk_competencies', []):
-                print(f"  - {comp['code']}: {comp['name'][:50]}...")
-                for ind in comp.get('indicators', []):
-                    print(f"    - {ind['code']}: {ind['formulation'][:50]}...")
-
-            print("\nРекомендованные ПС:", parsed_data.get('recommended_ps_codes'))
-            # print("\nСырой текст (превью):", parsed_data.get('raw_text', '')[:1000], "...")
-
-        except Exception as e:
-            print(f"\nОшибка при выполнении парсера: {e}")
-
-```
-
-**Пояснения к парсеру (`fgos_parser.py`):**
-
-*   Использует `pdfminer.six` для извлечения всего текста из PDF.
-*   Применяет базовые регулярные выражения для поиска ключевых разделов и элементов: метаданных в начале документа, раздела III с компетенциями, списка рекомендованных ПС.
-*   Функция `parse_competency_block` специально разработана для поиска компетенций (по стандартному паттерну `ТИП-N. Формулировка`) и их индикаторов (по паттерну `ТИП-N.M. Формулировка`) внутри текстовых блоков.
-*   Парсер **не идеален** и может некорректно работать с PDF, имеющими нестандартную структуру или сложное форматирование (таблицы, многоколоночный текст, картинки, разбивающие текст). Это **ограничение текущей реализации** и возможная точка для будущих улучшений (использовать `pdfplumber` для таблиц, например).
-*   Возвращает структурированный словарь с извлеченными данными и полный сырой текст для отладки. В случае критической ошибки парсинга может выбросить `ValueError`.
-
-**2. Бэкенд: Дополнение `competencies_matrix/logic.py`**
-
-Добавим необходимые функции для работы с ФГОС в базу данных.
-
-```python
-# competencies_matrix/logic.py
-
-# ... (существующие импорты) ...
-from .fgos_parser import parse_fgos_pdf # Импортируем наш парсер
-
-# --- Функции для работы с ФГОС ---
-
-def parse_fgos_file(file_bytes: bytes, filename: str) -> Optional[Dict[str, Any]]:
-    """
-    Оркестрирует парсинг загруженного файла ФГОС ВО.
-
-    Args:
-        file_bytes: Содержимое PDF файла в байтах.
-        filename: Имя файла.
-
-    Returns:
-        Optional[Dict[str, Any]]: Структурированные данные ФГОС или None в случае ошибки парсинга.
-    """
-    try:
-        # TODO: Добавить проверку типа файла (только PDF?)
-        parsed_data = parse_fgos_pdf(file_bytes, filename)
-        
-        # Простая проверка, что извлечены хотя бы базовые метаданные
-        if not parsed_data or not parsed_data.get('metadata'):
-             print(f"parse_fgos_file: Parsing failed or returned no metadata for {filename}")
-             return None
-
-        # TODO: Добавить логику сравнения с существующим ФГОС в БД (если нужно для preview)
-        # На этом этапе возвращаем просто парсенные данные
-        return parsed_data
-        
-    except ValueError as e: # Ловим специфичные ошибки парсера
-        print(f"parse_fgos_file: Parser ValueError for {filename}: {e}")
-        return None
-    except Exception as e:
-        print(f"parse_fgos_file: Unexpected error parsing {filename}: {e}")
-        traceback.print_exc()
-        return None
-
-
-def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session, force_update: bool = False) -> Optional[FgosVo]:
-    """
-    Сохраняет структурированные данные ФГОС из парсера в БД.
-    Обрабатывает обновление существующих записей (FgosVo, Competency, Indicator).
-
-    Args:
-        parsed_data: Структурированные данные, полученные от parse_fgos_file.
-        filename: Имя исходного файла (для сохранения пути).
-        session: Сессия SQLAlchemy.
-        force_update: Если True, удаляет старый ФГОС и связанные сущности перед сохранением нового.
-                      Если False, пытается найти существующий ФГОС и либо обновить его, либо пропустить,
-                      либо вернуть ошибку (в зависимости от логики обновления).
-
-    Returns:
-        Optional[FgosVo]: Сохраненный (или обновленный) объект FgosVo или None в случае ошибки.
-    """
-    if not parsed_data or not parsed_data.get('metadata'):
-        print("save_fgos_data: No parsed data or metadata provided.")
-        return None
-
-    metadata = parsed_data['metadata']
-    fgos_number = metadata.get('order_number')
-    fgos_date = metadata.get('order_date') # Строка в формате DD.MM.YYYY
-    fgos_direction_code = metadata.get('direction_code')
-    fgos_education_level = metadata.get('education_level')
-    fgos_generation = metadata.get('generation')
-
-    if not fgos_number or not fgos_date or not fgos_direction_code or not fgos_education_level:
-        print("save_fgos_data: Missing core metadata for saving.")
-        return None
-
-    # Преобразуем дату из строки в объект Date
-    try:
-        fgos_date_obj = datetime.datetime.strptime(fgos_date, '%d.%m.%Y').date()
-    except (ValueError, TypeError):
-        print(f"save_fgos_data: Could not parse date '{fgos_date}'.")
-        return None
-
-    # --- 1. Ищем существующий ФГОС ---
-    # Считаем ФГОС уникальным по комбинации код направления + уровень + номер + дата
-    # Или только код направления + уровень + поколение? Поколение может быть "не определено".
-    # Давайте использовать код направления, уровень, номер и дату приказа как основной ключ.
-    existing_fgos = session.query(FgosVo).filter_by(
-        direction_code=fgos_direction_code,
-        education_level=fgos_education_level,
-        number=fgos_number,
-        date=fgos_date_obj # Сравниваем с объектом Date
-    ).first()
-
-    if existing_fgos:
-        if force_update:
-            print(f"save_fgos_data: Existing FGOS found ({existing_fgos.id}). Force update requested. Deleting old...")
-            # Удаляем старый ФГОС и все связанные сущности (благодаря CASCADE DELETE)
-            try:
-                session.delete(existing_fgos)
-                session.commit() # Коммит удаления
-                print(f"save_fgos_data: Old FGOS ({existing_fgos.id}) and its dependencies deleted.")
-            except SQLAlchemyError as e:
-                session.rollback()
-                print(f"save_fgos_data: Database error deleting old FGOS {existing_fgos.id}: {e}")
-                return None
-        else:
-            # Если не force_update и ФГОС существует, мы его не перезаписываем
-            print(f"save_fgos_data: FGOS with same code, level, number, date already exists ({existing_fgos.id}). Force update NOT requested. Skipping save.")
-            # Можно вернуть существующий объект или None, в зависимости от требуемого поведения API POST /fgos/save
-            # Если API должен вернуть ошибку 409 Conflict, то нужно выбросить исключение здесь.
-            # Для простоты MVP вернем существующий объект и фронтенд решит, что с этим делать.
-            return existing_fgos # Возвращаем существующий ФГОС
-
-
-    # --- 2. Создаем или обновляем FgosVo ---
-    try:
-        # Создаем новый объект FgosVo
-        fgos_vo = FgosVo(
-            number=fgos_number,
-            date=fgos_date_obj,
-            direction_code=fgos_direction_code,
-            direction_name=metadata.get('direction_name', 'Не указано'),
-            education_level=fgos_education_level,
-            generation=fgos_generation,
-            file_path=filename # Сохраняем имя файла
-            # TODO: Добавить другие поля метаданных, если извлекаются парсером
-        )
-        session.add(fgos_vo)
-        session.commit() # Коммитим FgosVo, чтобы получить ID
-        print(f"save_fgos_data: FGOS {fgos_vo.direction_code} ({fgos_vo.generation}) created with id {fgos_vo.id}.")
-
-    except SQLAlchemyError as e:
-        session.rollback()
-        print(f"save_fgos_data: Database error creating FgosVo: {e}")
-        return None
-
-    # --- 3. Сохраняем Компетенции и Индикаторы ---
-    # Получаем типы компетенций (УК, ОПК) из БД
-    comp_types = {ct.code: ct for ct in session.query(CompetencyType).filter(CompetencyType.code.in_(['УК', 'ОПК'])).all()}
-
-    try:
-        saved_competencies = []
-        # Объединяем УК и ОПК для итерации
-        all_parsed_competencies = parsed_data.get('uk_competencies', []) + parsed_data.get('opk_competencies', [])
-
-        for parsed_comp in all_parsed_competencies:
-            comp_code = parsed_comp.get('code')
-            comp_name = parsed_comp.get('name')
-            parsed_indicators = parsed_comp.get('indicators', [])
-
-            if not comp_code or not comp_name:
-                print(f"save_fgos_data: Skipping competency due to missing code/name: {parsed_comp}")
-                continue
-
-            comp_prefix = comp_code.split('-')[0]
-            comp_type = comp_types.get(comp_prefix)
-
-            if not comp_type:
-                print(f"save_fgos_data: Skipping competency {comp_code}: Competency type {comp_prefix} not found in DB.")
-                continue
-
-            # Создаем компетенцию
-            competency = Competency(
-                competency_type_id=comp_type.id,
-                fgos_vo_id=fgos_vo.id, # Связываем с новым ФГОС
-                code=comp_code,
-                name=comp_name,
-                # description=... # Если есть описание в парсенных данных
-            )
-            session.add(competency)
-            # db.session.flush() # Получим ID компетенции перед сохранением индикаторов
-
-            # Создаем индикаторы для этой компетенции
-            for parsed_ind in parsed_indicators:
-                ind_code = parsed_ind.get('code')
-                ind_formulation = parsed_ind.get('formulation')
-
-                if not ind_code or not ind_formulation:
-                    print(f"save_fgos_data: Skipping indicator due to missing code/formulation: {parsed_ind}")
-                    continue
-
-                indicator = Indicator(
-                    # competency_id будет установлен SQLAlchemy после flush/commit
-                    competency=competency, # Связываем с родителем
-                    code=ind_code,
-                    formulation=ind_formulation,
-                    source=f"ФГОС {fgos_vo.direction_code} ({fgos_vo.generation})" # Указываем источник
-                )
-                session.add(indicator)
-            
-            saved_competencies.append(competency)
-
-        session.commit() # Коммитим компетенции и индикаторы
-        print(f"save_fgos_data: Saved {len(saved_competencies)} competencies and their indicators for FGOS {fgos_vo.id}.")
-
-    except SQLAlchemyError as e:
-        session.rollback()
-        print(f"save_fgos_data: Database error saving competencies/indicators: {e}")
-        return None # Вернем None, чтобы указать на ошибку
-
-    # --- 4. Сохраняем рекомендованные ПС ---
-    try:
-        recommended_ps_codes = parsed_data.get('recommended_ps_codes', [])
-        print(f"save_fgos_data: Found {len(recommended_ps_codes)} recommended PS codes.")
-        
-        # Ищем существующие Профстандарты по кодам
-        existing_prof_standards = session.query(ProfStandard).filter(ProfStandard.code.in_(recommended_ps_codes)).all()
-        ps_by_code = {ps.code: ps for ps in existing_prof_standards}
-
-        for ps_code in recommended_ps_codes:
-            prof_standard = ps_by_code.get(ps_code)
-            if prof_standard:
-                # Создаем связь FgosRecommendedPs
-                link = FgosRecommendedPs(
-                    fgos_vo_id=fgos_vo.id,
-                    prof_standard_id=prof_standard.id,
-                    is_mandatory=False # По умолчанию считаем рекомендованным, не обязательным
-                    # description = ... # Если парсер найдет доп. описание связи
-                )
-                session.add(link)
-            else:
-                print(f"save_fgos_data: Recommended PS with code {ps_code} not found in DB. Skipping link creation.")
-
-        session.commit() # Коммитим связи ПС
-        print(f"save_fgos_data: Linked {len(recommended_ps_codes)} recommended PS (if found in DB).")
-
-    except SQLAlchemyError as e:
-        session.rollback()
-        print(f"save_fgos_data: Database error saving recommended PS links: {e}")
-        return None # Вернем None, чтобы указать на ошибку
-
-
-    # Если дошли сюда, все сохранено успешно
-    return fgos_vo
-
-
-def get_fgos_list() -> List[FgosVo]:
-    """
-    Получает список всех сохраненных ФГОС ВО.
-
-    Returns:
-        List[FgosVo]: Список объектов FgosVo.
-    """
-    try:
-        # Просто возвращаем все ФГОС, можно добавить сортировку/фильтры позже
-        fgos_list = db.session.query(FgosVo).order_by(FgosVo.direction_code, FgosVo.date.desc()).all()
-        return fgos_list
-    except SQLAlchemyError as e:
-        print(f"Database error in get_fgos_list: {e}")
-        return []
-
-
-def get_fgos_details(fgos_id: int) -> Optional[Dict[str, Any]]:
-    """
-    Получает детальную информацию по ФГОС ВО, включая связанные компетенции, индикаторы,
-    и рекомендованные профстандарты.
-
-    Args:
-        fgos_id: ID ФГОС ВО.
-
-    Returns:
-        Optional[Dict[str, Any]]: Словарь с данными ФГОС или None, если не найден.
-    """
-    try:
-        fgos = db.session.query(FgosVo).options(
-            # Загружаем связанные сущности
-            selectinload(FgosVo.competencies).selectinload(Competency.indicators),
-            selectinload(FgosVo.recommended_ps_assoc).selectinload(FgosRecommendedPs.prof_standard)
-        ).get(fgos_id)
-
-        if not fgos:
-            return None
-
-        # Сериализуем основной объект ФГОС
-        details = fgos.to_dict()
-
-        # Сериализуем компетенции и индикаторы (фильтруем только те, что связаны с этим ФГОС)
-        # Хотя relationship FgosVo.competencies уже должен был отфильтровать по FK,
-        # явная проверка делает логику понятнее.
-        uk_competencies_data = []
-        opk_competencies_data = []
-
-        # Сортируем компетенции и индикаторы для консистентности
-        sorted_competencies = sorted(fgos.competencies, key=lambda c: c.code)
-
-        for comp in sorted_competencies:
-            # Убеждаемся, что компетенция относится к этому ФГОС и является УК/ОПК
-            if comp.fgos_vo_id == fgos_id:
-                 comp_dict = comp.to_dict(rules=['-fgos', '-based_on_labor_function']) # Избегаем циклических ссылок и лишних данных
-                 comp_dict['indicators'] = []
-                 if comp.indicators:
-                      sorted_indicators = sorted(comp.indicators, key=lambda i: i.code)
-                      comp_dict['indicators'] = [ind.to_dict() for ind in sorted_indicators]
-
-                 if comp.competency_type and comp.competency_type.code == 'УК':
-                      uk_competencies_data.append(comp_dict)
-                 elif comp.competency_type and comp.competency_type.code == 'ОПК':
-                      opk_competencies_data.append(comp_dict)
-                 # ПК не должны быть напрямую связаны через fgos_vo_id, но могут быть в списке competencies
-                 # Если ПК случайно сюда попали, они не будут добавлены в uk_comp или opk_comp списки
-
-        details['uk_competencies'] = uk_competencies_data
-        details['opk_competencies'] = opk_competencies_data
-
-
-        # Сериализуем рекомендованные профстандарты
-        recommended_ps_list = []
-        if fgos.recommended_ps_assoc:
-            for assoc in fgos.recommended_ps_assoc:
-                if assoc.prof_standard:
-                    recommended_ps_list.append({
-                        'id': assoc.prof_standard.id,
-                        'code': assoc.prof_standard.code,
-                        'name': assoc.prof_standard.name,
-                        'is_mandatory': assoc.is_mandatory,
-                        'description': assoc.description,
-                    })
-        details['recommended_ps_list'] = recommended_ps_list
-
-        return details
-
-    except SQLAlchemyError as e:
-        print(f"Database error in get_fgos_details for fgos_id {fgos_id}: {e}")
-        # Нет необходимости в rollback для GET запросов
-        return None
-    except Exception as e:
-        print(f"Unexpected error in get_fgos_details for fgos_id {fgos_id}: {e}")
-        traceback.print_exc()
-        return None
-
-
-def delete_fgos(fgos_id: int, session: Session) -> bool:
-    """
-    Удаляет ФГОС ВО и все связанные сущности (Компетенции, Индикаторы, связи с ПС).
-    Предполагается, что отношения в моделях настроены на CASCADE DELETE.
-
-    Args:
-        fgos_id: ID ФГОС ВО для удаления.
-        session: Сессия SQLAlchemy.
-
-    Returns:
-        bool: True, если удаление выполнено успешно, False в противном случае.
-    """
-    try:
-        fgos_to_delete = session.query(FgosVo).get(fgos_id)
-        if not fgos_to_delete:
-            print(f"delete_fgos: FGOS with id {fgos_id} not found.")
-            return False
-
-        # SQLAlchemy с CASCADE DELETE должен удалить:
-        # - Competency, связанные с этим FgosVo
-        # - Indicator, связанные с этими Competency (через CASCADE на Competency)
-        # - FgosRecommendedPs, связанные с этим FgosVo
-
-        session.delete(fgos_to_delete)
-        session.commit()
-        print(f"delete_fgos: FGOS with id {fgos_id} deleted successfully (cascading enabled).")
-        return True
-
-    except SQLAlchemyError as e:
-        session.rollback()
-        print(f"delete_fgos: Database error deleting FGOS {fgos_id}: {e}")
-        return False
-    except Exception as e:
-        session.rollback()
-        print(f"delete_fgos: Unexpected error deleting FGOS {fgos_id}: {e}")
-        traceback.print_exc()
-        return False
-
-```
-
-**Пояснения к `logic.py`:**
-
-*   Добавлены функции `parse_fgos_file` (обертка парсера), `save_fgos_data` (логика сохранения/обновления), `get_fgos_list`, `get_fgos_details`, `delete_fgos`.
-*   `save_fgos_data` включает логику поиска существующего ФГОС по номеру, дате, направлению и уровню. Если `force_update=True`, старый ФГОС удаляется. Если `force_update=False` и ФГОС найден, функция возвращает существующий объект, не перезаписывая его.
-*   При сохранении компетенции и индикаторы связываются с только что созданным `FgosVo` через `fgos_vo_id`. Рекомендованные ПС связываются через `FgosRecommendedPs`.
-*   Настройка `ondelete="CASCADE"` в `models.py` на внешних ключах `Competency.fgos_vo_id` и `FgosRecommendedPs.fgos_vo_id` (и, возможно, от `Competency` к `Indicator`) **критически важна** для корректной работы `delete_fgos`. Убедитесь, что миграции Alembic правильно настроены для создания этих каскадов.
-
-**3. Бэкенд: Дополнение `competencies_matrix/routes.py`**
-
-Добавим новые маршруты.
-
-```python
-# competencies_matrix/routes.py
-
-# ... (существующие импорты) ...
+# filepath: /home/me/ВКР/maps_backend/competencies_matrix/routes.py
+# Маршруты (API endpoints) для модуля матрицы компетенций.
+# Здесь определены все API-точки входа для работы с матрицами компетенций,
+# образовательными программами, ФГОС, профстандартами и т.д.
+
+from flask import request, jsonify, abort
+# --- ИМПОРТ db ИЗ maps.models ---
+from maps.models import db # !!! ИСПРАВЛЕНИЕ: Импортируем объект db
+# --------------------------------
 from .logic import (
     get_educational_programs_list, get_program_details, 
     get_matrix_for_aup, update_matrix_link,
     create_competency, create_indicator,
-    parse_prof_standard_file,
     parse_fgos_file, save_fgos_data, get_fgos_list, get_fgos_details, delete_fgos
 )
-from auth.logic import login_required, approved_required, admin_only # Импортируем admin_only
+from auth.logic import login_required, approved_required, admin_only
+import logging
 
-# ... (существующая регистрация Blueprint) ...
+# Настройка логирования
+logger = logging.getLogger(__name__)
 
 # Группа эндпоинтов для работы с образовательными программами (ОП)
-# ... (существующие эндпоинты /programs, /programs/<int:program_id>) ...
+@competencies_matrix_bp.route('/programs', methods=['GET'])
+@login_required
+@approved_required
+def get_programs():
+    """Получение списка всех образовательных программ"""
+    # Используем функцию из logic.py
+    programs = get_educational_programs_list()
+    
+    # Сериализуем результат в список словарей
+    # Используем метод to_dict из BaseModel
+    result = [p.to_dict() for p in programs] # Используем .to_dict(), а не .to_dict(rules=...) для базовых полей
+    
+    return jsonify(result)
+
+@competencies_matrix_bp.route('/programs/<int:program_id>', methods=['GET'])
+@login_required
+@approved_required
+def get_program(program_id):
+    """Получение детальной информации по образовательной программе (ОП)"""
+    details = get_program_details(program_id)
+    if not details:
+        return jsonify({"error": "Образовательная программа не найдена"}), 404
+        
+    return jsonify(details)
 
 # Группа эндпоинтов для работы с матрицей компетенций
-# ... (существующие эндпоинты /matrix/<int:aup_id>, /matrix/link) ...
+@competencies_matrix_bp.route('/matrix/<int:aup_id>', methods=['GET'])
+@login_required
+@approved_required
+def get_matrix(aup_id):
+    """
+    Получение данных для матрицы компетенций конкретного АУП.
+    Этот эндпоинт возвращает все необходимые данные для отображения 
+    и редактирования матрицы в UI: дисциплины, компетенции, индикаторы и их связи.
+    """
+    matrix_data = get_matrix_for_aup(aup_id)
+    if not matrix_data:
+        return jsonify({"error": "АУП не найден или не связан с образовательной программой"}), 404
+        
+    return jsonify(matrix_data)
+
+@competencies_matrix_bp.route('/matrix/link', methods=['POST', 'DELETE'])
+@login_required
+@approved_required
+def manage_matrix_link():
+    """
+    Создает или удаляет связь Дисциплина(АУП)-ИДК в матрице.
+    Возвращает подробный статус операции вместе с соответствующим HTTP-кодом.
+    """
+    data = request.get_json()
+    if not data or 'aup_data_id' not in data or 'indicator_id' not in data:
+        abort(400, description="Отсутствуют обязательные поля: aup_data_id, indicator_id")
+
+    aup_data_id = data['aup_data_id']
+    indicator_id = data['indicator_id']
+    is_creating = (request.method == 'POST')
+
+    # Вызов функции логики, которая управляет транзакцией
+    result = update_matrix_link(
+        aup_data_id,
+        indicator_id,
+        create=is_creating
+    )
+
+    # Формируем ответ в зависимости от статуса результата
+    if result['success']:
+        if is_creating:
+            if result['status'] == 'created':
+                return jsonify({"status": "created", "message": "Связь успешно создана"}), 201
+            elif result['status'] == 'already_exists':
+                return jsonify({"status": "already_exists", "message": "Связь уже существует"}), 200
+        else:  # DELETE
+            if result['status'] == 'deleted':
+                return jsonify({"status": "deleted", "message": "Связь успешно удалена"}), 200
+            elif result['status'] == 'not_found':
+                return jsonify({"status": "not_found", "message": "Связь для удаления не найдена"}), 404
+    else:  # Обработка ошибок
+        # Обработка ошибок из логики, которая уже сделала rollback
+        error_msg = "Не удалось выполнить операцию"
+        status_code = 400
+        
+        if result.get('error_type') == 'aup_data_not_found':
+            error_msg = f"Запись AupData (id: {aup_data_id}) не найдена"
+            status_code = 404
+        elif result.get('error_type') == 'indicator_not_found':
+            error_msg = f"Индикатор (id: {indicator_id}) не найден"
+            status_code = 404
+        elif result.get('error_type') == 'database_error':
+            error_msg = "Ошибка базы данных при выполнении операции"
+            status_code = 500
+        # Логирование ошибки уже есть в update_matrix_link
+        
+        return jsonify({"status": "error", "message": error_msg}), status_code
 
 # Группа эндпоинтов для работы с компетенциями и индикаторами
-# ... (существующие эндпоинты /competencies (POST), /indicators (POST)) ...
+@competencies_matrix_bp.route('/competencies', methods=['POST'])
+@login_required
+@approved_required
+# @admin_only # Создание ПК может быть доступно методистам
+def create_new_competency():
+    """
+    Создание новой компетенции (обычно ПК на основе профстандарта).
+    Принимает JSON с полями компетенции:
+    - type_code: Код типа (УК, ОПК, ПК)
+    - code: Код компетенции (ПК-1, ...)
+    - name: Формулировка компетенции
+    - based_on_labor_function_id: (опционально) ID трудовой функции из ПС
+    - fgos_vo_id: (опционально) ID ФГОС ВО
+    """
+    data = request.get_json()
+    
+    # Проверка необходимых полей
+    if not data or 'type_code' not in data or 'code' not in data or 'name' not in data:
+        return jsonify({"error": "Отсутствуют обязательные поля"}), 400
+    
+    # Вызов функции логики, которая управляет транзакцией
+    result = create_competency(data) # create_competency возвращает словарь {success, status, message, competency?}
+    
+    if result['success']:
+        # Возвращаем созданный объект и статус 201 Created
+        return jsonify(result.get('competency')), 201
+    else:
+        # Обработка ошибок из логики
+        error_msg = result.get('message', "Не удалось создать компетенцию")
+        status_code = 400 # По умолчанию 400 Bad Request
+        if result.get('error_type') == 'type_not_found' or result.get('error_type') == 'parent_not_found':
+            status_code = 404 # Ресурс не найден
+        elif result.get('error_type') == 'already_exists':
+            status_code = 409 # Конфликт (уже существует)
+        elif result.get('error_type') == 'database_error':
+            status_code = 500 # Ошибка БД
+        
+        return jsonify({"error": error_msg}), status_code
 
-# Группа эндпоинтов для работы с профессиональными стандартами (ПС)
-# ... (существующий эндпоинт /profstandards/upload) ...
+
+@competencies_matrix_bp.route('/indicators', methods=['POST'])
+@login_required
+@approved_required
+# @admin_only # Создание индикаторов доступно методистам
+def create_new_indicator():
+    """
+    Создание нового индикатора достижения компетенции (ИДК).
+    Принимает JSON с полями:
+    - competency_id: ID родительской компетенции
+    - code: Код индикатора (ИУК-1.1, ИОПК-2.3, ИПК-3.2 и т.д.)
+    - formulation: Формулировка индикатора
+    - source: (опционально) Описание источника (имя поля изменено на 'source')
+    - labor_function_ids: (опционально) Список ID трудовых функций
+    """
+    data = request.get_json()
+    
+    # Проверка необходимых полей
+    if not data or 'competency_id' not in data or 'code' not in data or 'formulation' not in data:
+        return jsonify({"error": "Отсутствуют обязательные поля"}), 400
+    
+    # Вызов функции логики, которая управляет транзакцией
+    result = create_indicator(data) # create_indicator возвращает словарь {success, status, message, indicator?}
+    
+    if result['success']:
+        # Возвращаем созданный объект и статус 201 Created
+        return jsonify(result.get('indicator')), 201
+    else:
+        # Обработка ошибок из логики
+        error_msg = result.get('message', "Не удалось создать индикатор")
+        status_code = 400 # По умолчанию 400 Bad Request
+        if result.get('error_type') == 'parent_competency_not_found':
+            status_code = 404 # Родительская компетенция не найдена
+        elif result.get('error_type') == 'already_exists':
+            status_code = 409 # Конфликт (уже существует)
+        elif result.get('error_type') == 'database_error':
+            status_code = 500 # Ошибка БД
+        
+        return jsonify({"error": error_msg}), status_code
+
 
 # --- Новая группа эндпоинтов для работы с ФГОС ВО ---
 @competencies_matrix_bp.route('/fgos', methods=['GET'])
@@ -757,18 +259,25 @@ def upload_fgos():
     
     try:
         file_bytes = file.read()
+        
+        # Вызываем парсер ФГОС
         parsed_data = parse_fgos_file(file_bytes, file.filename)
 
-        if not parsed_data:
-            return jsonify({"error": "Не удалось распарсить файл ФГОС или извлечь основные данные"}), 400
+        if not parsed_data or not parsed_data.get('metadata'):
+            # Если парсер не вернул данные или вернул без метаданных, считаем ошибкой парсинга
+            return jsonify({"error": parsed_data.get('message', "Не удалось распарсить файл ФГОС или извлечь основные данные")}), 400
 
         # TODO: Добавить в ответ информацию о существующем ФГОС, если найден (для сравнения на фронтенде)
         # Можно вызвать get_fgos_details, если найден ФГОС с такими же ключевыми параметрами
+        # Для этого нужно распарсить ключевые метаданные и сделать поиск в БД
+        # Логика поиска дублирует начало save_fgos_data. Можно вынести в отдельную функцию логики.
         
         return jsonify(parsed_data), 200 # Возвращаем парсенные данные
 
     except Exception as e:
         logger.error(f"Error processing FGOS upload for {file.filename}: {e}", exc_info=True)
+        # Если произошла ошибка на уровне парсинга (не ValueError из парсера), скорее всего, проблема в коде
+        # or related libraries (e.g., pdfminer)
         return jsonify({"error": f"Ошибка сервера при обработке файла: {e}"}), 500
 
 
@@ -791,34 +300,25 @@ def save_fgos():
     if not parsed_data or not filename:
         return jsonify({"error": "Некорректные данные для сохранения"}), 400
 
-    try:
-        # Вызываем функцию сохранения данных
-        # Передаем сессию явно
-        saved_fgos = save_fgos_data(parsed_data, filename, db.session, force_update=options.get('force_update', False))
+    # Вызываем функцию сохранения данных. Она сама управляет транзакцией.
+    result = save_fgos_data(
+        parsed_data=parsed_data, 
+        filename=filename, 
+        # Передаем сессию, как это было в логике.
+        # !!! ИСПРАВЛЕНИЕ: Передаем сессию из контекста Flask.
+        session=db.session, 
+        # -------------------------------------------------
+        force_update=options.get('force_update', False)
+    )
 
-        if saved_fgos is None:
-            # Если save_fgos_data вернула None, значит произошла ошибка БД или валидации внутри
-            # (логирование ошибки должно быть внутри save_fgos_data)
-            return jsonify({"error": "Ошибка при сохранении данных ФГОС в базу данных"}), 500
-            
-        # Если save_fgos_data вернула объект, который уже существовал и force_update=False,
-        # то это не ошибка, просто дубликат. Фронтенд должен был это обработать на шаге preview.
-        # Но API все равно должен вернуть информацию.
-        # Проверяем, был ли это новый объект или существующий
-        is_new = saved_fgos._sa_instance_state.key is None or saved_fgos._sa_instance_state.key.persistent is None
-
-        return jsonify({
-            "success": True,
-            "fgos_id": saved_fgos.id,
-            "message": "Данные ФГОС успешно сохранены." if is_new else "Данные ФГОС успешно обновлены."
-        }), 201 # 201 Created или 200 OK, 201 более уместен для создания/обновления
-
-
-    except Exception as e:
-        logger.error(f"Error saving FGOS data from file {filename}: {e}", exc_info=True)
-        # Если произошла ошибка, и она не была поймана внутри save_fgos_data с откатом, откатываем здесь
-        db.session.rollback()
-        return jsonify({"error": f"Неожиданная ошибка сервера при сохранении: {e}"}), 500
+    # save_fgos_data теперь возвращает словарь {success, message, fgos_id?}
+    if result['success']:
+        # Возвращаем ID сохраненного/обновленного ФГОС
+        return jsonify({"success": True, "fgos_id": result.get('fgos_id'), "message": result.get('message')}), 201
+    else:
+        # Ошибка сохранения (ошибка БД, валидации данных перед сохранением и т.д.)
+        # Логирование ошибки уже есть в save_fgos_data
+        return jsonify({"success": False, "error": result.get('message', 'Ошибка при сохранении данных ФГОС')}), 500
 
 @competencies_matrix_bp.route('/fgos/<int:fgos_id>', methods=['DELETE'])
 @login_required
@@ -827,1501 +327,3847 @@ def save_fgos():
 def delete_fgos_route(fgos_id):
     """Удаление ФГОС ВО по ID"""
     try:
+        # Вызываем функцию логики, которая управляет транзакцией
         deleted = delete_fgos(fgos_id, db.session)
         if deleted:
             return jsonify({"success": True, "message": "ФГОС успешно удален"}), 200
         else:
+            # Если функция вернула False, значит объект не найден (уже залогировано в логике)
             return jsonify({"success": False, "error": "ФГОС не найден или не удалось удалить"}), 404
 
     except Exception as e:
         logger.error(f"Error deleting FGOS {fgos_id}: {e}", exc_info=True)
+        # Если ошибка не поймана в логике (что маловероятно), откатываем здесь
         db.session.rollback()
         return jsonify({"success": False, "error": f"Неожиданная ошибка сервера при удалении: {e}"}), 500
 
+
+# Группа эндпоинтов для работы с профессиональными стандартами (ПС)
+@competencies_matrix_bp.route('/profstandards/upload', methods=['POST'])
+@login_required
+@approved_required
+# @admin_only # Загрузка ПС может быть доступна методистам
+def upload_profstandard():
+    """
+    Загрузка файла профессионального стандарта (HTML/Markdown).
+    Парсит и сохраняет в БД профстандарт и его структуру (базово).
+    Принимает multipart/form-data с файлом.
+    """
+    # from .logic import parse_prof_standard_file as parse_prof_standard_logic_function # Переименована в save_prof_standard_from_file
+    from .logic import save_prof_standard_from_file
+
+    if 'file' not in request.files:
+        return jsonify({"error": "Файл не найден в запросе"}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "Файл не выбран"}), 400
+    
+    # Читаем содержимое файла в байтах
+    file_bytes = file.read()
+
+    # Вызываем функцию логики, которая парсит и сохраняет
+    result = save_prof_standard_from_file(file_bytes, file.filename)
+    
+    # save_prof_standard_from_file возвращает словарь {success, message, prof_standard_id?}
+    if result.get('success'):
+        return jsonify(result), 201 # 201 Created
+    else:
+        return jsonify(result), 400 # 400 Bad Request (или 500, если ошибка сервера/БД)
+
+
+# Дальнейшие эндпоинты можно добавить по мере необходимости:
+# - CRUD для образовательных программ
+# - Управление связями ОП-АУП и ОП-ПС
+# - API для NLP-модуля
+# - Генерация отчетов
+# - и т.д.
 ```
 
-**Пояснения к `routes.py`:**
-
-*   Добавлены эндпоинты `GET /fgos`, `GET /fgos/<id>`, `POST /fgos/upload`, `POST /fgos/save`, `DELETE /fgos/<id>`.
-*   Эндпоинт `/fgos/upload` принимает файл, вызывает парсер и возвращает **только парсенные данные** в формате JSON (без сохранения в БД).
-*   Эндпоинт `/fgos/save` принимает JSON с парсенными данными и флагом `force_update`, вызывает `save_fgos_data` для сохранения в БД.
-*   Применены декораторы `@login_required`, `@approved_required`. Для операций загрузки/сохранения/удаления ФГОС добавлен `@admin_only`.
-*   Используется логгер для записи ошибок. Транзакции управляются в `logic.py` и в route при необходимости отката в случае неожиданной ошибки.
-
-**4. Бэкенд: Дополнение CLI команды импорта ФГОС (`cli_commands/fgos_import.py`)**
-
-Создадим новый файл для этой команды.
-
 ```python
-# cli_commands/fgos_import.py
-import click
-from flask.cli import with_appcontext
-import os
-import traceback
+# filepath: /home/me/ВКР/maps_backend/competencies_matrix/logic.py
+# competencies_matrix/logic.py
+from typing import Dict, List, Any, Optional
 import datetime
+from sqlalchemy.orm import joinedload, selectinload, Session
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError # Импортируем IntegrityError
+from sqlalchemy import exists, and_
+import traceback
+# Импортируем парсер ФГОС
+from .fgos_parser import parse_fgos_pdf, parse_uk_opk_simple # parse_uk_opk_simple тоже может пригодиться в будущем сидере
+# Импортируем парсер ПС
+from .parsers import parse_prof_standard_upload # Переименовал для ясности
+# Импортируем модели ПС, если они не импортируются автоматически через BaseModel или другие связи
+from .models import (
+    GeneralizedLaborFunction, LaborFunction, LaborAction, RequiredSkill, RequiredKnowledge
+)
 
-# --- Импортируем необходимые компоненты ---
-from maps.models import db
-from competencies_matrix.logic import parse_fgos_file, save_fgos_data, delete_fgos
-from competencies_matrix.models import FgosVo # Нужно для поиска
+from maps.models import db, AupData, SprDiscipline, AupInfo
+from .models import (
+    EducationalProgram, Competency, Indicator, CompetencyMatrix,
+    ProfStandard, FgosVo, FgosRecommendedPs, EducationalProgramAup, EducationalProgramPs,
+    CompetencyType, IndicatorPsLink
+)
+
 import logging
-
+# Настройка логирования
 logger = logging.getLogger(__name__)
+# Уровень логирования устанавливается при старте приложения или в конфиге
 
-@click.command(name='import-fgos')
-@click.argument('filepath', type=click.Path(exists=True, dir_okay=False))
-@click.option('--force', is_flag=True, default=False,
-              help='Force import/overwrite if FGOS with same identifying data exists.')
-@click.option('--delete-only', is_flag=True, default=False,
-              help='Only delete FGOS if it exists, do not import.')
-@click.option('--dry-run', is_flag=True, default=False,
-              help='Perform read and validation without saving or deleting.')
-@with_appcontext
-def import_fgos_command(filepath, force, delete_only, dry_run):
+# --- Функции для получения данных для отображения ---
+
+def get_educational_programs_list() -> List[EducationalProgram]:
     """
-    Импортирует данные ФГОС ВО из PDF-файла, парсит и сохраняет в БД.
-    Поиск существующего ФГОС производится по коду направления, уровню, номеру и дате приказа.
+    Получает список всех образовательных программ из БД.
 
-    FILEPATH: Путь к PDF файлу ФГОС для импорта.
+    Returns:
+        List[EducationalProgram]: Список объектов SQLAlchemy EducationalProgram.
     """
-    print(f"\n---> Starting FGOS import from: {filepath}")
-    filename = os.path.basename(filepath)
-
-    if dry_run:
-        print("   >>> DRY RUN MODE ENABLED: No changes will be saved/deleted from the database. <<<")
-
     try:
-        # 1. Чтение и парсинг Excel файла
-        print(f"Reading and parsing FGOS file: {filename}...")
-        with open(filepath, 'rb') as f:
-            file_bytes = f.read()
-        
-        # Вызываем парсер
-        # Ловим ValueError от парсера
-        parsed_data = parse_fgos_file(file_bytes, filename)
+        # Используем joinedload для предзагрузки первого AUP
+        # Это может ускорить отображение списка, если первый_aup_id используется на фронте
+        programs = EducationalProgram.query.options(
+             joinedload(EducationalProgram.aup_assoc).joinedload(EducationalProgramAup.aup)
+        ).order_by(EducationalProgram.title).all()
+        return programs
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_educational_programs_list: {e}", exc_info=True) # Добавлено exc_info
+        return [] # Возвращаем пустой список в случае ошибки
 
-        if not parsed_data:
-            print("\n!!! PARSING FAILED !!!")
-            print(f"   - Could not parse file or extract essential metadata from '{filename}'.")
-            print("   - Please check the file format and content.")
-            if not dry_run:
-                db.session.rollback() # Откат, если сессия была изменена (хотя parse не меняет)
-            return
+def get_program_details(program_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Получает детальную информацию по ОП, включая связанные сущности.
 
-        print("   - File parsed successfully.")
-        
-        # Выводим извлеченные метаданные для информации
-        metadata = parsed_data.get('metadata', {})
-        print("   - Extracted Metadata:")
-        for key, value in metadata.items():
-             print(f"     - {key}: {value}")
-             
-        if delete_only:
-             # В режиме delete-only парсинг нужен только для получения ключевых данных для поиска
-             print("\n---> DELETE ONLY mode enabled.")
-             fgos_to_delete = None
-             if metadata.get('direction_code') and metadata.get('education_level') and metadata.get('order_number') and metadata.get('order_date'):
-                  try:
-                       fgos_date_obj = datetime.datetime.strptime(metadata['order_date'], '%d.%m.%Y').date()
-                       fgos_to_delete = db.session.query(FgosVo).filter_by(
-                            direction_code=metadata['direction_code'],
-                            education_level=metadata['education_level'],
-                            number=metadata['order_number'],
-                            date=fgos_date_obj
-                       ).first()
-                  except (ValueError, TypeError):
-                        print(f"   - Could not parse date '{metadata['order_date']}' for lookup. Cannot perform delete.")
-                        fgos_to_delete = None # Устанавливаем None, если дату не распарсили
-                  except SQLAlchemyError as e:
-                        print(f"   - Database error during lookup for delete: {e}")
-                        db.session.rollback()
-                        return
-             else:
-                  print("   - Missing identifying metadata for lookup. Cannot perform delete.")
-             
-             if fgos_to_delete:
-                  if not dry_run:
-                       print(f"   - Found existing FGOS (id: {fgos_to_delete.id}, code: {fgos_to_delete.direction_code}). Deleting...")
-                       deleted = delete_fgos(fgos_to_delete.id, db.session)
-                       if deleted:
-                            print("   - FGOS deleted successfully.")
-                       else:
-                            print("   - Failed to delete FGOS (check logs).")
-                  else:
-                       print(f"   - DRY RUN: Found existing FGOS (id: {fgos_to_delete.id}). Would delete.")
-             else:
-                  print("   - No existing FGOS found matching identifying metadata. Nothing to delete.")
+    Args:
+        program_id: ID образовательной программы.
 
-             print("---> FGOS import finished (delete only mode).\n")
-             return # Выходим после удаления
+    Returns:
+        Optional[Dict[str, Any]]: Словарь с данными программы или None, если не найдена.
+                                   Структура должна включать детали ФГОС, список АУП,
+                                   список выбранных и рекомендованных ПС.
+    """
+    try:
+        session: Session = db.session # Используем сессию
+        program = session.query(EducationalProgram).options( # Используем session.query
+            # Эффективно загружаем связанные данные одним запросом
+            selectinload(EducationalProgram.fgos),
+            selectinload(EducationalProgram.aup_assoc).selectinload(EducationalProgramAup.aup),
+            selectinload(EducationalProgram.selected_ps_assoc).selectinload(EducationalProgramPs.prof_standard)
+        ).get(program_id)
 
-        # 2. Сохранение данных в БД (только если не dry-run и не delete-only)
-        if not dry_run:
-            print("Saving data to database...")
+        if not program:
+            logger.warning(f"Program with id {program_id} not found for details.")
+            return None
+
+        # Сериализуем программу основные поля без связей
+        details = program.to_dict() # Используем to_dict из BaseModel
+
+        # Добавляем детали в нужном формате
+        if program.fgos:
+            details['fgos_details'] = {
+                'id': program.fgos.id,
+                'number': program.fgos.number,
+                'date': program.fgos.date.isoformat() if program.fgos.date else None, # Форматируем дату
+                'direction_code': program.fgos.direction_code,
+                'direction_name': program.fgos.direction_name,
+                'education_level': program.fgos.education_level,
+                'generation': program.fgos.generation,
+                'file_path': program.fgos.file_path
+            }
+        else:
+            details['fgos_details'] = None
             
-            # Вызываем функцию сохранения данных
-            # Передаем сессию явно
-            saved_fgos = save_fgos_data(parsed_data, filename, db.session, force_update=force)
+        details['aup_list'] = []
+        if program.aup_assoc:
+            details['aup_list'] = [
+                {
+                    'id_aup': assoc.aup.id_aup,
+                    'num_aup': assoc.aup.num_aup,
+                    'file': assoc.aup.file
+                } 
+                for assoc in program.aup_assoc if assoc.aup
+            ]
+        
+        details['selected_ps_list'] = []
+        if program.selected_ps_assoc:
+            details['selected_ps_list'] = [
+                {
+                    'id': assoc.prof_standard.id,
+                    'code': assoc.prof_standard.code,
+                    'name': assoc.prof_standard.name
+                }
+                for assoc in program.selected_ps_assoc if assoc.prof_standard
+            ]
 
-            if saved_fgos is None:
-                 print("\n!!! SAVE FAILED !!!")
-                 print("   - Error occurred while saving FGOS data (check logs).")
-                 # save_fgos_data уже откатил транзакцию при ошибке БД
+        # Получаем рекомендованные ПС для связанного ФГОС
+        recommended_ps_list = []
+        if program.fgos and program.fgos.recommended_ps_assoc:
+            if program.fgos.recommended_ps_assoc:
+                # Бережно обрабатываем каждую связь, извлекая только нужные поля
+                for assoc in program.fgos.recommended_ps_assoc:
+                    if assoc.prof_standard:
+                        recommended_ps_list.append({
+                            'id': assoc.prof_standard.id,
+                            'code': assoc.prof_standard.code,
+                            'name': assoc.prof_standard.name,
+                            'is_mandatory': assoc.is_mandatory, # Добавляем метаданные связи
+                            'description': assoc.description,
+                        })
+                    
+        details['recommended_ps_list'] = recommended_ps_list
+
+        return details
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_program_details for program_id {program_id}: {e}", exc_info=True)
+        return None
+    except AttributeError as e: # Может быть при неполноте данных (например, AUP_assoc, но AUP==None)
+        logger.error(f"Attribute error likely due to missing relationship/data in get_program_details for program_id {program_id}: {e}", exc_info=True)
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error in get_program_details for program_id {program_id}: {e}", exc_info=True)
+        return None
+
+def get_matrix_for_aup(aup_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Собирает все данные для отображения матрицы компетенций для АУП.
+    (Версия с исправлениями сортировки, фильтрации УК/ОПК и ПК)
+
+    Args:
+        aup_id: ID Академического учебного плана (из таблицы tbl_aup).
+
+    Returns:
+        Словарь с данными для фронтенда или None.
+    """
+    try:
+        session: Session = db.session
+
+        # 1. Получаем инфо об АУП и связанные ОП
+        aup_info = session.query(AupInfo).options(
+            selectinload(AupInfo.education_programs_assoc).selectinload(EducationalProgramAup.educational_program).selectinload(EducationalProgram.fgos) # Загружаем FGOS через ОП
+        ).get(aup_id)
+
+        if not aup_info:
+            logger.warning(f"AUP with id {aup_id} not found for matrix.")
+            return None
+
+        # 2. Находим связанную ОП и ФГОС
+        program = None
+        fgos = None
+        if aup_info.education_programs_assoc:
+             # Предполагаем, что AUP связан только с одной ОП в контексте матрицы
+             # TODO: Уточнить логику, если AUP связан с несколькими ОП
+             program_assoc = aup_info.education_programs_assoc[0]
+             program = program_assoc.educational_program
+             if program and program.fgos:
+                  fgos = program.fgos # FGOS уже загружен благодаря selectinload
+
+        if not program:
+             logger.warning(f"AUP {aup_id} is not linked to any Educational Program.")
+             # TODO: Если АУП не связан с ОП, что показываем? Пустую матрицу? Ошибку?
+             # Пока возвращаем None, чтобы фронтенд показал ошибку.
+             return None
+
+        logger.info(f"Found Program (id: {program.id}, title: {program.title}) for AUP {aup_id}.")
+        if fgos:
+             logger.info(f"Found linked FGOS (id: {fgos.id}, code: {fgos.direction_code}).")
+        else:
+             logger.warning(f"Educational Program {program.id} is not linked to any FGOS.")
+
+
+        # 3. Получаем дисциплины АУП из AupData
+        aup_data_entries = session.query(AupData).options(
+            joinedload(AupData.discipline)
+        ).filter_by(id_aup=aup_id).order_by(AupData.id_period, AupData.num_row).all()
+
+        disciplines_list = []
+        aup_data_ids_in_matrix = set()
+        for entry in aup_data_entries:
+            # Пропускаем записи без привязки к дисциплине (например, служебные строки)
+            if entry.id_discipline is None or entry.discipline is None:
+                continue
+            
+            # TODO: Возможно, добавить фильтрацию по типам записей AupData (только Дисциплины)
+            # if entry.id_type_record != 1: # 1 - Дисциплина, нужно уточнить ID в справочнике D_TypeRecord
+            #     continue
+
+            discipline_title = entry.discipline.title
+            discipline_data = {
+                "aup_data_id": entry.id,
+                "discipline_id": entry.id_discipline,
+                "title": discipline_title,
+                "semester": entry.id_period # Семестр хранится в id_period AupData
+            }
+            disciplines_list.append(discipline_data)
+            aup_data_ids_in_matrix.add(entry.id)
+
+        # Сортировка списка дисциплин уже сделана ORM по id_period и num_row, что обычно соответствует порядку в АУП
+        # disciplines_list.sort(key=lambda d: (d.get('semester', 0), d.get('title', ''))) # На всякий случай можно оставить, но ORM должен справиться
+        logger.info(f"Found {len(disciplines_list)} relevant AupData entries for AUP {aup_id}.")
+
+        # 4. Получаем релевантные компетенции и их индикаторы
+        # УК и ОПК берутся из ФГОС, связанного с ОП
+        # ПК берутся из тех, что созданы пользователем и связаны с ОП
+        
+        relevant_competencies_query = session.query(Competency).options(
+            selectinload(Competency.indicators),
+            joinedload(Competency.competency_type)
+        )
+
+        relevant_competencies = []
+
+        # Получаем УК и ОПК, связанные с данным ФГОС (если ФГОС есть)
+        if fgos:
+            uk_opk_competencies = relevant_competencies_query.filter(
+                Competency.fgos_vo_id == fgos.id # Фильтруем по FK на ФГОС
+            ).all() # Query.all() вернет все объекты, фильтруем по типу в Python
+            
+            # Фильтруем по типу 'УК' или 'ОПК' после загрузки
+            uk_opk_competencies = [
+                 c for c in uk_opk_competencies 
+                 if c.competency_type and c.competency_type.code in ['УК', 'ОПК']
+            ]
+            relevant_competencies.extend(uk_opk_competencies)
+            logger.info(f"Found {len(uk_opk_competencies)} УК/ОПК competencies linked to FGOS {fgos.id}.")
+        else:
+             logger.warning("No FGOS linked to program, cannot retrieve УК/ОПК from FGOS.")
+
+
+        # Получаем ПК, связанные с данной ОП
+        # Логика связи ПК с ОП: Компетенция (ПК) может быть создана на основе ТФ (LaborFunction).
+        # LaborFunction принадлежит Профстандарту (ProfStandard).
+        # Профстандарт может быть выбран для Образовательной Программы (EducationalProgramPs).
+        # Поэтому, чтобы получить ПК для данной ОП, нужно найти все ТФ из ПС, выбранных для этой ОП,
+        # и все ПК, основанные на этих ТФ.
+        # Также, ПК могут быть созданы не на основе ТФ, а просто вручную и связаны с ОП напрямую (если такая связь есть в модели).
+        # На данном этапе (MVP) временно берем ВСЕ ПК, т.к. логика связи ПК с ОП через ПС/ТФ еще не полностью реализована/верифицирована.
+        
+        # TODO: Реализовать правильную фильтрацию ПК по ОП
+        # Вариант 1 (Если ПК напрямую связаны с ОП):
+        # pk_competencies = relevant_competencies_query.join(EducationalProgramCompetency).filter(EducationalProgramCompetency.program_id == program.id).all()
+        # Вариант 2 (Если ПК связаны через ТФ, ПС, ОП-ПС):
+        # pk_competencies = relevant_competencies_query.join(LaborFunction).join(ProfStandard).join(EducationalProgramPs).filter(EducationalProgramPs.educational_program_id == program.id).all()
+        # На данном этапе, берем все ПК:
+        pk_competencies = relevant_competencies_query.join(CompetencyType).filter(CompetencyType.code == 'ПК').all()
+        relevant_competencies.extend(pk_competencies)
+        logger.info(f"Found {len(pk_competencies)} ПК competencies (all existing ПК).")
+
+
+        # Форматируем результат
+        competencies_data = []
+        indicator_ids_in_matrix = set()
+        
+        # Сортируем релевантные компетенции перед форматированием
+        # Сортировка: сначала УК, потом ОПК, потом ПК; внутри каждого типа - по коду
+        type_order = ['УК', 'ОПК', 'ПК']
+        relevant_competencies.sort(key=lambda c: (
+            type_order.index(c.competency_type.code) if c.competency_type and c.competency_type.code in type_order else len(type_order), # Неизвестные типы в конец
+            c.code
+        ))
+
+        for comp in relevant_competencies:
+            type_code = comp.competency_type.code if comp.competency_type else "UNKNOWN"
+
+            # Используем .to_dict() из BaseModel для сериализации полей
+            comp_dict = comp.to_dict()
+            comp_dict.pop('fgos', None) # Удаляем объект Fgos
+            comp_dict.pop('competency_type', None) # Удаляем объект CompetencyType
+            comp_dict.pop('based_on_labor_function', None) # Удаляем объект LaborFunction
+            comp_dict.pop('matrix_links', None) # Удаляем связи матрицы, они в отдельном массиве
+
+            comp_dict['type_code'] = type_code # Добавляем код типа явно
+            comp_dict['indicators'] = []
+            if comp.indicators:
+                # Сортируем индикаторы внутри компетенции
+                sorted_indicators = sorted(comp.indicators, key=lambda i: i.code)
+                for ind in sorted_indicators:
+                    indicator_ids_in_matrix.add(ind.id)
+                    # Сериализуем индикатор
+                    ind_dict = ind.to_dict()
+                    ind_dict.pop('competency', None) # Удаляем родительскую компетенцию
+                    ind_dict.pop('labor_functions', None) # Удаляем связанные ТФ
+                    ind_dict.pop('matrix_entries', None) # Удаляем связи матрицы
+                    comp_dict['indicators'].append(ind_dict)
+            competencies_data.append(comp_dict)
+
+        logger.info(f"Formatted {len(competencies_data)} relevant competencies with indicators.")
+
+        # 5. Получаем существующие связи
+        existing_links_data = []
+        # Проверяем, что списки ID не пустые, чтобы избежать ошибки .in_([])
+        if aup_data_ids_in_matrix and indicator_ids_in_matrix:
+            # Используем .in_() для эффективного запроса
+            existing_links_db = session.query(CompetencyMatrix).filter(
+                and_(
+                   CompetencyMatrix.aup_data_id.in_(list(aup_data_ids_in_matrix)), # Преобразуем set в list
+                   CompetencyMatrix.indicator_id.in_(list(indicator_ids_in_matrix)) # Преобразуем set в list
+                )
+            ).all()
+            # Сериализуем связи
+            existing_links_data = [
+                link.to_dict() for link in existing_links_db # Используем to_dict из BaseModel
+            ]
+            logger.info(f"Found {len(existing_links_data)} existing matrix links for relevant AupData and Indicators.")
+
+
+        # 6. Предложения от NLP (заглушка для MVP)
+        # suggestions_data = suggest_links_nlp(disciplines_list, competencies_data) # Заглушка
+
+        # Сериализуем AupInfo в конце
+        aup_info_dict = aup_info.as_dict() # Используем as_dict из maps.models.py
+        # Удаляем relation properties, если они есть в as_dict
+        aup_info_dict.pop('education_programs_assoc', None)
+        # Добавляем num_aup если он не попал в as_dict (хотя должен)
+        # if 'num_aup' not in aup_info_dict and hasattr(aup_info, 'num_aup'):
+        #      aup_info_dict['num_aup'] = aup_info.num_aup
+
+
+        return {
+            "aup_info": aup_info_dict,
+            "disciplines": disciplines_list,
+            "competencies": competencies_data,
+            "links": existing_links_data,
+            "suggestions": [] # Заглушка для NLP
+        }
+
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_matrix_for_aup for aup_id {aup_id}: {e}", exc_info=True)
+        session.rollback() # Откат при ошибке БД
+        return None
+    except AttributeError as e: # Может быть при неполноте данных (например, AUP_assoc, но AUP==None)
+        logger.error(f"Attribute error likely due to missing relationship/data in get_matrix_for_aup for aup_id {aup_id}: {e}", exc_info=True)
+        session.rollback() # Откат при ошибке
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error in get_matrix_for_aup for aup_id {aup_id}: {e}", exc_info=True)
+        session.rollback() # Откат при любой неожиданной ошибке
+        return None
+
+# --- Функции для изменения данных ---
+
+def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True) -> Dict[str, Any]:
+    """
+    Создает или удаляет связь Дисциплина(АУП)-ИДК в матрице.
+    (Версия с подробным возвратом статуса)
+
+    Args:
+        aup_data_id: ID записи из таблицы aup_data.
+        indicator_id: ID индикатора из таблицы indicators.
+        create (bool): True для создания связи, False для удаления.
+
+    Returns:
+        Dict[str, Any]: Словарь с результатом операции:
+            {
+                'success': True/False,
+                'status': 'created'/'already_exists'/'deleted'/'not_found'/'error',
+                'message': '...' (сообщение для логирования/отладки),
+                'error_type': '...' (опционально, тип ошибки),
+                'details': '...' (опционально, детали ошибки),
+                'link_id': '...' (ID созданной связи, если 'created')
+            }
+    """
+    session: Session = db.session
+    try:
+        # 1. Проверяем существование AupData и Indicator более эффективно
+        # Используем AND для комбинации условий в одном exists() запросе, если возможно
+        # Или делаем два отдельных запроса для более точной диагностики ошибки 404
+        
+        # Оптимизированная проверка существования AupData и Indicator в одном запросе (если возможно)
+        # Или делаем два запроса, чтобы точно знать, какой ID не найден
+        aup_data_rec = session.query(AupData).get(aup_data_id)
+        if not aup_data_rec:
+             message = f"update_matrix_link: AupData entry with id {aup_data_id} not found."
+             logger.warning(message)
+             return {
+                 'success': False,
+                 'status': 'error',
+                 'message': message,
+                 'error_type': 'aup_data_not_found'
+             }
+
+        indicator_rec = session.query(Indicator).get(indicator_id)
+        if not indicator_rec:
+            message = f"update_matrix_link: Indicator with id {indicator_id} not found."
+            logger.warning(message)
+            return {
+                'success': False,
+                'status': 'error',
+                'message': message,
+                'error_type': 'indicator_not_found'
+            }
+
+
+        # 2. Находим существующую связь
+        existing_link = session.query(CompetencyMatrix).filter_by(
+            aup_data_id=aup_data_id,
+            indicator_id=indicator_id
+        ).first()
+
+        if create:
+            if not existing_link:
+                link = CompetencyMatrix(aup_data_id=aup_data_id, indicator_id=indicator_id, is_manual=True)
+                session.add(link)
+                session.commit() # Коммит после успешного добавления
+                message = f"Link created: AupData {aup_data_id} <-> Indicator {indicator_id}"
+                logger.info(message)
+                return {
+                    'success': True,
+                    'status': 'created',
+                    'message': message,
+                    'link_id': link.id # Возвращаем ID созданной связи
+                }
             else:
-                 print(f"\n---> FGOS from '{filename}' imported successfully with ID {saved_fgos.id}!\n")
+                message = f"Link already exists: AupData {aup_data_id} <-> Indicator {indicator_id}"
+                logger.info(message)
+                # Не нужно коммитить, т.к. ничего не меняли
+                return {
+                    'success': True,
+                    'status': 'already_exists',
+                    'message': message,
+                    'link_id': existing_link.id # Возвращаем ID существующей связи
+                }
+        else: # delete
+            if existing_link:
+                session.delete(existing_link)
+                session.commit() # Коммит после успешного удаления
+                message = f"Link deleted: AupData {aup_data_id} <-> Indicator {indicator_id}"
+                logger.info(message)
+                return {
+                    'success': True, # Вернем success=True, т.к. цель (отсутствие связи) достигнута
+                    'status': 'deleted',
+                    'message': message
+                }
+            else:
+                message = f"Link not found for deletion: AupData {aup_data_id} <-> Indicator {indicator_id}"
+                logger.warning(message)
+                # Не нужно коммитить
+                return {
+                    'success': True, # Вернем success=True, т.к. цель (отсутствие связи) достигнута
+                    'status': 'not_found',
+                    'message': message
+                }
+
+    except SQLAlchemyError as e:
+        session.rollback() # Откат при ошибке БД
+        message = f"Database error in update_matrix_link: {e}"
+        logger.error(message, exc_info=True)
+        return {
+            'success': False,
+            'status': 'error',
+            'message': message,
+            'error_type': 'database_error'
+        }
+    except Exception as e:
+        session.rollback() # Откат при любой другой ошибке
+        message = f"Unexpected error in update_matrix_link: {e}"
+        logger.error(message, exc_info=True)
+        return {
+            'success': False,
+            'status': 'error',
+            'message': message,
+            'error_type': 'unexpected_error',
+            'details': str(e)
+        }
+
+
+def create_competency(data: Dict[str, Any]) -> Dict[str, Any]: # Изменен возвращаемый тип
+    """
+    Создает новую компетенцию (обычно ПК). Базовая реализация для MVP.
+
+    Args:
+        data: Словарь с данными {'type_code': 'ПК', 'code': 'ПК-1', 'name': '...', ...}.
+
+    Returns:
+        Dict[str, Any]: Словарь с результатом операции:
+            {
+                'success': True/False,
+                'status': 'created'/'already_exists'/'error',
+                'message': '...',
+                'error_type': '...',
+                'competency': {...} (созданный объект в словаре, если success=True)
+            }
+    """
+    # TODO: Добавить валидацию входных данных (через schemas.py)
+    required_fields = ['type_code', 'code', 'name']
+    if not all(field in data and data[field] is not None for field in required_fields): # Проверяем на None тоже
+        message = "Отсутствуют обязательные поля: type_code, code, name"
+        logger.warning(message)
+        return {'success': False, 'status': 'error', 'message': message, 'error_type': 'missing_fields'}
+
+    session: Session = db.session
+    try:
+        # Проверяем тип компетенции
+        comp_type_code = data['type_code'].upper() # Приводим к верхнему регистру
+        comp_type = session.query(CompetencyType).filter_by(code=comp_type_code).first()
+        if not comp_type:
+            message = f"Тип компетенции с кодом '{comp_type_code}' не найден в базе данных."
+            logger.warning(message)
+            return {'success': False, 'status': 'error', 'message': message, 'error_type': 'type_not_found'}
+
+        # Проверка на уникальность кода компетенции в рамках типа и/или родителя (ФГОС/ТФ)
+        # Для УК/ОПК - уникален в рамках ФГОС (если fgos_vo_id предоставлен)
+        # Для ПК - уникален в рамках ТФ (если based_on_labor_function_id предоставлен)
+        # Если родитель не предоставлен, уникален только по коду и типу.
+        # MVP: Проверка уникальности кода в рамках типа и опционально родителя.
+        
+        existing_comp_query = session.query(Competency).filter_by(
+             code=data['code'],
+             competency_type_id=comp_type.id
+        )
+        
+        # Добавляем фильтр по родителю, если он предоставлен
+        if data.get('fgos_vo_id') is not None:
+            existing_comp_query = existing_comp_query.filter_by(fgos_vo_id=data['fgos_vo_id'])
+        elif data.get('based_on_labor_function_id') is not None:
+            existing_comp_query = existing_comp_query.filter_by(based_on_labor_function_id=data['based_on_labor_function_id'])
+
+        existing_comp = existing_comp_query.first()
+
+        if existing_comp:
+             message = f"Компетенция с кодом '{data['code']}' и типом '{comp_type_code}' уже существует."
+             # TODO: Уточнить сообщение, если есть родитель (ФГОС/ТФ)
+             logger.warning(message)
+             return {'success': False, 'status': 'already_exists', 'message': message, 'error_type': 'already_exists'}
+
+        # Проверяем существование родительских сущностей, если ID предоставлены
+        if data.get('fgos_vo_id') is not None:
+            fgos = session.query(FgosVo).get(data['fgos_vo_id'])
+            if not fgos:
+                 message = f"Указанный ФГОС с id {data['fgos_vo_id']} не найден."
+                 logger.warning(message)
+                 return {'success': False, 'status': 'error', 'message': message, 'error_type': 'parent_not_found', 'parent_type': 'fgos_vo'}
+        
+        if data.get('based_on_labor_function_id') is not None:
+            tf = session.query(LaborFunction).get(data['based_on_labor_function_id'])
+            if not tf:
+                 message = f"Указанная Трудовая Функция с id {data['based_on_labor_function_id']} не найдена."
+                 logger.warning(message)
+                 return {'success': False, 'status': 'error', 'message': message, 'error_type': 'parent_not_found', 'parent_type': 'labor_function'}
+
+
+        # Создаем компетенцию
+        competency = Competency(
+            competency_type_id=comp_type.id,
+            code=data['code'],
+            name=data['name'],
+            description=data.get('description'),
+            fgos_vo_id=data.get('fgos_vo_id'), # Связываем с ФГОС, если ID предоставлен
+            based_on_labor_function_id=data.get('based_on_labor_function_id') # Связываем с ТФ, если ID предоставлен
+        )
+        session.add(competency)
+        session.commit() # Коммит после успешного добавления
+        logger.info(f"Competency created: {competency.code} (ID: {competency.id})")
+        
+        # Возвращаем созданный объект в виде словаря
+        return {'success': True, 'status': 'created', 'message': 'Компетенция успешно создана', 'competency': competency.to_dict()}
+
+    except IntegrityError as e:
+        session.rollback()
+        message = f"Ошибка уникальности при создании компетенции: {e}"
+        logger.error(message, exc_info=True)
+        return {'success': False, 'status': 'error', 'message': message, 'error_type': 'integrity_error'}
+    except SQLAlchemyError as e:
+        session.rollback()
+        message = f"Ошибка базы данных при создании компетенции: {e}"
+        logger.error(message, exc_info=True)
+        return {'success': False, 'status': 'error', 'message': message, 'error_type': 'database_error'}
+    except Exception as e:
+        session.rollback()
+        message = f"Неожиданная ошибка при создании компетенции: {e}"
+        logger.error(message, exc_info=True)
+        return {'success': False, 'status': 'error', 'message': message, 'error_type': 'unexpected_error', 'details': str(e)}
+
+
+def create_indicator(data: Dict[str, Any]) -> Dict[str, Any]: # Изменен возвращаемый тип
+    """
+    Создает новый индикатор (ИДК). Базовая реализация для MVP.
+
+    Args:
+        data: Словарь с данными {'competency_id': ..., 'code': 'ИПК-1.1', 'formulation': '...', ...}
+
+    Returns:
+        Dict[str, Any]: Словарь с результатом операции:
+            {
+                'success': True/False,
+                'status': 'created'/'already_exists'/'error',
+                'message': '...',
+                'error_type': '...',
+                'indicator': {...} (созданный объект в словаре, если success=True)
+            }
+    """
+    # TODO: Добавить валидацию входных данных
+    required_fields = ['competency_id', 'code', 'formulation']
+    if not all(field in data and data[field] is not None for field in required_fields): # Проверяем на None тоже
+        message = "Отсутствуют обязательные поля: competency_id, code, formulation"
+        logger.warning(message)
+        return {'success': False, 'status': 'error', 'message': message, 'error_type': 'missing_fields'}
+
+    session: Session = db.session
+    try:
+        # Проверяем существование родительской компетенции
+        competency = session.query(Competency).get(data['competency_id'])
+        if not competency:
+            message = f"Родительская компетенция с id {data['competency_id']} не найдена."
+            logger.warning(message)
+            return {'success': False, 'status': 'error', 'message': message, 'error_type': 'parent_competency_not_found'}
+
+        # Проверка на уникальность кода индикатора в рамках компетенции
+        existing_indicator = session.query(Indicator).filter_by(
+             code=data['code'],
+             competency_id=data['competency_id']
+        ).first()
+        if existing_indicator:
+             message = f"Индикатор с кодом '{data['code']}' для компетенции {data['competency_id']} уже существует."
+             logger.warning(message)
+             return {'success': False, 'status': 'already_exists', 'message': message, 'error_type': 'already_exists'}
+
+        indicator = Indicator(
+            competency_id=data['competency_id'], # Связываем по ID
+            code=data['code'],
+            formulation=data['formulation'],
+            source=data.get('source') # Используем поле 'source'
+        )
+        session.add(indicator)
+        session.commit() # Коммит после успешного добавления
+        logger.info(f"Indicator created: {indicator.code} (ID: {indicator.id}) for competency {indicator.competency_id}")
+
+        # TODO: Реализовать сохранение связей с ПС (IndicatorPsLink)
+        # data.get('labor_function_ids') - список ID ТФ
+        # Нужно найти эти ТФ и создать записи в IndicatorPsLink
+        # if data.get('labor_function_ids') and isinstance(data['labor_function_ids'], list):
+        #     labor_functions = session.query(LaborFunction).filter(LaborFunction.id.in_(data['labor_function_ids'])).all()
+        #     for tf in labor_functions:
+        #         # Проверяем, нет ли уже такой связи
+        #         existing_link = session.query(IndicatorPsLink).filter_by(
+        #             indicator_id=indicator.id,
+        #             labor_function_id=tf.id
+        #         ).first()
+        #         if not existing_link:
+        #             link = IndicatorPsLink(
+        #                 indicator_id=indicator.id,
+        #                 labor_function_id=tf.id,
+        #                 is_manual=True # Связь установлена вручную при создании индикатора
+        #                 # relevance_score = ... # Возможно, задается пользователем?
+        #             )
+        #             session.add(link)
+        #     session.commit() # Коммит связей ПС
+
+        # Возвращаем созданный объект в виде словаря
+        return {'success': True, 'status': 'created', 'message': 'Индикатор успешно создан', 'indicator': indicator.to_dict()}
+
+    except IntegrityError as e:
+        session.rollback()
+        message = f"Ошибка уникальности при создании индикатора: {e}"
+        logger.error(message, exc_info=True)
+        return {'success': False, 'status': 'error', 'message': message, 'error_type': 'integrity_error'}
+    except SQLAlchemyError as e:
+        session.rollback()
+        message = f"Ошибка базы данных при создании индикатора: {e}"
+        logger.error(message, exc_info=True)
+        return {'success': False, 'status': 'error', 'message': message, 'error_type': 'database_error'}
+    except Exception as e:
+        session.rollback()
+        message = f"Неожиданная ошибка при создании индикатора: {e}"
+        logger.error(message, exc_info=True)
+        return {'success': False, 'status': 'error', 'message': message, 'error_type': 'unexpected_error', 'details': str(e)}
+
+
+# --- Функции для работы с ФГОС ---
+
+def parse_fgos_file(file_bytes: bytes, filename: str) -> Dict[str, Any]: # Возвращаемый тип изменен на Dict (т.к. ошибки ловятся внутри парсера)
+    """
+    Оркестрирует парсинг загруженного файла ФГОС ВО.
+
+    Args:
+        file_bytes: Содержимое PDF файла в байтах.
+        filename: Имя файла.
+
+    Returns:
+        Dict[str, Any]: Структурированные данные ФГОС или raise ValueError/Exception в случае ошибки парсинга.
+                        В случае успеха всегда возвращает словарь с ключом 'metadata'.
+    """
+    # parse_fgos_pdf сам обрабатывает ошибки парсинга и логирует их, выбрасывая ValueError или Exception
+    # Мы просто вызываем его.
+    parsed_data = parse_fgos_pdf(file_bytes, filename)
+    
+    # Если parse_fgos_pdf не выбросил исключение, значит базовый парсинг прошел успешно.
+    # Возвращаем результат.
+    # Проверка на неполные данные (нет метаданных или компетенций) уже есть внутри parse_fgos_pdf.
+    
+    return parsed_data
+
+
+def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session, force_update: bool = False) -> Dict[str, Any]: # Изменен возвращаемый тип
+    """
+    Сохраняет структурированные данные ФГОС из парсера в БД.
+    Обрабатывает обновление существующих записей (FgosVo, Competency, Indicator).
+    Управляет своей транзакцией.
+
+    Args:
+        parsed_data: Структурированные данные, полученные от parse_fgos_file.
+        filename: Имя исходного файла (для сохранения пути).
+        session: Сессия SQLAlchemy.
+        force_update: Если True, удаляет старый ФГОС и связанные сущности перед сохранением нового.
+
+    Returns:
+        Dict[str, Any]: Словарь с результатом операции:
+            {
+                'success': True/False,
+                'message': '...',
+                'fgos_id': '...' (ID сохраненного/обновленного FgosVo, если success=True),
+                'error_type': '...' (опционально)
+            }
+    """
+    if not parsed_data or not parsed_data.get('metadata'):
+        message = "Некорректные или пустые данные для сохранения ФГОС."
+        logger.warning(message)
+        # Не нужен rollback, если данные даже не начали обрабатываться
+        return {'success': False, 'message': message, 'error_type': 'invalid_data'}
+
+    metadata = parsed_data['metadata']
+    fgos_number = metadata.get('order_number')
+    # !!! ИСПРАВЛЕНИЕ: Используем распарсенный объект date напрямую, если он есть
+    fgos_date_obj = metadata.get('order_date') # <-- Теперь это объект Date из парсера
+    # ------------------------------------------------------------------------
+    fgos_direction_code = metadata.get('direction_code')
+    fgos_education_level = metadata.get('education_level')
+    fgos_generation = metadata.get('generation')
+    fgos_direction_name = metadata.get('direction_name')
+    # TODO: Добавить другие поля метаданных, если извлекаются парсером (metadata['order_info']?)
+
+    # Проверка на обязательные метаданные (уже должна быть в парсере, но на всякий случай)
+    if not fgos_number or fgos_date_obj is None or not fgos_direction_code or not fgos_education_level:
+        message = "Отсутствуют обязательные метаданные ФГОС (номер, дата, код направления, уровень)."
+        logger.error(message)
+        return {'success': False, 'message': message, 'error_type': 'missing_metadata'}
+
+    # --- 1. Ищем существующий ФГОС ---
+    # Считаем ФГОС уникальным по комбинации код направления + уровень + номер + дата
+    existing_fgos = session.query(FgosVo).filter_by(
+        direction_code=fgos_direction_code,
+        education_level=fgos_education_level,
+        number=fgos_number,
+        date=fgos_date_obj # Сравниваем с объектом Date
+    ).first()
+
+    fgos_id_to_return = None # Для возврата ID нового или существующего ФГОС
+
+    if existing_fgos:
+        if force_update:
+            logger.info(f"save_fgos_data: Existing FGOS found ({existing_fgos.id}, code: {existing_fgos.direction_code}). Force update requested. Deleting old...")
+            # Удаляем старый ФГОС и все связанные сущности (благодаря CASCADE DELETE)
+            try:
+                session.delete(existing_fgos)
+                # Не коммитим здесь. Коммит будет в конце вместе с новым сохранением.
+                logger.info(f"save_fgos_data: Old FGOS ({existing_fgos.id}) marked for deletion.")
+                # Сохраняем ID, если нам нужно вернуть ID нового ФГОС после сохранения
+                fgos_id_to_return = existing_fgos.id # Сохраняем старый ID, чтобы, возможно, новый объект занял его место (или просто возвращаем новый ID)
+            except SQLAlchemyError as e:
+                session.rollback() # Откат при ошибке БД во время удаления
+                message = f"Ошибка базы данных при удалении старого ФГОС {existing_fgos.id}: {e}"
+                logger.error(message, exc_info=True)
+                return {'success': False, 'message': message, 'error_type': 'database_error_deleting_old'}
+        else:
+            # Если не force_update и ФГОС существует, мы его не перезаписываем
+            message = f"FGOS с тем же кодом, уровнем, номером и датой уже существует ({existing_fgos.id}). Обновление не затребовано (--force не установлен)."
+            logger.warning(message)
+            # Возвращаем существующий объект, чтобы фронтенд знал о дубликате
+            # Возвращаем success=True, т.к. операция "сохранения" в некотором смысле завершилась успешно (мы убедились, что запись есть)
+            # Но фронтенд должен интерпретировать status/message как "уже существует"
+            return {'success': True, 'message': message, 'status': 'already_exists', 'fgos_id': existing_fgos.id}
+
+
+    # --- 2. Создаем новый FgosVo (или обновляем существующий, если логика будет сложнее) ---
+    try:
+        # Создаем новый объект FgosVo
+        fgos_vo = FgosVo(
+            number=fgos_number,
+            date=fgos_date_obj, # <-- Используем объект Date
+            direction_code=fgos_direction_code,
+            direction_name=fgos_direction_name or 'Не указано', # Используем извлеченное имя
+            education_level=fgos_education_level,
+            generation=fgos_generation,
+            file_path=filename # Сохраняем имя файла
+            # TODO: Добавить другие поля метаданных, если извлекаются парсером
+        )
+        session.add(fgos_vo)
+        # Используем flush, чтобы получить ID нового ФГОС ДО коммита
+        session.flush() 
+        fgos_id_to_return = fgos_vo.id # Сохраняем ID нового объекта
+        logger.info(f"save_fgos_data: New FgosVo object created/queued for {fgos_vo.direction_code} with ID {fgos_vo.id}.")
+
+    except SQLAlchemyError as e:
+        session.rollback() # Откат при ошибке БД при создании нового ФГОС
+        message = f"Ошибка базы данных при создании объекта FgosVo: {e}"
+        logger.error(message, exc_info=True)
+        return {'success': False, 'message': message, 'error_type': 'database_error_creating_new'}
+
+    # --- 3. Сохраняем Компетенции и Индикаторы ---
+    # Важно: На этом этапе мы сохраняем ТОЛЬКО УК/ОПК из ФГОС PDF.
+    # Индикаторы для них (ИУК/ИОПК) должны приходить из Распоряжения 505-Р
+    # и быть сидированы или загружены отдельно.
+    # Если парсер ФГОС PDF находит индикаторы (старый код), они ИГНОРИРУЮТСЯ ЗДЕСЬ при сохранении.
+    
+    try:
+        # Получаем типы компетенций (УК, ОПК) из БД (уже должны быть сидированы)
+        comp_types = {ct.code: ct for ct in session.query(CompetencyType).filter(CompetencyType.code.in_(['УК', 'ОПК'])).all()}
+        if not comp_types:
+             session.rollback() # Откат, т.к. не можем сохранить компетенции без типов
+             message = "Типы компетенций (УК, ОПК) не найдены в базе данных. Запустите seed_db!"
+             logger.error(message)
+             return {'success': False, 'message': message, 'error_type': 'missing_competency_types'}
+
+        saved_competencies_count = 0
+        # Объединяем УК и ОПК для итерации
+        all_parsed_competencies = parsed_data.get('uk_competencies', []) + parsed_data.get('opk_competencies', [])
+
+        for parsed_comp in all_parsed_competencies:
+            comp_code = parsed_comp.get('code')
+            comp_name = parsed_comp.get('name')
+            # parsed_indicators = parsed_comp.get('indicators', []) # ИГНОРИРУЕМ индикаторы из PDF
+
+            if not comp_code or not comp_name:
+                logger.warning(f"save_fgos_data: Skipping competency due to missing code/name in parsed data: {parsed_comp}")
+                continue
+
+            comp_prefix = comp_code.split('-')[0].upper() # Убедимся, что префикс верхний регистр
+            comp_type = comp_types.get(comp_prefix)
+
+            if not comp_type:
+                logger.warning(f"save_fgos_data: Skipping competency {comp_code}: Competency type {comp_prefix} not found in mapped types (expected UK/OPK).")
+                continue
+                
+            # Проверяем, существует ли уже компетенция с таким кодом, привязанная к этому ФГОС
+            # Это важно при force_update, чтобы не дублировать (хотя удаление старого ФГОС должно это предотвратить)
+            # Если сработало - это либо баг в удалении, либо неполное удаление.
+            # В этом случае, мы хотим убедиться, что не добавляем дубликат по unique constraint.
+            # Добавляем явную проверку перед add().
+            existing_comp = session.query(Competency).filter_by(
+                 code=comp_code,
+                 fgos_vo_id=fgos_vo.id # Проверяем привязку именно к новому/обновляемому ФГОС
+            ).first()
+            
+            if existing_comp:
+                 logger.warning(f"save_fgos_data: Competency {comp_code} already exists for FGOS {fgos_vo.id} before explicit add. This is unexpected. Skipping add.")
+                 # TODO: Рассмотреть логику обновления существующей, если это нужно
+                 continue # Пропускаем создание, если уже есть
+
+            # Создаем компетенцию
+            competency = Competency(
+                competency_type_id=comp_type.id,
+                fgos_vo_id=fgos_vo.id, # Связываем с новым ФГОС
+                code=comp_code,
+                name=comp_name,
+                # description=... # Если есть описание в парсенных данных
+            )
+            session.add(competency)
+            # Используем flush, чтобы получить ID компетенции ДО коммита (если нужно)
+            # session.flush() 
+            saved_competencies_count += 1
+
+            # Индикаторы для этих УК/ОПК НЕ ПАРСЯТСЯ из PDF и НЕ СОХРАНЯЮТСЯ здесь.
+            # Они должны быть добавлены в БД из Распоряжения 505-Р через seed_db или отдельный механизм.
+            # Если они уже есть в БД и связаны с этим ФГОС/Компетенцией (по коду и родительскому ID),
+            # то они будут доступны через relationship при получении деталей ФГОС/Компетенции.
+
+        logger.info(f"save_fgos_data: Queued {saved_competencies_count} УК/ОПК competencies for saving.")
+
+    except SQLAlchemyError as e:
+        session.rollback() # Откат при ошибке БД при сохранении компетенций/индикаторов
+        message = f"Ошибка базы данных при сохранении компетенций/индикаторов: {e}"
+        logger.error(message, exc_info=True)
+        return {'success': False, 'message': message, 'error_type': 'database_error_saving_comp'}
+    except Exception as e:
+        session.rollback() # Откат при любой другой ошибке
+        message = f"Неожиданная ошибка при сохранении компетенций/индикаторов: {e}"
+        logger.error(message, exc_info=True)
+        return {'success': False, 'message': message, 'error_type': 'unexpected_error_saving_comp', 'details': str(e)}
+
+
+    # --- 4. Сохраняем рекомендованные ПС ---
+    # Сохраняем только связи FgosRecommendedPs с существующими ProfStandard в БД
+    try:
+        recommended_ps_codes = parsed_data.get('recommended_ps_codes', [])
+        logger.info(f"save_fgos_data: Found {len(recommended_ps_codes)} potential recommended PS codes in parsed data.")
+        
+        # Ищем существующие Профстандарты по кодам в БД
+        # Используем .in_() для эффективного запроса
+        if recommended_ps_codes:
+             existing_prof_standards = session.query(ProfStandard).filter(ProfStandard.code.in_(recommended_ps_codes)).all()
+             ps_by_code = {ps.code: ps for ps in existing_prof_standards}
+        else:
+             ps_by_code = {}
+
+
+        linked_ps_count = 0
+        for ps_code in recommended_ps_codes:
+            prof_standard = ps_by_code.get(ps_code)
+            if prof_standard:
+                # Проверяем, существует ли уже эта связь ФГОС-ПС для данного ФГОС
+                existing_link = session.query(FgosRecommendedPs).filter_by(
+                    fgos_vo_id=fgos_vo.id, # Связываем с новым/обновляемым ФГОС
+                    prof_standard_id=prof_standard.id
+                ).first()
+                
+                if not existing_link:
+                     # Создаем связь FgosRecommendedPs
+                     link = FgosRecommendedPs(
+                         fgos_vo_id=fgos_vo.id,
+                         prof_standard_id=prof_standard.id,
+                         is_mandatory=False # По умолчанию считаем рекомендованным (если парсер не извлек обязательность)
+                         # description = ... # Если парсер найдет доп. описание связи
+                     )
+                     session.add(link)
+                     linked_ps_count += 1
+                     logger.debug(f"save_fgos_data: Queued link between FGOS {fgos_vo.id} and PS {prof_standard.code}.")
+                else:
+                     logger.warning(f"save_fgos_data: Link between FGOS {fgos_vo.id} and PS {prof_standard.code} already exists. Skipping creation.")
+
+            else:
+                # Если ПС с таким кодом не найден в нашей БД, мы не можем создать связь.
+                # Это ожидаемая ситуация, если ПС еще не был загружен.
+                logger.warning(f"save_fgos_data: Recommended PS with code {ps_code} not found in DB. Cannot create link for FGOS {fgos_vo.id}. Please upload this PS first.")
+
+        logger.info(f"save_fgos_data: Queued {linked_ps_count} recommended PS links for saving.")
+
+    except SQLAlchemyError as e:
+        session.rollback() # Откат при ошибке БД при сохранении связей ПС
+        message = f"Ошибка базы данных при сохранении связей рекомендованных ПС: {e}"
+        logger.error(message, exc_info=True)
+        return {'success': False, 'message': message, 'error_type': 'database_error_saving_ps_links'}
+    except Exception as e:
+        session.rollback() # Откат при любой другой ошибке
+        message = f"Неожиданная ошибка при сохранении связей рекомендованных ПС: {e}"
+        logger.error(message, exc_info=True)
+        return {'success': False, 'message': message, 'error_type': 'unexpected_error_saving_ps_links', 'details': str(e)}
+
+
+    # --- Финальный коммит ---
+    try:
+        session.commit()
+        logger.info(f"save_fgos_data: Final commit successful for FGOS ID {fgos_id_to_return}.")
+        # Возвращаем успех и ID сохраненного/обновленного ФГОС
+        return {'success': True, 'message': 'Данные ФГОС успешно сохранены', 'fgos_id': fgos_id_to_return}
+    except SQLAlchemyError as e:
+        session.rollback() # Финальный откат, если коммит не удался
+        message = f"Финальный коммит не удался при сохранении ФГОС ID {fgos_id_to_return}: {e}"
+        logger.error(message, exc_info=True)
+        return {'success': False, 'message': message, 'error_type': 'database_commit_error'}
+
+
+def get_fgos_list() -> List[FgosVo]:
+    """
+    Получает список всех сохраненных ФГОС ВО.
+
+    Returns:
+        List[FgosVo]: Список объектов FgosVo.
+    """
+    try:
+        session = db.session
+        # Просто возвращаем все ФГОС, можно добавить сортировку/фильтры позже
+        # Добавим eager loading для associated educational programs count (через relationship)
+        # from sqlalchemy import func, select # Добавьте эти импорты, если используете subquery
+        # from sqlalchemy.orm import column_property
+
+        # TODO: добавить count_educational_programs = column_property(select(func.count(EducationalProgram.id)).where(EducationalProgram.fgos_vo_id == FgosVo.id).scalar_subquery()) in model?
+        # Если поле count_educational_programs добавлено в модель FgosVo, оно будет загружено автоматически
+
+        # Загружаем связи с ОП, чтобы отобразить их количество или первый АУП
+        fgos_list = session.query(FgosVo).options(
+             joinedload(FgosVo.educational_programs) # Загружаем связанные ОП
+        ).order_by(FgosVo.direction_code, FgosVo.date.desc()).all()
+        
+        # TODO: Возможно, добавить к каждому FgosVo информацию о количестве связанных ОП
+        # or about the primary AUP of a primary linked program if needed for display
+        
+        return fgos_list
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_fgos_list: {e}", exc_info=True)
+        return []
+
+
+def get_fgos_details(fgos_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Получает детальную информацию по ФГОС ВО, включая связанные компетенции, индикаторы,
+    и рекомендованные профстандарты.
+
+    Args:
+        fgos_id: ID ФГОС ВО.
+
+    Returns:
+        Optional[Dict[str, Any]]: Словарь с данными ФГОС или None, если не найден.
+    """
+    try:
+        # Убедимся, что сессия активна
+        session: Session = db.session
+        # Нет необходимости получать новую сессию, если текущая закрыта в веб-приложении Flask
+        # Сессия управляется контекстом запроса.
+
+        fgos = session.query(FgosVo).options(
+            # Загружаем связанные сущности
+            # !!! ИСПРАВЛЕНИЕ: Загружаем индикаторы через компетенции
+            selectinload(FgosVo.competencies).selectinload(Competency.indicators).joinedload(Indicator.competency_type), # Загружаем тип индикатора
+            # !!! ИСПРАВЛЕНИЕ: Загружаем рекомендованные ПС
+            selectinload(FgosVo.recommended_ps_assoc).selectinload(FgosRecommendedPs.prof_standard)
+            # TODO: Загрузить связанные ОП, если нужно
+            # selectinload(FgosVo.educational_programs)
+        ).get(fgos_id)
+
+        if not fgos:
+            logger.warning(f"FGOS with id {fgos_id} not found for details.")
+            return None
+
+        # Сериализуем основной объект ФГОС
+        details = fgos.to_dict()
+        details['date'] = details['date'].isoformat() if details.get('date') else None # Форматируем дату
+
+        # Сериализуем компетенции и индикаторы, связанные с этим ФГОС
+        uk_competencies_data = []
+        opk_competencies_data = []
+
+        # Сортируем компетенции по коду
+        sorted_competencies = sorted(fgos.competencies, key=lambda c: c.code)
+
+        for comp in sorted_competencies:
+            # Проверяем, что компетенция относится к этому ФГОС (уже гарантировано relationship)
+            # и является УК/ОПК (они единственные напрямую связаны через fgos_vo_id)
+            if comp.competency_type and comp.competency_type.code in ['УК', 'ОПК']:
+                 # Используем .to_dict() из BaseModel для сериализации полей
+                 comp_dict = comp.to_dict()
+                 comp_dict.pop('fgos', None) # Удаляем объект Fgos
+                 comp_dict.pop('competency_type', None) # Удаляем объект CompetencyType
+                 comp_dict.pop('based_on_labor_function', None) # Удаляем объект LaborFunction
+                 
+                 # Сериализуем индикаторы для этой компетенции
+                 comp_dict['indicators'] = []
+                 if comp.indicators:
+                      # Сортируем индикаторы
+                      sorted_indicators = sorted(comp.indicators, key=lambda i: i.code)
+                      comp_dict['indicators'] = [ind.to_dict() for ind in sorted_indicators]
+
+                 if comp.competency_type.code == 'УК':
+                      uk_competencies_data.append(comp_dict)
+                 elif comp.competency_type.code == 'ОПК':
+                      opk_competencies_data.append(comp_dict)
+                 # ПК не должны быть напрямую связаны через fgos_vo_id
+
+        details['uk_competencies'] = uk_competencies_data
+        details['opk_competencies'] = opk_competencies_data
+
+
+        # Сериализуем рекомендованные профстандарты
+        recommended_ps_list = []
+        if fgos.recommended_ps_assoc:
+            for assoc in fgos.recommended_ps_assoc:
+                if assoc.prof_standard:
+                    # Сериализуем ProfStandard
+                    ps_dict = assoc.prof_standard.to_dict()
+                    # Удаляем обратные связи, если они загружены
+                    ps_dict.pop('generalized_labor_functions', None)
+                    ps_dict.pop('fgos_assoc', None)
+                    ps_dict.pop('educational_program_assoc', None)
+
+                    recommended_ps_list.append({
+                        **ps_dict, # Включаем все поля ПС
+                        'is_mandatory': assoc.is_mandatory, # Добавляем метаданные связи
+                        'description': assoc.description,
+                        'link_id': assoc.id # Добавляем ID связи, если нужно для управления
+                    })
+        details['recommended_ps_list'] = recommended_ps_list
+
+        logger.info(f"Fetched details for FGOS {fgos_id}.")
+        return details
+
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_fgos_details for fgos_id {fgos_id}: {e}", exc_info=True)
+        # Нет необходимости в rollback для GET запросов, если они были только read
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error in get_fgos_details for fgos_id {fgos_id}: {e}", exc_info=True)
+        return None
+
+
+def delete_fgos(fgos_id: int, session: Session) -> bool:
+    """
+    Удаляет ФГОС ВО и все связанные сущности (Компетенции, Индикаторы, связи с ПС).
+    Предполагается, что отношения в моделях настроены на CASCADE DELETE.
+    Управляет своей транзакцией.
+
+    Args:
+        fgos_id: ID ФГОС ВО для удаления.
+        session: Сессия SQLAlchemy.
+
+    Returns:
+        bool: True, если удаление выполнено успешно, False в противном случае.
+    """
+    try:
+        fgos_to_delete = session.query(FgosVo).get(fgos_id)
+        if not fgos_to_delete:
+            logger.warning(f"delete_fgos: FGOS with id {fgos_id} not found.")
+            return False
+
+        # SQLAlchemy с CASCADE DELETE должен удалить:
+        # - Competency, связанные с этим FgosVo (FK Competency.fgos_vo_id)
+        # - Indicator, связанные с этими Competency (FK Indicator.competency_id)
+        # - FgosRecommendedPs, связанные с этим FgosVo (FK FgosRecommendedPs.fgos_vo_id)
+        # - EducationalProgram, связанные с этим FgosVo (FK EducationalProgram.fgos_vo_id)
+        # - EducationalProgramAup, связанные с EducationalProgram (FK EducationalProgramAup.educational_program_id) - если CASCADE настроен там
+        # - EducationalProgramPs, связанные с EducationalProgram (FK EducationalProgramPs.educational_program_id) - если CASCADE настроен там
+
+        session.delete(fgos_to_delete)
+        session.commit() # Коммит после успешного удаления
+        logger.info(f"delete_fgos: FGOS with id {fgos_id} deleted successfully (cascading enabled).")
+        return True
+
+    except SQLAlchemyError as e:
+        session.rollback() # Откат при ошибке БД
+        logger.error(f"delete_fgos: Database error deleting FGOS {fgos_id}: {e}", exc_info=True)
+        return False
+    except Exception as e:
+        session.rollback() # Откат при любой другой ошибке
+        logger.error(f"delete_fgos: Unexpected error deleting FGOS {fgos_id}: {e}", exc_info=True)
+        return False
+
+# --- Функции для работы с Профстандартами ---
+
+def parse_prof_standard_upload(file_bytes: bytes, filename: str) -> Dict[str, Any]:
+    """
+    Парсит загруженный файл профстандарта, извлекает базовые метаданные и контент.
+    Эта функция вызывает парсер из parsers.py
+    (Переименована из parse_uploaded_prof_standard для ясности)
+
+    Args:
+        file_bytes: Содержимое файла в байтах.
+        filename: Имя файла.
+
+    Returns:
+        Dict[str, Any]: Словарь с извлеченными данными.
+                        Структура должна включать хотя бы {'code': '...', 'name': '...', 'parsed_content': '...'}.
+                        Может содержать 'generalized_labor_functions': [...] с детальной структурой.
+    """
+    # Вызываем парсер из parsers.py
+    # Обработка ошибок парсинга должна быть внутри parse_prof_standard или здесь.
+    try:
+        # TODO: parse_prof_standard_upload (в parsers.py) должна парсить и возвращатьDict
+        # с ключами 'code', 'name', 'parsed_content' (markdown), и опционально 'structure'
+        # Вызываем парсер
+        # from .parsers import parse_prof_standard_file # Нужно импортировать правильную функцию парсера ПС из parsers.py
+        # parsed_data = parse_prof_standard_file(file_bytes, filename) # Используем функцию парсера из parsers.py
+
+        # В текущей реализации parsers.py есть parse_uploaded_prof_standard
+        # Давайте используем её, но лучше переименовать в parsers.py на parse_prof_standard_from_bytes
+        from .parsers import parse_uploaded_prof_standard # Импортируем существующую функцию
+
+        # Вызываем парсер
+        parsed_data = parse_uploaded_prof_standard(file_bytes, filename)
+
+        # Проверяем, что парсер вернул хотя бы базовые данные
+        if not parsed_data or not parsed_data.get('code') or not parsed_data.get('name'):
+             logger.warning(f"parse_prof_standard_upload: Parser failed to extract core metadata for {filename}.")
+             # Возвращаем словарь с ошибкой
+             return {'success': False, 'message': 'Не удалось извлечь код и название профстандарта из файла.', 'error_type': 'parsing_failed_core'}
+             
+        # Если парсинг успешный, возвращаем данные
+        return {'success': True, 'message': 'Файл профстандарта успешно распарсен.', 'parsed_data': parsed_data}
+
+    except Exception as e:
+        logger.error(f"parse_prof_standard_upload: Unexpected error parsing {filename}: {e}", exc_info=True)
+        # Возвращаем словарь с ошибкой
+        return {'success': False, 'message': f"Неожиданная ошибка при парсинге файла: {e}", 'error_type': 'unexpected_parsing_error', 'details': str(e)}
+
+
+def save_prof_standard_from_file(file_bytes: bytes, filename: str) -> Dict[str, Any]:
+    """
+    Парсит файл профстандарта и сохраняет его в БД.
+    Управляет своей транзакцией.
+
+    Args:
+        file_bytes: Содержимое файла в байтах.
+        filename: Имя файла.
+
+    Returns:
+        Dict[str, Any]: Словарь с результатом операции:
+            {
+                'success': True/False,
+                'message': '...',
+                'prof_standard_id': '...' (ID сохраненного ProfStandard, если success=True),
+                'error_type': '...' (опционально)
+            }
+    """
+    session: Session = db.session
+    try:
+        # 1. Парсим файл
+        # parse_prof_standard_upload возвращает {success, message, parsed_data, error_type?}
+        parse_result = parse_prof_standard_upload(file_bytes, filename)
+
+        if not parse_result.get('success'):
+             # Если парсинг не удался, возвращаем результат парсера
+             return parse_result
+
+        parsed_data = parse_result['parsed_data']
+        ps_code = parsed_data.get('code')
+        ps_name = parsed_data.get('name')
+        ps_markdown = parsed_data.get('parsed_content')
+        # TODO: Извлечь и использовать другие метаданные ПС из парсера (номер, дата приказа, рег. номер/дата)
+
+        # Проверка на обязательные данные после парсинга
+        if not ps_code or not ps_name or ps_markdown is None: # parsed_content может быть пустой строкой, но не None
+            message = "Парсер не извлек обязательные данные профстандарта (код, название, контент)."
+            logger.error(message)
+            return {'success': False, 'message': message, 'error_type': 'missing_parsed_data'}
+
+
+        # 2. Ищем существующий Профстандарт по коду
+        existing_ps = session.query(ProfStandard).filter_by(code=ps_code).first()
+
+        if existing_ps:
+            # Если существует, обновляем его
+            logger.info(f"save_prof_standard_from_file: ProfStandard with code {ps_code} already exists ({existing_ps.id}). Updating...")
+            prof_standard = existing_ps
+            prof_standard.name = ps_name # Обновляем название
+            prof_standard.parsed_content = ps_markdown # Обновляем контент
+            # TODO: Обновить другие метаданные, если они есть в парсенных данных
+            prof_standard.updated_at = datetime.datetime.utcnow() # Обновляем дату изменения явно
+
+            # TODO: Удалить старую структурированную часть (ОТФ, ТФ, ТД, НУ, НЗ)
+            # и сохранить новую, если парсер умеет ее извлекать.
+            # Удаление должно быть каскадным или явным.
+            # delete_prof_standard_structure(prof_standard.id, session)
+
+            session.add(prof_standard) # Добавляем в сессию (для обновления)
 
         else:
-            print("   - Skipping database save due to --dry-run flag.")
-            print(f"---> DRY RUN for '{filename}' completed successfully (parsing passed).\n")
+            # Если не существует, создаем новый
+            logger.info(f"save_prof_standard_from_file: Creating new ProfStandard with code {ps_code}.")
+            prof_standard = ProfStandard(
+                code=ps_code,
+                name=ps_name,
+                parsed_content=ps_markdown,
+                # TODO: Добавить другие метаданные из парсера
+            )
+            session.add(prof_standard)
+            session.flush() # Получаем ID нового объекта
+
+        # TODO: Если парсер умеет извлекать структуру (ОТФ, ТФ, ...), сохранить ее ЗДЕСЬ
+        # save_prof_standard_structure(prof_standard.id, parsed_data.get('structure'), session)
 
 
-    except FileNotFoundError:
-        print(f"\n!!! ERROR: File not found at '{filepath}' !!!")
-    except ImportError as e:
-        print(f"\n!!! ERROR: Missing dependency for reading PDF files: {e} !!!")
-        print("   - Please ensure 'pdfminer.six' is installed.")
-    except ValueError as e: # Ловим ошибки от parse_fgos_file
-        print(f"\n!!! PARSING ERROR: {e} !!!")
-        if not dry_run:
-             db.session.rollback() # Откат, если сессия была изменена
+        session.commit() # Коммит после успешного создания/обновления
+        logger.info(f"save_prof_standard_from_file: ProfStandard {ps_code} saved/updated successfully with ID {prof_standard.id}.")
+        return {'success': True, 'message': 'Профстандарт успешно загружен и сохранен', 'prof_standard_id': prof_standard.id, 'code': prof_standard.code, 'name': prof_standard.name}
+
+    except IntegrityError as e:
+        session.rollback() # Откат при ошибке уникальности
+        message = f"Ошибка уникальности при сохранении профстандарта (код '{ps_code}'): {e}"
+        logger.error(message, exc_info=True)
+        return {'success': False, 'message': message, 'error_type': 'integrity_error'}
+    except SQLAlchemyError as e:
+        session.rollback() # Откат при любой другой ошибке БД
+        message = f"Ошибка базы данных при сохранении профстандарта '{ps_code}': {e}"
+        logger.error(message, exc_info=True)
+        return {'success': False, 'message': message, 'error_type': 'database_error'}
     except Exception as e:
-        if not dry_run:
-            db.session.rollback()
-            print("   - Database transaction might have been rolled back.")
-        print(f"\n!!! UNEXPECTED ERROR during import: {e} !!!")
-        print("   - Database transaction might have been rolled back.")
+        session.rollback() # Откат при любой другой неожиданной ошибке
+        message = f"Неожиданная ошибка при сохранении профстандарта '{ps_code}': {e}"
+        logger.error(message, exc_info=True)
+        return {'success': False, 'message': message, 'error_type': 'unexpected_error', 'details': str(e)}
+
+# Вспомогательные функции (для будущей имплементации)
+# TODO: Реализовать удаление структуры ПС перед обновлением
+# def delete_prof_standard_structure(prof_standard_id: int, session: Session):
+#     """Удаляет всю структурированную информацию (ОТФ, ТФ, ТД, НУ, НЗ) для данного ПС."""
+#     # Реализовать удаление из GeneralizedLaborFunction, LaborFunction, LaborAction, RequiredSkill, RequiredKnowledge
+#     # Возможно, CASCADE DELETE на FK уже достаточно.
+
+
+# TODO: Реализовать сохранение структуры ПС
+# def save_prof_standard_structure(prof_standard_id: int, structure_data: Dict[str, Any], session: Session):
+#     """Сохраняет структурированные данные ПС в БД."""
+#     # structure_data = {'generalized_labor_functions': [...]}
+#     # Реализовать создание записей в GeneralizedLaborFunction, LaborFunction, LaborAction, RequiredSkill, RequiredKnowledge
+#     # и связывание их с ProfStandard и друг с другом.
+
+# TODO: Реализовать удаление ПС
+# def delete_prof_standard(prof_standard_id: int, session: Session) -> bool:
+#     """Удаляет профстандарт и все связанные с ним сущности."""
+#     # Удаление ProfStandard должно каскадно удалить связанные ОТФ, ТФ, и т.д.
+#     # А также связи EducationalProgramPs, FgosRecommendedPs, IndicatorPsLink
+#     # Нужно проверить настройки ON DELETE CASCADE в моделях.
+#     pass
+
+
+# --- Вспомогательные функции для других модулей (например, для импорта АУП) ---
+# Функции для импорта AUP были перенесены в maps.logic.save_excel_data
+# Например: delete_aup_by_num, save_excel_data (с session)
+
+# --- Заглушка для NLP ---
+def suggest_links_nlp(disciplines: List[Dict], indicators: List[Dict]) -> List[Dict]:
+    """
+    Получает предложения по связям "Дисциплина-ИДК" от NLP модуля.
+    Это заглушка, которая будет заменена реальным вызовом к NLP.
+    
+    Args:
+        disciplines: Список дисциплин с их данными
+        indicators: Список ИДК с их данными
+        
+    Returns:
+        List: Список предложенных связей вида [{'aup_data_id': ..., 'indicator_id': ..., 'score': ...}, ...]
+    """
+    # Заглушка - в реальности здесь будет вызов к NLP сервису
+    # Просто возвращаем пару случайных связей
+    import random
+    
+    if not disciplines or not indicators:
+        return []
+    
+    result = []
+    # Генерируем 5 случайных предложений
+    # Учитываем, что количество предложений не может превышать общее количество возможных связей
+    max_suggestions = len(disciplines) * len(indicators)
+    num_suggestions = min(5, max_suggestions) # Ограничиваем количество предложений
+    
+    # Используем set для хранения уникальных пар (discipline_id, indicator_id)
+    generated_links = set()
+    
+    while len(generated_links) < num_suggestions:
+        if not disciplines or not indicators: # Повторная проверка на случай, если списки опустели (хотя маловероятно)
+             break
+        
+        d = random.choice(disciplines)
+        i = random.choice(indicators)
+        
+        link_key = (d['aup_data_id'], i['id'])
+        
+        if link_key not in generated_links:
+            generated_links.add(link_key)
+            result.append({
+                'aup_data_id': d['aup_data_id'],
+                'indicator_id': i['id'],
+                'score': round(random.random(), 2) # Случайная оценка релевантности
+            })
+            
+        # Добавляем защиту от бесконечного цикла, если max_suggestions < num_suggestions
+        if len(generated_links) >= max_suggestions:
+             break
+    
+    return result
+```
+
+```python
+# filepath: /home/me/ВКР/maps_backend/cli_commands/db_seed.py
+# filepath: /home/me/ВКР/maps_backend/cli_commands/db_seed.py
+import click
+from flask.cli import with_appcontext
+import datetime
+import traceback
+from werkzeug.security import generate_password_hash
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+import random
+
+# --- Import all necessary models ---
+# You need to import 'db' and all models used within the seed_command function
+from maps.models import (
+    db, SprDiscipline, AupInfo, AupData, SprFaculty, Department,
+    SprDegreeEducation, SprFormEducation, SprRop, NameOP, Groups, SprOKCO,
+    D_Blocks, D_Part, D_TypeRecord, D_ControlType, D_EdIzmereniya, D_Period, SprBranch, D_Modules
+)
+from auth.models import Roles, Users
+from competencies_matrix.models import (
+    CompetencyType, FgosVo, EducationalProgram, Competency, Indicator,
+    CompetencyMatrix, EducationalProgramAup, EducationalProgramPs,
+    ProfStandard, FgosRecommendedPs, IndicatorPsLink, LaborFunction, # Import LaborFunction
+    GeneralizedLaborFunction, LaborAction, RequiredSkill, RequiredKnowledge # Import other PS structure models
+)
+from cabinet.models import (
+    StudyGroups, SprPlace, SprBells, DisciplineTable,
+    GradeType, Topics, Students, Tutors, Grade, GradeColumn,
+    TutorsOrder, TutorsOrderRow
+)
+
+# Assuming Mode model exists, potentially in a general config or base models file
+# If it's elsewhere, adjust the import accordingly
+# from some_module import Mode # Placeholder for Mode import
+
+@click.command(name='seed_db')
+@with_appcontext
+def seed_command():
+    """Заполняет базу данных начальными/тестовыми данными (Идемпотентно)."""
+    print("Starting database seeding...")
+    try:
+        session = db.session # Получаем сессию
+        
+        # === БЛОК 1: Основные Справочники (Первоочередные) ===
+        print("Seeding Core Lookups...")
+
+        # Используем merge для идемпотентности - он вставит или обновит по PK
+        # Сначала справочники без зависимостей
+        session.merge(CompetencyType(id=1, code='УК', name='Универсальная'))
+        session.merge(CompetencyType(id=2, code='ОПК', name='Общепрофессиональная'))
+        session.merge(CompetencyType(id=3, code='ПК', code_name='Профессиональная')) # Уточнено code_name
+
+        session.merge(Roles(id_role=1, name_role='admin'))
+        session.merge(Roles(id_role=2, name_role='methodologist'))
+        session.merge(Roles(id_role=3, name_role='teacher'))
+        session.merge(Roles(id_role=4, name_role='tutor'))
+        session.merge(Roles(id_role=5, name_role='student'))
+
+        # Справочники для АУП (ID как в сидере)
+        session.merge(SprBranch(id_branch=1, city='Москва', location='Основное подразделение')) # Имя поля уточнено
+        session.merge(SprDegreeEducation(id_degree=1, name_deg="Высшее образование - бакалавриат")) # Имя поля уточнено
+        session.merge(SprFormEducation(id_form=1, form="Очная")) # Имя поля уточнено
+        session.merge(SprRop(id_rop=1, last_name='Иванов', first_name='Иван', middle_name='Иванович', email='rop@example.com', telephone='+70000000000'))
+        # Замени на реальные данные для SprOKCO и NameOP если они используются как FK
+        session.merge(SprOKCO(program_code='09.03.01', name_okco='Информатика и ВТ')) # Пример ОКСО
+        session.merge(NameOP(id_spec=1, program_code='09.03.01', num_profile='01', name_spec='Веб-технологии')) # Пример NameOP
+
+        # Добавляем факультет и кафедру (департамент) - обязательно перед АУП
+        faculty_1 = session.merge(SprFaculty(id_faculty=1, name_faculty='Факультет информатики', id_branch=1))
+        department_1 = session.merge(Department(id_department=1, name_department='Кафедра веб-технологий'))
+        session.commit()  # Коммитим факультет и кафедру
+
+        # Справочники для AupData (ID как в сидере)
+        session.merge(D_Blocks(id=1, title="Блок 1. Дисциплины (модули)"))
+        session.merge(D_Part(id=1, title="Обязательная часть"))
+        session.merge(D_Modules(id=1, title="Базовый модуль", color="#FFFFFF")) # Добавлен цвет
+        session.merge(Groups(id_group=1, name_group="Основные", color="#FFFFFF", weight=1)) # Имя поля уточнено
+        session.merge(D_TypeRecord(id=1, title="Дисциплина"))
+        session.merge(D_ControlType(id=1, title="Экзамен", default_shortname="Экз"))
+        session.merge(D_ControlType(id=5, title="Зачет", default_shortname="Зач"))
+        session.merge(D_EdIzmereniya(id=1, title="Академ. час"))
+        session.merge(D_Period(id=1, title="Семестр 1"))
+        session.merge(D_Period(id=2, title="Семестр 2"))
+
+        # Справочники Дисциплин
+        session.merge(SprDiscipline(id=1001, title='Основы программирования'))
+        session.merge(SprDiscipline(id=1002, title='Базы данных'))
+        session.merge(SprDiscipline(id=1003, title='История России'))
+
+        # Коммитим все справочники ПЕРЕД созданием зависимых сущностей
+        session.commit()
+        print("  - Core lookups seeded/merged.")
+
+        # === БЛОК 2: ФГОС и Образовательные Программы ===
+        print("Seeding FGOS...")
+        # merge вернет объект, который есть в сессии (или новый)
+        # Используем дату в формате YYYY-MM-DD
+        fgos1 = session.merge(FgosVo(id=1, number='929', date=datetime.date(2017, 9, 19), direction_code='09.03.01',
+                                       direction_name='Информатика и вычислительная техника', education_level='бакалавриат', generation='3++', file_path='ФГОС ВО 090301_B_3_19092017.pdf'))
+        # Добавим еще один ФГОС для теста
+        fgos2 = session.merge(FgosVo(id=2, number='922', date=datetime.date(2020, 8, 7), direction_code='18.03.01',
+                                       direction_name='Химическая технология', education_level='бакалавриат', generation='3+', file_path='ФГОС ВО 180301_B_3_07082020.pdf'))
+        session.commit()
+        print("  - FGOS 09.03.01 and 18.03.01 checked/merged.")
+
+        print("Seeding Educational Program...")
+        # ИСПОЛЬЗУЕМ title
+        program1 = session.merge(EducationalProgram(id=1, fgos_vo_id=1, code='09.03.01', title='Веб-технологии (09.03.01)',
+                                                     profile='Веб-технологии', qualification='Бакалавр', form_of_education='очная', enrollment_year=2024))
+        # Добавим еще одну ОП для теста
+        program2 = session.merge(EducationalProgram(id=2, fgos_vo_id=2, code='18.03.01', title='Технология переработки пластических масс и эластомеров (18.03.01)',
+                                                    profile='Не указан', qualification='Бакалавр', form_of_education='очная', enrollment_year=2024))
+
+        session.commit()
+        print("  - Educational Programs checked/merged.")
+
+        # === БЛОК 3: АУП и его структура ===
+        print("Seeding AUP...")
+        # merge вернет объект AupInfo
+        aup101 = session.merge(AupInfo(id_aup=101, num_aup='B093011451', file='example.xlsx', base='11 классов',
+                                          id_faculty=1, id_rop=1, type_educ='Высшее', qualification='Бакалавр',
+                                          type_standard='ФГОС 3++', id_department=1, period_educ='4 года',
+                                          id_degree=1, id_form=1, years=4, months=0, id_spec=1,
+                                          year_beg=2024, year_end=2028, is_actual=1))
+        # Добавим еще один АУП для теста
+        aup102 = session.merge(AupInfo(id_aup=102, num_aup='B180301XXXX', file='example2.xlsx', base='11 классов',
+                                       id_faculty=1, id_rop=1, type_educ='Высшее', qualification='Бакалавр',
+                                       type_standard='ФГОС 3+', id_department=1, period_educ='4 года',
+                                       id_degree=1, id_form=1, years=4, months=0, id_spec=1,
+                                       year_beg=2024, year_end=2028, is_actual=1))
+
+        session.commit()
+        print("  - AUPs checked/merged.")
+
+        print("Seeding AUP-Program Links...")
+        # Для ассоциативных лучше проверка + add
+        link_ep_aup1 = EducationalProgramAup.query.filter_by(educational_program_id=1, aup_id=101).first()
+        if not link_ep_aup1:
+            link_ep_aup1 = EducationalProgramAup(educational_program_id=1, aup_id=101, is_primary=True)
+            session.add(link_ep_aup1)
+            print("  - Linked Program 1 and AUP 101.")
+        else:
+            print("  - Link Program 1 - AUP 101 already exists.")
+
+        link_ep_aup2 = EducationalProgramAup.query.filter_by(educational_program_id=2, aup_id=102).first()
+        if not link_ep_aup2:
+            link_ep_aup2 = EducationalProgramAup(educational_program_id=2, aup_id=102, is_primary=True)
+            session.add(link_ep_aup2)
+            print("  - Linked Program 2 and AUP 102.")
+        else:
+            print("  - Link Program 2 - AUP 102 already exists.")
+
+
+        session.commit()
+        print("  - AUP-Program Links checked/merged.")
+
+
+        print("Seeding AupData entries...")
+        # merge вернет объекты AupData - используем _discipline для имени колонки
+        ad501 = session.merge(AupData(
+            id=501, id_aup=101, id_discipline=1001, _discipline='Основы программирования',
+            id_block=1, shifr='Б1.1.07', id_part=1, id_module=1, id_group=1,
+            id_type_record=1, id_period=1, num_row=7, id_type_control=1, # Экзамен
+            amount=14400, id_edizm=1, zet=4
+        ))
+        ad502 = session.merge(AupData(
+            id=502, id_aup=101, id_discipline=1002, _discipline='Базы данных',
+            id_block=1, shifr='Б1.1.10', id_part=1, id_module=1, id_group=1,
+            id_type_record=1, id_period=1, num_row=10, id_type_control=5, # Зачет
+            amount=10800, id_edizm=1, zet=3
+        ))
+        ad503 = session.merge(AupData(
+            id=503, id_aup=101, id_discipline=1003, _discipline='История России',
+            id_block=1, shifr='Б1.1.01', id_part=1, id_module=1, id_group=1,
+            id_type_record=1, id_period=1, num_row=1, id_type_control=5, # Зачет
+            amount=7200, id_edizm=1, zet=2
+        ))
+        # Добавим AupData для второго АУП
+        ad504 = session.merge(AupData(
+            id=504, id_aup=102, id_discipline=1001, _discipline='Основы программирования',
+            id_block=1, shifr='Б1.1.08', id_part=1, id_module=1, id_group=1,
+            id_type_record=1, id_period=1, num_row=8, id_type_control=1, # Экзамен
+            amount=14400, id_edizm=1, zet=4
+        ))
+        ad505 = session.merge(AupData(
+            id=505, id_aup=102, id_discipline=1003, _discipline='История России',
+            id_block=1, shifr='Б1.1.01', id_part=1, id_module=1, id_group=1,
+            id_type_record=1, id_period=2, num_row=1, id_type_control=5, # Зачет
+            amount=7200, id_edizm=1, zet=2
+        ))
+
+
+        session.commit()
+        print("  - AupData entries checked/merged.")
+
+        # === БЛОК 4: Компетенции и Индикаторы ===
+        print("Seeding Competencies & Indicators...")
+        # Используем merge
+        # ВАЖНО: Убедись, что поле fgos_vo_id добавлено в модель Competency и миграцию!
+
+        # УК для ФГОС 09.03.01 (fgos_vo_id=1)
+        comp_uk1_fgos1 = session.merge(Competency(id=1, competency_type_id=1, fgos_vo_id=1, code='УК-1', name='Способен осуществлять поиск, критический анализ и синтез информации, применять системный подход для решения поставленных задач'))
+        comp_uk2_fgos1 = session.merge(Competency(id=2, competency_type_id=1, fgos_vo_id=1, code='УК-2', name='Способен определять круг задач в рамках поставленной цели и выбирать оптимальные способы их решения...'))
+        comp_uk3_fgos1 = session.merge(Competency(id=3, competency_type_id=1, fgos_vo_id=1, code='УК-3', name='Способен осуществлять социальное взаимодействие и реализовывать свою роль в команде'))
+        comp_uk4_fgos1 = session.merge(Competency(id=4, competency_type_id=1, fgos_vo_id=1, code='УК-4', name='Способен осуществлять деловую коммуникацию в устной и письменной формах на государственном языке РФ...'))
+        comp_uk5_fgos1 = session.merge(Competency(id=5, competency_type_id=1, fgos_vo_id=1, code='УК-5', name='Способен воспринимать межкультурное разнообразие общества...'))
+        comp_uk6_fgos1 = session.merge(Competency(id=6, competency_type_id=1, fgos_vo_id=1, code='УК-6', name='Способен управлять своим временем, выстраивать и реализовывать траекторию саморазвития...'))
+        comp_uk7_fgos1 = session.merge(Competency(id=7, competency_type_id=1, fgos_vo_id=1, code='УК-7', name='Способен поддерживать должный уровень физической подготовленности...'))
+        comp_uk8_fgos1 = session.merge(Competency(id=8, competency_type_id=1, fgos_vo_id=1, code='УК-8', name='Способен создавать и поддерживать в повседневной жизни и в профессиональной деятельности безопасные условия...'))
+        comp_uk9_fgos1 = session.merge(Competency(id=9, competency_type_id=1, fgos_vo_id=1, code='УК-9', name='Способен принимать обоснованные экономические решения...'))
+        comp_uk10_fgos1 = session.merge(Competency(id=10, competency_type_id=1, fgos_vo_id=1, code='УК-10', name='Способен формировать нетерпимое отношение к проявлениям экстремизма, терроризма, коррупционного поведения...'))
+
+        # ОПК для ФГОС 09.03.01 (fgos_vo_id=1)
+        comp_opk1_fgos1 = session.merge(Competency(id=101, competency_type_id=2, fgos_vo_id=1, code='ОПК-1', name='Способен применять естественнонаучные и общеинженерные знания...'))
+        comp_opk2_fgos1 = session.merge(Competency(id=102, competency_type_id=2, fgos_vo_id=1, code='ОПК-2', name='Способен принимать принципы работы современных информационных технологий...'))
+        comp_opk3_fgos1 = session.merge(Competency(id=103, competency_type_id=2, fgos_vo_id=1, code='ОПК-3', name='Способен решать стандартные задачи профессиональной деятельности на основе информационной и библиографической культуры...'))
+        comp_opk4_fgos1 = session.merge(Competency(id=104, competency_type_id=2, fgos_vo_id=1, code='ОПК-4', name='Способен участвовать в разработке стандартов, норм и правил...'))
+        comp_opk5_fgos1 = session.merge(Competency(id=105, competency_type_id=2, fgos_vo_id=1, code='ОПК-5', name='Способен инсталлировать программное и аппаратное обеспечение...'))
+        comp_opk6_fgos1 = session.merge(Competency(id=106, competency_type_id=2, fgos_vo_id=1, code='ОПК-6', name='Способен разрабатывать бизнес-планы и технические задания...'))
+        comp_opk7_fgos1 = session.merge(Competency(id=107, competency_type_id=2, fgos_vo_id=1, code='ОПК-7', name='Способен участвовать в настройке и наладке программно-аппаратных комплексов'))
+        comp_opk8_fgos1 = session.merge(Competency(id=108, competency_type_id=2, fgos_vo_id=1, code='ОПК-8', name='Способен разрабатывать алгоритмы и программы, пригодные для практического применения'))
+        comp_opk9_fgos1 = session.merge(Competency(id=109, competency_type_id=2, fgos_vo_id=1, code='ОПК-9', name='Способен осваивать методики использования программных средств для решения практических задач'))
+
+        # ПК для ОП Веб-технологии (fgos_vo_id=None, т.к. ПК не берутся из ФГОС)
+        comp_pk1 = session.merge(Competency(id=201, competency_type_id=3, fgos_vo_id=None, code='ПК-1', name='Способен выполнять работы по созданию (модификации) и сопровождению ИС, автоматизирующих задачи организационного управления и бизнес-процессы'))
+        comp_pk2 = session.merge(Competency(id=202, competency_type_id=3, fgos_vo_id=None, code='ПК-2', name='Способен осуществлять управление проектами в области ИТ на основе полученных планов проектов в условиях, когда проект не выходит за пределы утвержденных параметров'))
+        comp_pk3 = session.merge(Competency(id=203, competency_type_id=3, fgos_vo_id=None, code='ПК-3', name='Способен разрабатывать требования и проектировать программное обеспечение'))
+        comp_pk4 = session.merge(Competency(id=204, competency_type_id=3, fgos_vo_id=None, code='ПК-4', name='Способен проводить работы по интеграции программных модулей и компонент и проверку работоспособности выпусков программных продуктов'))
+        comp_pk5 = session.merge(Competency(id=205, competency_type_id=3, fgos_vo_id=None, code='ПК-5', name='Способен осуществлять концептуальное, функциональное и логическое проектирование систем среднего и крупного масштаба и сложности'))
+
+
+        # Индикаторы - тоже через merge
+        # Для УК-1 (ID=1)
+        session.merge(Indicator(id=10, competency_id=1, code='ИУК-1.1', formulation='Анализирует задачу, выделяя ее базовые составляющие', source='Распоряжение 505-Р'))
+        session.merge(Indicator(id=11, competency_id=1, code='ИУК-1.2', formulation='Осуществляет поиск, критически оценивает, обобщает, систематизирует и ранжирует информацию...', source='Распоряжение 505-Р'))
+        session.merge(Indicator(id=12, competency_id=1, code='ИУК-1.3', formulation='Рассматривает и предлагает рациональные варианты решения...', source='Распоряжение 505-Р'))
+        # Для УК-2 (ID=2)
+        session.merge(Indicator(id=20, competency_id=2, code='ИУК-2.1', formulation='Формулирует совокупность задач в рамках поставленной цели проекта...', source='Распоряжение 505-Р'))
+        session.merge(Indicator(id=21, competency_id=2, code='ИУК-2.2', formulation='Определяет связи между поставленными задачами, основными компонентами проекта...', source='Распоряжение 505-Р'))
+        session.merge(Indicator(id=22, competency_id=2, code='ИУК-2.3', formulation='Выбирает оптимальные способы планирования, распределения зон ответственности...', source='Распоряжение 505-Р'))
+        # ... и так далее для всех УК и ОПК по Распоряжению 505-Р
+        # Для УК-5 (ID=5)
+        session.merge(Indicator(id=50, competency_id=5, code='ИУК-5.1', formulation='Анализирует и интерпретирует события, современное состояние общества...', source='Распоряжение 505-Р'))
+        # Для ОПК-7 (ID=107)
+        session.merge(Indicator(id=170, competency_id=107, code='ИОПК-7.1', formulation='Знает основные языки программирования, операционные системы и оболочки, современные среды разработки программного обеспечения', source='ОП Веб-технологии'))
+        # ... и так далее для всех ОПК
+        
+        # Индикаторы для ПК (ИПК) (Пример для ПК-1 ID=201)
+        session.merge(Indicator(id=210, competency_id=201, code='ИПК-1.1', formulation='Знает: методологию и технологии проектирования информационных систем; проектирование обеспечивающих подсистем; приемы программирования приложений.', source='ОП Веб-технологии / ПС 06.015'))
+        session.merge(Indicator(id=211, competency_id=201, code='ИПК-1.2', formulation='Умеет: создавать, модифицировать и сопровождать информационные системы для решения задач бизнес-процессов и организационного управления...', source='ОП Веб-технологии / ПС 06.015'))
+        session.merge(Indicator(id=212, competency_id=201, code='ИПК-1.3', formulation='Владеет: методами создания и сопровождения информационных систем...', source='ОП Веб-технологии / ПС 06.015'))
+        # ... и так далее для всех ПК из таблицы 5 ОП Веб-технологии
+
+        session.commit() # Коммитим компетенции и индикаторы
+        print("  - Competencies & Indicators checked/merged.")
+
+        # === БЛОК 4.1: Профессиональные Стандарты (Базовая структура) ===
+        print("Seeding Basic Professional Standards Structure...")
+        # Добавим несколько Профстандартов и базовую структуру (ОТФ, ТФ)
+        # Наполнение всей структуры (ТД, НУ, НЗ) и связей ИДК-ТФ/ТД/НУ/НЗ - это задача парсинга ПС и ручного формирования
+
+        ps_prog = session.merge(ProfStandard(id=1, code='06.001', name='Программист', parsed_content='...')) # Добавить markdown контент
+        ps_is = session.merge(ProfStandard(id=2, code='06.015', name='Специалист по информационным системам', parsed_content='...'))
+        ps_pm = session.merge(ProfStandard(id=3, code='06.016', name='Руководитель проектов в области ИТ', parsed_content='...'))
+        ps_sa = session.merge(ProfStandard(id=4, code='06.022', name='Системный аналитик', parsed_content='...'))
+
+        session.commit()
+        print("  - ProfStandards checked/merged.")
+
+        # Добавим базовые ОТФ и ТФ для ПС 06.015 (id=2)
+        otf_c_06015 = session.merge(GeneralizedLaborFunction(id=1, prof_standard_id=2, code='C', name='Выполнение работ и управление работами по созданию (модификации) и сопровождению ИС...'))
+        session.commit()
+
+        tf_c016_06015 = session.merge(LaborFunction(id=1, generalized_labor_function_id=1, code='C/01.6', name='Определение первоначальных требований заказчика к ИС...'))
+        tf_c166_06015 = session.merge(LaborFunction(id=2, generalized_labor_function_id=1, code='C/16.6', name='Проектирование и дизайн ИС...'))
+        tf_c186_06015 = session.merge(LaborFunction(id=3, generalized_labor_function_id=1, code='C/18.6', name='Организационное и технологическое обеспечение создания программного кода ИС...'))
+
+        session.commit()
+        print("  - Basic ОТФ/ТФ for PS 06.015 seeded.")
+
+        # Свяжем ПК-1 (ID=201) с ТФ C/16.6 (ID=2) и C/18.6 (ID=3) из ПС 06.015 (ID=2) как базовые
+        # Это связь Competency.based_on_labor_function_id (один-к-одному для ПК, если ПК основана на одной ТФ)
+        # Или ПК может быть основана на нескольких ТФ (тогда нужна доп. таблица или поле text/json)
+        # ОП Веб-технологии таблица 5 указывает, что ПК-1 основана на ОТФ C ПС 06.015.
+        # Давайте свяжем ПК-1 с ОТФ C (ID=1) в Competency.based_on_labor_function_id (хотя FK на LaborFunction)
+        # TODO: Определить точную логику связи ПК с ПС/ОТФ/ТФ в модели
+        # Сейчас Competency.based_on_labor_function_id ссылается на LaborFunction.
+        # Давайте свяжем ПК-1 с одной из ключевых ТФ, например C/16.6 (id=2)
+        comp_pk1 = session.query(Competency).get(201)
+        if comp_pk1 and comp_pk1.based_on_labor_function_id is None:
+            tf_c166 = session.query(LaborFunction).get(2)
+            if tf_c166:
+                comp_pk1.based_on_labor_function_id = tf_c166.id
+                session.commit()
+                print("  - Linked ПК-1 to TФ C/16.6.")
+            else:
+                print("  - TФ C/16.6 not found, cannot link ПК-1.")
+
+
+        # Связи ОП Веб-технологии (ID=1) с выбранными ПС (из таблицы 1 ОП)
+        # ПС 06.015, 06.016, 06.022 выбраны. ПС 06.001 тоже, т.к. профиль Программист.
+        program1 = session.query(EducationalProgram).get(1)
+        ps_ids_for_prog1 = session.query(ProfStandard.id).filter(ProfStandard.code.in_(['06.001', '06.015', '06.016', '06.022'])).all()
+        ps_ids_for_prog1 = [id for (id,) in ps_ids_for_prog1] # Преобразуем в список ID
+
+        for ps_id in ps_ids_for_prog1:
+            link_ep_ps = EducationalProgramPs.query.filter_by(educational_program_id=1, prof_standard_id=ps_id).first()
+            if not link_ep_ps:
+                link_ep_ps = EducationalProgramPs(educational_program_id=1, prof_standard_id=ps_id)
+                session.add(link_ep_ps)
+                print(f"  - Linked Program 1 to ProfStandard ID {ps_id}.")
+            else:
+                 print(f"  - Link Program 1 to ProfStandard ID {ps_id} already exists.")
+        session.commit()
+        print("  - Program-ProfStandard links seeded.")
+
+
+        # Связи ФГОС 09.03.01 (ID=1) с рекомендованными ПС (из приложения к ФГОС)
+        # ПС 06.001, 06.004, 06.011, 06.015, 06.016, 06.019, 06.022, 06.025, 06.026, 06.027, 06.028
+        fgos1 = session.query(FgosVo).get(1)
+        recommended_ps_codes_for_fgos1 = ['06.001', '06.004', '06.011', '06.015', '06.016', '06.019', '06.022', '06.025', '06.026', '06.027', '06.028']
+        ps_ids_for_fgos1 = session.query(ProfStandard.id).filter(ProfStandard.code.in_(recommended_ps_codes_for_fgos1)).all()
+        ps_ids_for_fgos1 = [id for (id,) in ps_ids_for_fgos1]
+
+        for ps_id in ps_ids_for_fgos1:
+             link_fgos_ps = FgosRecommendedPs.query.filter_by(fgos_vo_id=1, prof_standard_id=ps_id).first()
+             if not link_fgos_ps:
+                  link_fgos_ps = FgosRecommendedPs(fgos_vo_id=1, prof_standard_id=ps_id)
+                  session.add(link_fgos_ps)
+                  print(f"  - Linked FGOS 1 to Recommended ProfStandard ID {ps_id}.")
+             else:
+                  print(f"  - Link FGOS 1 to Recommended ProfStandard ID {ps_id} already exists.")
+        session.commit()
+        print("  - FGOS-RecommendedProfStandard links seeded.")
+
+
+        # Связи Индикаторов с Трудовыми Функция (IndicatorPsLink)
+        # Пример: ИПК-1.1 (id=210) -> ТФ C/01.6 (id=1) и C/16.6 (id=2) из ПС 06.015
+        # Это нужно, чтобы знать, какие элементы ПС "формируют" данный ИПК
+        ind210 = session.query(Indicator).get(210)
+        tf_c016 = session.query(LaborFunction).get(1)
+        tf_c166 = session.query(LaborFunction).get(2)
+
+        if ind210 and tf_c016:
+             link_ind_tf1 = IndicatorPsLink.query.filter_by(indicator_id=210, labor_function_id=1).first()
+             if not link_ind_tf1:
+                  link_ind_tf1 = IndicatorPsLink(indicator_id=210, labor_function_id=1, is_manual=True, relevance_score=1.0)
+                  session.add(link_ind_tf1)
+                  print("  - Linked Indicator 210 to LaborFunction 1.")
+             else:
+                  print("  - Link Indicator 210 to LaborFunction 1 already exists.")
+
+        if ind210 and tf_c166:
+             link_ind_tf2 = IndicatorPsLink.query.filter_by(indicator_id=210, labor_function_id=2).first()
+             if not link_ind_tf2:
+                  link_ind_tf2 = IndicatorPsLink(indicator_id=210, labor_function_id=2, is_manual=True, relevance_score=1.0)
+                  session.add(link_ind_tf2)
+                  print("  - Linked Indicator 210 to LaborFunction 2.")
+             else:
+                  print("  - Link Indicator 210 to LaborFunction 2 already exists.")
+        session.commit()
+        print("  - Indicator-LaborFunction links seeded.")
+
+
+        # === БЛОК 5: Связи Матрицы Компетенций ===
+        print("Seeding Competency Matrix links...")
+        # Используем функцию для проверки и добавления
+        def add_link_if_not_exists(aup_data_id, indicator_id):
+            # Проверяем существование AupData и Indicator в текущей сессии или БД
+            aup_data_rec = session.query(AupData).get(aup_data_id)
+            indicator_rec = session.query(Indicator).get(indicator_id)
+            if not aup_data_rec or not indicator_rec:
+                 print(f"    - SKIPPED link ({aup_data_id} <-> {indicator_id}): AupData or Indicator missing!")
+                 return False
+
+            exists = session.query(CompetencyMatrix).filter_by(aup_data_id=aup_data_id, indicator_id=indicator_id).first()
+            if not exists:
+                link = CompetencyMatrix(aup_data_id=aup_data_id, indicator_id=indicator_id, is_manual=True)
+                session.add(link)
+                print(f"    - Added link ({aup_data_id} <-> {indicator_id})")
+                return True
+            return True
+
+        # Основы программирования (501) -> ИУК-1.1(10), ИУК-1.2(11), ИУК-1.3(12), ИОПК-7.1(170)
+        add_link_if_not_exists(501, 10)
+        add_link_if_not_exists(501, 11)
+        add_link_if_not_exists(501, 12)
+        add_link_if_not_exists(501, 170)
+        # История России (503) -> ИУК-5.1(50)
+        add_link_if_not_exists(503, 50)
+        # Базы данных (502) -> ИПК-1.1(210)
+        add_link_if_not_exists(502, 210)
+
+        session.commit() # Коммитим связи
+        print("  - Matrix links checked/added based on Excel example.")
+
+        # === БЛОК 6: Тестовый Пользователь ===
+        print("Seeding Test User...")
+        test_user = Users.query.filter_by(login='testuser').first()
+        if not test_user:
+            test_user = Users(
+                # id_user=999, # Позволим БД самой назначить ID через auto-increment
+                login='testuser',
+                # Устанавливаем хеш пароля 'password'
+                password_hash=generate_password_hash('password', method='pbkdf2:sha256'),
+                name='Тестовый Методист',
+                email='testuser@example.com',
+                approved_lk=True # Предполагаем, что для тестов одобрение ЛК не нужно
+                # Добавь department_id, если оно обязательно
+            )
+            session.add(test_user)
+            session.commit() # Коммитим пользователя ПЕРЕД назначением роли
+            print(f"  - Added test user 'testuser' with id {test_user.id_user}.")
+
+            # Назначаем роль methodologist (ID=2)
+            methodologist_role = Roles.query.get(2)
+            if methodologist_role:
+                # Используем session.query для проверки наличия роли у пользователя
+                if methodologist_role not in test_user.roles: # Проверяем через relationship
+                    test_user.roles.append(methodologist_role)
+                    session.commit()
+                    print("  - Assigned 'methodologist' role to 'testuser'.")
+                else:
+                    print("  - Role 'methodologist' already assigned to 'testuser'.")
+            else:
+                print("  - WARNING: Role 'methodologist' (ID=2) not found, skipping role assignment.")
+        else:
+            print("  - Test user 'testuser' already exists.")
+
+        # === BLOCK 7: Admin User ===
+        print("Seeding Admin User...")
+        admin_user = Users.query.filter_by(login='admin').first()
+        if not admin_user:
+            admin_user = Users(
+                login='admin',
+                password_hash=generate_password_hash('admin', method='pbkdf2:sha256'),
+                name='Admin User',
+                email='admin@example.com',
+                approved_lk=True
+            )
+            session.add(admin_user)
+            session.commit()
+            print(f"  - Added admin user 'admin' with id {admin_user.id_user}")
+
+            # Assign admin role (ID=1)
+            admin_role = Roles.query.get(1)
+            if admin_role:
+                # Используем session.query для проверки наличия роли у пользователя
+                 if admin_role not in admin_user.roles: # Проверяем через relationship
+                    admin_user.roles.append(admin_role)
+                    session.commit()
+                    print("  - Assigned 'admin' role to admin user")
+                 else:
+                     print("  - Role 'admin' already assigned to admin user")
+            else:
+                print("  - WARNING: Role 'admin' (ID=1) not found, skipping role assignment")
+        else:
+            print("  - Admin user 'admin' already exists")
+
+        # === BLOCK 8: Cabinet Models (Academic Cabinet) ===
+        print("Seeding Cabinet Models...")
+
+        # Add classroom locations (SprPlace)
+        places = [
+            SprPlace(id=1, name="Аудитория", prefix="А", is_online=False),
+            SprPlace(id=2, name="Online", prefix="", is_online=True),
+            SprPlace(id=3, name="Лаборатория", prefix="Л", is_online=False),
+            SprPlace(id=4, name="Компьютерный класс", prefix="КК", is_online=False)
+        ]
+        for place in places:
+            session.merge(place) # Используем session.merge
+        session.commit()
+        print("  - Classroom locations seeded.")
+
+        # Add bell schedule (SprBells)
+        bells = [
+            SprBells(id=1, order=1, name="9:00 - 10:30"),
+            SprBells(id=2, order=2, name="10:40 - 12:10"),
+            SprBells(id=3, order=3, name="12:20 - 13:50"),
+            SprBells(id=4, order=4, name="14:30 - 16:00"),
+            SprBells(id=5, order=5, name="16:10 - 17:40"),
+            SprBells(id=6, order=6, name="17:50 - 19:20")
+        ]
+        for bell in bells:
+            session.merge(bell) # Используем session.merge
+        session.commit()
+        print("  - Bell schedule seeded.")
+
+        # Add study groups (StudyGroups)
+        # Используем session.query для проверки
+        test_group = session.query(StudyGroups).filter_by(title="211-321").first()
+        if not test_group:
+            # Remove the explicit ID to allow auto-increment (или использовать session.merge с id)
+            test_group = StudyGroups(
+                # Remove id=1 to avoid primary key conflicts
+                title="211-321",
+                num_aup="B093011451" # Привязываем к AUP 101
+            )
+            session.add(test_group) # Используем session.add
+            session.commit()
+            print("  - Study group 211-321 added.")
+        else:
+            # Update the existing record if needed
+            test_group.num_aup = "B093011451"
+            session.commit()
+            print("  - Study group 211-321 already exists, updated if needed.")
+
+        # Add a test student
+        test_student = session.query(Students).filter_by(name="Иванов Иван Иванович").first()
+        if not test_student:
+            test_student = Students(
+                name="Иванов Иван Иванович",
+                study_group_id=test_group.id,
+                lk_id=1001 # ID из ЛК
+            )
+            session.add(test_student)
+            session.commit()
+            print("  - Test student added.")
+        else:
+            print("  - Test student already exists.")
+
+        # Add a test tutor
+        test_tutor = session.query(Tutors).filter_by(name="Петров Петр Петрович").first()
+        if not test_tutor:
+            test_tutor = Tutors(
+                name="Петров Петр Петрович",
+                lk_id=2001, # ID из ЛК
+                post="Доцент",
+                id_department=1  # Using the department added earlier
+            )
+            session.add(test_tutor)
+            session.commit()
+            print("  - Test tutor added.")
+        else:
+            print("  - Test tutor already exists.")
+
+        # Create DisciplineTable entry for the test AUP and group
+        discipline_table = session.query(DisciplineTable).filter_by(
+            id_aup=101, # Привязываем к AUP 101
+            id_unique_discipline=1001, # Привязываем к Основам программирования
+            study_group_id=test_group.id,
+            semester=1
+        ).first()
+
+        if not discipline_table:
+            # Remove explicit ID if using auto-increment
+            discipline_table = DisciplineTable(
+                # id=1, # Remove explicit ID
+                id_aup=101,  # From seeded AUP
+                id_unique_discipline=1001,  # From seeded SprDiscipline
+                study_group_id=test_group.id,
+                semester=1
+            )
+            session.add(discipline_table)
+            session.commit()
+            print("  - Discipline table created.")
+        else:
+            print("  - Discipline table already exists.")
+
+        # Add grade types (GradeType)
+        # Используем session.merge
+        grade_types_data = [
+            {"id": 1, "name": "Посещаемость", "type": "attendance", "binary": True, "discipline_table_id": discipline_table.id},
+            {"id": 2, "name": "Активность", "type": "activity", "binary": False, "discipline_table_id": discipline_table.id},
+            {"id": 3, "name": "Задания", "type": "tasks", "binary": False, "discipline_table_id": discipline_table.id}
+        ]
+
+        for grade_type_data in grade_types_data:
+            # Use session.merge for GradeType
+            grade_type = session.merge(GradeType(**grade_type_data))
+        session.commit()
+        print("  - Grade types created.")
+
+        # Add a couple of topics to the discipline table
+        # Используем session.merge
+        topics_data = [
+            {
+                "id": 1,
+                "discipline_table_id": discipline_table.id,
+                "topic": "Введение в предмет",
+                "chapter": "Глава 1",
+                "id_type_control": 1,  # Lecture (from D_ControlType)
+                "task_link": "https://example.com/task1",
+                "task_link_name": "Задание 1",
+                "study_group_id": test_group.id,
+                "spr_place_id": 1,  # Classroom
+                "lesson_order": 1
+            },
+            {
+                "id": 2,
+                "discipline_table_id": discipline_table.id,
+                "topic": "Основные понятия",
+                "chapter": "Глава 1",
+                "id_type_control": 1,  # Lecture
+                "task_link": "https://example.com/task2",
+                "task_link_name": "Задание 2",
+                "study_group_id": test_group.id,
+                "spr_place_id": 1,  # Classroom
+                "lesson_order": 2
+            }
+        ]
+
+        for topic_data in topics_data:
+            # Use session.merge for Topics
+            topic = session.merge(Topics(**topic_data))
+        session.commit()
+        print("  - Topics created.")
+
+        # Add grade columns for the topics and grade types
+        # Используем session.merge
+        # Получаем все topics и grade_types из сессии после их создания/мерджа
+        all_topics = session.query(Topics).all()
+        all_grade_types = session.query(GradeType).all() # Все GradeType
+
+        for topic in all_topics:
+            for grade_type in all_grade_types:
+                # Важно: GradeColumn привязана к DisciplineTable, Topic, GradeType
+                # Проверяем, что GradeType привязан к той же DisciplineTable, что и Topic
+                if grade_type.discipline_table_id != topic.discipline_table_id:
+                    continue # Пропускаем, если GradeType не относится к этой DisciplineTable
+
+                grade_column = session.query(GradeColumn).filter_by(
+                    discipline_table_id=topic.discipline_table_id,
+                    grade_type_id=grade_type.id,
+                    topic_id=topic.id
+                ).first()
+
+                if not grade_column:
+                    grade_column = GradeColumn(
+                        discipline_table_id=topic.discipline_table_id,
+                        grade_type_id=grade_type.id,
+                        topic_id=topic.id
+                    )
+                    session.add(grade_column) # Используем session.add
+        session.commit()
+        print("  - Grade columns created.")
+
+        # Add some sample grades for the student
+        # Используем session.merge
+        # Получаем все grade columns из сессии
+        all_grade_columns = session.query(GradeColumn).all()
+        # Получаем тестового студента из сессии
+        test_student = session.query(Students).filter_by(name="Иванов Иван Иванович").first()
+        if test_student:
+            for grade_column in all_grade_columns:
+                grade = session.query(Grade).filter_by(
+                    student_id=test_student.id,
+                    grade_column_id=grade_column.id
+                ).first()
+
+                if not grade:
+                    # Random grades between 3 and 5
+                    value = random.randint(3, 5)
+
+                    # For attendance (binary), use 1 for present
+                    # Нужно получить тип из GradeType
+                    grade_type = session.query(GradeType).get(grade_column.grade_type_id)
+                    if grade_type and grade_type.type == 'attendance':
+                        value = 1 # Оценка за посещаемость
+
+                    grade = Grade(
+                        student_id=test_student.id,
+                        grade_column_id=grade_column.id,
+                        value=value
+                    )
+                    session.add(grade) # Используем session.add
+            session.commit()
+            print("  - Sample grades created.")
+        else:
+             print("  - Test student not found, skipping sample grades.")
+
+
+        print("Cabinet models seeded successfully.")
+        print("\nDatabase seeding finished successfully.")
+
+    except (IntegrityError, SQLAlchemyError) as e: # Ловим конкретные ошибки БД
+        session.rollback()
+        print(f"\n!!! DATABASE ERROR during seeding: {e} !!!")
+        print("!!! Seeding stopped. Check foreign key constraints and data order. !!!")
+        traceback.print_exc()
+    except Exception as e: # Ловим все остальные ошибки
+        session.rollback()
+        print(f"\n!!! UNEXPECTED ERROR during seeding: {e} !!!")
         traceback.print_exc()
 
 ```
 
-**Пояснения к `fgos_import.py`:**
+```python
+# filepath: /home/me/ВКР/maps_backend/competencies_matrix/logic.py
+# competencies_matrix/logic.py
+from typing import Dict, List, Any, Optional
+import datetime
+from sqlalchemy.orm import joinedload, selectinload, Session
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError # Импортируем IntegrityError
+from sqlalchemy import exists, and_
+import traceback
+# Импортируем парсер ФГОС
+from .fgos_parser import parse_fgos_pdf, parse_uk_opk_simple # parse_uk_opk_simple тоже может пригодиться в будущем сидере
+# Импортируем парсер ПС
+from .parsers import parse_prof_standard_upload # Переименовал для ясности
+# Импортируем модели ПС, если они не импортируются автоматически через BaseModel или другие связи
+from .models import (
+    GeneralizedLaborFunction, LaborFunction, LaborAction, RequiredSkill, RequiredKnowledge
+)
 
-*   Создана новая CLI команда `flask import-fgos <filepath>`.
-*   Принимает путь к PDF файлу.
-*   Флаг `--force` (перезапись): При передаче, если ФГОС с теми же ключевыми параметрами найден, он будет удален перед сохранением нового (логика в `save_fgos_data`).
-*   Флаг `--delete-only` (только удаление): При передаче, парсит файл для получения ключевых параметров ФГОС, и если найден соответствующий ФГОС в БД, вызывает `delete_fgos` и выходит. Не производит сохранения.
-*   Флаг `--dry-run`: Выполняет только парсинг и валидацию, но не затрагивает базу данных.
-*   Использует функции `parse_fgos_file`, `save_fgos_data`, `delete_fgos` из `competencies_matrix.logic`.
-*   Настроена обработка ошибок и логирование.
-*   Важно добавить эту команду в `app.py` для регистрации:
+from maps.models import db, AupData, SprDiscipline, AupInfo
+from .models import (
+    EducationalProgram, Competency, Indicator, CompetencyMatrix,
+    ProfStandard, FgosVo, FgosRecommendedPs, EducationalProgramAup, EducationalProgramPs,
+    CompetencyType, IndicatorPsLink
+)
+
+import logging
+# Настройка логирования
+logger = logging.getLogger(__name__)
+# Уровень логирования устанавливается при старте приложения или в конфиге
+
+# --- Функции для получения данных для отображения ---
+
+def get_educational_programs_list() -> List[EducationalProgram]:
+    """
+    Получает список всех образовательных программ из БД.
+
+    Returns:
+        List[EducationalProgram]: Список объектов SQLAlchemy EducationalProgram.
+    """
+    try:
+        session: Session = db.session # Используем сессию явно
+        # Используем joinedload для предзагрузки первого AUP
+        # Это может ускорить отображение списка, если первый_aup_id используется на фронте
+        programs = session.query(EducationalProgram).options( # Используем session.query
+             joinedload(EducationalProgram.aup_assoc).joinedload(EducationalProgramAup.aup)
+        ).order_by(EducationalProgram.title).all()
+        return programs
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_educational_programs_list: {e}", exc_info=True) # Добавлено exc_info
+        return [] # Возвращаем пустой список в случае ошибки
+
+def get_program_details(program_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Получает детальную информацию по ОП, включая связанные сущности.
+
+    Args:
+        program_id: ID образовательной программы.
+
+    Returns:
+        Optional[Dict[str, Any]]: Словарь с данными программы или None, если не найдена.
+                                   Структура должна включать детали ФГОС, список АУП,
+                                   список выбранных и рекомендованных ПС.
+    """
+    try:
+        session: Session = db.session # Используем сессию
+        program = session.query(EducationalProgram).options( # Используем session.query
+            # Эффективно загружаем связанные данные одним запросом
+            selectinload(EducationalProgram.fgos),
+            selectinload(EducationalProgram.aup_assoc).selectinload(EducationalProgramAup.aup),
+            selectinload(EducationalProgram.selected_ps_assoc).selectinload(EducationalProgramPs.prof_standard)
+        ).get(program_id)
+
+        if not program:
+            logger.warning(f"Program with id {program_id} not found for details.")
+            return None
+
+        # Сериализуем программу основные поля без связей
+        details = program.to_dict() # Используем to_dict из BaseModel
+
+        # Добавляем детали в нужном формате
+        if program.fgos:
+            details['fgos_details'] = {
+                'id': program.fgos.id,
+                'number': program.fgos.number,
+                'date': program.fgos.date.isoformat() if program.fgos.date else None, # Форматируем дату
+                'direction_code': program.fgos.direction_code,
+                'direction_name': program.fgos.direction_name,
+                'education_level': program.fgos.education_level,
+                'generation': program.fgos.generation,
+                'file_path': program.fgos.file_path
+            }
+        else:
+            details['fgos_details'] = None
+            
+        details['aup_list'] = []
+        if program.aup_assoc:
+            details['aup_list'] = [
+                {
+                    'id_aup': assoc.aup.id_aup,
+                    'num_aup': assoc.aup.num_aup,
+                    'file': assoc.aup.file
+                } 
+                for assoc in program.aup_assoc if assoc.aup
+            ]
+        
+        details['selected_ps_list'] = []
+        if program.selected_ps_assoc:
+            details['selected_ps_list'] = [
+                {
+                    'id': assoc.prof_standard.id,
+                    'code': assoc.prof_standard.code,
+                    'name': assoc.prof_standard.name
+                }
+                for assoc in program.selected_ps_assoc if assoc.prof_standard
+            ]
+
+        # Получаем рекомендованные ПС для связанного ФГОС
+        recommended_ps_list = []
+        if program.fgos and program.fgos.recommended_ps_assoc:
+            if program.fgos.recommended_ps_assoc:
+                # Бережно обрабатываем каждую связь, извлекая только нужные поля
+                for assoc in program.fgos.recommended_ps_assoc:
+                    if assoc.prof_standard:
+                        recommended_ps_list.append({
+                            'id': assoc.prof_standard.id,
+                            'code': assoc.prof_standard.code,
+                            'name': assoc.prof_standard.name,
+                            'is_mandatory': assoc.is_mandatory, # Добавляем метаданные связи
+                            'description': assoc.description,
+                        })
+                    
+        details['recommended_ps_list'] = recommended_ps_list
+
+        return details
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_program_details for program_id {program_id}: {e}", exc_info=True)
+        return None
+    except AttributeError as e: # Может быть при неполноте данных (например, AUP_assoc, но AUP==None)
+        logger.error(f"Attribute error likely due to missing relationship/data in get_program_details for program_id {program_id}: {e}", exc_info=True)
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error in get_program_details for program_id {program_id}: {e}", exc_info=True)
+        return None
+
+def get_matrix_for_aup(aup_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Собирает все данные для отображения матрицы компетенций для АУП.
+    (Версия с исправлениями сортировки, фильтрации УК/ОПК и ПК)
+
+    Args:
+        aup_id: ID Академического учебного плана (из таблицы tbl_aup).
+
+    Returns:
+        Словарь с данными для фронтенда или None.
+    """
+    try:
+        session: Session = db.session
+
+        # 1. Получаем инфо об АУП и связанные ОП
+        aup_info = session.query(AupInfo).options(
+            selectinload(AupInfo.education_programs_assoc).selectinload(EducationalProgramAup.educational_program).selectinload(EducationalProgram.fgos) # Загружаем FGOS через ОП
+        ).get(aup_id)
+
+        if not aup_info:
+            logger.warning(f"AUP with id {aup_id} not found for matrix.")
+            return None
+
+        # 2. Находим связанную ОП и ФГОС
+        program = None
+        fgos = None
+        if aup_info.education_programs_assoc:
+             # Предполагаем, что AUP связан только с одной ОП в контексте матрицы
+             # TODO: Уточнить логику, если AUP связан с несколькими ОП
+             program_assoc = aup_info.education_programs_assoc[0]
+             program = program_assoc.educational_program
+             if program and program.fgos:
+                  fgos = program.fgos # FGOS уже загружен благодаря selectinload
+
+        if not program:
+             logger.warning(f"AUP {aup_id} is not linked to any Educational Program.")
+             # TODO: Если АУП не связан с ОП, что показываем? Пустую матрицу? Ошибку?
+             # Пока возвращаем None, чтобы фронтенд показал ошибку.
+             return None
+
+        logger.info(f"Found Program (id: {program.id}, title: {program.title}) for AUP {aup_id}.")
+        if fgos:
+             logger.info(f"Found linked FGOS (id: {fgos.id}, code: {fgos.direction_code}).")
+        else:
+             logger.warning(f"Educational Program {program.id} is not linked to any FGOS.")
+
+
+        # 3. Получаем дисциплины АУП из AupData
+        aup_data_entries = session.query(AupData).options(
+            joinedload(AupData.discipline)
+        ).filter_by(id_aup=aup_id).order_by(AupData.id_period, AupData.num_row).all()
+
+        disciplines_list = []
+        aup_data_ids_in_matrix = set()
+        for entry in aup_data_entries:
+            # Пропускаем записи без привязки к дисциплине (например, служебные строки)
+            if entry.id_discipline is None or entry.discipline is None:
+                continue
+            
+            # TODO: Возможно, добавить фильтрацию по типам записей AupData (только Дисциплины)
+            # if entry.id_type_record != 1: # 1 - Дисциплина, нужно уточнить ID в справочнике D_TypeRecord
+            #     continue
+
+            discipline_title = entry.discipline.title
+            discipline_data = {
+                "aup_data_id": entry.id,
+                "discipline_id": entry.id_discipline,
+                "title": discipline_title,
+                "semester": entry.id_period # Семестр хранится в id_period AupData
+            }
+            disciplines_list.append(discipline_data)
+            aup_data_ids_in_matrix.add(entry.id)
+
+        # Сортировка списка дисциплин уже сделана ORM по id_period и num_row, что обычно соответствует порядку в АУП
+        # disciplines_list.sort(key=lambda d: (d.get('semester', 0), d.get('title', ''))) # На всякий случай можно оставить, но ORM должен справиться
+        logger.info(f"Found {len(disciplines_list)} relevant AupData entries for AUP {aup_id}.")
+
+        # 4. Получаем релевантные компетенции и их индикаторы
+        # УК и ОПК берутся из ФГОС, связанного с ОП
+        # ПК берутся из тех, что созданы пользователем и связаны с ОП
+        
+        relevant_competencies_query = session.query(Competency).options(
+            selectinload(Competency.indicators),
+            joinedload(Competency.competency_type)
+        )
+
+        relevant_competencies = []
+
+        # Получаем УК и ОПК, связанные с данным ФГОС (если ФГОС есть)
+        if fgos:
+            uk_opk_competencies = relevant_competencies_query.filter(
+                Competency.fgos_vo_id == fgos.id # Фильтруем по FK на ФГОС
+            ).all() # Query.all() вернет все объекты, фильтруем по типу в Python
+            
+            # Фильтруем по типу 'УК' или 'ОПК' после загрузки
+            uk_opk_competencies = [
+                 c for c in uk_opk_competencies 
+                 if c.competency_type and c.competency_type.code in ['УК', 'ОПК']
+            ]
+            relevant_competencies.extend(uk_opk_competencies)
+            logger.info(f"Found {len(uk_opk_competencies)} УК/ОПК competencies linked to FGOS {fgos.id}.")
+        else:
+             logger.warning("No FGOS linked to program, cannot retrieve УК/ОПК from FGOS.")
+
+
+        # Получаем ПК, связанные с данной ОП
+        # Логика связи ПК с ОП: Компетенция (ПК) может быть создана на основе ТФ (LaborFunction).
+        # LaborFunction принадлежит Профстандарту (ProfStandard).
+        # Профстандарт может быть выбран для Образовательной Программы (EducationalProgramPs).
+        # Поэтому, чтобы получить ПК для данной ОП, нужно найти все ТФ из ПС, выбранных для этой ОП,
+        # и все ПК, основанные на этих ТФ.
+        # Также, ПК могут быть созданы не на основе ТФ, а просто вручную и связаны с ОП напрямую (если такая связь есть в модели).
+        # На данном этапе (MVP) временно берем ВСЕ ПК, т.к. логика связи ПК с ОП через ПС/ТФ еще не полностью реализована/верифицирована.
+        
+        # TODO: Реализовать правильную фильтрацию ПК по ОП
+        # Вариант 1 (Если ПК напрямую связаны с ОП):
+        # pk_competencies = relevant_competencies_query.join(EducationalProgramCompetency).filter(EducationalProgramCompetency.program_id == program.id).all()
+        # Вариант 2 (Если ПК связаны через ТФ, ПС, ОП-ПС):
+        # pk_competencies = relevant_competencies_query.join(LaborFunction).join(ProfStandard).join(EducationalProgramPs).filter(EducationalProgramPs.educational_program_id == program.id).all()
+        # На данном этапе, берем все ПК:
+        pk_competencies = relevant_competencies_query.join(CompetencyType).filter(CompetencyType.code == 'ПК').all()
+        relevant_competencies.extend(pk_competencies)
+        logger.info(f"Found {len(pk_competencies)} ПК competencies (all existing ПК).")
+
+
+        # Форматируем результат
+        competencies_data = []
+        indicator_ids_in_matrix = set()
+        
+        # Сортируем релевантные компетенции перед форматированием
+        # Сортировка: сначала УК, потом ОПК, потом ПК; внутри каждого типа - по коду
+        type_order = ['УК', 'ОПК', 'ПК']
+        relevant_competencies.sort(key=lambda c: (
+            type_order.index(c.competency_type.code) if c.competency_type and c.competency_type.code in type_order else len(type_order), # Неизвестные типы в конец
+            c.code
+        ))
+
+        for comp in relevant_competencies:
+            type_code = comp.competency_type.code if comp.competency_type else "UNKNOWN"
+
+            # Используем .to_dict() из BaseModel для сериализации полей
+            comp_dict = comp.to_dict()
+            comp_dict.pop('fgos', None) # Удаляем объект Fgos
+            comp_dict.pop('competency_type', None) # Удаляем объект CompetencyType
+            comp_dict.pop('based_on_labor_function', None) # Удаляем объект LaborFunction
+            comp_dict.pop('matrix_links', None) # Удаляем связи матрицы, они в отдельном массиве
+
+            comp_dict['type_code'] = type_code # Добавляем код типа явно
+            comp_dict['indicators'] = []
+            if comp.indicators:
+                # Сортируем индикаторы внутри компетенции
+                sorted_indicators = sorted(comp.indicators, key=lambda i: i.code)
+                for ind in sorted_indicators:
+                    indicator_ids_in_matrix.add(ind.id)
+                    # Сериализуем индикатор
+                    ind_dict = ind.to_dict()
+                    ind_dict.pop('competency', None) # Удаляем родительскую компетенцию
+                    ind_dict.pop('labor_functions', None) # Удаляем связанные ТФ
+                    ind_dict.pop('matrix_entries', None) # Удаляем связи матрицы
+                    comp_dict['indicators'].append(ind_dict)
+            competencies_data.append(comp_dict)
+
+        logger.info(f"Formatted {len(competencies_data)} relevant competencies with indicators.")
+
+        # 5. Получаем существующие связи
+        existing_links_data = []
+        # Проверяем, что списки ID не пустые, чтобы избежать ошибки .in_([])
+        if aup_data_ids_in_matrix and indicator_ids_in_matrix:
+            # Используем .in_() для эффективного запроса
+            existing_links_db = session.query(CompetencyMatrix).filter(
+                and_(
+                   CompetencyMatrix.aup_data_id.in_(list(aup_data_ids_in_matrix)), # Преобразуем set в list
+                   CompetencyMatrix.indicator_id.in_(list(indicator_ids_in_matrix)) # Преобразуем set в list
+                )
+            ).all()
+            # Сериализуем связи
+            existing_links_data = [
+                link.to_dict() for link in existing_links_db # Используем to_dict из BaseModel
+            ]
+            logger.info(f"Found {len(existing_links_data)} existing matrix links for relevant AupData and Indicators.")
+
+
+        # 6. Предложения от NLP (заглушка для MVP)
+        # suggestions_data = suggest_links_nlp(disciplines_list, competencies_data) # Заглушка
+
+        # Сериализуем AupInfo в конце
+        aup_info_dict = aup_info.as_dict() # Используем as_dict из maps.models.py
+        # Удаляем relation properties, если они есть в as_dict
+        aup_info_dict.pop('education_programs_assoc', None)
+        # Добавляем num_aup если он не попал в as_dict (хотя должен)
+        # if 'num_aup' not in aup_info_dict and hasattr(aup_info, 'num_aup'):
+        #      aup_info_dict['num_aup'] = aup_info.num_aup
+
+
+        return {
+            "aup_info": aup_info_dict,
+            "disciplines": disciplines_list,
+            "competencies": competencies_data,
+            "links": existing_links_data,
+            "suggestions": [] # Заглушка для NLP
+        }
+
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_matrix_for_aup for aup_id {aup_id}: {e}", exc_info=True)
+        session.rollback() # Откат при ошибке БД
+        return None
+    except AttributeError as e: # Может быть при неполноте данных (например, AUP_assoc, но AUP==None)
+        logger.error(f"Attribute error likely due to missing relationship/data in get_matrix_for_aup for aup_id {aup_id}: {e}", exc_info=True)
+        session.rollback() # Откат при ошибке
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error in get_matrix_for_aup for aup_id {aup_id}: {e}", exc_info=True)
+        session.rollback() # Откат при любой неожиданной ошибке
+        return None
+
+# --- Функции для изменения данных ---
+
+def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True) -> Dict[str, Any]:
+    """
+    Создает или удаляет связь Дисциплина(АУП)-ИДК в матрице.
+    (Версия с подробным возвратом статуса)
+
+    Args:
+        aup_data_id: ID записи из таблицы aup_data.
+        indicator_id: ID индикатора из таблицы indicators.
+        create (bool): True для создания связи, False для удаления.
+
+    Returns:
+        Dict[str, Any]: Словарь с результатом операции:
+            {
+                'success': True/False,
+                'status': 'created'/'already_exists'/'deleted'/'not_found'/'error',
+                'message': '...' (сообщение для логирования/отладки),
+                'error_type': '...' (о
+```
 
 ```python
-# app.py
-# ... (существующие импорты и инициализация) ...
+# filepath: /home/me/ВКР/maps_backend/competencies_matrix/logic.py
+# competencies_matrix/logic.py
+from typing import Dict, List, Any, Optional
+import datetime
+from sqlalchemy.orm import joinedload, selectinload, Session
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError # Импортируем IntegrityError
+from sqlalchemy import exists, and_
+import traceback
+# Импортируем парсер ФГОС
+from .fgos_parser import parse_fgos_pdf, parse_uk_opk_simple # parse_uk_opk_simple тоже может пригодиться в будущем сидере
+# Импортируем парсер ПС
+from .parsers import parse_prof_standard_upload # Переименовал для ясности
+# Импортируем модели ПС, если они не импортируются автоматически через BaseModel или другие связи
+from .models import (
+    GeneralizedLaborFunction, LaborFunction, LaborAction, RequiredSkill, RequiredKnowledge
+)
 
-# --- Import CLI Commands ---
-# ... (существующие импорты команд) ...
-from cli_commands.fgos_import import import_fgos_command # Импортируем новую команду
+from maps.models import db, AupData, SprDiscipline, AupInfo
+from .models import (
+    EducationalProgram, Competency, Indicator, CompetencyMatrix,
+    ProfStandard, FgosVo, FgosRecommendedPs, EducationalProgramAup, EducationalProgramPs,
+    CompetencyType, IndicatorPsLink
+)
 
-# ... (существующая регистрация blueprints) ...
+import logging
+# Настройка логирования
+logger = logging.getLogger(__name__)
+# Уровень логирования устанавливается при старте приложения или в конфиге
 
-# ... (существующие обработчики ошибок) ...
+# --- Функции для получения данных для отображения ---
 
-# --- Базовый маршрут ---
-# ...
+def get_educational_programs_list() -> List[EducationalProgram]:
+    """
+    Получает список всех образовательных программ из БД.
 
-# Регистрируем команды сидера и ансидера
-# ... (существующая регистрация команд) ...
-app.cli.add_command(import_fgos_command) # Регистрируем новую команду ФГОС
+    Returns:
+        List[EducationalProgram]: Список объектов SQLAlchemy EducationalProgram.
+    """
+    try:
+        session: Session = db.session # Используем сессию явно
+        # Используем joinedload для предзагрузки первого AUP
+        # Это может ускорить отображение списка, если первый_aup_id используется на фронте
+        programs = session.query(EducationalProgram).options( # Используем session.query
+             joinedload(EducationalProgram.aup_assoc).joinedload(EducationalProgramAup.aup)
+        ).order_by(EducationalProgram.title).all()
+        return programs
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_educational_programs_list: {e}", exc_info=True) # Добавлено exc_info
+        return [] # Возвращаем пустой список в случае ошибки
 
-# Точка входа для запуска через `python app.py`
-if __name__ == '__main__':
-    app.run(debug=app.config.get('DEBUG', False), host='0.0.0.0', port=5000)
+def get_program_details(program_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Получает детальную информацию по ОП, включая связанные сущности.
 
-```
+    Args:
+        program_id: ID образовательной программы.
 
-**5. Frontend: Дополнение Store и API Service**
+    Returns:
+        Optional[Dict[str, Any]]: Словарь с данными программы или None, если не найдена.
+                                   Структура должна включать детали ФГОС, список АУП,
+                                   список выбранных и рекомендованных ПС.
+    """
+    try:
+        session: Session = db.session # Используем сессию
+        program = session.query(EducationalProgram).options( # Используем session.query
+            # Эффективно загружаем связанные данные одним запросом
+            selectinload(EducationalProgram.fgos),
+            selectinload(EducationalProgram.aup_assoc).selectinload(EducationalProgramAup.aup),
+            selectinload(EducationalProgram.selected_ps_assoc).selectinload(EducationalProgramPs.prof_standard)
+        ).get(program_id)
 
-Добавим методы для новых эндпоинтов в Pinia store и API service.
+        if not program:
+            logger.warning(f"Program with id {program_id} not found for details.")
+            return None
 
-```typescript
-// src/services/CompetenciesApi.ts
+        # Сериализуем программу основные поля без связей
+        details = program.to_dict() # Используем to_dict из BaseModel
 
-// ... (существующие импорты) ...
-
-/**
- * Service for interacting with the Competencies Matrix API
- * This service contains methods for all competencies_matrix endpoints
- */
-class CompetenciesApi {
-  // ... (существующие методы) ...
-
-  /**
-   * Get a list of all saved FGOS VO records
-   * @returns Promise with array of FGOS records
-   */
-  async getFgosList() {
-    const { data } = await axios.get('/competencies/fgos')
-    return data
-  }
-
-  /**
-   * Get detailed information about a specific FGOS VO record
-   * @param fgosId ID of the FGOS VO record
-   * @returns Promise with FGOS details including competencies, indicators, recommended PS
-   */
-  async getFgosDetails(fgosId) {
-    const { data } = await axios.get(`/competencies/fgos/${fgosId}`)
-    return data
-  }
-
-  /**
-   * Upload a FGOS VO PDF file for parsing (does NOT save to DB)
-   * @param file File object to upload
-   * @returns Promise with parsed FGOS data or error
-   */
-  async uploadFgosFile(file: File) {
-    const formData = new FormData()
-    formData.append('file', file)
-    
-    const { data } = await axios.post(
-      '/competencies/fgos/upload', 
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      }
-    )
-    return data // This should return parsed data, not success status
-  }
-
-  /**
-   * Save parsed FGOS data to the database
-   * @param parsedData Parsed FGOS data object
-   * @param filename Original filename
-   * @param options Save options (e.g., { force_update: boolean })
-   * @returns Promise with operation result
-   */
-  async saveFgosData(parsedData: any, filename: string, options: { force_update: boolean } = { force_update: false }) {
-     // Send the parsed data and options to the save endpoint
-    const { data } = await axios.post(
-      '/competencies/fgos/save', 
-      {
-        parsed_data: parsedData,
-        filename: filename,
-        options: options
-      }
-    )
-    return data // Should return success status and fgos_id
-  }
-
-  /**
-   * Delete a FGOS VO record
-   * @param fgosId ID of the FGOS VO record to delete
-   * @returns Promise with operation result
-   */
-  async deleteFgos(fgosId) {
-    const { data } = await axios.delete(`/competencies/fgos/${fgosId}`)
-    return data // Should return success status
-  }
-
-  // ... (остальные методы CompetenciesApi) ...
-}
-
-// Экспортируем как синглтон
-export default new CompetenciesApi()
-```
-
-```typescript
-// src/stores/competenciesMatrix.ts
-
-// ... (существующие импорты и интерфейсы) ...
-import CompetenciesApi from '@/services/CompetenciesApi'; // Импорт нашего нового сервиса API ФГОС
-
-// Define interface for FGOS VO
-interface FgosVo {
-  id: number | string;
-  number: string;
-  date: string; // Store as string for now
-  direction_code: string;
-  direction_name: string;
-  education_level: string;
-  generation: string;
-  file_path?: string;
-  created_at: string;
-  updated_at: string;
-  // Add nested structures if needed for details view
-  uk_competencies?: any[];
-  opk_competencies?: any[];
-  recommended_ps_list?: any[];
-}
-
-
-/**
- * Pinia store for managing competencies matrix state
- * This store handles state management for educational programs, matrix data, and interactions
- * 
- * Backend endpoints used:
- * ... (existing endpoints) ...
- * 
- * - GET /competencies/fgos - Get list of saved FGOS
- *   Implementation: maps_backend/competencies_matrix/routes.py (get_all_fgos)
- *   Logic: maps_backend/competencies_matrix/logic.py (get_fgos_list)
- * 
- * - GET /competencies/fgos/<fgos_id> - Get details of a specific FGOS
- *   Implementation: maps_backend/competencies_matrix/routes.py (get_fgos_details_route)
- *   Logic: maps_backend/competencies_matrix/logic.py (get_fgos_details)
- * 
- * - POST /competencies/fgos/upload - Upload and parse FGOS file
- *   Implementation: maps_backend/competencies_matrix/routes.py (upload_fgos)
- *   Logic: maps_backend/competencies_matrix/logic.py (parse_fgos_file)
- * 
- * - POST /competencies/fgos/save - Save parsed FGOS data to DB
- *   Implementation: maps_backend/competencies_matrix/routes.py (save_fgos)
- *   Logic: maps_backend/competencies_matrix/logic.py (save_fgos_data)
- * 
- * - DELETE /competencies/fgos/<fgos_id> - Delete FGOS
- *   Implementation: maps_backend/competencies_matrix/routes.py (delete_fgos_route)
- *   Logic: maps_backend/competencies_matrix/logic.py (delete_fgos)
- * 
- * Database tables accessed:
- * ... (existing tables) ...
- * - competencies_fgos_vo
- */
-export const useCompetenciesMatrixStore = defineStore('competenciesMatrix', {
-  state: () => ({
-    // ... (существующие состояния) ...
-    
-    // FGOS related state
-    fgosList: [] as FgosVo[],
-    selectedFgosId: null as number | string | null,
-    selectedFgosDetails: null as FgosVo | null, // Use the FgosVo interface
-    
-    // State for FGOS Upload/Preview modal
-    showFgosPreviewModal: false,
-    fgosParsedData: null as any | null, // Parsed data before saving
-    fgosUploadFilename: '' as string, // Filename of the uploaded FGOS
-    fgosExistingRecord: null as FgosVo | null, // Existing FGOS found during upload preview
-    
-    // Loading/Error states for FGOS
-    isLoadingFgosList: false,
-    isLoadingFgosDetails: false,
-    isLoadingFgosUpload: false,
-    isSavingFgos: false,
-    fgosError: null as string | null,
-  }),
-  
-  getters: {
-    // ... (существующие геттеры) ...
-    
-    getFgosList: (state) => state.fgosList,
-    getSelectedFgosDetails: (state) => state.selectedFgosDetails,
-    
-    // Getters for FGOS Upload/Preview modal
-    getShowFgosPreviewModal: (state) => state.showFgosPreviewModal,
-    getFgosParsedData: (state) => state.fgosParsedData,
-    getFgosUploadFilename: (state) => state.fgosUploadFilename,
-    getFgosExistingRecord: (state) => state.fgosExistingRecord,
-  },
-  
-  actions: {
-    // ... (существующие экшены) ...
-
-    // --- Actions for FGOS VO ---
-    
-    /**
-     * Fetch the list of all saved FGOS VO records
-     */
-    async fetchFgosList() {
-      try {
-        this.isLoadingFgosList = true;
-        this.fgosError = null;
-        
-        const data = await CompetenciesApi.getFgosList(); // Используем новый сервис
-        this.fgosList = data;
-        
-        return data;
-      } catch (error: any) {
-        console.error("Error fetching FGOS list:", error);
-        this.fgosError = error.message || "Failed to fetch FGOS list";
-        throw error;
-      } finally {
-        this.isLoadingFgosList = false;
-      }
-    },
-    
-    /**
-     * Fetch details for a specific FGOS VO record
-     * @param fgosId ID of the FGOS VO record
-     */
-    async fetchFgosDetails(fgosId) {
-      try {
-        this.isLoadingFgosDetails = true;
-        this.fgosError = null;
-        this.selectedFgosId = fgosId;
-        this.selectedFgosDetails = null; // Clear previous details
-        
-        const data = await CompetenciesApi.getFgosDetails(fgosId); // Используем новый сервис
-        this.selectedFgosDetails = data;
-        
-        console.log("FGOS details fetched:", data);
-        return data;
-      } catch (error: any) {
-        console.error("Error fetching FGOS details:", error);
-        this.fgosError = error.message || "Failed to fetch FGOS details";
-        throw error;
-      } finally {
-        this.isLoadingFgosDetails = false;
-      }
-    },
-    
-    /**
-     * Upload and parse a FGOS VO PDF file.
-     * Shows a preview modal with parsed data.
-     * @param file File object to upload
-     */
-    async uploadFgosFile(file: File) {
-      try {
-        this.isLoadingFgosUpload = true;
-        this.fgosError = null;
-        this.fgosParsedData = null; // Clear previous parsed data
-        this.fgosUploadFilename = ''; // Clear previous filename
-        this.fgosExistingRecord = null; // Clear previous existing record
-
-        const parsedData = await CompetenciesApi.uploadFgosFile(file); // Используем новый сервис
-
-        if (parsedData && parsedData.metadata) {
-            this.fgosParsedData = parsedData;
-            this.fgosUploadFilename = file.name;
-
-            // TODO: Implement logic to find if this FGOS already exists in DB
-            // based on parsedData.metadata (e.g., direction_code, education_level, order_number, order_date)
-            // If found, fetch the existing record and set this.fgosExistingRecord
-            const metadata = parsedData.metadata;
-            if (metadata.direction_code && metadata.education_level && metadata.order_number && metadata.order_date) {
-                 try {
-                      // Find existing FGOS in the already loaded list
-                      const existing = this.fgosList.find(fgos => 
-                          fgos.direction_code === metadata.direction_code &&
-                          fgos.education_level === metadata.education_level &&
-                          fgos.number === metadata.order_number &&
-                          // Compare dates, maybe convert string date from metadata to Date object
-                          new Date(fgos.date).getTime() === new Date(metadata.order_date.split('.').reverse().join('-')).getTime() // Simple date comparison
-                      );
-                      if (existing) {
-                           // If found in list, fetch full details for preview comparison
-                           this.fgosExistingRecord = await CompetenciesApi.getFgosDetails(existing.id);
-                      }
-                 } catch(lookupError) {
-                     console.warn("Could not perform lookup for existing FGOS:", lookupError);
-                     // Continue without existing record if lookup fails
-                 }
+        # Добавляем детали в нужном формате
+        if program.fgos:
+            details['fgos_details'] = {
+                'id': program.fgos.id,
+                'number': program.fgos.number,
+                'date': program.fgos.date.isoformat() if program.fgos.date else None, # Форматируем дату
+                'direction_code': program.fgos.direction_code,
+                'direction_name': program.fgos.direction_name,
+                'education_level': program.fgos.education_level,
+                'generation': program.fgos.generation,
+                'file_path': program.fgos.file_path
             }
-
-
-            this.showFgosPreviewModal = true; // Show the preview modal
-        } else {
-            this.fgosError = "Failed to parse FGOS file or extracted no data.";
-            throw new Error(this.fgosError);
-        }
+        else:
+            details['fgos_details'] = None
+            
+        details['aup_list'] = []
+        if program.aup_assoc:
+            details['aup_list'] = [
+                {
+                    'id_aup': assoc.aup.id_aup,
+                    'num_aup': assoc.aup.num_aup,
+                    'file': assoc.aup.file
+                } 
+                for assoc in program.aup_assoc if assoc.aup
+            ]
         
-      } catch (error: any) {
-        console.error("Error uploading FGOS file:", error);
-        this.fgosError = this.fgosError || error.message || "Failed to upload and parse FGOS file";
-        throw error;
-      } finally {
-        this.isLoadingFgosUpload = false;
-      }
-    },
-    
-    /**
-     * Save parsed FGOS data to the database after user confirmation.
-     * @param options Save options (e.g., { force_update: boolean })
-     */
-    async saveFgosData(options: { force_update: boolean } = { force_update: false }) {
-        if (!this.fgosParsedData || !this.fgosUploadFilename) {
-             console.error("saveFgosData: No parsed data available to save.");
-             return; // Cannot save if no data
-        }
+        details['selected_ps_list'] = []
+        if program.selected_ps_assoc:
+            details['selected_ps_list'] = [
+                {
+                    'id': assoc.prof_standard.id,
+                    'code': assoc.prof_standard.code,
+                    'name': assoc.prof_standard.name
+                }
+                for assoc in program.selected_ps_assoc if assoc.prof_standard
+            ]
+
+        # Получаем рекомендованные ПС для связанного ФГОС
+        recommended_ps_list = []
+        if program.fgos and program.fgos.recommended_ps_assoc:
+            if program.fgos.recommended_ps_assoc:
+                # Бережно обрабатываем каждую связь, извлекая только нужные поля
+                for assoc in program.fgos.recommended_ps_assoc:
+                    if assoc.prof_standard:
+                        recommended_ps_list.append({
+                            'id': assoc.prof_standard.id,
+                            'code': assoc.prof_standard.code,
+                            'name': assoc.prof_standard.name,
+                            'is_mandatory': assoc.is_mandatory, # Добавляем метаданные связи
+                            'description': assoc.description,
+                        })
+                    
+        details['recommended_ps_list'] = recommended_ps_list
+
+        return details
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_program_details for program_id {program_id}: {e}", exc_info=True)
+        return None
+    except AttributeError as e: # Может быть при неполноте данных (например, AUP_assoc, но AUP==None)
+        logger.error(f"Attribute error likely due to missing relationship/data in get_program_details for program_id {program_id}: {e}", exc_info=True)
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error in get_program_details for program_id {program_id}: {e}", exc_info=True)
+        return None
+
+def get_matrix_for_aup(aup_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Собирает все данные для отображения матрицы компетенций для АУП.
+    (Версия с исправлениями сортировки, фильтрации УК/ОПК и ПК)
+
+    Args:
+        aup_id: ID Академического учебного плана (из таблицы tbl_aup).
+
+    Returns:
+        Словарь с данными для фронтенда или None.
+    """
+    try:
+        session: Session = db.session
+
+        # 1. Получаем инфо об АУП и связанные ОП
+        aup_info = session.query(AupInfo).options(
+            selectinload(AupInfo.education_programs_assoc).selectinload(EducationalProgramAup.educational_program).selectinload(EducationalProgram.fgos) # Загружаем FGOS через ОП
+        ).get(aup_id)
+
+        if not aup_info:
+            logger.warning(f"AUP with id {aup_id} not found for matrix.")
+            return None
+
+        # 2. Находим связанную ОП и ФГОС
+        program = None
+        fgos = None
+        if aup_info.education_programs_assoc:
+             # Предполагаем, что AUP связан только с одной ОП в контексте матрицы
+             # TODO: Уточнить логику, если AUP связан с несколькими ОП
+             program_assoc = aup_info.education_programs_assoc[0]
+             program = program_assoc.educational_program
+             if program and program.fgos:
+                  fgos = program.fgos # FGOS уже загружен благодаря selectinload
+
+        if not program:
+             logger.warning(f"AUP {aup_id} is not linked to any Educational Program.")
+             # TODO: Если АУП не связан с ОП, что показываем? Пустую матрицу? Ошибку?
+             # Пока возвращаем None, чтобы фронтенд показал ошибку.
+             return None
+
+        logger.info(f"Found Program (id: {program.id}, title: {program.title}) for AUP {aup_id}.")
+        if fgos:
+             logger.info(f"Found linked FGOS (id: {fgos.id}, code: {fgos.direction_code}).")
+        else:
+             logger.warning(f"Educational Program {program.id} is not linked to any FGOS.")
+
+
+        # 3. Получаем дисциплины АУП из AupData
+        aup_data_entries = session.query(AupData).options(
+            joinedload(AupData.discipline)
+        ).filter_by(id_aup=aup_id).order_by(AupData.id_period, AupData.num_row).all()
+
+        disciplines_list = []
+        aup_data_ids_in_matrix = set()
+        for entry in aup_data_entries:
+            # Пропускаем записи без привязки к дисциплине (например, служебные строки)
+            if entry.id_discipline is None or entry.discipline is None:
+                continue
+            
+            # TODO: Возможно, добавить фильтрацию по типам записей AupData (только Дисциплины)
+            # if entry.id_type_record != 1: # 1 - Дисциплина, нужно уточнить ID в справочнике D_TypeRecord
+            #     continue
+
+            discipline_title = entry.discipline.title
+            discipline_data = {
+                "aup_data_id": entry.id,
+                "discipline_id": entry.id_discipline,
+                "title": discipline_title,
+                "semester": entry.id_period # Семестр хранится в id_period AupData
+            }
+            disciplines_list.append(discipline_data)
+            aup_data_ids_in_matrix.add(entry.id)
+
+        # Сортировка списка дисциплин уже сделана ORM по id_period и num_row, что обычно соответствует порядку в АУП
+        # disciplines_list.sort(key=lambda d: (d.get('semester', 0), d.get('title', ''))) # На всякий случай можно оставить, но ORM должен справиться
+        logger.info(f"Found {len(disciplines_list)} relevant AupData entries for AUP {aup_id}.")
+
+        # 4. Получаем релевантные компетенции и их индикаторы
+        # УК и ОПК берутся из ФГОС, связанного с ОП
+        # ПК берутся из тех, что созданы пользователем и связаны с ОП
         
-        try {
-            this.isSavingFgos = true;
-            this.fgosError = null;
-            
-            const result = await CompetenciesApi.saveFgosData(this.fgosParsedData, this.fgosUploadFilename, options); // Используем новый сервис
-            
-            console.log("FGOS save result:", result);
-            
-            // After successful save, refresh the FGOS list
-            await this.fetchFgosList();
-            
-            this.showFgosPreviewModal = false; // Close the modal on success
-            this.fgosParsedData = null; // Clear parsed data
-            this.fgosUploadFilename = ''; // Clear filename
-            this.fgosExistingRecord = null; // Clear existing record info
+        relevant_competencies_query = session.query(Competency).options(
+            selectinload(Competency.indicators),
+            joinedload(Competency.competency_type)
+        )
 
-            // TODO: Show success message
+        relevant_competencies = []
+
+        # Получаем УК и ОПК, связанные с данным ФГОС (если ФГОС есть)
+        if fgos:
+            uk_opk_competencies = relevant_competencies_query.filter(
+                Competency.fgos_vo_id == fgos.id # Фильтруем по FK на ФГОС
+            ).all() # Query.all() вернет все объекты, фильтруем по типу в Python
             
-            return result;
-        } catch (error: any) {
-            console.error("Error saving FGOS data:", error);
-            this.fgosError = error.message || "Failed to save FGOS data";
-            throw error;
-        } finally {
-            this.isSavingFgos = false;
+            # Фильтруем по типу 'УК' или 'ОПК' после загрузки
+            uk_opk_competencies = [
+                 c for c in uk_opk_competencies 
+                 if c.competency_type and c.competency_type.code in ['УК', 'ОПК']
+            ]
+            relevant_competencies.extend(uk_opk_competencies)
+            logger.info(f"Found {len(uk_opk_competencies)} УК/ОПК competencies linked to FGOS {fgos.id}.")
+        else:
+             logger.warning("No FGOS linked to program, cannot retrieve УК/ОПК from FGOS.")
+
+
+        # Получаем ПК, связанные с данной ОП
+        # Логика связи ПК с ОП: Компетенция (ПК) может быть создана на основе ТФ (LaborFunction).
+        # LaborFunction принадлежит Профстандарту (ProfStandard).
+        # Профстандарт может быть выбран для Образовательной Программы (EducationalProgramPs).
+        # Поэтому, чтобы получить ПК для данной ОП, нужно найти все ТФ из ПС, выбранных для этой ОП,
+        # и все ПК, основанные на этих ТФ.
+        # Также, ПК могут быть созданы не на основе ТФ, а просто вручную и связаны с ОП напрямую (если такая связь есть в модели).
+        # На данном этапе (MVP) временно берем ВСЕ ПК, т.к. логика связи ПК с ОП через ПС/ТФ еще не полностью реализована/верифицирована.
+        
+        # TODO: Реализовать правильную фильтрацию ПК по ОП
+        # Вариант 1 (Если ПК напрямую связаны с ОП):
+        # pk_competencies = relevant_competencies_query.join(EducationalProgramCompetency).filter(EducationalProgramCompetency.program_id == program.id).all()
+        # Вариант 2 (Если ПК связаны через ТФ, ПС, ОП-ПС):
+        # pk_competencies = relevant_competencies_query.join(LaborFunction).join(ProfStandard).join(EducationalProgramPs).filter(EducationalProgramPs.educational_program_id == program.id).all()
+        # На данном этапе, берем все ПК:
+        pk_competencies = relevant_competencies_query.join(CompetencyType).filter(CompetencyType.code == 'ПК').all()
+        relevant_competencies.extend(pk_competencies)
+        logger.info(f"Found {len(pk_competencies)} ПК competencies (all existing ПК).")
+
+
+        # Форматируем результат
+        competencies_data = []
+        indicator_ids_in_matrix = set()
+        
+        # Сортируем релевантные компетенции перед форматированием
+        # Сортировка: сначала УК, потом ОПК, потом ПК; внутри каждого типа - по коду
+        type_order = ['УК', 'ОПК', 'ПК']
+        relevant_competencies.sort(key=lambda c: (
+            type_order.index(c.competency_type.code) if c.competency_type and c.competency_type.code in type_order else len(type_order), # Неизвестные типы в конец
+            c.code
+        ))
+
+        for comp in relevant_competencies:
+            type_code = comp.competency_type.code if comp.competency_type else "UNKNOWN"
+
+            # Используем .to_dict() из BaseModel для сериализации полей
+            comp_dict = comp.to_dict()
+            comp_dict.pop('fgos', None) # Удаляем объект Fgos
+            comp_dict.pop('competency_type', None) # Удаляем объект CompetencyType
+            comp_dict.pop('based_on_labor_function', None) # Удаляем объект LaborFunction
+            comp_dict.pop('matrix_links', None) # Удаляем связи матрицы, они в отдельном массиве
+
+            comp_dict['type_code'] = type_code # Добавляем код типа явно
+            comp_dict['indicators'] = []
+            if comp.indicators:
+                # Сортируем индикаторы внутри компетенции
+                sorted_indicators = sorted(comp.indicators, key=lambda i: i.code)
+                for ind in sorted_indicators:
+                    indicator_ids_in_matrix.add(ind.id)
+                    # Сериализуем индикатор
+                    ind_dict = ind.to_dict()
+                    ind_dict.pop('competency', None) # Удаляем родительскую компетенцию
+                    ind_dict.pop('labor_functions', None) # Удаляем связанные ТФ
+                    ind_dict.pop('matrix_entries', None) # Удаляем связи матрицы
+                    comp_dict['indicators'].append(ind_dict)
+            competencies_data.append(comp_dict)
+
+        logger.info(f"Formatted {len(competencies_data)} relevant competencies with indicators.")
+
+        # 5. Получаем существующие связи
+        existing_links_data = []
+        # Проверяем, что списки ID не пустые, чтобы избежать ошибки .in_([])
+        if aup_data_ids_in_matrix and indicator_ids_in_matrix:
+            # Используем .in_() для эффективного запроса
+            existing_links_db = session.query(CompetencyMatrix).filter(
+                and_(
+                   CompetencyMatrix.aup_data_id.in_(list(aup_data_ids_in_matrix)), # Преобразуем set в list
+                   CompetencyMatrix.indicator_id.in_(list(indicator_ids_in_matrix)) # Преобразуем set в list
+                )
+            ).all()
+            # Сериализуем связи
+            existing_links_data = [
+                link.to_dict() for link in existing_links_db # Используем to_dict из BaseModel
+            ]
+            logger.info(f"Found {len(existing_links_data)} existing matrix links for relevant AupData and Indicators.")
+
+
+        # 6. Предложения от NLP (заглушка для MVP)
+        # suggestions_data = suggest_links_nlp(disciplines_list, competencies_data) # Заглушка
+
+        # Сериализуем AupInfo в конце
+        aup_info_dict = aup_info.as_dict() # Используем as_dict из maps.models.py
+        # Удаляем relation properties, если они есть в as_dict
+        aup_info_dict.pop('education_programs_assoc', None)
+        # Добавляем num_aup если он не попал в as_dict (хотя должен)
+        # if 'num_aup' not in aup_info_dict and hasattr(aup_info, 'num_aup'):
+        #      aup_info_dict['num_aup'] = aup_info.num_aup
+
+
+        return {
+            "aup_info": aup_info_dict,
+            "disciplines": disciplines_list,
+            "competencies": competencies_data,
+            "links": existing_links_data,
+            "suggestions": [] # Заглушка для NLP
         }
-    },
-    
-    /**
-     * Delete a FGOS VO record
-     * @param fgosId ID of the FGOS VO record to delete
-     */
-    async deleteFgos(fgosId) {
-      // TODO: Implement delete logic and confirmation modal
-      try {
-          this.loading = true; // Use general loading for simplicity
-          this.fgosError = null;
-          
-          const result = await CompetenciesApi.deleteFgos(fgosId); // Используем новый сервис
-          
-          console.log("FGOS delete result:", result);
-          
-          // Remove from the local list
-          this.fgosList = this.fgosList.filter(fgos => fgos.id !== fgosId);
 
-          // If the deleted FGOS was currently viewed, clear details
-          if (this.selectedFgosId === fgosId) {
-              this.selectedFgosDetails = null;
-              this.selectedFgosId = null;
-          }
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_matrix_for_aup for aup_id {aup_id}: {e}", exc_info=True)
+        session.rollback() # Откат при ошибке БД
+        return None
+    except AttributeError as e: # Может быть при неполноте данных (например, AUP_assoc, но AUP==None)
+        logger.error(f"Attribute error likely due to missing relationship/data in get_matrix_for_aup for aup_id {aup_id}: {e}", exc_info=True)
+        session.rollback() # Откат при ошибке
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error in get_matrix_for_aup for aup_id {aup_id}: {e}", exc_info=True)
+        session.rollback() # Откат при любой неожиданной ошибке
+        return None
 
-          // TODO: Show success message
-          
-          return result;
-      } catch (error: any) {
-          console.error("Error deleting FGOS:", error);
-          this.fgosError = error.message || "Failed to delete FGOS";
-          throw error;
-      } finally {
-          this.loading = false;
-      }
-    },
+# --- Функции для изменения данных ---
 
-    /**
-     * Clear the FGOS upload/preview state (e.g., when closing modal)
-     */
-    clearFgosPreviewState() {
-        this.showFgosPreviewModal = false;
-        this.fgosParsedData = null;
-        this.fgosUploadFilename = '';
-        this.fgosExistingRecord = null;
-        this.fgosError = null; // Clear error as well
-    }
-  }
-})
+def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True) -> Dict[str, Any]:
+    """
+    Создает или удаляет связь Дисциплина(АУП)-ИДК в матрице.
+    (Версия с подробным возвратом статуса)
+
+    Args:
+        aup_data_id: ID записи из таблицы aup_data.
+        indicator_id: ID индикатора из таблицы indicators.
+        create (bool): True для создания связи, False для удаления.
+
+    Returns:
+        Dict[str, Any]: Словарь с результатом операции:
+            {
+                'success': True/False,
+                'status': 'created'/'already_exists'/'deleted'/'not_found'/'error',
+                'message': '...' (сообщение для логирования/отладки),
+                'error_type': '...' (о
 ```
 
-**Пояснения к Store:**
+```python
+# filepath: /home/me/ВКР/maps_backend/competencies_matrix/logic.py
+# competencies_matrix/logic.py
+from typing import Dict, List, Any, Optional
+import datetime
+from sqlalchemy.orm import joinedload, selectinload, Session
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError # Импортируем IntegrityError
+from sqlalchemy import exists, and_
+import traceback
+# Импортируем парсер ФГОС
+from .fgos_parser import parse_fgos_pdf, parse_uk_opk_simple # parse_uk_opk_simple тоже может пригодиться в будущем сидере
+# Импортируем парсер ПС
+from .parsers import parse_prof_standard_upload # Переименовал для ясности
+# Импортируем модели ПС, если они не импортируются автоматически через BaseModel или другие связи
+from .models import (
+    GeneralizedLaborFunction, LaborFunction, LaborAction, RequiredSkill, RequiredKnowledge
+)
 
-*   Добавлено состояние для списка ФГОС (`fgosList`), деталей выбранного ФГОС (`selectedFgosDetails`), и состояния для модального окна предпросмотра (`showFgosPreviewModal`, `fgosParsedData`, `fgosUploadFilename`, `fgosExistingRecord`).
-*   Добавлены экшены `fetchFgosList`, `fetchFgosDetails`, `uploadFgosFile`, `saveFgosData`, `deleteFgos`, `clearFgosPreviewState`.
-*   `uploadFgosFile` вызывает API для парсинга, и если успешно, заполняет состояние для модального окна предпросмотра (`fgosParsedData`, `fgosUploadFilename`). **Необходимо добавить логику поиска существующего ФГОС в `fgosList` и загрузки его деталей (`fgosExistingRecord`) для сравнения в модальном окне.**
-*   `saveFgosData` вызывает API для сохранения, а затем обновляет список ФГОС (`fetchFgosList`) и закрывает модальное окно.
-*   `deleteFgos` вызывает API для удаления и удаляет запись из локального списка.
-*   `clearFgosPreviewState` сбрасывает состояние, связанное с модальным окном.
+from maps.models import db, AupData, SprDiscipline, AupInfo
+from .models import (
+    EducationalProgram, Competency, Indicator, CompetencyMatrix,
+    ProfStandard, FgosVo, FgosRecommendedPs, EducationalProgramAup, EducationalProgramPs,
+    CompetencyType, IndicatorPsLink
+)
 
-**6. Frontend: Реализация UI для Управления ФГОС**
+import logging
+# Настройка логирования
+logger = logging.getLogger(__name__)
+# Уровень логирования устанавливается при старте приложения или в конфиге
 
-Создадим страницу списка ФГОС (`FgosView.vue`) и компонент модального окна предпросмотра (`FgosPreviewModal.vue`).
+# --- Функции для получения данных для отображения ---
 
-```vue
-<!-- src/views/competencies/FgosView.vue -->
-<template>
-  <div class="FgosView">
-    <h2>ФГОС ВО</h2>
-    
-    <div class="FgosView__header-actions">
-        <!-- Кнопка загрузки нового ФГОС -->
-        <Button
-            label="Загрузить ФГОС"
-            icon="mdi mdi-upload"
-            @click="openFileUpload"
-            :loading="isLoadingFgosUpload"
-            :disabled="isLoadingFgosUpload"
-        />
-         <input
-            ref="fileInput"
-            type="file"
-            accept=".pdf"
-            @change="handleFileUpload"
-            style="display: none;"
-         />
-    </div>
+def get_educational_programs_list() -> List[EducationalProgram]:
+    """
+    Получает список всех образовательных программ из БД.
 
-    <!-- Список ФГОС -->
-    <div class="FgosView__content">
-      <div class="FgosView__table-wrapper">
-        <DataTable
-          :value="fgosList"
-          :loading="isLoadingFgosList"
-          dataKey="id"
-          class="FgosView__table"
-          :paginator="fgosList.length > 10"
-          :rows="10"
-          stripedRows
-          removableSort
-          showGridlines
-          v-model:sortField="sortField"
-          v-model:sortOrder="sortOrder"
-          scrollable
-          scrollHeight="flex"
-        >
-        <Column field="number" header="Номер приказа" :sortable="true"></Column>
-        <Column field="date" header="Дата приказа" :sortable="true">
-            <template #body="slotProps">
-                {{ formatDate(slotProps.data.date) }}
-            </template>
-        </Column>
-        <Column field="direction_code" header="Код направления" :sortable="true"></Column>
-        <Column field="direction_name" header="Название направления" :sortable="true"></Column>
-        <Column field="education_level" header="Уровень" :sortable="true"></Column>
-        <Column field="generation" header="Поколение" :sortable="true"></Column>
-        <Column headerStyle="width: 8rem" header="Действия">
-          <template #body="slotProps">
-            <div class="action-buttons">
-              <Button
-                icon="mdi mdi-eye"
-                class="p-button-sm action-button"
-                @click.stop="viewFgosDetails(slotProps.data)"
-                v-tooltip.top="'Просмотреть детали ФГОС'"
-              />
-               <Button
-                icon="mdi mdi-delete"
-                class="p-button-sm p-button-danger action-button"
-                @click.stop="confirmDeleteFgos(slotProps.data)"
-                v-tooltip.top="'Удалить ФГОС'"
-              />
-            </div>
-          </template>
-        </Column>
-      </DataTable>
+    Returns:
+        List[EducationalProgram]: Список объектов SQLAlchemy EducationalProgram.
+    """
+    try:
+        session: Session = db.session # Используем сессию явно
+        # Используем joinedload для предзагрузки первого AUP
+        # Это может ускорить отображение списка, если первый_aup_id используется на фронте
+        programs = session.query(EducationalProgram).options( # Используем session.query
+             joinedload(EducationalProgram.aup_assoc).joinedload(EducationalProgramAup.aup)
+        ).order_by(EducationalProgram.title).all()
+        return programs
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_educational_programs_list: {e}", exc_info=True) # Добавлено exc_info
+        return [] # Возвращаем пустой список в случае ошибки
 
-      <!-- Empty state -->
-      <div v-if="!isLoadingFgosList && fgosList.length === 0" class="FgosView__empty">
-        <i class="mdi mdi-file-document-outline text-4xl text-gray-400"></i>
-        <p>Нет загруженных ФГОС ВО</p>
-      </div>
-    </div>
-    
-    <!-- Модальное окно предпросмотра / деталей ФГОС -->
-    <FgosPreviewModal
-        v-model:visible="showFgosPreviewModal"
-        :parsed-data="fgosParsedData"
-        :filename="fgosUploadFilename"
-        :existing-fgos-record="fgosExistingRecord"
-        :is-view-mode="!fgosParsedData"
-        @save="saveFgosData"
-        @hide="clearFgosPreviewState"
-    />
+def get_program_details(program_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Получает детальную информацию по ОП, включая связанные сущности.
 
-    <!-- Модальное окно подтверждения удаления -->
-    <ConfirmDialog group="deleteFgosConfirmation"></ConfirmDialog>
+    Args:
+        program_id: ID образовательной программы.
 
-  </div>
-</template>
+    Returns:
+        Optional[Dict[str, Any]]: Словарь с данными программы или None, если не найдена.
+                                   Структура должна включать детали ФГОС, список АУП,
+                                   список выбранных и рекомендованных ПС.
+    """
+    try:
+        session: Session = db.session # Используем сессию
+        program = session.query(EducationalProgram).options( # Используем session.query
+            # Эффективно загружаем связанные данные одним запросом
+            selectinload(EducationalProgram.fgos),
+            selectinload(EducationalProgram.aup_assoc).selectinload(EducationalProgramAup.aup),
+            selectinload(EducationalProgram.selected_ps_assoc).selectinload(EducationalProgramPs.prof_standard)
+        ).get(program_id)
 
-<script setup>
-import { ref, onMounted, computed } from 'vue';
-import { useRouter } from 'vue-router';
-import { useCompetenciesMatrixStore } from '@/stores/competenciesMatrix';
-import CompetenciesApi from '@/services/CompetenciesApi'; // Импорт API сервис
-import DataTable from 'primevue/datatable';
-import Column from 'primevue/column';
-import Button from 'primevue/button';
-import Dialog from 'primevue/dialog'; // Возможно, не понадобится, если используем модалку из компонента
-import ProgressSpinner from 'primevue/progressspinner'; // Возможно, не понадобится
-import Tooltip from 'primevue/tooltip'; // Директива
-import FgosPreviewModal from '@/components/competencies/FgosPreviewModal.vue'; // Наш компонент модального окна
-import ConfirmDialog from 'primevue/confirmdialog'; // Для модалки подтверждения
-import { useConfirm } from "primevue/useconfirm"; // Для модалки подтверждения
-import { useToast } from "primevue/usetoast"; // Для сообщений пользователю
+        if not program:
+            logger.warning(f"Program with id {program_id} not found for details.")
+            return None
 
-const router = useRouter();
-const competenciesStore = useCompetenciesMatrixStore();
-const confirm = useConfirm(); // Для модалки подтверждения
-const toast = useToast(); // Для сообщений пользователю
+        # Сериализуем программу основные поля без связей
+        details = program.to_dict() # Используем to_dict из BaseModel
 
-// State from store
-const fgosList = computed(() => competenciesStore.fgosList);
-const isLoadingFgosList = computed(() => competenciesStore.isLoadingFgosList);
-const isLoadingFgosUpload = computed(() => competenciesStore.isLoadingFgosUpload);
-const showFgosPreviewModal = computed({ // Связываем видимость модалки с состоянием в сторе
-    get: () => competenciesStore.getShowFgosPreviewModal,
-    set: (value) => { if (!value) competenciesStore.clearFgosPreviewState(); } // При закрытии - очищаем состояние
-});
-const fgosParsedData = computed(() => competenciesStore.getFgosParsedData);
-const fgosUploadFilename = computed(() => competenciesStore.getFgosUploadFilename);
-const fgosExistingRecord = computed(() => competenciesStore.getFgosExistingRecord);
+        # Добавляем детали в нужном формате
+        if program.fgos:
+            details['fgos_details'] = {
+                'id': program.fgos.id,
+                'number': program.fgos.number,
+                'date': program.fgos.date.isoformat() if program.fgos.date else None, # Форматируем дату
+                'direction_code': program.fgos.direction_code,
+                'direction_name': program.fgos.direction_name,
+                'education_level': program.fgos.education_level,
+                'generation': program.fgos.generation,
+                'file_path': program.fgos.file_path
+            }
+        else:
+            details['fgos_details'] = None
+            
+        details['aup_list'] = []
+        if program.aup_assoc:
+            details['aup_list'] = [
+                {
+                    'id_aup': assoc.aup.id_aup,
+                    'num_aup': assoc.aup.num_aup,
+                    'file': assoc.aup.file
+                } 
+                for assoc in program.aup_assoc if assoc.aup
+            ]
+        
+        details['selected_ps_list'] = []
+        if program.selected_ps_assoc:
+            details['selected_ps_list'] = [
+                {
+                    'id': assoc.prof_standard.id,
+                    'code': assoc.prof_standard.code,
+                    'name': assoc.prof_standard.name
+                }
+                for assoc in program.selected_ps_assoc if assoc.prof_standard
+            ]
 
+        # Получаем рекомендованные ПС для связанного ФГОС
+        recommended_ps_list = []
+        if program.fgos and program.fgos.recommended_ps_assoc:
+            if program.fgos.recommended_ps_assoc:
+                # Бережно обрабатываем каждую связь, извлекая только нужные поля
+                for assoc in program.fgos.recommended_ps_assoc:
+                    if assoc.prof_standard:
+                        recommended_ps_list.append({
+                            'id': assoc.prof_standard.id,
+                            'code': assoc.prof_standard.code,
+                            'name': assoc.prof_standard.name,
+                            'is_mandatory': assoc.is_mandatory, # Добавляем метаданные связи
+                            'description': assoc.description,
+                        })
+                    
+        details['recommended_ps_list'] = recommended_ps_list
 
-// Local state
-const sortField = ref('direction_code'); // Default sort field
-const sortOrder = ref(1); // Default sort order (1 for ascending, -1 for descending)
-const fileInput = ref(null); // Ссылка на скрытый input type="file"
+        return details
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_program_details for program_id {program_id}: {e}", exc_info=True)
+        return None
+    except AttributeError as e: # Может быть при неполноте данных (например, AUP_assoc, но AUP==None)
+        logger.error(f"Attribute error likely due to missing relationship/data in get_program_details for program_id {program_id}: {e}", exc_info=True)
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error in get_program_details for program_id {program_id}: {e}", exc_info=True)
+        return None
 
-// Methods
-const fetchFgosList = async () => {
-  await competenciesStore.fetchFgosList();
-};
+def get_matrix_for_aup(aup_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Собирает все данные для отображения матрицы компетенций для АУП.
+    (Версия с исправлениями сортировки, фильтрации УК/ОПК и ПК)
 
-const openFileUpload = () => {
-    fileInput.value.click(); // Инициируем клик по скрытому input[type="file"]
-};
+    Args:
+        aup_id: ID Академического учебного плана (из таблицы tbl_aup).
 
-const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
-    if (file) {
-        await competenciesStore.uploadFgosFile(file);
-        // Очищаем input, чтобы можно было загрузить тот же файл повторно
-        event.target.value = null;
-    }
-};
+    Returns:
+        Словарь с данными для фронтенда или None.
+    """
+    try:
+        session: Session = db.session
 
-const viewFgosDetails = async (fgos) => {
-    // Открываем модальное окно в режиме просмотра, передавая ID
-    // FgosPreviewModal должен уметь загрузить детали по ID, если parsedData нет, но передан ID
-    // Или же мы фетчим детали здесь и передаем их как prop existing-fgos-record
-    // Давайте фетчим детали здесь и передаем их в модалку, используя поле existing-fgos-record
-    
-    // Устанавливаем state для модалки в режим просмотра
-    competenciesStore.showFgosPreviewModal = true; // Открываем модалку
-    competenciesStore.fgosParsedData = null; // Указываем, что это не предпросмотр нового файла
-    competenciesStore.fgosUploadFilename = ''; // Указываем, что это не новый файл
-    
-    // Загружаем детали существующего ФГОС
-    await competenciesStore.fetchFgosDetails(fgos.id); // fetchFgosDetails сохранит результат в selectedFgosDetails
-    // FgosPreviewModal будет использовать getSelectedFgosDetails геттер, если parsedData нет
-};
+        # 1. Получаем инфо об АУП и связанные ОП
+        aup_info = session.query(AupInfo).options(
+            selectinload(AupInfo.education_programs_assoc).selectinload(EducationalProgramAup.educational_program).selectinload(EducationalProgram.fgos) # Загружаем FGOS через ОП
+        ).get(aup_id)
+
+        if not aup_info:
+            logger.warning(f"AUP with id {aup_id} not found for matrix.")
+            return None
+
+        # 2. Находим связанную ОП и ФГОС
+        program = None
+        fgos = None
+        if aup_info.education_programs_assoc:
+             # Предполагаем, что AUP связан только с одной ОП в контексте матрицы
+             # TODO: Уточнить логику, если AUP связан с несколькими ОП
+             program_assoc = aup_info.education_programs_assoc[0]
+             program = program_assoc.educational_program
+             if program and program.fgos:
+                  fgos = program.fgos # FGOS уже загружен благодаря selectinload
+
+        if not program:
+             logger.warning(f"AUP {aup_id} is not linked to any Educational Program.")
+             # TODO: Если АУП не связан с ОП, что показываем? Пустую матрицу? Ошибку?
+             # Пока возвращаем None, чтобы фронтенд показал ошибку.
+             return None
+
+        logger.info(f"Found Program (id: {program.id}, title: {program.title}) for AUP {aup_id}.")
+        if fgos:
+             logger.info(f"Found linked FGOS (id: {fgos.id}, code: {fgos.direction_code}).")
+        else:
+             logger.warning(f"Educational Program {program.id} is not linked to any FGOS.")
 
 
-const confirmDeleteFgos = (fgos) => {
-    confirm.require({
-        group: 'deleteFgosConfirmation',
-        message: `Вы уверены, что хотите удалить ФГОС "${fgos.direction_code} (${fgos.generation}) Приказ №${fgos.number} от ${formatDate(fgos.date)}"? Это действие необратимо и удалит все связанные компетенции и индикаторы.`,
-        header: 'Подтверждение удаления',
-        icon: 'mdi mdi-information-outline',
-        acceptClass: 'p-button-danger',
-        acceptLabel: 'Удалить',
-        rejectLabel: 'Отмена',
-        accept: async () => {
-            await competenciesStore.deleteFgos(fgos.id);
-            // Уведомление об успехе показывается в экшене стора или здесь
-             toast.add({severity:'success', summary: 'Удалено', detail:'ФГОС успешно удален', life: 3000});
-        },
-        reject: () => {
-            // Действия при отмене
+        # 3. Получаем дисциплины АУП из AupData
+        aup_data_entries = session.query(AupData).options(
+            joinedload(AupData.discipline)
+        ).filter_by(id_aup=aup_id).order_by(AupData.id_period, AupData.num_row).all()
+
+        disciplines_list = []
+        aup_data_ids_in_matrix = set()
+        for entry in aup_data_entries:
+            # Пропускаем записи без привязки к дисциплине (например, служебные строки)
+            if entry.id_discipline is None or entry.discipline is None:
+                continue
+            
+            # TODO: Возможно, добавить фильтрацию по типам записей AupData (только Дисциплины)
+            # if entry.id_type_record != 1: # 1 - Дисциплина, нужно уточнить ID в справочнике D_TypeRecord
+            #     continue
+
+            discipline_title = entry.discipline.title
+            discipline_data = {
+                "aup_data_id": entry.id,
+                "discipline_id": entry.id_discipline,
+                "title": discipline_title,
+                "semester": entry.id_period # Семестр хранится в id_period AupData
+            }
+            disciplines_list.append(discipline_data)
+            aup_data_ids_in_matrix.add(entry.id)
+
+        # Сортировка списка дисциплин уже сделана ORM по id_period и num_row, что обычно соответствует порядку в АУП
+        # disciplines_list.sort(key=lambda d: (d.get('semester', 0), d.get('title', ''))) # На всякий случай можно оставить, но ORM должен справиться
+        logger.info(f"Found {len(disciplines_list)} relevant AupData entries for AUP {aup_id}.")
+
+        # 4. Получаем релевантные компетенции и их индикаторы
+        # УК и ОПК берутся из ФГОС, связанного с ОП
+        # ПК берутся из тех, что созданы пользователем и связаны с ОП
+        
+        relevant_competencies_query = session.query(Competency).options(
+            selectinload(Competency.indicators),
+            joinedload(Competency.competency_type)
+        )
+
+        relevant_competencies = []
+
+        # Получаем УК и ОПК, связанные с данным ФГОС (если ФГОС есть)
+        if fgos:
+            uk_opk_competencies = relevant_competencies_query.filter(
+                Competency.fgos_vo_id == fgos.id # Фильтруем по FK на ФГОС
+            ).all() # Query.all() вернет все объекты, фильтруем по типу в Python
+            
+            # Фильтруем по типу 'УК' или 'ОПК' после загрузки
+            uk_opk_competencies = [
+                 c for c in uk_opk_competencies 
+                 if c.competency_type and c.competency_type.code in ['УК', 'ОПК']
+            ]
+            relevant_competencies.extend(uk_opk_competencies)
+            logger.info(f"Found {len(uk_opk_competencies)} УК/ОПК competencies linked to FGOS {fgos.id}.")
+        else:
+             logger.warning("No FGOS linked to program, cannot retrieve УК/ОПК from FGOS.")
+
+
+        # Получаем ПК, связанные с данной ОП
+        # Логика связи ПК с ОП: Компетенция (ПК) может быть создана на основе ТФ (LaborFunction).
+        # LaborFunction принадлежит Профстандарту (ProfStandard).
+        # Профстандарт может быть выбран для Образовательной Программы (EducationalProgramPs).
+        # Поэтому, чтобы получить ПК для данной ОП, нужно найти все ТФ из ПС, выбранных для этой ОП,
+        # и все ПК, основанные на этих ТФ.
+        # Также, ПК могут быть созданы не на основе ТФ, а просто вручную и связаны с ОП напрямую (если такая связь есть в модели).
+        # На данном этапе (MVP) временно берем ВСЕ ПК, т.к. логика связи ПК с ОП через ПС/ТФ еще не полностью реализована/верифицирована.
+        
+        # TODO: Реализовать правильную фильтрацию ПК по ОП
+        # Вариант 1 (Если ПК напрямую связаны с ОП):
+        # pk_competencies = relevant_competencies_query.join(EducationalProgramCompetency).filter(EducationalProgramCompetency.program_id == program.id).all()
+        # Вариант 2 (Если ПК связаны через ТФ, ПС, ОП-ПС):
+        # pk_competencies = relevant_competencies_query.join(LaborFunction).join(ProfStandard).join(EducationalProgramPs).filter(EducationalProgramPs.educational_program_id == program.id).all()
+        # На данном этапе, берем все ПК:
+        pk_competencies = relevant_competencies_query.join(CompetencyType).filter(CompetencyType.code == 'ПК').all()
+        relevant_competencies.extend(pk_competencies)
+        logger.info(f"Found {len(pk_competencies)} ПК competencies (all existing ПК).")
+
+
+        # Форматируем результат
+        competencies_data = []
+        indicator_ids_in_matrix = set()
+        
+        # Сортируем релевантные компетенции перед форматированием
+        # Сортировка: сначала УК, потом ОПК, потом ПК; внутри каждого типа - по коду
+        type_order = ['УК', 'ОПК', 'ПК']
+        relevant_competencies.sort(key=lambda c: (
+            type_order.index(c.competency_type.code) if c.competency_type and c.competency_type.code in type_order else len(type_order), # Неизвестные типы в конец
+            c.code
+        ))
+
+        for comp in relevant_competencies:
+            type_code = comp.competency_type.code if comp.competency_type else "UNKNOWN"
+
+            # Используем .to_dict() из BaseModel для сериализации полей
+            comp_dict = comp.to_dict()
+            comp_dict.pop('fgos', None) # Удаляем объект Fgos
+            comp_dict.pop('competency_type', None) # Удаляем объект CompetencyType
+            comp_dict.pop('based_on_labor_function', None) # Удаляем объект LaborFunction
+            comp_dict.pop('matrix_links', None) # Удаляем связи матрицы, они в отдельном массиве
+
+            comp_dict['type_code'] = type_code # Добавляем код типа явно
+            comp_dict['indicators'] = []
+            if comp.indicators:
+                # Сортируем индикаторы внутри компетенции
+                sorted_indicators = sorted(comp.indicators, key=lambda i: i.code)
+                for ind in sorted_indicators:
+                    indicator_ids_in_matrix.add(ind.id)
+                    # Сериализуем индикатор
+                    ind_dict = ind.to_dict()
+                    ind_dict.pop('competency', None) # Удаляем родительскую компетенцию
+                    ind_dict.pop('labor_functions', None) # Удаляем связанные ТФ
+                    ind_dict.pop('matrix_entries', None) # Удаляем связи матрицы
+                    comp_dict['indicators'].append(ind_dict)
+            competencies_data.append(comp_dict)
+
+        logger.info(f"Formatted {len(competencies_data)} relevant competencies with indicators.")
+
+        # 5. Получаем существующие связи
+        existing_links_data = []
+        # Проверяем, что списки ID не пустые, чтобы избежать ошибки .in_([])
+        if aup_data_ids_in_matrix and indicator_ids_in_matrix:
+            # Используем .in_() для эффективного запроса
+            existing_links_db = session.query(CompetencyMatrix).filter(
+                and_(
+                   CompetencyMatrix.aup_data_id.in_(list(aup_data_ids_in_matrix)), # Преобразуем set в list
+                   CompetencyMatrix.indicator_id.in_(list(indicator_ids_in_matrix)) # Преобразуем set в list
+                )
+            ).all()
+            # Сериализуем связи
+            existing_links_data = [
+                link.to_dict() for link in existing_links_db # Используем to_dict из BaseModel
+            ]
+            logger.info(f"Found {len(existing_links_data)} existing matrix links for relevant AupData and Indicators.")
+
+
+        # 6. Предложения от NLP (заглушка для MVP)
+        # suggestions_data = suggest_links_nlp(disciplines_list, competencies_data) # Заглушка
+
+        # Сериализуем AupInfo в конце
+        aup_info_dict = aup_info.as_dict() # Используем as_dict из maps.models.py
+        # Удаляем relation properties, если они есть в as_dict
+        aup_info_dict.pop('education_programs_assoc', None)
+        # Добавляем num_aup если он не попал в as_dict (хотя должен)
+        # if 'num_aup' not in aup_info_dict and hasattr(aup_info, 'num_aup'):
+        #      aup_info_dict['num_aup'] = aup_info.num_aup
+
+
+        return {
+            "aup_info": aup_info_dict,
+            "disciplines": disciplines_list,
+            "competencies": competencies_data,
+            "links": existing_links_data,
+            "suggestions": [] # Заглушка для NLP
         }
-    });
-};
 
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_matrix_for_aup for aup_id {aup_id}: {e}", exc_info=True)
+        session.rollback() # Откат при ошибке БД
+        return None
+    except AttributeError as e: # Может быть при неполноте данных (например, AUP_assoc, но AUP==None)
+        logger.error(f"Attribute error likely due to missing relationship/data in get_matrix_for_aup for aup_id {aup_id}: {e}", exc_info=True)
+        session.rollback() # Откат при ошибке
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error in get_matrix_for_aup for aup_id {aup_id}: {e}", exc_info=True)
+        session.rollback() # Откат при любой неожиданной ошибке
+        return None
 
-const saveFgosData = async (options) => {
-    // Этот метод вызывается из FgosPreviewModal при нажатии "Сохранить"
-    // options = { force_update: boolean }
-    try {
-        await competenciesStore.saveFgosData(options);
-        // Успех обрабатывается в сторе (закрытие модалки, обновление списка)
-        toast.add({severity:'success', summary: 'Сохранено', detail:'Данные ФГОС успешно сохранены', life: 3000});
-    } catch (error) {
-        // Ошибка обрабатывается в сторе и/или здесь
-         toast.add({severity:'error', summary: 'Ошибка', detail:'Не удалось сохранить данные ФГОС', life: 3000});
-    }
-};
+# --- Функции для изменения данных ---
 
-const clearFgosPreviewState = () => {
-    // Этот метод вызывается при скрытии модалки
-    competenciesStore.clearFgosPreviewState();
-    // Важно: selectedFgosDetails очищается в сторе при закрытии модалки,
-    // если это был режим просмотра, или при начале нового upload
-};
+def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True) -> Dict[str, Any]:
+    """
+    Создает или удаляет связь Дисциплина(АУП)-ИДК в матрице.
+    (Версия с подробным возвратом статуса)
 
-// Helper to format date (reuse from other helpers)
-const formatDate = (dateString) => {
-    if (!dateString) return 'Не указано';
-    try {
-         const date = new Date(dateString);
-         return date.toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' });
-    } catch (e) {
-         console.error("Failed to format date:", dateString, e);
-         return dateString; // Return original if formatting fails
-    }
-};
+    Args:
+        aup_data_id: ID записи из таблицы aup_data.
+        indicator_id: ID индикатора из таблицы indicators.
+        create (bool): True для создания связи, False для удаления.
 
-
-// Lifecycle hook
-onMounted(() => {
-  fetchFgosList(); // Fetch list of FGOS on mount
-});
-
-// Добавляем директиву v-tooltip локально
-const vTooltip = Tooltip;
-
-</script>
-
-<style lang="scss" scoped>
-@import '@styles/_variables.scss';
-
-.FgosView {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  
-  h2 {
-    margin-bottom: 16px;
-    
-    @media (max-width: 640px) {
-      font-size: 1.3rem;
-      margin-bottom: 12px;
-    }
-  }
-  
-   &__header-actions {
-       margin-bottom: 16px;
-   }
-
-  &__content {
-    flex: 1;
-    overflow: auto;
-    min-width: 0; // Fix flexbox overflow issues
-  }
-  
-  &__table-wrapper {
-    overflow-x: auto; // Enable horizontal scrolling
-    width: 100%;
-    margin-bottom: 16px;
-    -webkit-overflow-scrolling: touch; // Smooth scrolling on iOS
-  }
-  
-  &__table {
-    min-width: 750px; // Minimum width to ensure proper display
-    width: 100%;
-    
-    ::v-deep(.p-datatable-wrapper) {
-      overflow-x: auto; // Ensure scrolling works inside the wrapper
-      scrollbar-width: thin; // Thin scrollbar for Firefox
-    }
-    
-    // Make the table rows have pointer cursor
-    ::v-deep(.p-datatable-tbody > tr) {
-      cursor: default; // Default cursor for rows without specific action
-    }
-    
-    // Optimize header and cell padding for better space usage
-    ::v-deep(.p-datatable-thead > tr > th) {
-      padding: 0.6rem 0.5rem;
-      position: sticky; // Keep headers visible on scroll
-      top: 0;
-      z-index: 1;
-      
-      // Only show sort icons when actively sorted
-      .p-sortable-column-icon {
-        &:not(.p-highlight) {
-          opacity: 0; // Hide when not sorted
-        }
-      }
-      
-      // Show sort icons on hover
-      &:hover .p-sortable-column-icon {
-        opacity: 0.5; // Show with reduced opacity on hover
-      }
-    }
-    
-    ::v-deep(.p-datatable-sm .p-datatable-tbody > tr > td) {
-      padding: 0.6rem 0.5rem;
-    }
-    
-    // Responsive adjustments
-    @media (max-width: 768px) {
-      min-width: 650px;
-      
-      ::v-deep(.p-datatable-thead > tr > th),
-      ::v-deep(.p-datatable-tbody > tr > td) {
-        padding: 0.4rem 0.4rem;
-        font-size: 0.9rem;
-      }
-    }
-
-    @media (max-width: 576px) {
-      min-width: 550px;
-      font-size: 0.85rem;
-    }
-  }
-  
-  // Style for the action buttons container
-  .action-buttons {
-    display: flex;
-    justify-content: center;
-    gap: 0.3rem;
-    flex-wrap: nowrap;
-  }
-  
-  // Style for action buttons
-  .action-button {
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    min-width: 2.2rem;
-    height: 2.2rem;
-    padding: 0.3rem;
-    
-    &:hover {
-      background-color: rgba(255, 255, 255, 0.1);
-    }
-    
-    @media (max-width: 768px) {
-      min-width: 1.8rem;
-      height: 1.8rem;
-    }
-  }
-  
-  &__empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 200px;
-    gap: 16px;
-    color: $shade400;
-  }
-}
-</style>
-
+    Returns:
+        Dict[str, Any]: Словарь с результатом операции:
+            {
+                'success': True/False,
+                'status': 'created'/'already_exists'/'deleted'/'not_found'/'error',
+                'message': '...' (сообщение для логирования/отладки),
+                'error_type': '...' (о
 ```
 
-```vue
-<!-- src/components/competencies/FgosPreviewModal.vue -->
-<template>
-    <Dialog
-        v-model:visible="visible"
-        :header="modalTitle"
-        :style="{width: '80vw'}"
-        :modal="true"
-        :closable="true"
-        @hide="$emit('hide')"
-    >
-        <div v-if="isLoadingDetails || isSavingFgos" class="text-center p-4"> <ProgressSpinner /> </div>
-        <div v-else-if="currentFgosData" class="FgosPreviewModal__content">
-            <!-- Раздел Метаданные -->
-            <div class="FgosPreviewModal__section">
-                <h3>Основная информация</h3>
-                <div class="FgosPreviewModal__details-grid">
-                     <template v-if="currentFgosData.metadata">
-                        <div class="FgosPreviewModal__details-item">
-                            <span class="FgosPreviewModal__details-label">Номер приказа</span>
-                            <span :class="getDiffClass(existingFgosData?.number, currentFgosData.metadata.order_number)" class="FgosPreviewModal__details-value">{{ formatDiff(existingFgosData?.number, currentFgosData.metadata.order_number, currentFgosData.metadata.order_number) }}</span>
-                        </div>
-                         <div class="FgosPreviewModal__details-item">
-                            <span class="FgosPreviewModal__details-label">Дата приказа</span>
-                            <span :class="getDiffClass(formatDate(existingFgosData?.date), currentFgosData.metadata.order_date)" class="FgosPreviewModal__details-value">{{ formatDiff(formatDate(existingFgosData?.date), currentFgosData.metadata.order_date, currentFgosData.metadata.order_date) }}</span>
-                        </div>
-                        <div class="FgosPreviewModal__details-item">
-                            <span class="FgosPreviewModal__details-label">Код направления</span>
-                            <span :class="getDiffClass(existingFgosData?.direction_code, currentFgosData.metadata.direction_code)" class="FgosPreviewModal__details-value">{{ formatDiff(existingFgosData?.direction_code, currentFgosData.metadata.direction_code, currentFgosData.metadata.direction_code) }}</span>
-                        </div>
-                        <div class="FgosPreviewModal__details-item">
-                            <span class="FgosPreviewModal__details-label">Название направления</span>
-                            <span :class="getDiffClass(existingFgosData?.direction_name, currentFgosData.metadata.direction_name)" class="FgosPreviewModal__details-value">{{ formatDiff(existingFgosData?.direction_name, currentFgosData.metadata.direction_name, currentFgosData.metadata.direction_name) }}</span>
-                        </div>
-                        <div class="FgosPreviewModal__details-item">
-                            <span class="FgosPreviewModal__details-label">Уровень образования</span>
-                             <span :class="getDiffClass(existingFgosData?.education_level, currentFgosData.metadata.education_level)" class="FgosPreviewModal__details-value">{{ formatDiff(existingFgosData?.education_level, currentFgosData.metadata.education_level, currentFgosData.metadata.education_level) }}</span>
-                        </div>
-                        <div class="FgosPreviewModal__details-item">
-                            <span class="FgosPreviewModal__details-label">Поколение</span>
-                            <span :class="getDiffClass(existingFgosData?.generation, currentFgosData.metadata.generation)" class="FgosPreviewModal__details-value">{{ formatDiff(existingFgosData?.generation, currentFgosData.metadata.generation, currentFgosData.metadata.generation) }}</span>
-                        </div>
-                        <div class="FgosPreviewModal__details-item">
-                             <span class="FgosPreviewModal__details-label">Имя файла</span>
-                             <span class="FgosPreviewModal__details-value">{{ currentFgosData.file_path || filename }}</span>
-                        </div>
-                     </template>
-                     <div v-else class="FgosPreviewModal__empty-section">
-                        Метаданные не извлечены.
-                     </div>
-                </div>
-            </div>
+```python
+# filepath: /home/me/ВКР/maps_backend/cli_commands/db_seed.py
+# filepath: /home/me/ВКР/maps_backend/cli_commands/db_seed.py
+import click
+from flask.cli import with_appcontext
+import datetime
+import traceback
+from werkzeug.security import generate_password_hash
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+import random
 
-            <!-- Раздел УК Компетенции -->
-            <div class="FgosPreviewModal__section">
-                <h3>Универсальные компетенции (УК)</h3>
-                <div v-if="currentFgosData.uk_competencies?.length > 0">
-                    <DataTable :value="currentFgosData.uk_competencies" responsiveLayout="scroll">
-                        <Column field="code" header="Код" style="width: 100px;"></Column>
-                        <Column field="name" header="Формулировка компетенции"></Column>
-                        <Column header="Индикаторы">
-                            <template #body="slotProps">
-                                <ul v-if="slotProps.data.indicators?.length > 0">
-                                    <li v-for="ind in slotProps.data.indicators" :key="ind.code">
-                                        <strong>{{ ind.code }}:</strong> {{ ind.formulation }}
-                                    </li>
-                                </ul>
-                                <span v-else>Нет индикаторов</span>
-                            </template>
-                        </Column>
-                    </DataTable>
-                </div>
-                 <div v-else class="FgosPreviewModal__empty-section">
-                     УК компетенции не извлечены.
-                 </div>
-            </div>
-            
-            <!-- Раздел ОПК Компетенции -->
-            <div class="FgosPreviewModal__section">
-                <h3>Общепрофессиональные компетенции (ОПК)</h3>
-                 <div v-if="currentFgosData.opk_competencies?.length > 0">
-                     <DataTable :value="currentFgosData.opk_competencies" responsiveLayout="scroll">
-                         <Column field="code" header="Код" style="width: 100px;"></Column>
-                         <Column field="name" header="Формулировка компетенции"></Column>
-                         <Column header="Индикаторы">
-                             <template #body="slotProps">
-                                 <ul v-if="slotProps.data.indicators?.length > 0">
-                                     <li v-for="ind in slotProps.data.indicators" :key="ind.code">
-                                         <strong>{{ ind.code }}:</strong> {{ ind.formulation }}
-                                     </li>
-                                 </ul>
-                                 <span v-else>Нет индикаторов</span>
-                             </template>
-                         </Column>
-                     </DataTable>
-                 </div>
-                  <div v-else class="FgosPreviewModal__empty-section">
-                      ОПК компетенции не извлечены.
-                  </div>
-            </div>
+# --- Import all necessary models ---
+# You need to import 'db' and all models used within the seed_command function
+from maps.models import (
+    db, SprDiscipline, AupInfo, AupData, SprFaculty, Department,
+    SprDegreeEducation, SprFormEducation, SprRop, NameOP, Groups, SprOKCO,
+    D_Blocks, D_Part, D_TypeRecord, D_ControlType, D_EdIzmereniya, D_Period, SprBranch, D_Modules
+)
+from auth.models import Roles, Users
+from competencies_matrix.models import (
+    CompetencyType, FgosVo, EducationalProgram, Competency, Indicator,
+    CompetencyMatrix, EducationalProgramAup, EducationalProgramPs,
+    ProfStandard, FgosRecommendedPs, IndicatorPsLink, LaborFunction, # Import LaborFunction
+    GeneralizedLaborFunction, LaborAction, RequiredSkill, RequiredKnowledge # Import other PS structure models
+)
+from cabinet.models import (
+    StudyGroups, SprPlace, SprBells, DisciplineTable,
+    GradeType, Topics, Students, Tutors, Grade, GradeColumn,
+    TutorsOrder, TutorsOrderRow
+)
 
-            <!-- Раздел Рекомендованные ПС -->
-            <div class="FgosPreviewModal__section">
-                <h3>Рекомендованные профессиональные стандарты (ПС)</h3>
-                <div v-if="currentFgosData.recommended_ps_codes?.length > 0">
-                    <ul>
-                        <li v-for="code in currentFgosData.recommended_ps_codes" :key="code">
-                            {{ code }}
-                            <!-- TODO: Добавить поиск по коду в БД и отображение названия ПС, если он уже загружен -->
-                        </li>
-                    </ul>
-                </div>
-                <div v-else class="FgosPreviewModal__empty-section">
-                    Коды рекомендованных ПС не извлечены.
-                </div>
-            </div>
-            
-            <!-- Сообщения о сравнении -->
-            <div v-if="existingFgosRecord && !isViewMode" class="FgosPreviewModal__section">
-                 <h3>Сравнение с существующим ФГОС</h3>
-                 <InlineMessage severity="warn" class="my-2">
-                     В базе данных уже существует ФГОС с номером <strong>{{ existingFgosRecord.number }}</strong> от <strong>{{ formatDate(existingFgosRecord.date) }}</strong> для направления <strong>{{ existingFgosRecord.direction_code }}</strong> ({{ existingFgosRecord.education_level }}).
-                     <br/> Загружаемый файл, по всей видимости, является обновлением существующего. Сохранение перезапишет старую запись и связанные УК/ОПК/ИДК.
-                 </InlineMessage>
-                 <!-- TODO: Добавить более детальное сравнение УК/ОПК/ИДК, если нужно -->
-            </div>
-            <div v-else-if="isViewMode && selectedFgosDetails" class="FgosPreviewModal__section">
-                 <h3>Связанные Компетенции и Индикаторы в БД</h3>
-                 <!-- Тут можно отобразить списки УК/ОПК с ИДК из selectedFgosDetails -->
-                 <div v-if="selectedFgosDetails.uk_competencies?.length > 0 || selectedFgosDetails.opk_competencies?.length > 0">
-                      <h4>УК из БД</h4>
-                      <DataTable :value="selectedFgosDetails.uk_competencies" responsiveLayout="scroll" class="mb-4">
-                           <Column field="code" header="Код" style="width: 100px;"></Column>
-                           <Column field="name" header="Формулировка"></Column>
-                           <Column header="Индикаторы">
-                               <template #body="slotProps">
-                                   <ul v-if="slotProps.data.indicators?.length > 0">
-                                       <li v-for="ind in slotProps.data.indicators" :key="ind.code">
-                                           <strong>{{ ind.code }}:</strong> {{ ind.formulation }}
-                                       </li>
-                                   </ul>
-                                   <span v-else>Нет индикаторов</span>
-                               </template>
-                           </Column>
-                      </DataTable>
-                       <h4>ОПК из БД</h4>
-                      <DataTable :value="selectedFgosDetails.opk_competencies" responsiveLayout="scroll">
-                           <Column field="code" header="Код" style="width: 100px;"></Column>
-                           <Column field="name" header="Формулировка"></Column>
-                            <Column header="Индикаторы">
-                                <template #body="slotProps">
-                                    <ul v-if="slotProps.data.indicators?.length > 0">
-                                        <li v-for="ind in slotProps.data.indicators" :key="ind.code">
-                                            <strong>{{ ind.code }}:</strong> {{ ind.formulation }}
-                                        </li>
-                                    </ul>
-                                    <span v-else>Нет индикаторов</span>
-                                </template>
-                            </Column>
-                       </DataTable>
-                 </div>
-                  <div v-else class="FgosPreviewModal__empty-section">
-                      Связанные УК/ОПК компетенции и индикаторы не найдены в БД.
-                  </div>
+# Assuming Mode model exists, potentially in a general config or base models file
+# If it's elsewhere, adjust the import accordingly
+# from some_module import Mode # Placeholder for Mode import
 
-                  <h4>Рекомендованные ПС в БД</h4>
-                  <div v-if="selectedFgosDetails.recommended_ps_list?.length > 0">
-                      <ul>
-                          <li v-for="ps in selectedFgosDetails.recommended_ps_list" :key="ps.id">
-                              <strong>{{ ps.code }}:</strong> {{ ps.name }}
-                              <!-- TODO: Добавить ссылку на просмотр ПС -->
-                          </li>
-                      </ul>
-                  </div>
-                   <div v-else class="FgosPreviewModal__empty-section">
-                       Связанные рекомендованные ПС не найдены в БД.
-                   </div>
-
-            </div>
-
-
-        </div>
-        <div v-else class="text-center p-4">
-             <InlineMessage severity="error">
-                 Не удалось загрузить данные ФГОС.
-             </InlineMessage>
-        </div>
-
-        <template #footer>
-             <div v-if="!isLoadingDetails && !isSavingFgos">
-                <Button
-                    v-if="!isViewMode"
-                    label="Отменить"
-                    icon="mdi mdi-close"
-                    @click="visible = false"
-                    text
-                />
-                <Button
-                     v-if="!isViewMode"
-                     label="Сохранить"
-                     icon="mdi mdi-content-save"
-                     @click="$emit('save', { force_update: !!existingFgosRecord })"
-                     :loading="isSavingFgos"
-                     :disabled="!currentFgosData || isSavingFgos"
-                 />
-                 <Button
-                    v-if="isViewMode"
-                     label="Закрыть"
-                     icon="mdi mdi-close"
-                     @click="visible = false"
-                     text
-                 />
-             </div>
-        </template>
-    </Dialog>
-</template>
-
-<script setup>
-import { ref, computed, watch } from 'vue';
-import Dialog from 'primevue/dialog';
-import Button from 'primevue/button';
-import DataTable from 'primevue/datatable';
-import Column from 'primevue/column';
-import ProgressSpinner from 'primevue/progressspinner'; // Для индикатора загрузки
-import InlineMessage from 'primevue/inlinemessage'; // Для сообщений
-import Tooltip from 'primevue/tooltip'; // Директива
-
-import { useCompetenciesMatrixStore } from '@/stores/competenciesMatrix';
-
-// Props
-const props = defineProps({
-    visible: {
-        type: Boolean,
-        required: true
-    },
-    // Данные парсинга нового файла (присутствуют только в режиме предпросмотра нового файла)
-    parsedData: {
-        type: Object,
-        default: null
-    },
-     // Имя парсенного файла (присутствуют только в режиме предпросмотра нового файла)
-    filename: {
-        type: String,
-        default: ''
-    },
-    // Существующая запись ФГОС в БД, если найдена (присутствует в режиме предпросмотра обновления)
-    existingFgosRecord: {
-        type: Object,
-        default: null
-    },
-    // Режим отображения: true - просмотр существующего, false - предпросмотр/сохранение нового
-    isViewMode: {
-        type: Boolean,
-        default: false
-    }
-});
-
-// Emits
-const emit = defineEmits(['update:visible', 'save', 'hide']);
-
-// Pinia Store
-const competenciesStore = useCompetenciesMatrixStore();
-
-// State from store
-const isLoadingDetails = computed(() => competenciesStore.isLoadingFgosDetails); // Загрузка деталей существующего
-const isSavingFgos = computed(() => competenciesStore.isSavingFgos); // Сохранение
-const selectedFgosDetails = computed(() => competenciesStore.getSelectedFgosDetails); // Детали существующего из стора
-
-
-// Computed properties
-const visible = computed({
-    get: () => props.visible,
-    set: (value) => emit('update:visible', value)
-});
-
-const modalTitle = computed(() => {
-    if (props.isViewMode) {
-        return props.existingFgosRecord ? `Детали ФГОС ВО: ${props.existingFgosRecord.direction_code}` : 'Детали ФГОС ВО';
-    } else {
-         // Режим предпросмотра нового файла
-         const metadata = props.parsedData?.metadata;
-         if (metadata) {
-              return `Предпросмотр ФГОС: ${metadata.direction_code} (${metadata.generation})`;
-         }
-        return 'Предпросмотр ФГОС ВО';
-    }
-});
-
-const currentFgosData = computed(() => {
-    // В режиме просмотра используем данные из selectedFgosDetails из стора
-    // В режиме предпросмотра используем данные из props.parsedData
-    return props.isViewMode ? selectedFgosDetails.value : props.parsedData;
-});
-
-
-// Helper for formatting date
-const formatDate = (dateString) => {
-    if (!dateString) return 'Не указано';
-    try {
-         // If it's a Date object from backend (details), use toLocaleDateString
-         if (dateString instanceof Date) {
-              return dateString.toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' });
-         }
-         // If it's a string from metadata (parsedData), try parsing
-         // Assuming metadata date is DD.MM.YYYY
-         if (typeof dateString === 'string') {
-              const parts = dateString.split('.');
-              if (parts.length === 3) {
-                   const date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-                   return date.toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' });
-              }
-         }
-         return dateString; // Return original if parsing fails
-    } catch (e) {
-         console.error("Failed to format date:", dateString, e);
-         return dateString;
-    }
-};
-
-// Helper for diff styling
-const getDiffClass = (oldValue, newValue) => {
-    if (props.isViewMode || !props.existingFgosRecord) return ''; // Нет сравнения в режиме просмотра или если нет старой записи
-    // Сравниваем значения после форматирования (например, даты) или как есть
-    const formattedOld = typeof oldValue === 'string' ? oldValue.trim() : oldValue;
-    const formattedNew = typeof newValue === 'string' ? newValue.trim() : newValue;
-
-    if (formattedOld !== formattedNew && formattedOld !== undefined && formattedOld !== null && formattedOld !== '') {
-         return 'diff-changed'; // Изменилось значение
-    } else if (formattedOld === undefined || formattedOld === null || formattedOld === '') {
-         return 'diff-new'; // Новое значение (не было в старой записи)
-    }
-    return ''; // Без изменений
-};
-
-const formatDiff = (oldValue, newValue, displayedValue) => {
-    if (props.isViewMode || !props.existingFgosRecord) return displayedValue;
-
-     const formattedOld = typeof oldValue === 'string' ? oldValue.trim() : oldValue;
-     const formattedNew = typeof newValue === 'string' ? newValue.trim() : newValue;
-
-     if (formattedOld !== formattedNew && formattedOld !== undefined && formattedOld !== null && formattedOld !== '') {
-          // Значение изменилось, показываем старое зачеркнутым и новое
-          return `${formattedOld} → ${displayedValue}`;
-     }
-     // Если значение новое или не изменилось, показываем просто новое
-     return displayedValue;
-};
-
-
-// Watchers
-watch(() => props.visible, (isVisible) => {
-    if (isVisible && props.isViewMode && props.existingFgosRecord) {
-        // Если модалка открывается в режиме просмотра и есть существующая запись,
-        // она должна сама загрузить детали, если их нет в сторе.
-        // Но мы фетчим детали в FgosView перед открытием модалки,
-        // так что они должны быть доступны в selectedFgosDetails геттере.
-        // Убедимся, что selectedFgosDetails соответствует existingFgosRecord
-        if (!selectedFgosDetails.value || selectedFgosDetails.value.id !== props.existingFgosRecord.id) {
-             // Этого не должно происходить при правильном вызове из FgosView
-             console.error("FgosPreviewModal: Mismatch between existingFgosRecord and selectedFgosDetails");
-             // Возможно, стоит вызвать fetchFgosDetails(props.existingFgosRecord.id);
-        }
-    }
-});
-
-// Добавляем директиву v-tooltip локально
-const vTooltip = Tooltip;
-
-</script>
-
-<style lang="scss">
-@import '@styles/_variables.scss';
-
-.FgosPreviewModal__content {
-    padding: 0 16px; // Внутренние отступы модалки
-    
-    @media (max-width: 768px) {
-         padding: 0 8px;
-    }
-}
-
-.FgosPreviewModal__section {
-    margin-bottom: 24px;
-    
-    h3 {
-        margin-bottom: 12px;
-        font-size: 1.2rem;
-        color: $shade100;
+@click.command(name='seed_db')
+@with_appcontext
+def seed_command():
+    """Заполняет базу данных начальными/тестовыми данными (Идемпотентно)."""
+    print("Starting database seeding...")
+    try:
+        session = db.session # Получаем сессию
         
-        @media (max-width: 640px) {
-             font-size: 1.1rem;
-             margin-bottom: 8px;
-        }
-    }
-     
-    // Стили для таблиц внутри секции
-    .p-datatable {
-        font-size: 0.9rem;
+        # === БЛОК 1: Основные Справочники (Первоочередные) ===
+        print("Seeding Core Lookups...")
+
+        # Используем merge для идемпотентности - он вставит или обновит по PK
+        # Сначала справочники без зависимостей
+        session.merge(CompetencyType(id=1, code='УК', name='Универсальная'))
+        session.merge(CompetencyType(id=2, code='ОПК', name='Общепрофессиональная'))
+        session.merge(CompetencyType(id=3, code='ПК', code_name='Профессиональная')) # Уточнено code_name
+
+        session.merge(Roles(id_role=1, name_role='admin'))
+        session.merge(Roles(id_role=2, name_role='methodologist'))
+        session.merge(Roles(id_role=3, name_role='teacher'))
+        session.merge(Roles(id_role=4, name_role='tutor'))
+        session.merge(Roles(id_role=5, name_role='student'))
+
+        # Справочники для АУП (ID как в сидере)
+        session.merge(SprBranch(id_branch=1, city='Москва', location='Основное подразделение')) # Имя поля уточнено
+        session.merge(SprDegreeEducation(id_degree=1, name_deg="Высшее образование - бакалавриат")) # Имя поля уточнено
+        session.merge(SprFormEducation(id_form=1, form="Очная")) # Имя поля уточнено
+        session.merge(SprRop(id_rop=1, last_name='Иванов', first_name='Иван', middle_name='Иванович', email='rop@example.com', telephone='+70000000000'))
+        # Замени на реальные данные для SprOKCO и NameOP если они используются как FK
+        session.merge(SprOKCO(program_code='09.03.01', name_okco='Информатика и ВТ')) # Пример ОКСО
+        session.merge(NameOP(id_spec=1, program_code='09.03.01', num_profile='01', name_spec='Веб-технологии')) # Пример NameOP
+
+        # Добавляем факультет и кафедру (департамент) - обязательно перед АУП
+        faculty_1 = session.merge(SprFaculty(id_faculty=1, name_faculty='Факультет информатики', id_branch=1))
+        department_1 = session.merge(Department(id_department=1, name_department='Кафедра веб-технологий'))
+        session.commit()  # Коммитим факультет и кафедру
+
+        # Справочники для AupData (ID как в сидере)
+        session.merge(D_Blocks(id=1, title="Блок 1. Дисциплины (модули)"))
+        session.merge(D_Part(id=1, title="Обязательная часть"))
+        session.merge(D_Modules(id=1, title="Базовый модуль", color="#FFFFFF")) # Добавлен цвет
+        session.merge(Groups(id_group=1, name_group="Основные", color="#FFFFFF", weight=1)) # Имя поля уточнено
+        session.merge(D_TypeRecord(id=1, title="Дисциплина"))
+        session.merge(D_ControlType(id=1, title="Экзамен", default_shortname="Экз"))
+        session.merge(D_ControlType(id=5, title="Зачет", default_shortname="Зач"))
+        session.merge(D_EdIzmereniya(id=1, title="Академ. час"))
+        session.merge(D_Period(id=1, title="Семестр 1"))
+        session.merge(D_Period(id=2, title="Семестр 2"))
+
+        # Справочники Дисциплин
+        session.merge(SprDiscipline(id=1001, title='Основы программирования'))
+        session.merge(SprDiscipline(id=1002, title='Базы данных'))
+        session.merge(SprDiscipline(id=1003, title='История России'))
+
+        # Коммитим все справочники ПЕРЕД созданием зависимых сущностей
+        session.commit()
+        print("  - Core lookups seeded/merged.")
+
+        # === БЛОК 2: ФГОС и Образовательные Программы ===
+        print("Seeding FGOS...")
+        # merge вернет объект, который есть в сессии (или новый)
+        # Используем дату в формате YYYY-MM-DD
+        fgos1 = session.merge(FgosVo(id=1, number='929', date=datetime.date(2017, 9, 19), direction_code='09.03.01',
+                                       direction_name='Информатика и вычислительная техника', education_level='бакалавриат', generation='3++', file_path='ФГОС ВО 090301_B_3_19092017.pdf'))
+        # Добавим еще один ФГОС для теста
+        fgos2 = session.merge(FgosVo(id=2, number='922', date=datetime.date(2020, 8, 7), direction_code='18.03.01',
+                                       direction_name='Химическая технология', education_level='бакалавриат', generation='3+', file_path='ФГОС ВО 180301_B_3_07082020.pdf'))
+        session.commit()
+        print("  - FGOS 09.03.01 and 18.03.01 checked/merged.")
+
+        print("Seeding Educational Program...")
+        # ИСПОЛЬЗУЕМ title
+        program1 = session.merge(EducationalProgram(id=1, fgos_vo_id=1, code='09.03.01', title='Веб-технологии (09.03.01)',
+                                                     profile='Веб-технологии', qualification='Бакалавр', form_of_education='очная', enrollment_year=2024))
+        # Добавим еще одну ОП для теста
+        program2 = session.merge(EducationalProgram(id=2, fgos_vo_id=2, code='18.03.01', title='Технология переработки пластических масс и эластомеров (18.03.01)',
+                                                    profile='Не указан', qualification='Бакалавр', form_of_education='очная', enrollment_year=2024))
+
+        session.commit()
+        print("  - Educational Programs checked/merged.")
+
+        # === БЛОК 3: АУП и его структура ===
+        print("Seeding AUP...")
+        # merge вернет объект AupInfo
+        aup101 = session.merge(AupInfo(id_aup=101, num_aup='B093011451', file='example.xlsx', base='11 классов',
+                                          id_faculty=1, id_rop=1, type_educ='Высшее', qualification='Бакалавр',
+                                          type_standard='ФГОС 3++', id_department=1, period_educ='4 года',
+                                          id_degree=1, id_form=1, years=4, months=0, id_spec=1,
+                                          year_beg=2024, year_end=2028, is_actual=1))
+        # Добавим еще один АУП для теста
+        aup102 = session.merge(AupInfo(id_aup=102, num_aup='B180301XXXX', file='example2.xlsx', base='11 классов',
+                                       id_faculty=1, id_rop=1, type_educ='Высшее', qualification='Бакалавр',
+                                       type_standard='ФГОС 3+', id_department=1, period_educ='4 года',
+                                       id_degree=1, id_form=1, years=4, months=0, id_spec=1,
+                                       year_beg=2024, year_end=2028, is_actual=1))
+
+        session.commit()
+        print("  - AUPs checked/merged.")
+
+        print("Seeding AUP-Program Links...")
+        # Для ассоциативных лучше проверка + add
+        link_ep_aup1 = EducationalProgramAup.query.filter_by(educational_program_id=1, aup_id=101).first()
+        if not link_ep_aup1:
+            link_ep_aup1 = EducationalProgramAup(educational_program_id=1, aup_id=101, is_primary=True)
+            session.add(link_ep_aup1)
+            print("  - Linked Program 1 and AUP 101.")
+        else:
+            print("  - Link Program 1 - AUP 101 already exists.")
+
+        link_ep_aup2 = EducationalProgramAup.query.filter_by(educational_program_id=2, aup_id=102).first()
+        if not link_ep_aup2:
+            link_ep_aup2 = EducationalProgramAup(educational_program_id=2, aup_id=102, is_primary=True)
+            session.add(link_ep_aup2)
+            print("  - Linked Program 2 and AUP 102.")
+        else:
+            print("  - Link Program 2 - AUP 102 already exists.")
+
+
+        session.commit()
+        print("  - AUP-Program Links checked/merged.")
+
+
+        print("Seeding AupData entries...")
+        # merge вернет объекты AupData - используем _discipline для имени колонки
+        ad501 = session.merge(AupData(
+            id=501, id_aup=101, id_discipline=1001, _discipline='Основы программирования',
+            id_block=1, shifr='Б1.1.07', id_part=1, id_module=1, id_group=1,
+            id_type_record=1, id_period=1, num_row=7, id_type_control=1, # Экзамен
+            amount=14400, id_edizm=1, zet=4
+        ))
+        ad502 = session.merge(AupData(
+            id=502, id_aup=101, id_discipline=1002, _discipline='Базы данных',
+            id_block=1, shifr='Б1.1.10', id_part=1, id_module=1, id_group=1,
+            id_type_record=1, id_period=1, num_row=10, id_type_control=5, # Зачет
+            amount=10800, id_edizm=1, zet=3
+        ))
+        ad503 = session.merge(AupData(
+            id=503, id_aup=101, id_discipline=1003, _discipline='История России',
+            id_block=1, shifr='Б1.1.01', id_part=1, id_module=1, id_group=1,
+            id_type_record=1, id_period=1, num_row=1, id_type_control=5, # Зачет
+            amount=7200, id_edizm=1, zet=2
+        ))
+        # Добавим AupData для второго АУП
+        ad504 = session.merge(AupData(
+            id=504, id_aup=102, id_discipline=1001, _discipline='Основы программирования',
+            id_block=1, shifr='Б1.1.08', id_part=1, id_module=1, id_group=1,
+            id_type_record=1, id_period=1, num_row=8, id_type_control=1, # Экзамен
+            amount=14400, id_edizm=1, zet=4
+        ))
+        ad505 = session.merge(AupData(
+            id=505, id_aup=102, id_discipline=1003, _discipline='История России',
+            id_block=1, shifr='Б1.1.01', id_part=1, id_module=1, id_group=1,
+            id_type_record=1, id_period=2, num_row=1, id_type_control=5, # Зачет
+            amount=7200, id_edizm=1, zet=2
+        ))
+
+
+        session.commit()
+        print("  - AupData entries checked/merged.")
+
+        # === БЛОК 4: Компетенции и Индикаторы ===
+        print("Seeding Competencies & Indicators...")
+        # Используем merge
+        # ВАЖНО: Убедись, что поле fgos_vo_id добавлено в модель Competency и миграцию!
+
+        # УК для ФГОС 09.03.01 (fgos_vo_id=1)
+        comp_uk1_fgos1 = session.merge(Competency(id=1, competency_type_id=1, fgos_vo_id=1, code='УК-1', name='Способен осуществлять поиск, критический анализ и синтез информации, применять системный подход для решения поставленных задач'))
+        comp_uk2_fgos1 = session.merge(Competency(id=2, competency_type_id=1, fgos_vo_id=1, code='УК-2', name='Способен определять круг задач в рамках поставленной цели и выбирать оптимальные способы их решения...'))
+        comp_uk3_fgos1 = session.merge(Competency(id=3, competency_type_id=1, fgos_vo_id=1, code='УК-3', name='Способен осуществлять социальное взаимодействие и реализовывать свою роль в команде'))
+        comp_uk4_fgos1 = session.merge(Competency(id=4, competency_type_id=1, fgos_vo_id=1, code='УК-4', name='Способен осуществлять деловую коммуникацию в устной и письменной формах на государственном языке РФ...'))
+        comp_uk5_fgos1 = session.merge(Competency(id=5, competency_type_id=1, fgos_vo_id=1, code='УК-5', name='Способен воспринимать межкультурное разнообразие общества...'))
+        comp_uk6_fgos1 = session.merge(Competency(id=6, competency_type_id=1, fgos_vo_id=1, code='УК-6', name='Способен управлять своим временем, выстраивать и реализовывать траекторию саморазвития...'))
+        comp_uk7_fgos1 = session.merge(Competency(id=7, competency_type_id=1, fgos_vo_id=1, code='УК-7', name='Способен поддерживать должный уровень физической подготовленности...'))
+        comp_uk8_fgos1 = session.merge(Competency(id=8, competency_type_id=1, fgos_vo_id=1, code='УК-8', name='Способен создавать и поддерживать в повседневной жизни и в профессиональной деятельности безопасные условия...'))
+        comp_uk9_fgos1 = session.merge(Competency(id=9, competency_type_id=1, fgos_vo_id=1, code='УК-9', name='Способен принимать обоснованные экономические решения...'))
+        comp_uk10_fgos1 = session.merge(Competency(id=10, competency_type_id=1, fgos_vo_id=1, code='УК-10', name='Способен формировать нетерпимое отношение к проявлениям экстремизма, терроризма, коррупционного поведения...'))
+
+        # ОПК для ФГОС 09.03.01 (fgos_vo_id=1)
+        comp_opk1_fgos1 = session.merge(Competency(id=101, competency_type_id=2, fgos_vo_id=1, code='ОПК-1', name='Способен применять естественнонаучные и общеинженерные знания...'))
+        comp_opk2_fgos1 = session.merge(Competency(id=102, competency_type_id=2, fgos_vo_id=1, code='ОПК-2', name='Способен принимать принципы работы современных информационных технологий...'))
+        comp_opk3_fgos1 = session.merge(Competency(id=103, competency_type_id=2, fgos_vo_id=1, code='ОПК-3', name='Способен решать стандартные задачи профессиональной деятельности на основе информационной и библиографической культуры...'))
+        comp_opk4_fgos1 = session.merge(Competency(id=104, competency_type_id=2, fgos_vo_id=1, code='ОПК-4', name='Способен участвовать в разработке стандартов, норм и правил...'))
+        comp_opk5_fgos1 = session.merge(Competency(id=105, competency_type_id=2, fgos_vo_id=1, code='ОПК-5', name='Способен инсталлировать программное и аппаратное обеспечение...'))
+        comp_opk6_fgos1 = session.merge(Competency(id=106, competency_type_id=2, fgos_vo_id=1, code='ОПК-6', name='Способен разрабатывать бизнес-планы и технические задания...'))
+        comp_opk7_fgos1 = session.merge(Competency(id=107, competency_type_id=2, fgos_vo_id=1, code='ОПК-7', name='Способен участвовать в настройке и наладке программно-аппаратных комплексов'))
+        comp_opk8_fgos1 = session.merge(Competency(id=108, competency_type_id=2, fgos_vo_id=1, code='ОПК-8', name='Способен разрабатывать алгоритмы и программы, пригодные для практического применения'))
+        comp_opk9_fgos1 = session.merge(Competency(id=109, competency_type_id=2, fgos_vo_id=1, code='ОПК-9', name='Способен осваивать методики использования программных средств для решения практических задач'))
+
+        # ПК для ОП Веб-технологии (fgos_vo_id=None, т.к. ПК не берутся из ФГОС)
+        comp_pk1 = session.merge(Competency(id=201, competency_type_id=3, fgos_vo_id=None, code='ПК-1', name='Способен выполнять работы по созданию (модификации) и сопровождению ИС, автоматизирующих задачи организационного управления и бизнес-процессы'))
+        comp_pk2 = session.merge(Competency(id=202, competency_type_id=3, fgos_vo_id=None, code='ПК-2', name='Способен осуществлять управление проектами в области ИТ на основе полученных планов проектов в условиях, когда проект не выходит за пределы утвержденных параметров'))
+        comp_pk3 = session.merge(Competency(id=203, competency_type_id=3, fgos_vo_id=None, code='ПК-3', name='Способен разрабатывать требования и проектировать программное обеспечение'))
+        comp_pk4 = session.merge(Competency(id=204, competency_type_id=3, fgos_vo_id=None, code='ПК-4', name='Способен проводить работы по интеграции программных модулей и компонент и проверку работоспособности выпусков программных продуктов'))
+        comp_pk5 = session.merge(Competency(id=205, competency_type_id=3, fgos_vo_id=None, code='ПК-5', name='Способен осуществлять концептуальное, функциональное и логическое проектирование систем среднего и крупного масштаба и сложности'))
+
+
+        # Индикаторы - тоже через merge
+        # Для УК-1 (ID=1)
+        session.merge(Indicator(id=10, competency_id=1, code='ИУК-1.1', formulation='Анализирует задачу, выделяя ее базовые составляющие', source='Распоряжение 505-Р'))
+        session.merge(Indicator(id=11, competency_id=1, code='ИУК-1.2', formulation='Осуществляет поиск, критически оценивает, обобщает, систематизирует и ранжирует информацию...', source='Распоряжение 505-Р'))
+        session.merge(Indicator(id=12, competency_id=1, code='ИУК-1.3', formulation='Рассматривает и предлагает рациональные варианты решения...', source='Распоряжение 505-Р'))
+        # Для УК-2 (ID=2)
+        session.merge(Indicator(id=20, competency_id=2, code='ИУК-2.1', formulation='Формулирует совокупность задач в рамках поставленной цели проекта...', source='Распоряжение 505-Р'))
+        session.merge(Indicator(id=21, competency_id=2, code='ИУК-2.2', formulation='Определяет связи между поставленными задачами, основными компонентами проекта...', source='Распоряжение 505-Р'))
+        session.merge(Indicator(id=22, competency_id=2, code='ИУК-2.3', formulation='Выбирает оптимальные способы планирования, распределения зон ответственности...', source='Распоряжение 505-Р'))
+        # ... и так далее для всех УК и ОПК по Распоряжению 505-Р
+        # Для УК-5 (ID=5)
+        session.merge(Indicator(id=50, competency_id=5, code='ИУК-5.1', formulation='Анализирует и интерпретирует события, современное состояние общества...', source='Распоряжение 505-Р'))
+        # Для ОПК-7 (ID=107)
+        session.merge(Indicator(id=170, competency_id=107, code='ИОПК-7.1', formulation='Знает основные языки программирования, операционные системы и оболочки, современные среды разработки программного обеспечения', source='ОП Веб-технологии'))
+        # ... и так далее для всех ОПК
         
-         @media (max-width: 768px) {
-             font-size: 0.85rem;
-         }
-        
-        .p-datatable-thead > tr > th {
-             padding: 0.5rem;
-             background-color: $shade800;
-        }
-         .p-datatable-tbody > tr > td {
-             padding: 0.5rem;
-         }
-    }
-    
-    // Стили для списков индикаторов
-    ul {
-        padding-left: 20px;
-         margin: 0;
-    }
-    li {
-        margin-bottom: 5px;
-         word-break: break-word; // Перенос длинных формулировок
-    }
+        # Индикаторы для ПК (ИПК) (Пример для ПК-1 ID=201)
+        session.merge(Indicator(id=210, competency_id=201, code='ИПК-1.1', formulation='Знает: методологию и технологии проектирования информационных систем; проектирование обеспечивающих подсистем; приемы программирования приложений.', source='ОП Веб-технологии / ПС 06.015'))
+        session.merge(Indicator(id=211, competency_id=201, code='ИПК-1.2', formulation='Умеет: создавать, модифицировать и сопровождать информационные системы для решения задач бизнес-процессов и организационного управления...', source='ОП Веб-технологии / ПС 06.015'))
+        session.merge(Indicator(id=212, competency_id=201, code='ИПК-1.3', formulation='Владеет: методами создания и сопровождения информационных систем...', source='ОП Веб-технологии / ПС 06.015'))
+        # ... и так далее для всех ПК из таблицы 5 ОП Веб-технологии
 
-     @media (max-width: 640px) {
-        margin-bottom: 16px;
-     }
-}
+        session.commit() # Коммитим компетенции и индикаторы
+        print("  - Competencies & Indicators checked/merged.")
 
-.FgosPreviewModal__details-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 16px;
-    margin-bottom: 16px;
+        # === БЛОК 4.1: Профессиональные Стандарты (Базовая структура) ===
+        print("Seeding Basic Professional Standards Structure...")
+        # Добавим несколько Профстандартов и базовую структуру (ОТФ, ТФ)
+        # Наполнение всей структуры (ТД, НУ, НЗ) и связей ИДК-ТФ/ТД/НУ/НЗ - это задача парсинга ПС и ручного формирования
 
-    @media (max-width: 768px) {
-        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-        gap: 12px;
-    }
+        ps_prog = session.merge(ProfStandard(id=1, code='06.001', name='Программист', parsed_content='...')) # Добавить markdown контент
+        ps_is = session.merge(ProfStandard(id=2, code='06.015', name='Специалист по информационным системам', parsed_content='...'))
+        ps_pm = session.merge(ProfStandard(id=3, code='06.016', name='Руководитель проектов в области ИТ', parsed_content='...'))
+        ps_sa = session.merge(ProfStandard(id=4, code='06.022', name='Системный аналитик', parsed_content='...'))
 
-    @media (max-width: 480px) {
-        grid-template-columns: 1fr;
-        gap: 8px;
-    }
-}
+        session.commit()
+        print("  - ProfStandards checked/merged.")
 
-.FgosPreviewModal__details-item {
-    display: flex;
-    flex-direction: column;
-    background-color: $shade800;
-    padding: 12px;
-    border-radius: $borderRadius;
+        # Добавим базовые ОТФ и ТФ для ПС 06.015 (id=2)
+        otf_c_06015 = session.merge(GeneralizedLaborFunction(id=1, prof_standard_id=2, code='C', name='Выполнение работ и управление работами по созданию (модификации) и сопровождению ИС...'))
+        session.commit()
 
-    @media (max-width: 640px) {
-        padding: 8px;
-    }
-}
+        tf_c016_06015 = session.merge(LaborFunction(id=1, generalized_labor_function_id=1, code='C/01.6', name='Определение первоначальных требований заказчика к ИС...'))
+        tf_c166_06015 = session.merge(LaborFunction(id=2, generalized_labor_function_id=1, code='C/16.6', name='Проектирование и дизайн ИС...'))
+        tf_c186_06015 = session.merge(LaborFunction(id=3, generalized_labor_function_id=1, code='C/18.6', name='Организационное и технологическое обеспечение создания программного кода ИС...'))
 
-.FgosPreviewModal__details-label {
-    font-size: 0.9rem;
-    color: $shade300;
-    margin-bottom: 4px;
+        session.commit()
+        print("  - Basic ОТФ/ТФ for PS 06.015 seeded.")
 
-    @media (max-width: 640px) {
-        font-size: 0.8rem;
-    }
-}
+        # Свяжем ПК-1 (ID=201) с ТФ C/16.6 (ID=2) и C/18.6 (ID=3) из ПС 06.015 (ID=2) как базовые
+        # Это связь Competency.based_on_labor_function_id (один-к-одному для ПК, если ПК основана на одной ТФ)
+        # Или ПК может быть основана на нескольких ТФ (тогда нужна доп. таблица или поле text/json)
+        # ОП Веб-технологии таблица 5 указывает, что ПК-1 основана на ОТФ C ПС 06.015.
+        # Давайте свяжем ПК-1 с одной из ключевых ТФ, например C/16.6 (id=2)
+        comp_pk1 = session.query(Competency).get(201)
+        if comp_pk1 and comp_pk1.based_on_labor_function_id is None:
+            tf_c166 = session.query(LaborFunction).get(2)
+            if tf_c166:
+                comp_pk1.based_on_labor_function_id = tf_c166.id
+                session.commit()
+                print("  - Linked ПК-1 to TФ C/16.6.")
+            else:
+                print("  - TФ C/16.6 not found, cannot link ПК-1.")
 
-.FgosPreviewModal__details-value {
-    font-weight: 500;
-     word-break: break-word; // Перенос длинных названий
 
-    @media (max-width: 640px) {
-        font-size: 0.95rem;
-    }
-}
+        # Связи ОП Веб-технологии (ID=1) с выбранными ПС (из таблицы 1 ОП)
+        # ПС 06.015, 06.016, 06.022 выбраны. ПС 06.001 тоже, т.к. профиль Программист.
+        program1 = session.query(EducationalProgram).get(1)
+        ps_ids_for_prog1 = session.query(ProfStandard.id).filter(ProfStandard.code.in_(['06.001', '06.015', '06.016', '06.022'])).all()
+        ps_ids_for_prog1 = [id for (id,) in ps_ids_for_prog1] # Преобразуем в список ID
 
-.FgosPreviewModal__empty-section {
-    padding: 16px;
-    background-color: $shade800;
-    border-radius: $borderRadius;
-    color: $shade400;
-    text-align: center;
+        for ps_id in ps_ids_for_prog1:
+            link_ep_ps = EducationalProgramPs.query.filter_by(educational_program_id=1, prof_standard_id=ps_id).first()
+            if not link_ep_ps:
+                link_ep_ps = EducationalProgramPs(educational_program_id=1, prof_standard_id=ps_id)
+                session.add(link_ep_ps)
+                print(f"  - Linked Program 1 to ProfStandard ID {ps_id}.")
+            else:
+                 print(f"  - Link Program 1 to ProfStandard ID {ps_id} already exists.")
+        session.commit()
+        print("  - Program-ProfStandard links seeded.")
 
-    @media (max-width: 640px) {
-        padding: 12px 8px;
-        font-size: 0.9rem;
-    }
-}
 
-// Diff styling
-.diff-changed {
-    // Старое значение будет показано в formatDiff, но без зачеркивания по умолчанию
-    // Придется вручную стилизовать, если хотим зачеркивание старого
-    color: $yellow-500; // Пример подсветки измененных полей
-    // text-decoration: line-through; /* Это применится ко всему значению */
-}
-.diff-new {
-    color: $green-500; // Пример подсветки новых полей
-    font-weight: bold;
-}
+        # Связи ФГОС 09.03.01 (ID=1) с рекомендованными ПС (из приложения к ФГОС)
+        # ПС 06.001, 06.004, 06.011, 06.015, 06.016, 06.019, 06.022, 06.025, 06.026, 06.027, 06.028
+        fgos1 = session.query(FgosVo).get(1)
+        recommended_ps_codes_for_fgos1 = ['06.001', '06.004', '06.011', '06.015', '06.016', '06.019', '06.022', '06.025', '06.026', '06.027', '06.028']
+        ps_ids_for_fgos1 = session.query(ProfStandard.id).filter(ProfStandard.code.in_(recommended_ps_codes_for_fgos1)).all()
+        ps_ids_for_fgos1 = [id for (id,) in ps_ids_for_fgos1]
 
-</style>
-```
+        for ps_id in ps_ids_for_fgos1:
+             link_fgos_ps = FgosRecommendedPs.query.filter_by(fgos_vo_id=1, prof_standard_id=ps_id).first()
+             if not link_fgos_ps:
+                  link_fgos_ps = FgosRecommendedPs(fgos_vo_id=1, prof_standard_id=ps_id)
+                  session.add(link_fgos_ps)
+                  print(f"  - Linked FGOS 1 to Recommended ProfStandard ID {ps_id}.")
+             else:
+                  print(f"  - Link FGOS 1 to Recommended ProfStandard ID {ps_id} already exists.")
+        session.commit()
+        print("  - FGOS-RecommendedProfStandard links seeded.")
 
-**Пояснения к Frontend UI:**
 
-*   `FgosView.vue` создает страницу со списком загруженных ФГОС (`DataTable`), кнопкой "Загрузить ФГОС" и ссылкой на скрытый input `type="file"`.
-*   При выборе файла вызывается `uploadFgosFile` из стора.
-*   При успешном парсинге и получении данных от API (`/fgos/upload`), стор заполняет `fgosParsedData` и `fgosUploadFilename`, а также пытается найти существующий ФГОС (`fgosExistingRecord`) и открывает модальное окно `FgosPreviewModal`.
-*   `FgosPreviewModal.vue` отображает данные из `fgosParsedData` (для нового файла) или `selectedFgosDetails` (для просмотра существующего).
-*   Используются вычисляемые свойства для определения заголовка модалки и данных для отображения (`currentFgosData`).
-*   Добавлены базовые стили для сравнения (`diff-changed`, `diff-new`). Форматирование сравнения (`formatDiff`, `getDiffClass`) реализовано на стороне Vue.
-*   Кнопка "Сохранить" вызывает `saveFgosData` из стора, передавая флаг `force_update` (если `existingFgosRecord` не null).
-*   Добавлены ConfirmDialog и useConfirm/useToast для подтверждения удаления и уведомлений пользователя.
+        # Связи Индикаторов с Трудовыми Функция (IndicatorPsLink)
+        # Пример: ИПК-1.1 (id=210) -> ТФ C/01.6 (id=1) и C/16.6 (id=2) из ПС 06.015
+        # Это нужно, чтобы знать, какие элементы ПС "формируют" данный ИПК
+        ind210 = session.query(Indicator).get(210)
+        tf_c016 = session.query(LaborFunction).get(1)
+        tf_c166 = session.query(LaborFunction).get(2)
 
-**Необходимо сделать после применения этих изменений:**
+        if ind210 and tf_c016:
+             link_ind_tf1 = IndicatorPsLink.query.filter_by(indicator_id=210, labor_function_id=1).first()
+             if not link_ind_tf1:
+                  link_ind_tf1 = IndicatorPsLink(indicator_id=210, labor_function_id=1, is_manual=True, relevance_score=1.0)
+                  session.add(link_ind_tf1)
+                  print("  - Linked Indicator 210 to LaborFunction 1.")
+             else:
+                  print("  - Link Indicator 210 to LaborFunction 1 already exists.")
 
-1.  **Применить изменения:** Скопировать код в соответствующие файлы в вашем репозитории. Установить `pdfminer.six`.
-2.  **Сгенерировать и применить миграцию:** `flask db migrate -m "Add FGOS and related tables/columns"` (если модели были изменены или добавлены новые FK) и `flask db upgrade`. Убедитесь, что `ondelete="CASCADE"` правильно настроены.
-3.  **Обновить `seed_db`:** Добавить сидинг для `FgosVo`, УК, ОПК, ИУК, ИОПК, связей `FgosRecommendedPs` в `cli_commands/db_seed.py`, чтобы были тестовые данные для просмотра и сравнения. Коды и формулировки взять из Распоряжения 505-Р для 09.03.01.
-4.  **Тестирование Backend (CLI):** Протестировать `flask import-fgos` с разными сценариями:
-    *   Импорт нового файла (`--dry-run`, без флагов).
-    *   Импорт нового файла, когда он уже есть (`--force` vs без флага).
-    *   Удаление существующего (`--delete-only`).
-    *   Попытка импорта не-PDF файла.
-    *   Попытка импорта PDF с ошибками парсинга.
-5.  **Тестирование Backend (API):** Протестировать новые эндпоинты `/fgos` через `curl`/Postman: `GET /fgos`, `GET /fgos/<id>`, `POST /fgos/upload`, `POST /fgos/save`, `DELETE /fgos/<id>`. Проверить статусы ответов, структуру JSON, корректность данных в БД. Проверить права доступа (`admin_only`).
-6.  **Тестирование Frontend:** Проверить UI:
-    *   Отображение списка ФГОС.
-    *   Просмотр деталей существующего ФГОС.
-    *   Загрузка нового файла, появление модального окна предпросмотра.
-    *   Предпросмотр нового ФГОС (данные из файла).
-    *   Предпросмотр обновленной версии (сравнение с существующим).
-    *   Сохранение нового/обновленного ФГОС через модалку.
-    *   Удаление ФГОС из списка.
-    *   Обработка ошибок (не удалось распарсить, не удалось сохранить).
-7.  **Обновление `tasks.md`:** Отметить выполненные задачи в разделе 1 и актуализировать статус.
+        if ind210 and tf_c166:
+             link_ind_tf2 = IndicatorPsLink.query.filter_by(indicator_id=210, labor_function_id=2).first()
+             if not link_ind_tf2:
+                  link_ind_tf2 = IndicatorPsLink(indicator_id=210, labor_function_id=2, is_manual=True, relevance_score=1.0)
+                  session.add(link_ind_tf2)
+                  print("  - Linked Indicator 210 to LaborFunction 2.")
+             else:
+                  print("  - Link Indicator 210 to LaborFunction 2 already exists.")
+        session.commit()
+        print("  - Indicator-LaborFunction links seeded.")
 
-Это большой шаг. Удачи в реализации и тестировании!
+
+        # === БЛОК 5: Связи Матрицы Компетенций ===
+        print("Seeding Competency Matrix links...")
+        # Используем функцию для проверки и добавления
+        def add_link_if_not_exists(aup_data_id, indicator_id):
+            # Проверяем существование AupData и Indicator в текущей сессии или БД
+            aup_data_rec = session.query(AupData).get(aup_data_id)
+            indicator_rec = session.query(Indicator).get(indicator_id)
+            if not aup_data_rec or not indicator_rec:
+                 print(f"    - SKIPPED link ({aup_data_id} <-> {indicator_id}): AupData or Indicator missing!")
+                 return False
+
+            exists = session.query(CompetencyMatrix).filter_by(aup_data_id=aup_data_id, indicator_id=indicator_id).first()
+            if not exists:
+                link = CompetencyMatrix(aup_data_id=aup_data_id, indicator_id=indicator_id, is_manual=True)
+                session.add(link)
+                print(f"    - Added link ({aup_data_id} <-> {indicator_id})")
+                return True
+            return True
+
+        # Основы программирования (501) -> ИУК-1.1(10), ИУК-1.2(11), ИУК-1.3(12), ИОПК-7.1(170)
+        add_link_if_not_exists(501, 10)
+        add_link_if_not_exists(501, 11)
+        add_link_if_not_exists(501, 12)
+        add_link_if_not_exists(501, 170)
+        # История России (503) -> ИУК-5.1(50)
+        add_link_if_not_exists(503, 50)
+        # Базы данных (502) -> ИПК-1.1(210)
+        add_link_if_not_exists(502, 210)
+
+        session.commit() # Коммитим связи
+        print("  - Matrix links checked/added based on Excel example.")
+
+        # === БЛОК 6: Тестовый Пользователь ===
+        print("Seeding Test User...")
+        test_user = Users.query.filter_by(login='testuser').first()
+        if not test_user:
+            test_user = Users(
+                # id_user=999, # Позволим БД самой назначить ID через auto-increment
+                login='testuser',
+                # Устанавливаем хеш пароля 'password'
+                password_hash=generate_password_hash('password', method='pbkdf2:sha256'),
+                name='Тестовый Методист',
+                email='testuser@example.com',
+                approved_lk=True # Предполагаем, что для тестов одобрение ЛК не нужно
+                # Добавь department_id, если оно обязательно
+            )
+            session.add(test_user)
+            session.commit() # Коммитим пользователя ПЕРЕД назначением роли
+            print(f"  - Added test user 'testuser' with id {test_user.id_user}.")
+
+            # Назначаем роль methodologist (ID=2)
+            methodologist_role = Roles.query.get(2)
+            if methodologist_role:
+                # Используем session.query для проверки наличия роли у пользователя
+                if methodologist_role not in test_user.roles: # Проверяем через relationship
+                    test_user.roles.append(methodologist_role)
+                    session.commit()
+                    print("  - Assigned 'methodologist' role to 'testuser'.")
+                else:
+                    print("  - Role 'methodologist' already assigned to 'testuser'.")
+            else:
+                print("  - WARNING: Role 'methodologist' (ID=2) not found, skipping role assignment.")
+        else:
+            print("  - Test user 'testuser' already exists.")
+
+        # === BLOCK 7: Admin User ===
+        print("Seeding Admin User...")
+        admin_user = Users.query.filter_by(login='admin').first()
+        if not admin_user:
+            admin_user = Users(
+                login='admin',
+                password_hash=generate_password_hash('admin', method='pbkdf2:sha256'),
+                name='Admin User',
+                email='admin@example.com',
+                approved_lk=True
+            )
+            session.add(admin_user)
+            session.commit()
+            print(f"  - Added admin user 'admin' with id {admin_user.id_user}")
+
+            # Assign admin role (ID=1)
+            admin_role = Roles.query.get(1)
+            if admin_role:
+                # Используем session.query для проверки наличия роли у пользователя
+                 if admin_role not in admin_user.roles: # Проверяем через relationship
+                    admin_user.roles.append(admin_role)
+                    session.commit()
+                    print("  - Assigned 'admin' role to admin user")
+                 else:
+                     print("  - Role 'admin' already assigned to admin user")
+            else:
+                print("  - WARNING: Role 'admin' (ID=1) not found, skipping role assignment")
+        else:
+            print("  - Admin user 'admin' already exists")
+
+        # === BLOCK 8: Cabinet Models (Academic Cabinet) ===
+        print("Seeding Cabinet Models...")
+
+        # Add classroom locations (SprPlace)
+        places = [
+            SprPlace(id=1, name="Аудитория", prefix="А", is_online=False),
+            SprPlace(id=2, name="Online", prefix="", is_online=True),
+            SprPlace(id=3, name="Лаборатория", prefix="Л", is_online=False),
+            SprPlace(id=4, name="Компьютерный класс", prefix="КК", is_online=False)
+        ]
+        for place in places:
+            session.merge(place) # Используем session.merge
+        session.commit()
+        print("  - Classroom locations seeded.")
+
+        # Add bell schedule (SprBells)
+        bells = [
+            SprBells(id=1, order=1, name="9:00 - 10:30"),
+            SprBells(id=2, order=2, name="10:40 - 12:10"),
+            SprBells(id=3, order=3, name="12:20 - 13:50"),
+            SprBells(id=4, order=4, name="14:30 - 16:00"),
+            SprBells(id=5, order=5, name="16:10 - 17:40"),
+            SprBells(id=6, order=6, name="17:50 - 19:20")
+        ]
+        for bell in bells:
+            session.merge(bell) # Используем session.merge
+        session.commit()
+        print("  - Bell schedule seeded.")
+
+        # Add study groups (StudyGroups)
+        # Используем session.query для проверки
+        test_group = session.query(StudyGroups).filter_by(title="211-321").first()
+        if not test_group:
+            # Remove the explicit ID to allow auto-increment (или использовать session.merge с id)
+            test_group = StudyGroups(
+                # Remove id=1 to avoid primary key conflicts
+                title="211-321",
+                num_aup="B093011451" # Привязываем к AUP 101
+            )
+            session.add(test_group) # Используем session.add
+            session.commit()
+            print("  - Study group 211-321 added.")
+        else:
+            # Update the existing record if needed
+            test_group.num_aup = "B093011451"
+            session.commit()
+            print("  - Study group 211-321 already exists, updated if needed.")
+
+        # Add a test student
+        test_student = session.query(Students).filter_by(name="Иванов Иван Иванович").first()
+        if not test_student:
+            test_student = Students(
+                name="Иванов Иван Иванович",
+                study_group_id=test_group.id,
+                lk_id=1001 # ID из ЛК
+            )
+            session.add(test_student)
+            session.commit()
+            print("  - Test student added.")
+        else:
+            print("  - Test student already exists.")
+
+        # Add a test tutor
+        test_tutor = session.query(Tutors).filter_by(name="Петров Петр Петрович").first()
+        if not test_tutor:
+            test_tutor = Tutors(
+                name="Петров Петр Петрович",
+                lk_id=2001, # ID из ЛК
+                post="Доцент",
+                id_department=1  # Using the department added earlier
+            )
+            session.add(test_tutor)
+            session.commit()
+            print("  - Test tutor added.")
+        else:
+            print("  - Test tutor already exists.")
+
+        # Create DisciplineTable entry for the test AUP and group
+        discipline_table = session.query(DisciplineTable).filter_by(
+            id_aup=101, # Привязываем к AUP 101
+            id_unique_discipline=1001, # Привязываем к Основам программирования
+            study_group_id=test_group.id,
+            semester=1
+        ).first()
+
+        if not discipline_table:
+            # Remove explicit ID if using auto-increment
+            discipline_table = DisciplineTable(
+                # id=1, # Remove explicit ID
+                id_aup=101,  # From seeded AUP
+                id_unique_discipline=1001,  # From seeded SprDiscipline
+                study_group_id=test_group.id,
+                semester=1
+            )
+            session.add(discipline_table) # Используем session.add
+            session.commit()
+            print("  - Discipline table created.")
+        else:
+            print("  - Discipline table already exists.")
+
+        # Add grade types (GradeType)
+        # Используем session.merge
+        grade_types_data = [
+            {"id": 1, "name": "Посещаемость", "type": "attendance", "binary": True, "discipline_table_id": discipline_table.id},
+            {"id": 2, "name": "Активность", "type": "activity", "binary": False, "discipline_table_id": discipline_table.id},
+            {"id": 3, "name": "Задания", "type": "tasks", "binary": False, "discipline_table_id": discipline_table.id}
+        ]
+
+        for grade_type_data in grade_types_data:
+            # Use session.merge for GradeType
+            grade_type = session.merge(GradeType(**grade_type_data))
+        session.commit()
+        print("  - Grade types created.")
+
+        # Add a couple of topics to the discipline table
+        # Используем session.merge
+        topics_data = [
+            {
+                "id": 1,
+                "discipline_table_id": discipline_table.id,
+                "topic": "Введение в предмет",
+                "chapter": "Глава 1",
+                "id_type_control": 1,  # Lecture (from D_ControlType)
+                "task_link": "https://example.com/task1",
+                "task_link_name": "Задание 1",
+                "study_group_id": test_group.id,
+                "spr_place_id": 1,  # Classroom
+                "lesson_order": 1
+            },
+            {
+                "id": 2,
+                "discipline_table_id": discipline_table.id,
+                "topic": "Основные понятия",
+                "chapter": "Глава 1",
+                "id_type_control": 1,  # Lecture
+                "task_link": "https://example.com/task2",

@@ -77,7 +77,7 @@ def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
         print(f"   - Found {len(parsed_data.get('uk_competencies', []))} УК competencies.")
         print(f"   - Found {len(parsed_data.get('opk_competencies', []))} ОПК competencies.")
         total_indicators = sum(len(c.get('indicators', [])) for c in parsed_data.get('uk_competencies', []) + parsed_data.get('opk_competencies', []))
-        print(f"   - Found {total_indicators} indicators.")
+     #    print(f"   - Found {total_indicators} indicators.")
         print(f"   - Found {len(parsed_data.get('recommended_ps_codes', []))} recommended PS codes.")
 
 
