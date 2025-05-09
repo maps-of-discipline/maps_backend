@@ -16,6 +16,14 @@ LOG_LEVEL = logging.INFO
 SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/competencies')
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+# Настройка подключения к внешней БД Карт Дисциплин (KD)
+EXTERNAL_KD_DATABASE_URL = os.getenv('EXTERNAL_KD_DATABASE_URL', 'mysql+pymysql://competencies:MTIzcXdlYXNk@kd.mospolytech.ru:3306/kd_sandbox')
+
+# Конфигурация множественных БД
+SQLALCHEMY_BINDS = {
+    'kd_external': EXTERNAL_KD_DATABASE_URL
+}
+
 # Настройки почты (если потребуется)
 MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
 MAIL_PORT = int(os.getenv('MAIL_PORT', 587))

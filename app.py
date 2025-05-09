@@ -62,6 +62,12 @@ cors = CORS(app,
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', app.config.get('SQLALCHEMY_DATABASE_URI'))
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Настройка для множественных баз данных
+if app.config.get('SQLALCHEMY_BINDS') is None and app.config.get('EXTERNAL_KD_DATABASE_URL'):
+    app.config['SQLALCHEMY_BINDS'] = {
+        'kd_external': app.config.get('EXTERNAL_KD_DATABASE_URL')
+    }
+
 # Инициализация расширений
 # mail = Mail(app)
 
@@ -94,6 +100,34 @@ if not app.config.get('DEBUG'):
 def index():
     """Простой GET эндпоинт для проверки, что API работает."""
     return jsonify({'message': 'Maps and Competencies API is running'}), 200
+
+@app.route('/test/external-db')
+def test_external_db():
+    """Тестовый эндпоинт для проверки подключения к внешней БД."""
+    try:
+        # Импортируем модели для внешней БД
+        from kd_external_models import ExternalSprBranch, ExternalSprFaculty
+        
+        # Пробуем получить данные из внешней БД
+        branches = ExternalSprBranch.query.limit(5).all()
+        faculties = ExternalSprFaculty.query.limit(5).all()
+        
+        # Возвращаем результаты
+        return jsonify({
+            'success': True,
+            'message': 'Успешное подключение к внешней БД',
+            'data': {
+                'branches': [branch.as_dict() for branch in branches],
+                'faculties': [faculty.as_dict() for faculty in faculties]
+            }
+        }), 200
+    except Exception as e:
+        # В случае ошибки возвращаем сообщение об ошибке
+        return jsonify({
+            'success': False,
+            'message': 'Ошибка подключения к внешней БД',
+            'error': str(e)
+        }), 500
 
 @app.route('/debug/routes')
 def list_routes():
