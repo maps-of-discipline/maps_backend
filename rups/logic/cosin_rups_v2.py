@@ -1,14 +1,10 @@
-from typing import Any
-
-from sqlalchemy import select, func, case, and_
+import dataclasses
+from sqlalchemy import select, func, case
 from dataclasses import dataclass, asdict
 
-import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import re
-import json
-
 from maps.models import AupData, AupInfo, SprDiscipline, D_EdIzmereniya, D_ControlType
 from maps.models import db
 
@@ -19,6 +15,8 @@ class Discipline:
     period: int
     zet: float
     control: str
+    coursework: bool
+    amount: float
 
     @staticmethod
     def _amount_to_zet(amount: float, measure: str) -> float:
@@ -30,7 +28,9 @@ class Discipline:
             title=row["title"],
             period=row["period"],
             zet=cls._amount_to_zet(row["amount"], row["measure"]),
+            amount=row["amount"],
             control=row["control_type"],
+            coursework=row["coursework"],
         )
 
     def __hash__(self):
@@ -59,11 +59,18 @@ def get_aup(aup: str, sem_num: int = 20) -> list[Discipline]:
                     else_=None,
                 )
             ).label("control_type"),
+            func.max(
+                case(
+                    (D_ControlType.title == "Курсовой проект", True),
+                    (D_ControlType.title == "Курсовая работа", True),
+                    else_=False,
+                )
+            ).label("coursework"),
         )
         .join(AupInfo)
         .join(SprDiscipline)
         .join(D_EdIzmereniya)
-        .join(D_ControlType)
+        .join(D_ControlType, AupData.id_type_control == D_ControlType.id)
         .where(AupInfo.num_aup == aup)
         .group_by(
             SprDiscipline.title,
@@ -72,17 +79,30 @@ def get_aup(aup: str, sem_num: int = 20) -> list[Discipline]:
         )
         .order_by(AupData.id_period)
     )
+
     res = {}
     for el in db.session.execute(query).mappings().all():
         discipline = Discipline.from_sqla_row(el)
+
         title = discipline.title
+        cw_title = discipline.title + " (КП)"
+
         if discipline.period > sem_num:
             if title in res:
                 res.pop(title)
+            if cw_title in res:
+                res.pop(cw_title)
             continue
 
         if discipline.title not in res:
             res.update({discipline.title: discipline})
+
+        if discipline.coursework and cw_title not in res:
+            cw_discipline = dataclasses.replace(discipline)
+            cw_discipline.title = cw_title
+            cw_discipline.amount = 0
+            cw_discipline.control = "Курсовая работа"
+            res.update({cw_title: cw_discipline})
 
     return list(res.values())
 
@@ -112,6 +132,8 @@ def couldBeCredited(target: Discipline, variant: Discipline) -> bool:
         "Экзамен": ["Экзамен", "Диф. зачет"],
         "Диф. зачет": ["Экзамен", "Диф. зачет"],
         "Зачет": ["Экзамен", "Диф. зачет", "Зачет"],
+        "Курсовая работа": ["Курсовая работа", "Курсовой проект"],
+        "Курсовой проект": ["Курсовая работа", "Курсовой проект"],
     }
 
     return variant.control in mapper[target.control] and target.zet <= variant.zet
