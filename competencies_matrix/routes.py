@@ -7,14 +7,19 @@
 
 from flask import request, jsonify, abort
 from . import competencies_matrix_bp
+from typing import Optional
 from .logic import (
     get_educational_programs_list, get_program_details, 
     get_matrix_for_aup, update_matrix_link,
     create_competency, create_indicator,
-    parse_fgos_file, save_fgos_data, get_fgos_list, get_fgos_details, delete_fgos
+    parse_fgos_file, save_fgos_data, get_fgos_list, get_fgos_details, delete_fgos,
+    # parse_prof_standard_file, # Added from existing code, was missing in prompt's logic import list
+    get_external_aups_list, get_external_aup_disciplines # New imports
 )
 from auth.logic import login_required, approved_required, admin_only
 import logging
+# Импортируем db для корректного rollback в except
+from maps.models import db
 
 # Настройка логирования
 logger = logging.getLogger(__name__)
@@ -45,19 +50,23 @@ def get_program(program_id):
     return jsonify(details)
 
 # Группа эндпоинтов для работы с матрицей компетенций
-@competencies_matrix_bp.route('/matrix/<int:aup_id>', methods=['GET'])
+@competencies_matrix_bp.route('/matrix/num/<string:aup_num>', methods=['GET'])
 @login_required
 @approved_required
-def get_matrix(aup_id):
+def get_matrix(aup_num):
     """
-    Получение данных для матрицы компетенций конкретного АУП.
-    Этот эндпоинт возвращает все необходимые данные для отображения 
-    и редактирования матрицы в UI: дисциплины, компетенции, индикаторы и их связи.
+    Получение данных для матрицы компетенций конкретного АУП по его номеру.
+    Использует num_aup для поиска соответствующей локальной записи AupInfo.
     """
-    matrix_data = get_matrix_for_aup(aup_id)
+    logger.info(f"Received GET request for matrix for AUP num: {aup_num}")
+    # Вызываем логику, передавая номер АУП
+    matrix_data = get_matrix_for_aup(aup_num)
+    
     if not matrix_data:
-        return jsonify({"error": "АУП не найден или не связан с образовательной программой"}), 404
+        # Возвращаем 404, если локальная запись AupInfo по этому num_aup не найдена
+        return jsonify({"error": f"АУП с номером {aup_num} не найден в локальной БД или не связан с образовательной программой"}), 404
         
+    logger.info(f"Successfully fetched matrix data for AUP num: {aup_num}")
     return jsonify(matrix_data)
 
 @competencies_matrix_bp.route('/matrix/link', methods=['POST', 'DELETE'])
@@ -297,7 +306,7 @@ def upload_profstandard():
     Парсит и сохраняет в БД профстандарт и его структуру.
     Принимает multipart/form-data с файлом.
     """
-    from .logic import parse_prof_standard_file as parse_prof_standard_logic_function
+    # from .logic import parse_prof_standard_file as parse_prof_standard_logic_function # This line is redundant
     if 'file' not in request.files:
         return jsonify({"error": "Файл не найден в запросе"}), 400
     
@@ -307,12 +316,84 @@ def upload_profstandard():
     
     # Читаем содержимое файла
     file_bytes = file.read()
-    result = parse_prof_standard_file(file_bytes, file.filename)
+    result = parse_prof_standard_file(file_bytes, file.filename) # Uses the imported function
     
     if not result or not result.get('success'):
         return jsonify({"error": result.get('error', 'Ошибка при обработке файла')}), 400
     
     return jsonify(result), 201
+
+# --- Новая группа эндпоинтов для работы с внешней БД КД ---
+
+@competencies_matrix_bp.route('/external/aups', methods=['GET'])
+@login_required
+@approved_required
+# @admin_only # Просмотр списка АУП доступен методистам
+def get_external_aups():
+    """
+    Поиск и получение списка АУП из внешней БД КД по заданным параметрам.
+    Поддерживает фильтрацию и пагинацию.
+    """
+    try:
+        # Получаем параметры фильтрации и пагинации из запроса
+        program_code: Optional[str] = request.args.get('program_code')
+        profile_num: Optional[str] = request.args.get('profile_num')
+        # ИСПРАВЛЕНИЕ: Меняем имя аргумента на form_education_name, чтобы соответствовать логике
+        form_education_name: Optional[str] = request.args.get('form_education') 
+        year_beg: Optional[int] = request.args.get('year_beg', type=int)
+        # ИСПРАВЛЕНИЕ: Меняем имя аргумента на degree_education_name, чтобы соответствовать логике
+        degree_education_name: Optional[str] = request.args.get('degree_education') 
+        search_query: Optional[str] = request.args.get('search') # Общий текстовый поиск
+        offset: int = request.args.get('offset', default=0, type=int)
+        # ИСПРАВЛЕНИЕ: Добавляем проверку на None для limit, если он не был передан в запросе
+        limit_param = request.args.get('limit', default=20, type=int) 
+        limit: Optional[int] = limit_param if limit_param is not None else 20
+
+
+        # Вызываем логику для получения данных из внешней БД
+        aups_list = get_external_aups_list(
+            program_code=program_code,
+            profile_num=profile_num,
+            form_education_name=form_education_name, # ИСПРАВЛЕНИЕ: Передаем правильное имя
+            year_beg=year_beg,
+            degree_education_name=degree_education_name, # ИСПРАВЛЕНИЕ: Передаем правильное имя
+            search_query=search_query,
+            offset=offset,
+            limit=limit
+        )
+
+        return jsonify(aups_list), 200
+
+    except Exception as e:
+        # Логирование и откат при ошибке
+        logger.error(f"Error in /aups: {e}", exc_info=True)
+        # db.session.rollback() # Откат уже в get_external_aups_list при ошибке
+        return jsonify({"error": f"Ошибка сервера при получении списка АУП из внешней БД: {e}"}), 500
+
+@competencies_matrix_bp.route('/external/aups/<int:aup_id>/disciplines', methods=['GET'])
+@login_required
+@approved_required
+# @admin_only # Просмотр доступен методистам
+def get_external_aup_disciplines_route(aup_id):
+    """
+    Получение списка дисциплин (AupData записей) для конкретного АУП из внешней БД КД.
+    Возвращает сырые записи AupData.
+    """
+    try:
+        # Вызываем логику для получения данных из внешней БД
+        disciplines_list = get_external_aup_disciplines(aup_id)
+
+        return jsonify(disciplines_list), 200
+
+    except Exception as e:
+        logger.error(f"Error in /aups/{aup_id}/disciplines: {e}", exc_info=True)
+        # db.session.rollback() # Откат уже в get_external_aup_disciplines при ошибке
+        return jsonify({"error": f"Ошибка сервера при получении списка дисциплин из внешней БД: {e}"}), 500
+
+# TODO: Возможно, добавить API для получения опций фильтров (списки кодов ОП, профилей, форм, годов из внешней БД КД)
+# GET /api/competencies/external/filters/programs
+# GET /api/competencies/external/filters/forms
+# GET /api/competencies/external/filters/years etc.
 
 # Дальнейшие эндпоинты можно добавить по мере необходимости:
 # - CRUD для образовательных программ
