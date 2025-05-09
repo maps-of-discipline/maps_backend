@@ -17,6 +17,7 @@ class Discipline:
     control: str
     coursework: bool
     amount: float
+    elective_group: int | None = None
 
     @staticmethod
     def _amount_to_zet(amount: float, measure: str) -> float:
@@ -28,7 +29,7 @@ class Discipline:
             title=row["title"],
             period=row["period"],
             zet=cls._amount_to_zet(row["amount"], row["measure"]),
-            amount=row["amount"],
+            amount=round(row["amount"], 1),
             control=row["control_type"],
             coursework=row["coursework"],
         )
@@ -42,6 +43,25 @@ class Discipline:
             and self.control == value.control
             and self.zet == value.zet
         )
+
+
+def parse_electives(discipline: Discipline, group: int) -> dict[str, Discipline]:
+    titles = discipline.title.split(" / ")
+
+    res = {}
+    for title in titles:
+        discipline_copy = dataclasses.replace(discipline)
+        discipline_copy.title = title
+        discipline_copy.elective_group = group
+        res.update({title: discipline_copy})
+
+        if discipline_copy.coursework:
+            title += " (КР)"
+            cw_discipline = dataclasses.replace(discipline)
+            cw_discipline.title = title
+            cw_discipline.elective_group = group
+            res.update({title: discipline_copy})
+    return res
 
 
 def get_aup(aup: str, sem_num: int = 20) -> list[Discipline]:
@@ -81,8 +101,14 @@ def get_aup(aup: str, sem_num: int = 20) -> list[Discipline]:
     )
 
     res = {}
+    elective_group = 0
     for el in db.session.execute(query).mappings().all():
         discipline = Discipline.from_sqla_row(el)
+        if "/" in discipline.title:
+            elective_group += 1
+            disciplines = parse_electives(discipline, elective_group)
+            res.update(disciplines)
+            continue
 
         title = discipline.title
         cw_title = discipline.title + " (КП)"
