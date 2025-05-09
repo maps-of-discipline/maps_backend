@@ -1,21 +1,23 @@
 # competencies_matrix/routes.py
 """
 Маршруты (API endpoints) для модуля матрицы компетенций.
-Здесь определены все API-точки входа для работы с матрицами компетенций,
-образовательными программами, ФГОС, профстандартами и т.д.
 """
 
 from flask import request, jsonify, abort
 from . import competencies_matrix_bp
 from typing import Optional
 from .logic import (
-    get_educational_programs_list, get_program_details, 
-    get_matrix_for_aup, update_matrix_link,
+    get_educational_programs_list, get_program_details,
+    get_matrix_for_aup, update_matrix_link, # update_matrix_link теперь возвращает статус
     create_competency, create_indicator,
     parse_fgos_file, save_fgos_data, get_fgos_list, get_fgos_details, delete_fgos,
-    # parse_prof_standard_file, # Added from existing code, was missing in prompt's logic import list
+    # parse_prof_standard_file as logic_parse_ps_file, # Переименовано в parse_prof_standard_file
+    parse_prof_standard_file, # Импортируем оркестратор парсинга из logic.py
     get_external_aups_list, get_external_aup_disciplines # New imports
 )
+# Импортируем save_prof_standard_data из logic
+from .logic import save_prof_standard_data # <-- Добавлен импорт
+
 from auth.logic import login_required, approved_required, admin_only
 import logging
 # Импортируем db для корректного rollback в except
@@ -30,12 +32,13 @@ logger = logging.getLogger(__name__)
 @approved_required
 def get_programs():
     """Получение списка всех образовательных программ"""
-    # Используем функцию из logic.py
     programs = get_educational_programs_list()
-    
+
     # Сериализуем результат в список словарей
-    result = [p.to_dict(rules=['-fgos.educational_programs']) for p in programs]
-    
+    # Убедитесь, что to_dict доступен и настроен на модели EducationalProgram
+    # и что он не вызывает рекурсию через relationships при сериализации
+    result = [p.to_dict() for p in programs] # Убрал rule, т.к. to_dict должен быть безопасным
+
     return jsonify(result)
 
 @competencies_matrix_bp.route('/programs/<int:program_id>', methods=['GET'])
@@ -46,7 +49,7 @@ def get_program(program_id):
     details = get_program_details(program_id)
     if not details:
         return jsonify({"error": "Образовательная программа не найдена"}), 404
-        
+
     return jsonify(details)
 
 # Группа эндпоинтов для работы с матрицей компетенций
@@ -61,11 +64,11 @@ def get_matrix(aup_num):
     logger.info(f"Received GET request for matrix for AUP num: {aup_num}")
     # Вызываем логику, передавая номер АУП
     matrix_data = get_matrix_for_aup(aup_num)
-    
+
     if not matrix_data:
         # Возвращаем 404, если локальная запись AupInfo по этому num_aup не найдена
         return jsonify({"error": f"АУП с номером {aup_num} не найден в локальной БД или не связан с образовательной программой"}), 404
-        
+
     logger.info(f"Successfully fetched matrix data for AUP num: {aup_num}")
     return jsonify(matrix_data)
 
@@ -85,6 +88,7 @@ def manage_matrix_link():
     indicator_id = data['indicator_id']
     is_creating = (request.method == 'POST')
 
+    # update_matrix_link теперь возвращает словарь со статусом и сообщением
     result = update_matrix_link(
         aup_data_id,
         indicator_id,
@@ -102,22 +106,28 @@ def manage_matrix_link():
             if result['status'] == 'deleted':
                 return jsonify({"status": "deleted", "message": "Связь успешно удалена"}), 200
             elif result['status'] == 'not_found':
+                # DELETE должен вернуть 404 если не найдено
                 return jsonify({"status": "not_found", "message": "Связь для удаления не найдена"}), 404
-    else:  # Обработка ошибок
-        error_msg = "Не удалось выполнить операцию"
-        status_code = 400
-        
-        if result.get('error') == 'aup_data_not_found':
-            error_msg = f"Запись AupData (id: {aup_data_id}) не найдена"
+    else:  # Обработка ошибок, когда success=False
+        # update_matrix_link уже возвращает details об ошибке
+        error_msg = result.get('message', "Не удалось выполнить операцию")
+        status_code = 400 # Дефолтный код ошибки
+
+        # Если в результате есть конкретный тип ошибки, используем его для кода
+        if result.get('error_type') == 'indicator_not_found':
             status_code = 404
-        elif result.get('error') == 'indicator_not_found':
-            error_msg = f"Индикатор (id: {indicator_id}) не найден"
-            status_code = 404
-        elif result.get('error') == 'database_error':
-            error_msg = "Ошибка базы данных при выполнении операции"
+        elif result.get('error_type') == 'aup_data_not_found': # Этот тип ошибки больше не генерируется в logic.py
+             status_code = 404
+        elif result.get('error_type') == 'database_error':
             status_code = 500
-            
+        # Добавьте другие типы ошибок, если они появятся в update_matrix_link
+
+        # Логируем полную ошибку, включая детали
+        logger.error(f"Error processing matrix link request: {result.get('message')}. Details: {result.get('details')}")
+
+        # Возвращаем только безопасные для фронтенда сообщения
         return jsonify({"status": "error", "message": error_msg}), status_code
+
 
 # Группа эндпоинтов для работы с компетенциями и индикаторами
 @competencies_matrix_bp.route('/competencies', methods=['POST'])
@@ -126,23 +136,20 @@ def manage_matrix_link():
 def create_new_competency():
     """
     Создание новой компетенции (обычно ПК на основе профстандарта).
-    Принимает JSON с полями компетенции:
-    - type_code: Код типа (УК, ОПК, ПК)
-    - code: Код компетенции (ПК-1, ...)
-    - name: Формулировка компетенции
-    - based_on_labor_function_id: (опционально) ID трудовой функции из ПС
-    - fgos_vo_id: (опционально) ID ФГОС ВО
     """
     data = request.get_json()
-    
+
     # Проверка необходимых полей
     if not data or 'type_code' not in data or 'code' not in data or 'name' not in data:
-        return jsonify({"error": "Отсутствуют обязательные поля"}), 400
-    
+        abort(400, description="Отсутствуют обязательные поля: type_code, code, name")
+
+    # create_competency возвращает объект или None
     competency = create_competency(data)
     if not competency:
-        return jsonify({"error": "Не удалось создать компетенцию"}), 400
-    
+        # Логирование ошибки уже внутри create_competency
+        return jsonify({"error": "Не удалось создать компетенцию. Возможно, уже существует или не найден тип."}), 400
+
+    # Убедитесь, что to_dict доступен и настроен
     return jsonify(competency.to_dict()), 201
 
 @competencies_matrix_bp.route('/indicators', methods=['POST'])
@@ -151,23 +158,20 @@ def create_new_competency():
 def create_new_indicator():
     """
     Создание нового индикатора достижения компетенции (ИДК).
-    Принимает JSON с полями:
-    - competency_id: ID родительской компетенции
-    - code: Код индикатора (ИУК-1.1, ИОПК-2.3, ИПК-3.2 и т.д.)
-    - formulation: Формулировка индикатора
-    - source_description: (опционально) Описание источника
-    - labor_function_ids: (опционально) Список ID трудовых функций
     """
     data = request.get_json()
-    
+
     # Проверка необходимых полей
     if not data or 'competency_id' not in data or 'code' not in data or 'formulation' not in data:
-        return jsonify({"error": "Отсутствуют обязательные поля"}), 400
-    
+        abort(400, description="Отсутствуют обязательные поля: competency_id, code, formulation")
+
+    # create_indicator возвращает объект или None
     indicator = create_indicator(data)
     if not indicator:
-        return jsonify({"error": "Не удалось создать индикатор"}), 400
-    
+        # Логирование ошибки уже внутри create_indicator
+        return jsonify({"error": "Не удалось создать индикатор. Возможно, уже существует или не найдена компетенция."}), 400
+
+    # Убедитесь, что to_dict доступен и настроен
     return jsonify(indicator.to_dict()), 201
 
 # --- Новая группа эндпоинтов для работы с ФГОС ВО ---
@@ -180,7 +184,8 @@ def get_all_fgos():
     fgos_list = get_fgos_list()
     # Сериализуем результат в список словарей
     # Используем to_dict из BaseModel
-    result = [f.to_dict() for f in fgos_list]
+    # Исключаем Relationships, если они не нужны в списке
+    result = [f.to_dict(rules=['-competencies', '-recommended_ps_assoc', '-educational_programs']) for f in fgos_list]
     return jsonify(result)
 
 @competencies_matrix_bp.route('/fgos/<int:fgos_id>', methods=['GET'])
@@ -211,23 +216,29 @@ def upload_fgos():
     if file.filename == '':
         return jsonify({"error": "Файл не выбран"}), 400
 
-    # TODO: Добавить проверку расширения файла на .pdf
-    
+    # Проверка расширения файла на .pdf
+    if not file.filename.lower().endswith('.pdf'):
+         return jsonify({"error": "Поддерживаются только файлы формата PDF"}), 400
+
     try:
         file_bytes = file.read()
         parsed_data = parse_fgos_file(file_bytes, file.filename)
 
-        if not parsed_data:
-            return jsonify({"error": "Не удалось распарсить файл ФГОС или извлечь основные данные"}), 400
+        if not parsed_data or not parsed_data.get('metadata'):
+            # parse_fgos_file выбрасывает ValueError при критичных ошибках парсинга
+            # Если вернулось без ошибки, но данных мало - считаем невалидным
+            return jsonify({"error": "Не удалось извлечь основные метаданные из файла ФГОС"}), 400
 
-        # TODO: Добавить в ответ информацию о существующем ФГОС, если найден (для сравнения на фронтенде)
-        # Можно вызвать get_fgos_details, если найден ФГОС с такими же ключевыми параметрами
-        
-        return jsonify(parsed_data), 200 # Возвращаем парсенные данные
+        # Возвращаем парсенные данные, включая метаданные, УК/ОПК (без индикаторов) и рекомендованные ПС
+        # Frontend будет использовать эти данные для отображения предпросмотра
+        return jsonify(parsed_data), 200
 
+    except ValueError as e: # Ловим ошибки парсинга, выброшенные parse_fgos_file
+        logger.error(f"FGOS Parsing Error for {file.filename}: {e}")
+        return jsonify({"error": f"Ошибка парсинга файла: {e}"}), 400
     except Exception as e:
-        logger.error(f"Error processing FGOS upload for {file.filename}: {e}", exc_info=True)
-        return jsonify({"error": f"Ошибка сервера при обработке файла: {e}"}), 500
+        logger.error(f"Unexpected error processing FGOS upload for {file.filename}: {e}", exc_info=True)
+        return jsonify({"error": f"Неожиданная ошибка сервера при обработке файла: {e}"}), 500
 
 
 @competencies_matrix_bp.route('/fgos/save', methods=['POST'])
@@ -241,41 +252,38 @@ def save_fgos():
     """
     data = request.get_json()
     # Ожидаем JSON: {'parsed_data': {...}, 'filename': '...', 'options': {'force_update': true/false}}
-    
+
     parsed_data = data.get('parsed_data')
     filename = data.get('filename')
     options = data.get('options', {})
-    
+
     if not parsed_data or not filename:
         return jsonify({"error": "Некорректные данные для сохранения"}), 400
 
     try:
         # Вызываем функцию сохранения данных
-        # Передаем сессию явно
+        # save_fgos_data управляет своей транзакцией (savepoint), но коммит/роллбек при ошибке БД внутри
         saved_fgos = save_fgos_data(parsed_data, filename, db.session, force_update=options.get('force_update', False))
 
         if saved_fgos is None:
             # Если save_fgos_data вернула None, значит произошла ошибка БД или валидации внутри
-            # (логирование ошибки должно быть внутри save_fgos_data)
+            # (логирование ошибки уже внутри save_fgos_data)
             return jsonify({"error": "Ошибка при сохранении данных ФГОС в базу данных"}), 500
-            
-        # Если save_fgos_data вернула объект, который уже существовал и force_update=False,
-        # то это не ошибка, просто дубликат. Фронтенд должен был это обработать на шаге preview.
-        # Но API все равно должен вернуть информацию.
-        # Проверяем, был ли это новый объект или существующий
-        is_new = saved_fgos._sa_instance_state.key is None or saved_fgos._sa_instance_state.key.persistent is None
 
+        # save_fgos_data возвращает объект FgosVo, который был сохранен или обновлен
+        # Frontend может проверить existence_fgos_record на этапе предпросмотра
+        # Здесь просто подтверждаем успех
         return jsonify({
             "success": True,
             "fgos_id": saved_fgos.id,
-            "message": "Данные ФГОС успешно сохранены." if is_new else "Данные ФГОС успешно обновлены."
+            "message": "Данные ФГОС успешно сохранены."
         }), 201 # 201 Created или 200 OK, 201 более уместен для создания/обновления
 
 
     except Exception as e:
         logger.error(f"Error saving FGOS data from file {filename}: {e}", exc_info=True)
-        # Если произошла ошибка, и она не была поймана внутри save_fgos_data с откатом, откатываем здесь
-        db.session.rollback()
+        # Если произошла ошибка, которая не была поймана внутри save_fgos_data
+        # db.session.rollback() # Откат должен быть внутри save_fgos_data при ошибке БД
         return jsonify({"error": f"Неожиданная ошибка сервера при сохранении: {e}"}), 500
 
 @competencies_matrix_bp.route('/fgos/<int:fgos_id>', methods=['DELETE'])
@@ -285,43 +293,73 @@ def save_fgos():
 def delete_fgos_route(fgos_id):
     """Удаление ФГОС ВО по ID"""
     try:
+        # delete_fgos управляет своей транзакцией (commit/rollback)
         deleted = delete_fgos(fgos_id, db.session)
         if deleted:
             return jsonify({"success": True, "message": "ФГОС успешно удален"}), 200
         else:
+            # delete_fgos вернет False если не найдет или не сможет удалить
             return jsonify({"success": False, "error": "ФГОС не найден или не удалось удалить"}), 404
 
     except Exception as e:
         logger.error(f"Error deleting FGOS {fgos_id}: {e}", exc_info=True)
-        db.session.rollback()
+        # db.session.rollback() # Откат должен быть внутри delete_fgos при ошибке БД
         return jsonify({"success": False, "error": f"Неожиданная ошибка сервера при удалении: {e}"}), 500
 
 # Группа эндпоинтов для работы с профессиональными стандартами (ПС)
 @competencies_matrix_bp.route('/profstandards/upload', methods=['POST'])
 @login_required
 @approved_required
+@admin_only # Загрузка ПС - действие администратора
 def upload_profstandard():
     """
-    Загрузка файла профессионального стандарта (HTML/Markdown).
-    Парсит и сохраняет в БД профстандарт и его структуру.
+    Загрузка файла профессионального стандарта (HTML/Markdown/PDF).
+    Парсит, извлекает структуру и сохраняет в БД профстандарт и его структуру.
     Принимает multipart/form-data с файлом.
     """
-    # from .logic import parse_prof_standard_file as parse_prof_standard_logic_function # This line is redundant
     if 'file' not in request.files:
         return jsonify({"error": "Файл не найден в запросе"}), 400
-    
+
     file = request.files['file']
     if file.filename == '':
         return jsonify({"error": "Файл не выбран"}), 400
-    
-    # Читаем содержимое файла
-    file_bytes = file.read()
-    result = parse_prof_standard_file(file_bytes, file.filename) # Uses the imported function
-    
-    if not result or not result.get('success'):
-        return jsonify({"error": result.get('error', 'Ошибка при обработке файла')}), 400
-    
-    return jsonify(result), 201
+
+    # TODO: Добавить проверку расширения файла (HTML, DOCX, PDF?)
+
+    try:
+        # Читаем содержимое файла
+        file_bytes = file.read()
+        # Вызываем логику парсинга и сохранения
+        # parse_prof_standard_file теперь оркестрирует парсинг и сохранение
+        result = parse_prof_standard_file(file_bytes, file.filename)
+
+        if not result.get('success'):
+            # Логирование ошибки уже внутри parse_prof_standard_file
+            status_code = 400 # Дефолтный код ошибки
+            if result.get('error_type') == 'parsing_error': status_code = 400
+            elif result.get('error_type') == 'database_error': status_code = 500
+            elif result.get('error_type') == 'integrity_error': status_code = 409 # Conflict
+            elif result.get('error_type') == 'already_exists': status_code = 409 # Conflict
+
+            return jsonify({"status": "error", "message": result.get('error', 'Ошибка обработки файла')}), status_code
+
+        # Если успех
+        saved_prof_standard = result.get('prof_standard')
+        if saved_prof_standard:
+             return jsonify({
+                 "status": "success",
+                 "message": "Профессиональный стандарт успешно загружен и обработан.",
+                 "prof_standard_id": saved_prof_standard.id,
+                 "code": saved_prof_standard.code,
+                 "name": saved_prof_standard.name
+             }), 201 # 201 Created
+
+
+    except Exception as e:
+        logger.error(f"Unexpected error in /profstandards/upload for {file.filename}: {e}", exc_info=True)
+        # db.session.rollback() # Оркестратор должен откатывать при ошибке БД
+        return jsonify({"status": "error", "message": f"Неожиданная ошибка сервера при обработке файла: {e}"}), 500
+
 
 # --- Новая группа эндпоинтов для работы с внешней БД КД ---
 
@@ -337,26 +375,24 @@ def get_external_aups():
     try:
         # Получаем параметры фильтрации и пагинации из запроса
         program_code: Optional[str] = request.args.get('program_code')
-        profile_num: Optional[str] = request.args.get('profile_num')
-        # ИСПРАВЛЕНИЕ: Меняем имя аргумента на form_education_name, чтобы соответствовать логике
-        form_education_name: Optional[str] = request.args.get('form_education') 
+        profile_num: Optional[str] = request.args.get('profile_num') # <-- Читаем profile_num
+        profile_name: Optional[str] = request.args.get('profile_name') # <-- Читаем profile_name
+        form_education_name: Optional[str] = request.args.get('form_education')
         year_beg: Optional[int] = request.args.get('year_beg', type=int)
-        # ИСПРАВЛЕНИЕ: Меняем имя аргумента на degree_education_name, чтобы соответствовать логике
-        degree_education_name: Optional[str] = request.args.get('degree_education') 
+        degree_education_name: Optional[str] = request.args.get('degree_education')
         search_query: Optional[str] = request.args.get('search') # Общий текстовый поиск
         offset: int = request.args.get('offset', default=0, type=int)
-        # ИСПРАВЛЕНИЕ: Добавляем проверку на None для limit, если он не был передан в запросе
-        limit_param = request.args.get('limit', default=20, type=int) 
-        limit: Optional[int] = limit_param if limit_param is not None else 20
+        limit_param = request.args.get('limit', default=20, type=int)
+        limit: Optional[int] = limit_param if limit_param is not None and limit_param > 0 else 20 # Убедимся, что лимит > 0
 
-
-        # Вызываем логику для получения данных из внешней БД
+        # Вызываем логику для получения данных из внешней БД, передавая ОБА параметра профиля
         aups_list = get_external_aups_list(
             program_code=program_code,
-            profile_num=profile_num,
-            form_education_name=form_education_name, # ИСПРАВЛЕНИЕ: Передаем правильное имя
+            profile_num=profile_num, # <-- Передаем profile_num
+            profile_name=profile_name, # <-- Передаем profile_name
+            form_education_name=form_education_name,
             year_beg=year_beg,
-            degree_education_name=degree_education_name, # ИСПРАВЛЕНИЕ: Передаем правильное имя
+            degree_education_name=degree_education_name,
             search_query=search_query,
             offset=offset,
             limit=limit
@@ -367,7 +403,7 @@ def get_external_aups():
     except Exception as e:
         # Логирование и откат при ошибке
         logger.error(f"Error in /aups: {e}", exc_info=True)
-        # db.session.rollback() # Откат уже в get_external_aups_list при ошибке
+        # При обращении к внешней БД нет необходимости в rollback
         return jsonify({"error": f"Ошибка сервера при получении списка АУП из внешней БД: {e}"}), 500
 
 @competencies_matrix_bp.route('/external/aups/<int:aup_id>/disciplines', methods=['GET'])
@@ -381,13 +417,17 @@ def get_external_aup_disciplines_route(aup_id):
     """
     try:
         # Вызываем логику для получения данных из внешней БД
+        # get_external_aup_disciplines теперь ожидает External AUP ID (integer)
         disciplines_list = get_external_aup_disciplines(aup_id)
+
+        for d in disciplines_list:
+            if d.get('amount') is not None:
+                 d['amount'] = d['amount'] / 100
 
         return jsonify(disciplines_list), 200
 
     except Exception as e:
         logger.error(f"Error in /aups/{aup_id}/disciplines: {e}", exc_info=True)
-        # db.session.rollback() # Откат уже в get_external_aup_disciplines при ошибке
         return jsonify({"error": f"Ошибка сервера при получении списка дисциплин из внешней БД: {e}"}), 500
 
 # TODO: Возможно, добавить API для получения опций фильтров (списки кодов ОП, профилей, форм, годов из внешней БД КД)

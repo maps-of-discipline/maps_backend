@@ -1,32 +1,5 @@
-# filepath: cli_commands/parse_profstandard.py
-"""
-Flask CLI команда для парсинга файлов Профессиональных Стандартов (ПС)
-и сохранения их структуры в базу данных.
+# cli_commands/parse_profstandard.py
 
-Эта команда позволяет парсить HTML или DOCX файлы ПС, извлекать их структуру
-(ОТФ, ТФ, ТД, НУ, НЗ) и сохранять эти данные в соответствующие таблицы БД
-(competencies_prof_standard, competencies_generalized_labor_function и т.д.).
-
-Требует установки: pip install beautifulsoup4 lxml python-docx markdownify chardet
-
-Основные возможности:
-- Поддержка парсинга HTML и DOCX файлов (DOCX требует доработки).
-- Извлечение кода и названия ПС.
-- Извлечение структуры ОТФ, ТФ, ТД, НУ, НЗ.
-- Сохранение структуры в связанные таблицы БД.
-- Опция перезаписи (--force) существующего ПС и его структуры.
-- Опция "пробного запуска" (--dry-run) для проверки парсинга без сохранения.
-
-Пример использования:
-    # Пропарсить и сохранить новый ПС
-    flask parse-ps "path/to/ps_06.001.html"
-
-    # Пропарсить и перезаписать существующий ПС
-    flask parse-ps "path/to/ps_06.001.html" --force
-
-    # Только проверить парсинг без сохранения
-    flask parse-ps "path/to/ps_06.001.html" --dry-run
-"""
 import click
 from flask.cli import with_appcontext
 import os
@@ -34,9 +7,13 @@ import traceback
 import logging
 
 # Импорты из вашего приложения
-from maps.models import db
-from competencies_matrix.logic import save_parsed_prof_standard_structure # <<-- НОВАЯ ФУНКЦИЯ
-from competencies_matrix.parsers import parse_prof_standard_file # <<-- НОВАЯ ФУНКЦИЯ
+from maps.models import db # db используется для доступа к сессии
+# from competencies_matrix.logic import save_prof_standard_data, parse_prof_standard_file # <--- ИСПРАВЛЕНО
+from competencies_matrix.logic import (
+    save_prof_standard_data, # Импортируем функцию сохранения из logic.py
+    parse_prof_standard_file # Импортируем оркестратор парсинга из logic.py
+)
+# from competencies_matrix.parsers import parse_prof_standard_file # <-- Был импорт из parsers, теперь парсинг оркестрируется в logic
 
 # Настройка логирования
 logger = logging.getLogger(__name__)
@@ -50,51 +27,76 @@ logger = logging.getLogger(__name__)
 @with_appcontext
 def parse_ps_command(filepath, force, dry_run):
     """
-    Парсит файл Профессионального Стандарта (HTML/DOCX) и сохраняет структуру в БД.
+    Парсит файл Профессионального Стандарта (HTML/DOCX/PDF), извлекает структуру
+    и сохраняет в БД.
 
-    FILEPATH: Путь к файлу ПС для парсинга (HTML или DOCX).
+    FILEPATH: Путь к файлу ПС для парсинга.
     """
     print(f"\n---> Starting Professional Standard parsing from: {filepath}")
     if dry_run:
         print("   >>> DRY RUN MODE ENABLED: No changes will be saved to the database. <<<")
     filename = os.path.basename(filepath)
 
-    try:
-        # 1. Парсинг файла
-        print(f"Parsing file: {filename}...")
-        # Используем новую функцию parse_prof_standard_file
-        # Она должна возвращать словарь со структурой (ОТФ, ТФ и т.д.) и метаданными
-        parsed_structure = parse_prof_standard_file(filepath)
+    # Получаем сессию БД, если не в dry-run режиме
+    session = db.session if not dry_run else None
 
-        if not parsed_structure or not parsed_structure.get('code') or not parsed_structure.get('name'):
-             print("\n!!! PARSING FAILED or incomplete: Could not extract code/name. Aborting. !!!")
+    try:
+        # 1. Парсинг файла (используем оркестратор из logic.py)
+        print(f"Parsing file: {filename}...")
+        # parse_prof_standard_file теперь возвращает {'success': bool, 'error': str, 'parsed_data': {...}}
+        parse_result = parse_prof_standard_file(filepath) # Теперь принимает путь, читает файл внутри
+
+        if not parse_result['success']:
+             print(f"\n!!! PARSING FAILED: {parse_result['error']} !!!")
+             return # Выходим при ошибке парсинга
+
+
+        parsed_data = parse_result.get('parsed_data')
+        if not parsed_data or not parsed_data.get('code') or not parsed_data.get('name'):
+             # Эта проверка может быть избыточна, если parse_prof_standard_file выбрасывает исключения или возвращает success=False
+             print("\n!!! PARSING FAILED or incomplete: Could not extract code/name after successful parse. Aborting. !!!")
              return
 
+
         print("   - File parsed successfully.")
-        print(f"   - Found PS Code: {parsed_structure.get('code')}")
-        print(f"   - Found PS Name: {parsed_structure.get('name')}")
-        # Можно добавить вывод количества найденных ОТФ/ТФ для информации
-        otf_count = len(parsed_structure.get('generalized_labor_functions', []))
-        tf_count = sum(len(otf.get('labor_functions', [])) for otf in parsed_structure.get('generalized_labor_functions', []))
+        print(f"   - Found PS Code: {parsed_data.get('code')}")
+        print(f"   - Found PS Name: {parsed_data.get('name')}")
+        # Выводим количество найденных ОТФ/ТФ для информации
+        otf_count = len(parsed_data.get('generalized_labor_functions', []))
+        tf_count = sum(len(otf.get('labor_functions', [])) for otf in parsed_data.get('generalized_labor_functions', [])) if otf_count > 0 else 0
         print(f"   - Found {otf_count} ОТФ and {tf_count} ТФ.")
+
 
         # 2. Сохранение структуры в БД (если не dry-run)
         if not dry_run:
             print("Saving parsed structure to database...")
-            # Используем новую функцию save_parsed_prof_standard_structure
-            saved_ps = save_parsed_prof_standard_structure(
-                parsed_data=parsed_structure,
-                filename=filename, # Передаем имя файла для логов/метаданных
-                session=db.session,
-                force_update=force
-            )
+            # Вызываем логику сохранения, передавая парсенные данные и сессию
+            # save_prof_standard_data управляет своей транзакцией (savepoint), но commit/rollback должен быть на уровне CLI
+            try:
+                # Используем явную транзакцию для всей операции сохранения ПС
+                with db.session.begin(): # Начинаем явную транзакцию
+                    saved_ps = save_prof_standard_data( # <-- ИСПРАВЛЕНО
+                        parsed_data=parsed_data,
+                        filename=filename,
+                        session=db.session, # Передаем текущую сессию
+                        force_update=force
+                    )
 
-            if saved_ps:
-                print(f"   - Structure for PS '{saved_ps.code}' saved/updated successfully (ID: {saved_ps.id}).")
-                print(f"---> Professional Standard from '{filename}' processed successfully!\n")
-            else:
-                # Ошибка должна была быть залогирована внутри save_parsed_prof_standard_structure
-                print("\n!!! SAVE FAILED: Error occurred while saving parsed structure. Check logs. !!!")
+                # Транзакция коммитится при выходе из with блока, если нет исключений
+                if saved_ps:
+                    print(f"   - Structure for PS '{saved_ps.code}' saved/updated successfully (ID: {saved_ps.id}).")
+                    print(f"---> Professional Standard from '{filename}' processed successfully!\n")
+                else:
+                    # Ошибка должна была быть залогирована внутри save_prof_standard_data
+                    print("\n!!! SAVE FAILED: Error occurred while saving parsed structure. Check logs. !!!")
+
+            except Exception as e: # Ловим ошибки при сохранении
+                # Транзакция откатится автоматически при выходе из with блока после исключения
+                db.session.rollback() # Явный откат на всякий случай, хотя with block должен справиться
+                print(f"\n!!! SAVE FAILED during transaction: {e} !!!")
+                print("   - Database transaction rolled back.")
+                traceback.print_exc()
+
         else:
             print("   - Skipping database save due to --dry-run flag.")
             print(f"---> DRY RUN for '{filename}' completed successfully (parsing passed).\n")
@@ -103,10 +105,12 @@ def parse_ps_command(filepath, force, dry_run):
         print(f"\n!!! ERROR: File not found at '{filepath}' !!!")
     except ImportError as e:
         print(f"\n!!! ERROR: Missing dependency for parsing: {e} !!!")
-        print("   - Please ensure 'beautifulsoup4', 'lxml', 'python-docx', 'markdownify', 'chardet' are installed.")
-    except Exception as e:
-        if not dry_run:
-            db.session.rollback()
-            print("   - Database transaction rolled back due to error.")
-        print(f"\n!!! UNEXPECTED ERROR during parsing/saving: {e} !!!")
+        print("   - Please ensure 'beautifulsoup4', 'lxml', 'python-docx', 'markdownify', 'chardet', 'pdfminer.six' are installed.") # Добавил pdfminer на всякий случай
+    except Exception as e: # Ловим другие ошибки (кроме парсинга)
+        if not dry_run and session and session.dirty: session.rollback() # Откат, если сессия была изменена до ошибки
+        print(f"\n!!! UNEXPECTED ERROR during processing: {e} !!!")
         traceback.print_exc()
+
+    finally:
+         # Не нужно закрывать сессию здесь, т.к. она управляется flask.cli.with_appcontext
+         pass
