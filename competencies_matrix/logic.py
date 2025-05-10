@@ -10,7 +10,8 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError # Добавляем 
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload # Добавляем selectinload
 
 # --- Импортируем модели из maps.models (локальная БД) ---
-from maps.models import db as local_db, SprDiscipline, AupInfo as LocalAupInfo, AupData # Добавляем AupData
+from maps.models import db as local_db, SprDiscipline, AupInfo as LocalAupInfo
+from maps.models import AupData as LocalAupData # <--- Новый импорт
 
 # --- Импортируем НАШИ модели компетенций ---
 from .models import (
@@ -34,8 +35,7 @@ from .external_models import (
 )
 
 # --- Импортируем парсеры ---
-from .fgos_parser import parse_fgos_pdf
-# from .parsers import parse_prof_standard_file # Переименовано в parse_prof_standard_uploaded_file
+from .fgos_parser import parse_fgos_pdf, parse_prof_standard # <--- Импорт главной функции парсинга ПС
 
 
 # Настройка логирования
@@ -207,10 +207,6 @@ def get_external_aups_list(
 
             filters = []
             
-            # SQLAlchemy обычно достаточно умен, чтобы не дублировать JOIN, можно вызывать join при необходимости.
-            # Но явное добавление join() может улучшить читаемость и контроль за генерацией SQL.
-            # Если фильтры зависят от joined-таблиц, join() должен быть вызван ДО добавления фильтра.
-
             if program_code:
                 filters.append(ExternalSprOKCO.program_code == program_code)
             
@@ -232,9 +228,8 @@ def get_external_aups_list(
             if degree_education_name:
                 filters.append(ExternalSprDegreeEducation.name_deg == degree_education_name)
 
-            # Добавляем OUTER JOIN для полей, которые могут отсутствовать, но используются в search_query или фильтрах
             query = query.join(ExternalAupInfo.spec, isouter=True)\
-                         .join(ExternalNameOP.okco, isouter=True) # Джойнимся от NameOP, т.к. NameOP может не быть
+                         .join(ExternalNameOP.okco, isouter=True) 
             query = query.join(ExternalAupInfo.form, isouter=True)
             query = query.join(ExternalAupInfo.degree, isouter=True)
             query = query.join(ExternalAupInfo.faculty, isouter=True)
@@ -256,7 +251,6 @@ def get_external_aups_list(
                  query = query.filter(or_(*search_conditions))
 
             total_count = query.count()
-            # Сортировка по year_beg (убывание) затем по num_aup
             query = query.order_by(ExternalAupInfo.year_beg.desc(), ExternalAupInfo.num_aup)
             if limit is not None: query = query.offset(offset).limit(limit)
             external_aups = query.all()
@@ -276,22 +270,20 @@ def get_external_aup_disciplines(aup_id: int) -> List[Dict[str, Any]]:
     engine = get_external_db_engine()
     with Session(engine) as session:
         try:
-            # Запрос к ExternalAupData по id_aup
             aup_data_entries = session.query(ExternalAupData).options(
-                # joinedload(ExternalAupData.spr_discipline) # Если spr_discipline определена в external_models
+                # joinedload(ExternalAupData.spr_discipline) 
             ).filter(ExternalAupData.id_aup == aup_id).order_by(ExternalAupData.id_period, ExternalAupData.shifr, ExternalAupData.id).all()
 
             result = []
             for entry in aup_data_entries:
                  result.append({
-                     'aup_data_id': entry.id, # ЭТО ID из внешней БД aup_data
-                     'id_aup': entry.id_aup, # ЭТО ID AUP из внешней БД tbl_aup
+                     'aup_data_id': entry.id, 
+                     'id_aup': entry.id_aup, 
                      'discipline_id': entry.id_discipline,
                      'title': entry.discipline,
                      'semester': entry.id_period,
                      'shifr': entry.shifr,
                      'id_type_record': entry.id_type_record,
-                     # ИСПРАВЛЕНИЕ ЗЕТ: Проверяем на None перед делением и присваиваем 0 если None
                      'zet': (entry.zet / 100) if entry.zet is not None else 0,
                      'amount': entry.amount,
                      'id_type_control': entry.id_type_control
@@ -302,7 +294,6 @@ def get_external_aup_disciplines(aup_id: int) -> List[Dict[str, Any]]:
 
         except Exception as e:
             logger.error(f"Error fetching external AupData for external AUP ID {aup_id}: {e}", exc_info=True)
-            # Пробрасываем ошибку, чтобы вызывающий код мог ее обработать (например, вернуть 500 или 404)
             raise
 
 
@@ -310,15 +301,9 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
     logger.info(f"get_matrix_for_aup: Processing request for AUP num: {aup_num}")
     session: Session = local_db.session
     matrix_response: Dict[str, Any] = {
-        "aup_info": None,
-        "disciplines": [], # Заполняется данными ИЗ ВНЕШНЕЙ БД (ExternalAupData as dict)
-        "competencies": [], # Заполняется данными ИЗ ЛОКАЛЬНОЙ БД (Competency as dict)
-        "links": [], # Заполняется данными ИЗ ЛОКАЛЬНОЙ БД (CompetencyMatrix as dict)
-        "suggestions": [], # Заглушка для NLP
-        "external_aup_id": None, # ID AUP из внешней БД tbl_aup (используется для запроса дисциплин)
-        "external_aup_num": aup_num, # Num AUP, который запросил клиент
-        "source": "not_found", # local_only, external_only, local_with_external_disciplines, not_found
-        "error_details": None # Сообщения об ошибках загрузки
+        "aup_info": None, "disciplines": [], "competencies": [], "links": [],
+        "suggestions": [], "external_aup_id": None, "external_aup_num": aup_num,
+        "source": "not_found", "error_details": None
     }
 
     local_aup_info_entry: Optional[LocalAupInfo] = None
@@ -335,152 +320,169 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
 
         if local_aup_info_entry:
             logger.info(f"   - Found LocalAupInfo (ID: {local_aup_info_entry.id_aup}) for num_aup: {aup_num}.")
-            # Заполняем локальные метаданные сразу
-            matrix_response["aup_info"] = local_aup_info_entry.as_dict()
+            matrix_response["aup_info"] = local_aup_info_entry.as_dict() # Локальные метаданные АУП
             
-            # Определяем связанную ОП и ФГОС
             if local_aup_info_entry.education_programs_assoc:
                 primary_assoc = next((assoc for assoc in local_aup_info_entry.education_programs_assoc if assoc.is_primary), None)
                 assoc_to_use = primary_assoc or (local_aup_info_entry.education_programs_assoc[0] if local_aup_info_entry.education_programs_assoc else None)
                 if assoc_to_use and assoc_to_use.educational_program:
                     educational_program = assoc_to_use.educational_program
-                    logger.info(f"     - Linked EducationalProgram (ID: {educational_program.id}) found.")
-                    if educational_program.fgos:
-                        fgos = educational_program.fgos
-                        logger.info(f"     - Linked FGOS (ID: {fgos.id}, Code: {fgos.direction_code}) found.")
-                    else:
-                        logger.warning(f"     - EducationalProgram (ID: {educational_program.id}) is not linked to an FGOS.")
-            else:
-                 logger.warning(f"     - LocalAupInfo (ID: {local_aup_info_entry.id_aup}) is not linked to any EducationalProgram.")
+                    if educational_program.fgos: fgos = educational_program.fgos
         else:
             logger.warning(f"   - LocalAupInfo for num_aup '{aup_num}' not found.")
-
     except Exception as e_local_aup:
         logger.error(f"   - Error finding LocalAupInfo for num_aup '{aup_num}': {e_local_aup}", exc_info=True)
         matrix_response["error_details"] = (matrix_response["error_details"] or "") + f" Ошибка при поиске локальной записи АУП {aup_num}: {e_local_aup}."
-        # Не пробрасываем ошибку, продолжаем, чтобы попробовать загрузить дисциплины
+        pass
 
     # --- Шаг 2: Поиск external_aup_id в КД по aup_num и загрузка дисциплин ---
     external_disciplines: List[Dict[str, Any]] = []
-    external_aup_info_from_kd_search: Optional[Dict[str, Any]] = None
     external_aup_id_for_disciplines: Optional[int] = None
+    attempted_external_fetch = False
 
     try:
-        logger.debug(f"   - Searching external KD for AUP with num_aup '{aup_num}' to get external_aup_id for disciplines...")
-        # Используем тот же API, что и фронтенд для поиска АУП, но ищем конкретный num_aup
-        # Устанавливаем limit=1, т.к. нам нужен только один AUP с таким номером
+        logger.debug(f"   - Searching external KD for AUP with num_aup '{aup_num}'...")
         external_aup_search_result = get_external_aups_list(search_query=aup_num, limit=1)
+        attempted_external_fetch = True 
 
         if external_aup_search_result["total"] > 0 and external_aup_search_result["items"]:
-            # Убедимся, что найденный АУП действительно имеет тот же num_aup, что и искали
-            # Это важно, т.к. search_query может вернуть похожие, а не точные совпадения
             exact_match_aup = next((item for item in external_aup_search_result["items"] if item.get('num_aup') == aup_num), None)
-            
             if exact_match_aup:
-                external_aup_info_from_kd_search = exact_match_aup
-                external_aup_id_for_disciplines = external_aup_info_from_kd_search.get('id_aup')
-                matrix_response["external_aup_id"] = external_aup_id_for_disciplines # Сохраняем найденный внешний ID
-                matrix_response["external_aup_num"] = external_aup_info_from_kd_search.get('num_aup', aup_num) # Сохраняем num_aup из КД
-
-                if not local_aup_info_entry: # Если локальный AupInfo не был найден
-                     matrix_response["aup_info"] = external_aup_info_from_kd_search # Используем метаданные из КД
+                external_aup_id_for_disciplines = exact_match_aup.get('id_aup')
+                matrix_response["external_aup_id"] = external_aup_id_for_disciplines
+                matrix_response["external_aup_num"] = exact_match_aup.get('num_aup', aup_num)
+                if not local_aup_info_entry: matrix_response["aup_info"] = exact_match_aup
 
                 if external_aup_id_for_disciplines is not None:
-                     logger.debug(f"     - Found exact AUP match in external KD with num_aup '{aup_num}'. External ID for disciplines: {external_aup_id_for_disciplines}.")
-                     external_disciplines = get_external_aup_disciplines(external_aup_id_for_disciplines)
-                     matrix_response["disciplines"] = external_disciplines # <-- ПОПУЛЯЦИЯ matrix_response["disciplines"]
-                     logger.info(f"     - Fetched {len(external_disciplines)} discipline entries from external KD for external AUP ID: {external_aup_id_for_disciplines}.")
-                else:
-                     logger.warning(f"     - External AUP '{aup_num}' found, but its external ID is missing. Cannot fetch disciplines.")
-                     matrix_response["error_details"] = (matrix_response["error_details"] or "") + f" Внешний АУП {aup_num} найден, но его ID отсутствует в КД. Дисциплины не загружены."
-            else:
-                logger.warning(f"   - AUP with num_aup '{aup_num}' not found as an exact match in external KD search results. Disciplines will be empty.")
-                matrix_response["error_details"] = (matrix_response["error_details"] or "") + f" АУП {aup_num} не найден (точное совпадение) во внешней БД Карт Дисциплин. Дисциплины не загружены."
-        else:
-            logger.warning(f"   - AUP with num_aup '{aup_num}' not found in external KD by num_aup search. Disciplines will be empty.")
-            matrix_response["error_details"] = (matrix_response["error_details"] or "") + f" АУП {aup_num} не найден во внешней БД Карт Дисциплин. Дисциплины не загружены."
-
+                    external_disciplines = get_external_aup_disciplines(external_aup_id_for_disciplines)
+                    matrix_response["disciplines"] = external_disciplines
+                    logger.info(f"     - Fetched {len(external_disciplines)} discipline entries from external KD.")
+                else: # external_aup_id_for_disciplines is None
+                    error_msg = f" Внешний АУП {aup_num} найден, но его ID отсутствует. Дисциплины не загружены."
+                    matrix_response["error_details"] = (matrix_response["error_details"] or "") + error_msg
+                    logger.warning(f"     - External AUP '{aup_num}' found, but its external ID is missing. Cannot fetch disciplines.")
+            else: # No exact match
+                error_msg = f" АУП {aup_num} не найден (точное совпадение) во внешней БД. Дисциплины не загружены."
+                matrix_response["error_details"] = (matrix_response["error_details"] or "") + error_msg
+                logger.warning(f"   - AUP with num_aup '{aup_num}' not found as an exact match in external KD search results.")
+        else: # No items found in search
+            error_msg = f" АУП {aup_num} не найден во внешней БД. Дисциплины не загружены."
+            matrix_response["error_details"] = (matrix_response["error_details"] or "") + error_msg
+            logger.warning(f"   - AUP with num_aup '{aup_num}' not found in external KD by num_aup search.")
     except Exception as e_ext_disciplines:
+        attempted_external_fetch = True
         logger.error(f"   - Error during external KD lookup/discipline fetch for num_aup '{aup_num}': {e_ext_disciplines}", exc_info=True)
         matrix_response["error_details"] = (matrix_response["error_details"] or "") + f" Ошибка при загрузке дисциплин АУП {aup_num} из внешней БД: {e_ext_disciplines}."
-        # Не пробрасываем ошибку, продолжаем загрузку локальных компетенций
+
+    # --- Fallback на локальные дисциплины, если внешние не загружены, НО есть локальный AupInfo ---
+    if not external_disciplines and local_aup_info_entry:
+        logger.warning(f"   - External disciplines for AUP {aup_num} are empty. Attempting to load disciplines from local AupData for local AUP ID: {local_aup_info_entry.id_aup}.")
+        try:
+            # Используем LocalAupData (импортирован как from maps.models import AupData as LocalAupData)
+            local_aup_data_entries = session.query(LocalAupData).options(
+                joinedload(LocalAupData.discipline) 
+            ).filter(LocalAupData.id_aup == local_aup_info_entry.id_aup).order_by(LocalAupData.id_period, LocalAupData.shifr, LocalAupData.id).all()
+
+            if local_aup_data_entries:
+                local_disciplines_for_response = []
+                for entry in local_aup_data_entries:
+                    local_disciplines_for_response.append({
+                        'aup_data_id': entry.id, 
+                        'id_aup': entry.id_aup,
+                        'discipline_id': entry.id_discipline,
+                        'title': entry.discipline.title if entry.discipline else entry._discipline, 
+                        'semester': entry.id_period,
+                        'shifr': entry.shifr,
+                        'id_type_record': entry.id_type_record,
+                        'zet': entry.zet if entry.zet is not None else 0, # ZET из локальной БД обычно целое
+                        'amount': entry.amount,
+                        'id_type_control': entry.id_type_control
+                    })
+                matrix_response["disciplines"] = local_disciplines_for_response
+                matrix_response["source"] = "local_fallback_disciplines" 
+                fallback_msg = " Используются локальные данные дисциплин."
+                if matrix_response["error_details"] and attempted_external_fetch: 
+                    matrix_response["error_details"] += fallback_msg
+                else:
+                    matrix_response["error_details"] = "Используются локальные данные дисциплин (внешние не удалось загрузить или не запрашивались)."
+                logger.info(f"     - Fetched {len(local_disciplines_for_response)} discipline entries from LOCAL AupData for AUP ID {local_aup_info_entry.id_aup}.")
+            else:
+                logger.warning(f"     - No disciplines found in LOCAL AupData for local AUP ID {local_aup_info_entry.id_aup} either.")
+        except Exception as e_local_disc:
+            logger.error(f"   - Error fetching local disciplines for AUP {local_aup_info_entry.id_aup}: {e_local_disc}", exc_info=True)
+            matrix_response["error_details"] = (matrix_response["error_details"] or "") + f" Ошибка при загрузке локальных дисциплин: {e_local_disc}."
 
     # --- Шаг 3: Загрузка локальных данных компетенций и связей ---
     if local_aup_info_entry:
-        matrix_response["source"] = "local_with_external_disciplines" if external_disciplines else "local_no_external_disciplines"
+        if matrix_response["source"] != "local_fallback_disciplines": 
+            matrix_response["source"] = "local_with_external_disciplines" if external_disciplines else "local_no_external_disciplines"
 
         comp_types_q = session.query(CompetencyType).filter(CompetencyType.code.in_(['УК', 'ОПК', 'ПК'])).all()
         comp_types = {ct.code: ct for ct in comp_types_q}
         relevant_competencies = []
         if fgos:
-            uk_type = comp_types.get('УК')
-            opk_type = comp_types.get('ОПК')
+            uk_type = comp_types.get('УК'); opk_type = comp_types.get('ОПК')
             uk_opk_ids_to_load = [tid.id for tid in [uk_type, opk_type] if tid]
             if uk_opk_ids_to_load:
                 uk_opk_competencies = session.query(Competency).options(
                     selectinload(Competency.indicators), selectinload(Competency.competency_type)
-                ).filter(Competency.fgos_vo_id == fgos.id,
-                         Competency.competency_type_id.in_(uk_opk_ids_to_load)).all()
+                ).filter(Competency.fgos_vo_id == fgos.id, Competency.competency_type_id.in_(uk_opk_ids_to_load)).all()
                 relevant_competencies.extend(uk_opk_competencies)
-                logger.debug(f"     - Loaded {len(uk_opk_competencies)} УК/ОПК for FGOS {fgos.id}.")
-        else:
-            logger.warning(f"     - No FGOS linked to local AupInfo, skipping УК/ОПК for AUP num: {aup_num}")
+        else: logger.warning(f"     - No FGOS linked, skipping УК/ОПК for AUP num: {aup_num}")
 
         pk_type = comp_types.get('ПК')
         if pk_type:
+            # TODO: Фильтровать ПК по ОП (через EducationalProgramPs.prof_standard_id), а не брать все ПК
+            # Для MVP, пока берем все ПК
             pk_competencies = session.query(Competency).options(
                 selectinload(Competency.indicators), selectinload(Competency.competency_type)
-            ).filter(Competency.competency_type_id == pk_type.id).all() # Загружаем ВСЕ ПК
+            ).filter(Competency.competency_type_id == pk_type.id).all()
             relevant_competencies.extend(pk_competencies)
-            logger.debug(f"     - Loaded {len(pk_competencies)} ПК from local DB.")
 
-        competencies_data = []
-        all_indicator_ids_for_matrix = set()
-        comp_type_sort_order = {ct.code: ct.id for ct in comp_types_q} # Для сортировки
+        competencies_data = []; all_indicator_ids_for_matrix = set()
+        comp_type_sort_order = {ct.code: ct.id for ct in comp_types_q}
         relevant_competencies.sort(key=lambda c: (comp_type_sort_order.get(c.competency_type.code, 999) if c.competency_type else 999, c.code))
-
         for comp in relevant_competencies:
             type_code = comp.competency_type.code if comp.competency_type else "UNKNOWN"
             comp_dict = comp.to_dict(rules=['-indicators', '-competency_type', '-fgos', '-based_on_labor_function', '-matrix_entries'])
-            comp_dict['type_code'] = type_code
-            comp_dict['indicators'] = []
+            comp_dict['type_code'] = type_code; comp_dict['indicators'] = []
             if comp.indicators:
                 sorted_indicators = sorted(comp.indicators, key=lambda i: i.code)
                 for ind in sorted_indicators:
                     all_indicator_ids_for_matrix.add(ind.id)
-                    ind_dict = ind.to_dict()
-                    ind_dict['competency_code'] = comp.code # Добавляем ссылку на родительскую компетенцию
-                    ind_dict['competency_name'] = comp.name
+                    ind_dict = ind.to_dict(); ind_dict['competency_code'] = comp.code; ind_dict['competency_name'] = comp.name
                     comp_dict['indicators'].append(ind_dict)
             competencies_data.append(comp_dict)
         matrix_response["competencies"] = competencies_data
 
-        if external_disciplines and all_indicator_ids_for_matrix:
-            external_aup_data_ids = [d['aup_data_id'] for d in external_disciplines if d.get('aup_data_id') is not None]
-            if external_aup_data_ids:
+        if matrix_response["disciplines"] and all_indicator_ids_for_matrix:
+            discipline_source_aup_data_ids = [d['aup_data_id'] for d in matrix_response["disciplines"] if d.get('aup_data_id') is not None]
+            if discipline_source_aup_data_ids:
+                # CompetencyMatrix.aup_data_id должен соответствовать ID из источника дисциплин
+                # (внешнего или локального fallback)
                 existing_links_db = session.query(CompetencyMatrix).filter(
-                    CompetencyMatrix.aup_data_id.in_(external_aup_data_ids),
+                    CompetencyMatrix.aup_data_id.in_(discipline_source_aup_data_ids),
                     CompetencyMatrix.indicator_id.in_(list(all_indicator_ids_for_matrix))
                 ).all()
                 matrix_response["links"] = [link.to_dict(only=('aup_data_id', 'indicator_id', 'is_manual')) for link in existing_links_db]
-                logger.debug(f"     - Loaded {len(matrix_response['links'])} matrix links from local DB (based on external discipline IDs).")
-            else:
-                 logger.debug("     - No valid external discipline IDs to load local links for.")
+                logger.debug(f"     - Loaded {len(matrix_response['links'])} matrix links from local DB (based on current discipline source IDs).")
         else:
-            logger.debug("     - No external disciplines loaded or no indicators for matrix, local links will be empty.")
+            logger.debug("     - No disciplines loaded or no indicators for matrix, local links will be empty.")
 
-    elif matrix_response["aup_info"]: # Локальный AupInfo НЕ найден, но найден внешний AUP в Шаге 2
+    elif matrix_response["aup_info"] and external_disciplines : 
         matrix_response["source"] = "external_only"
-        logger.warning(f"   - LocalAupInfo with num_aup '{aup_num}' not found. Using data from external KD for aup_info field.")
-        matrix_response["competencies"] = []
-        matrix_response["links"] = []
-        logger.warning("     - Matrix will be shown with external disciplines only. No local competencies/links.")
-    else: # Ни локальный, ни внешний АУП не найдены
+        matrix_response["competencies"] = [] 
+        matrix_response["links"] = [] 
+        logger.warning(f"   - LocalAupInfo with num_aup '{aup_num}' not found. Using data from external KD. No local competencies/links.")
+    
+    elif not local_aup_info_entry and not external_disciplines:
         matrix_response["source"] = "not_found"
-        logger.error(f"   - AUP with num_aup '{aup_num}' not found in local DB. External search also failed or yielded no external_aup_id. Cannot proceed.")
-        if not matrix_response["error_details"]: # Если еще нет деталей ошибки
-            matrix_response["error_details"] = f"АУП {aup_num} не найден ни в локальной, ни во внешней базе данных, или не удалось определить ID для загрузки дисциплин."
-        return None # Возвращаем None, чтобы routes.py вернул 404
+        logger.error(f"   - AUP with num_aup '{aup_num}' not found in local DB. External search also failed or yielded no disciplines.")
+        if not matrix_response["error_details"]:
+            matrix_response["error_details"] = f"АУП {aup_num} не найден ни в локальной, ни во внешней базе данных, или не удалось загрузить дисциплины."
+        
+        if not matrix_response.get("aup_info") and not matrix_response.get("disciplines"):
+             return None
 
     return matrix_response
 
@@ -618,6 +620,7 @@ def create_competency(data: Dict[str, Any]) -> Optional[Competency]:
             code=data['code'],
             name=data['name'],
             description=data.get('description'),
+            # TODO: Добавить based_on_labor_function_id, если передано
         )
         session.add(competency)
         session.commit()
@@ -661,6 +664,7 @@ def create_indicator(data: Dict[str, Any]) -> Optional[Indicator]:
             code=data['code'],
             formulation=data['formulation'],
             source=data.get('source')
+            # TODO: Добавить логику связей с элементами ТФ, если передано (based_on_tf_elements)
         )
         session.add(indicator)
         session.commit()
@@ -877,7 +881,7 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
                  logger.info(f"save_fgos_data: Queued {linked_ps_count} new recommended PS links for FGOS {fgos_vo.id}.")
 
 
-            # Commit the nested transaction (savepoint)
+            # Commit the nested transaction
             session.commit()
             logger.info(f"save_fgos_data: Changes for FGOS ID {fgos_vo.id} committed successfully.")
             return fgos_vo # Возвращаем сохраненный объект
@@ -1038,68 +1042,8 @@ def delete_fgos(fgos_id: int, session: Session) -> bool:
 # ============================================================
 
 # TODO: Добавить импорт parse_prof_standard_uploaded_file из parsers.py
-from .parsers import parse_uploaded_prof_standard
+# from .parsers import parse_uploaded_prof_standard # Эта функция переименована в parse_prof_standard
 
-def parse_prof_standard_file(file_bytes: bytes, filename: str) -> Dict[str, Any]:
-    """
-    Оркестрирует парсинг загруженного файла ПС и возвращает структурированные данные.
-    (Вызывается из маршрутов POST /profstandards/upload)
-    """
-    logger.info(f"parse_prof_standard_file: Starting parsing for file: {filename}")
-    try:
-        # Вызываем парсер из parsers.py
-        parsed_data = parse_uploaded_prof_standard(file_bytes, filename)
-
-        if not parsed_data or not parsed_data.get('code') or not parsed_data.get('name'):
-            logger.warning(f"parse_prof_standard_file: Parsing failed or returned insufficient metadata for {filename}. Data: {parsed_data}")
-            # Парсер должен выбрасывать более специфичные ошибки.
-            # Если не выбросил, но данные неполные, считаем ошибкой.
-            raise ValueError("Не удалось извлечь код и название профессионального стандарта из файла.")
-
-        # TODO: Добавить проверку существования ПС с таким кодом в БД здесь для возврата информации фронтенду?
-
-        return {"success": True, "parsed_data": parsed_data, "filename": filename}
-
-    except Exception as e: # Ловим ошибки парсера
-        logger.error(f"parse_prof_standard_file: Error parsing file {filename}: {e}", exc_info=True)
-        # Возвращаем структурированный ответ об ошибке
-        return {"success": False, "error": str(e), "filename": filename}
-
-
-# TODO: Реализовать _prepare_ps_structure (преобразует словарь от парсера в объекты SQLAlchemy)
-def _prepare_ps_structure(parsed_structure: Dict[str, Any], session: Session) -> List[Any]:
-    """
-    Преобразует словарь со структурой ПС (ОТФ, ТФ, ТД, НУ, НЗ) в список объектов SQLAlchemy.
-    Не сохраняет в БД, только создает объекты.
-    """
-    logger.debug("Preparing PS structure objects from parsed data...")
-    objects_to_save = []
-    # Пример обработки ОТФ
-    for otf_data in parsed_structure.get('generalized_labor_functions', []):
-        otf_obj = GeneralizedLaborFunction(code=otf_data.get('code'), name=otf_data.get('name'), qualification_level=otf_data.get('qualification_level'))
-        objects_to_save.append(otf_obj)
-        # Пример обработки ТФ
-        for tf_data in otf_data.get('labor_functions', []):
-            tf_obj = LaborFunction(code=tf_data.get('code'), name=tf_data.get('name'), qualification_level=tf_data.get('qualification_level'), generalized_labor_function=otf_obj)
-            objects_to_save.append(tf_obj)
-            # Пример обработки ТД, НУ, НЗ
-            for td_data in tf_data.get('labor_actions', []):
-                 td_obj = LaborAction(description=td_data.get('description'), labor_function=tf_obj)
-                 objects_to_save.append(td_obj)
-            for skill_data in tf_data.get('required_skills', []):
-                 skill_obj = RequiredSkill(description=skill_data.get('description'), labor_function=tf_obj)
-                 objects_to_save.append(skill_obj)
-            for knowledge_data in tf_data.get('required_knowledge', []):
-                 knowledge_obj = RequiredKnowledge(description=knowledge_data.get('description'), labor_function=tf_obj)
-                 objects_to_save.append(knowledge_obj)
-
-    # TODO: Добавить обработку других полей ПС, если парсер их извлекает (номер приказа, дата и т.д.)
-    # TODO: Возможно, нужно сохранить сам объект ProfStandard здесь? Или он создается в save_prof_standard_data?
-
-    return objects_to_save
-
-
-# TODO: Реализовать save_prof_standard_data (сохраняет ProfStandard и его структуру в БД)
 def save_prof_standard_data(
     parsed_data: Dict[str, Any],
     filename: str,
@@ -1111,12 +1055,21 @@ def save_prof_standard_data(
     Принимает сессию local_db.session. Управляет своей транзакцией (commit/rollback).
     """
     logger.info(f"save_prof_standard_data: Attempting to save data for PS from '{filename}'. force_update: {force_update}")
-    ps_code = parsed_data.get('code')
-    ps_name = parsed_data.get('name')
-    ps_content = parsed_data.get('parsed_content')
+    
+    # Проверяем наличие обязательных ключей в parsed_data
+    if not isinstance(parsed_data, dict):
+        logger.error("save_prof_standard_data: Invalid parsed_data format (not a dict).")
+        return None
+        
+    metadata = parsed_data.get('metadata', {})
+    structure = parsed_data.get('structure', {})
+    
+    ps_code = metadata.get('code')
+    ps_name = metadata.get('name')
+    ps_markdown = parsed_data.get('parsed_content_markdown') # Получаем Markdown
 
-    if not ps_code or not ps_name:
-        logger.error("save_prof_standard_data: Missing code/name from parsed data for saving.")
+    if not ps_code or not ps_name or ps_markdown is None:
+        logger.error("save_prof_standard_data: Missing essential data (code, name, markdown) from parsed data for saving.")
         return None
 
     try:
@@ -1127,66 +1080,82 @@ def save_prof_standard_data(
 
             if existing_ps:
                 if force_update:
-                    logger.info(f"save_prof_standard_data: Existing PS found ({existing_ps.id}, code: {ps_code}). Force update requested.")
+                    logger.info(f"save_prof_standard_data: Existing PS found ({existing_ps.id}, code: {ps_code}). Force update requested. Deleting old structure and related links...")
+                    
                     # Удаляем старую структуру (ОТФ, ТФ, ТД, НУ, НЗ)
                     # CASCADE DELETE на FK от LaborFunction к GeneralizedLaborFunction, от ТД/НУ/НЗ к ТФ и т.д.
-                    session.query(GeneralizedLaborFunction).filter_by(prof_standard_id=existing_ps.id).delete()
+                    # Начинаем с ОТФ, удаление должно каскадироваться вниз
+                    session.query(GeneralizedLaborFunction).filter_by(prof_standard_id=existing_ps.id).delete(synchronize_session='fetch')
+                    # synchronize_session='fetch' может помочь обновить сессию перед удалением
 
                     # TODO: Удалить старые связи с ФГОС и ОП (FgosRecommendedPs, EducationalProgramPs)
-                    session.query(FgosRecommendedPs).filter_by(prof_standard_id=existing_ps.id).delete()
-                    session.query(EducationalProgramPs).filter_by(prof_standard_id=existing_ps.id).delete()
+                    # Эти связи НЕ каскадируются автоматически от ProfStandard
+                    session.query(FgosRecommendedPs).filter_by(prof_standard_id=existing_ps.id).delete(synchronize_session='fetch')
+                    session.query(EducationalProgramPs).filter_by(prof_standard_id=existing_ps.id).delete(synchronize_session='fetch')
+                    
                     # TODO: Удалить старые связи с Индикаторами (IndicatorPsLink)
-                    session.query(IndicatorPsLink).filter_by(labor_function_id.in_(session.query(LaborFunction.id).filter_by(generalized_labor_function_id.in_(session.query(GeneralizedLaborFunction.id).filter_by(prof_standard_id=existing_ps.id))))) # Это будет сложно, возможно нужен JOIN или CASCADE DELETE
+                    # Это самая сложная часть удаления зависимостей ПС
+                    # Нужен подзапрос или JOIN для нахождения IndicatorPsLink, связанных с LaborFunction,
+                    # которые связаны с GeneralizedLaborFunction, которые связаны с удаляемым ProfStandard
+                    indicator_ps_links_to_delete = session.query(IndicatorPsLink.id).join(LaborFunction).join(GeneralizedLaborFunction).filter(GeneralizedLaborFunction.prof_standard_id == existing_ps.id).subquery()
+                    session.query(IndicatorPsLink).filter(IndicatorPsLink.id.in_(indicator_ps_links_to_delete)).delete(synchronize_session='fetch')
 
-                    # Обновляем существующий объект ProfStandard
+
+                    # Обновляем существующий объект ProfStandard вместо создания нового
                     prof_standard = existing_ps
                     prof_standard.name = ps_name
-                    prof_standard.parsed_content = ps_content
-                    prof_standard.order_number = parsed_data.get('order_number') # TODO: Парсить из файла
-                    prof_standard.order_date = parsed_data.get('order_date') # TODO: Парсить из файла (Date object)
-                    prof_standard.registration_number = parsed_data.get('registration_number') # TODO: Парсить из файла
-                    prof_standard.registration_date = parsed_data.get('registration_date') # TODO: Парсить из файла (Date object)
+                    prof_standard.parsed_content = ps_markdown # Сохраняем новый Markdown
+                    # Обновляем метаданные, если они были извлечены
+                    prof_standard.order_number = metadata.get('order_number', prof_standard.order_number)
+                    prof_standard.order_date = metadata.get('order_date', prof_standard.order_date)
+                    prof_standard.registration_number = metadata.get('registration_number', prof_standard.registration_number)
+                    prof_standard.registration_date = metadata.get('registration_date', prof_standard.registration_date)
 
                     session.add(prof_standard)
                     session.flush()
                     logger.info(f"save_prof_standard_data: Existing PS ({prof_standard.id}) updated.")
+
                 else:
                     logger.warning(f"save_prof_standard_data: PS with code {ps_code} already exists ({existing_ps.id}). Force update NOT requested. Skipping save.")
-                    # TODO: Вернуть статус "уже существует"
+                    # TODO: Вернуть статус "уже существует", возможно, с ID существующего ПС
                     return existing_ps
+
             else: # Не существующий ПС - создаем новый
                 prof_standard = ProfStandard(
                     code=ps_code,
                     name=ps_name,
-                    parsed_content=ps_content,
-                    order_number = parsed_data.get('order_number'), # TODO: Парсить из файла
-                    order_date = parsed_data.get('order_date'), # TODO: Парсить из файла (Date object)
-                    registration_number = parsed_data.get('registration_number'), # TODO: Парсить из файла
-                    registration_date = parsed_data.get('registration_date') # TODO: Парсить из файла (Date object)
+                    parsed_content=ps_markdown,
+                    order_number = metadata.get('order_number'),
+                    order_date = metadata.get('order_date'),
+                    registration_number = metadata.get('registration_number'),
+                    registration_date = metadata.get('registration_date')
                 )
                 session.add(prof_standard)
                 session.flush() # Получаем ID нового объекта
                 logger.info(f"save_prof_standard_data: New ProfStandard object created with ID {prof_standard.id} for code {ps_code}.")
 
             # Сохранение структуры ПС (ОТФ, ТФ, ТД, НУ, НЗ)
-            # parsed_data должна содержать ключ 'generalized_labor_functions' со списком словарей
-            if 'generalized_labor_functions' in parsed_data and isinstance(parsed_data['generalized_labor_functions'], list):
-                 # Преобразуем словарь в объекты SQLAlchemy
-                 ps_structure_objects = _prepare_ps_structure(parsed_data, session)
-                 # Связываем объекты структуры с созданным/обновленным ProfStandard
+            # structure должна содержать ключ 'generalized_labor_functions' со списком словарей
+            if 'generalized_labor_functions' in structure and isinstance(structure['generalized_labor_functions'], list):
+                 # Создаем объекты SQLAlchemy из структуры
+                 # _prepare_ps_structure нужна отдельная функция, которая преобразует dict в объекты SQLAlchemy
+                 # (эта функция еще не реализована в парсере или здесь)
+                 # For now, let's add a placeholder call
+                 ps_structure_objects = _prepare_ps_structure_from_dict(structure, session) # <-- Placeholder function call
+                 
+                 # Связываем объекты структуры с созданным/обновленным ProfStandard и добавляем в сессию
                  for obj in ps_structure_objects:
-                      # Связь устанавливается через ForeignKey, но нужно убедиться, что поле prof_standard_id заполнено
-                      if isinstance(obj, GeneralizedLaborFunction):
-                           obj.prof_standard_id = prof_standard.id
-                      elif isinstance(obj, LaborFunction) and obj.generalized_labor_function:
-                           # Связь уже установлена через объект, но убедимся, что ForeignKey заполнится
-                           pass # FK заполнится при добавлении в сессию
-                      # Аналогично для LaborAction, RequiredSkill, RequiredKnowledge
-                 session.bulk_save_objects(ps_structure_objects)
+                     # Связь с ProfStandard должна быть установлена
+                     if hasattr(obj, 'prof_standard_id'):
+                          obj.prof_standard_id = prof_standard.id
+                     # TODO: Установить связи между ОТФ, ТФ, ТД/НУ/НЗ если _prepare_ps_structure_from_dict
+                     # их не устанавливает через объекты SQLAlchemy (через FK)
+                     session.add(obj) # Добавляем объекты в сессию
+                 
                  session.flush() # Сохраняем структуру
                  logger.info(f"save_prof_standard_data: Saved structure for PS {prof_standard.code}.")
             else:
-                 logger.warning(f"save_prof_standard_data: No or invalid 'generalized_labor_functions' in parsed data for PS {ps_code}. Skipping structure save.")
+                 logger.warning(f"save_prof_standard_data: No or invalid 'generalized_labor_functions' in parsed structure for PS {ps_code}. Skipping structure save.")
 
 
         # Commit the nested transaction
@@ -1196,19 +1165,37 @@ def save_prof_standard_data(
 
     except IntegrityError as e:
         session.rollback() # Откат вложенной транзакции
-        logger.error(f"save_prof_standard_data: Integrity error during save for PS '{ps_code}' from '{filename}': {e}", exc_info=True)
-        # TODO: Вернуть более конкретную ошибку
+        message = f"save_prof_standard_data: Integrity error during save for PS '{ps_code}' from '{filename}': {e}"
+        logger.error(message, exc_info=True)
+        # TODO: Вернуть более конкретную ошибку или статус "уже существует"
         return None
     except SQLAlchemyError as e:
         session.rollback() # Откат вложенной транзакции
-        logger.error(f"save_prof_standard_data: Database error during save for PS '{ps_code}' from '{filename}': {e}", exc_info=True)
+        message = f"save_prof_standard_data: Database error during save for PS '{ps_code}' from '{filename}': {e}"
+        logger.error(message, exc_info=True)
         # TODO: Вернуть более конкретную ошибку
         return None
     except Exception as e:
         session.rollback() # Откат вложенной транзакции
-        logger.error(f"save_prof_standard_data: Unexpected error during save for PS '{ps_code}' from '{filename}': {e}", exc_info=True)
+        message = f"save_prof_standard_data: Unexpected error during save for PS '{ps_code}' from '{filename}': {e}"
+        logger.error(message, exc_info=True)
         # TODO: Вернуть более конкретную ошибку
         return None
+
+# TODO: Реализовать _prepare_ps_structure_from_dict - Placeholder function
+def _prepare_ps_structure_from_dict(structure_dict: Dict[str, Any], session: Session) -> List[Any]:
+    """
+    (Плейсхолдер) Преобразует словарь со структурой ПС в список объектов SQLAlchemy.
+    """
+    logger.debug("_prepare_ps_structure_from_dict: Placeholder function called.")
+    objects = []
+    # Пример: создать объекты ОТФ из словаря
+    for otf_data in structure_dict.get('generalized_labor_functions', []):
+         otf_obj = GeneralizedLaborFunction(code=otf_data.get('code'), name=otf_data.get('name'), qualification_level=otf_data.get('qualification_level'))
+         objects.append(otf_obj)
+         # TODO: Рекурсивно создать и связать ТФ, ТД, НУ, НЗ
+    return objects
+
 
 # --- Функции для получения списка ПС и деталей ---
 
