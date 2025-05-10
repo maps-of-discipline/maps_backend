@@ -292,7 +292,11 @@ def AddNewGroup():
     request_data = request.get_json()
     if request_data["name"] == "":
         return make_response(jsonify("Введите название группировки"), 400)
-    data = Groups(name_group=request_data["name"], color=request_data["color"])
+    data = Groups(
+        name_group=request_data["name"], 
+        color=request_data["color"],
+        created_by = request_data["user_id"] if request_data["user_id"]  != "1" else "1",
+        )
     db.session.add(data)
     db.session.commit()
     d = dict()
@@ -308,20 +312,22 @@ def AddNewGroup():
 @aup_require(request)
 def DeleteGroup():
     request_data = request.get_json()
-    d = AupData.query.filter_by(id_group=request_data["id"]).all()
-    for row in d:
-        row.id_group = 1
-        db.session.add(row)
-    db.session.commit()
-    Groups.query.filter_by(id_group=request_data["id"]).delete()
-    db.session.commit()
-    return make_response(jsonify("OK"), 200)
+
+    gr = Groups.query.filter_by(id_group=request_data["id"]).first()
+    if gr.created_by != 1: #idk может быть другой id у System
+        gr.is_deleted = True 
+        db.session.add(gr)
+        db.session.commit()
+        return make_response(jsonify("OK"), 200)
+    
+    return make_response(jsonify("У вас нет прав на удаление этой группировки"), 400)
 
 
 @maps.route("/get-group-by-aup/<string:aup>", methods=["GET"])
 def GetGroupByAup(aup):
     aupId = AupInfo.query.filter_by(num_aup=aup).first().id_aup
     aupData = AupData.query.filter_by(id_aup=aupId).all()
+    basic_group = Groups.query.filter_by(id_aup = 1).first()
 
     groups_id = set()
     for elem in aupData:
@@ -329,16 +335,18 @@ def GetGroupByAup(aup):
 
     groups = []
     for g in Groups.query.filter(Groups.id_group.in_(groups_id)).all():
+        group = g if g.is_deleted == False else basic_group
+        
         groups.append(
             {
-                "id": g.id_group,
-                "name": g.name_group,
-                "color": g.color,
+                "id": group.id_group,
+                "name": group.name_group,
+                "color": group.color,
             }
-        )
+        )    
     return make_response(jsonify(groups), 200)
 
-
+#@maps.route("/recover-deleted-group/<string:group>")
 @maps.route("/get-modules-by-aup/<string:aup>", methods=["GET"])
 def GetModulesByAup(aup):
     aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
@@ -715,3 +723,4 @@ def update_short_control_types():
     db.session.commit()
 
     return jsonify({"status": "ok"}), 200
+
