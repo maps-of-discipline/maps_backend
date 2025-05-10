@@ -1,7 +1,7 @@
 # maps_backend/app.py
 import requests
 from flask import Flask, jsonify
-from flask_cors import CORS # Убедитесь, что этот импорт есть
+from flask_cors import CORS
 from flask_migrate import Migrate
 from sqlalchemy import MetaData
 from dotenv import load_dotenv
@@ -49,18 +49,13 @@ app.config.from_mapping(config_cache)
 cache.init_app(app) # Assuming cache is defined and imported from utils.cache
 
 # --- НАСТРОЙКА CORS ---
-cors_origins = "*"
-if app.debug: # Более гибко для разработки, если "*" не работает с credentials
-    cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"] # Пример для Vite
-    # или ваш порт, на котором запускается фронтенд
-
+# Устанавливаем более строгие, но корректные заголовки для credentials
 CORS(
     app,
-    # origins=cors_origins, # Используем переменную
-    origins="*", # Пока оставим так для максимальной простоты, но это менее безопасно для прода
-    supports_credentials=True, # Важно для передачи кук и заголовка Authorization
-    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"], # Все необходимые методы
-    allow_headers=[ # Все необходимые заголовки
+    origins=["http://localhost:5173", "http://127.0.0.1:5173"], # Укажите ТОЧНЫЙ origin вашего фронтенда
+    supports_credentials=True,
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=[
         "Content-Type",
         "Authorization",
         "X-Requested-With",
@@ -69,7 +64,7 @@ CORS(
         "Aup" # Если этот заголовок используется
     ],
     expose_headers=["Content-Disposition"], # Если этот заголовок используется клиентом
-    automatic_options=True # Flask-CORS должен автоматически обрабатывать OPTIONS запросы
+    # automatic_options=True # Эта опция не всегда нужна явно, Flask-CORS сам обрабатывает OPTIONS
 )
 
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', app.config.get('SQLALCHEMY_DATABASE_URI'))
