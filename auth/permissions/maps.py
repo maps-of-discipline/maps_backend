@@ -25,6 +25,3 @@ class CanEditOwnFaculty(Permission):
 
 
 class CanEditOwnMap(CanEditOwnFaculty): ...
-
-
-class CanEditAnyFaculty(Permission): ...

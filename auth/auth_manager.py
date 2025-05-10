@@ -73,6 +73,7 @@ class AuthManager:
 
         except SQLAlchemyError as e:
             db.session.rollback()
+            
             raise BadRequestException(f"Database error: {str(e)}")
         except grpc.RpcError as e:
             raise BadRequestException(f"Auth service error: {e.code()}")
@@ -86,10 +87,9 @@ class AuthManager:
             user = Users.query.get(payload.user_id)
             if not user:
                 user = self._create_user(service.get_user_data(token))
-
             for permission in required:
                 if not isinstance(permission, tuple):
-                    if permission not in payload.permissions and not permission.check(
+                    if permission not in payload.permissions or not permission.check(
                         user, request
                     ):
                         raise PermissionsDeniedException()
