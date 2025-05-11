@@ -101,12 +101,14 @@ def get_aup(aup: str, sem_num: int = 20) -> list[Discipline]:
     )
 
     res = {}
-    elective_group = 0
+    elective_groups = {}
     for el in db.session.execute(query).mappings().all():
         discipline = Discipline.from_sqla_row(el)
         if "/" in discipline.title:
-            elective_group += 1
-            disciplines = parse_electives(discipline, elective_group)
+            if discipline.title not in elective_groups:
+                elective_groups.update({discipline.title: len(elective_groups) + 1})
+
+            disciplines = parse_electives(discipline, elective_groups[discipline.title])
             res.update(disciplines)
             continue
 
