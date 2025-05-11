@@ -20,9 +20,9 @@ from .logic import (
 
 from auth.logic import login_required, approved_required, admin_only
 import logging
-# Note: db, Competency, Indicator are used in update_matrix_link etc.
-# Ensure these models are imported within logic.py or accessible via db.session
-from maps.models import db # Keep db import if needed in this file directly
+# --- Импортируем модели из нашего модуля ---
+from .models import db, Competency, Indicator, CompetencyType # Добавлены импорты Competency, Indicator, CompetencyType
+
 from sqlalchemy.orm import joinedload # Keep joinedload import if needed in this file directly
 
 logger = logging.getLogger(__name__)
@@ -209,6 +209,7 @@ def delete_competency(comp_id):
 def get_all_indicators():
     """Get list of all indicators."""
     try:
+        # ИЗМЕНЕНИЕ: Явно импортированы Competency и Indicator, теперь query будет работать
         indicators = db.session.query(Indicator).all()
         result = [ind.to_dict(rules=['-competency', '-labor_functions', '-matrix_entries']) for ind in indicators]
         return jsonify(result), 200
