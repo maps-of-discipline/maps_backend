@@ -1026,7 +1026,3 @@ def get_prof_standard_details(ps_id: int) -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"get_prof_standard_details: Unexpected error for PS ID {ps_id}: {e}", exc_info=True)
         return None
-
-# --- NLP Functions (Placeholder) ---
-
-# def suggest_links_nlp(...): ...
