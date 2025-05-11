@@ -1,3 +1,4 @@
+# maps/models.py
 from flask_sqlalchemy import SQLAlchemy
 from config import SQLALCHEMY_DATABASE_URI
 
@@ -93,46 +94,48 @@ class SprRop(db.Model):
         return "<Rop %r>" % self.full_name
 
 
-class AupInfo(db.Model, SerializationMixin):
+class AupInfo(db.Model, SerializationMixin): # <--- ДОБАВЛЕНО SerializationMixin
     __tablename__ = "tbl_aup"
 
     id_aup = db.Column(db.Integer, primary_key=True)
-    file = db.Column(db.String(255), nullable=False)
+    file = db.Column(db.String(255), nullable=True) # Сделаем nullable=True, т.к. при импорте из КД файла не будет
     num_aup = db.Column(db.String(255), nullable=False, unique=True)
-    base = db.Column(db.String(255), nullable=False)
+    base = db.Column(db.String(255), nullable=True) # Сделаем nullable=True
     # Updated ForeignKey definitions with ondelete options
     id_faculty = db.Column(
         db.Integer,
-        db.ForeignKey("spr_faculty.id_faculty", ondelete="CASCADE"), # <-- CASCADE
+        db.ForeignKey("spr_faculty.id_faculty", ondelete="CASCADE"), 
         nullable=False,
     )
-    id_rop = db.Column(db.Integer, db.ForeignKey("spr_rop.id_rop", ondelete="CASCADE"), nullable=False) # <-- CASCADE
-    type_educ = db.Column(db.String(255), nullable=False)
-    qualification = db.Column(db.String(255), nullable=False)
-    type_standard = db.Column(db.String(255), nullable=False)
+    id_rop = db.Column(db.Integer, db.ForeignKey("spr_rop.id_rop", ondelete="CASCADE"), nullable=True) # Сделаем nullable=True
+    type_educ = db.Column(db.String(255), nullable=True) # Сделаем nullable=True
+    qualification = db.Column(db.String(255), nullable=True) # Сделаем nullable=True
+    type_standard = db.Column(db.String(255), nullable=True) # Сделаем nullable=True
     id_department = db.Column(
         db.Integer,
-        db.ForeignKey("tbl_department.id_department", ondelete="SET NULL"), # <-- SET NULL
+        db.ForeignKey("tbl_department.id_department", ondelete="SET NULL"), 
+        nullable=True # Department может быть не указан
     )
-    period_educ = db.Column(db.String(255), nullable=False)
+    period_educ = db.Column(db.String(255), nullable=True) # Сделаем nullable=True
     id_degree = db.Column(
         db.Integer,
-        db.ForeignKey("spr_degree_education.id_degree", ondelete="CASCADE"), # <-- CASCADE
+        db.ForeignKey("spr_degree_education.id_degree", ondelete="CASCADE"), 
         nullable=False,
     )
     id_form = db.Column(
         db.Integer,
-        db.ForeignKey("spr_form_education.id_form", ondelete="CASCADE"), # <-- CASCADE
+        db.ForeignKey("spr_form_education.id_form", ondelete="CASCADE"), 
         nullable=False,
     )
-    years = db.Column(db.Integer, nullable=False)
+    years = db.Column(db.Integer, nullable=True) # Сделаем nullable=True
     months = db.Column(db.Integer, nullable=True)
     id_spec = db.Column(
         db.Integer,
-        db.ForeignKey("spr_name_op.id_spec", ondelete="CASCADE"), # <-- CASCADE (changed from SET NULL)
+        db.ForeignKey("spr_name_op.id_spec", ondelete="CASCADE"), 
+        nullable=False,
     )
     year_beg = db.Column(db.Integer, nullable=False)
-    year_end = db.Column(db.Integer, nullable=False)
+    year_end = db.Column(db.Integer, nullable=True) # Сделаем nullable=True
     is_actual = db.Column(db.Boolean, nullable=False)
     is_delete = db.Column(db.Boolean, nullable=True)
     date_delete = db.Column(db.DateTime, nullable=True)
@@ -140,12 +143,15 @@ class AupInfo(db.Model, SerializationMixin):
     # Relationships...
     degree = db.relationship("SprDegreeEducation")
     form = db.relationship("SprFormEducation")
-    faculty = db.relationship("SprFaculty", back_populates="aup_infos") # Added back_populates
+    faculty = db.relationship("SprFaculty", back_populates="aup_infos") 
     rop = db.relationship("SprRop")
     department = db.relationship("Department")
     aup_data = db.relationship("AupData", back_populates="aup", passive_deletes=True)
-    spec = db.relationship("NameOP") # Note: Relationship name 'spec' vs FK 'id_spec'
+    spec = db.relationship("NameOP") 
     weeks = db.relationship("Weeks")
+    
+    # Связь с EducationalProgramAup из competencies_matrix.models
+    # education_programs_assoc уже определен в competencies_matrix.models через backref='aup'
 
     def __repr__(self):
         return "<№ AUP %r>" % self.num_aup
@@ -203,7 +209,7 @@ class NameOP(db.Model, SerializationMixin):
         db.ForeignKey("spr_okco.program_code", ondelete="CASCADE"),
         nullable=False,
     )
-    num_profile = db.Column(db.String(255), nullable=False)
+    num_profile = db.Column(db.String(255), nullable=True) # Сделаем nullable=True
     name_spec = db.Column(db.String(255), nullable=False)
 
     okco = db.relationship("SprOKCO", back_populates="profiles")
@@ -368,8 +374,8 @@ class AupData(db.Model):
 
     id_discipline = db.Column(
         db.Integer,
-        db.ForeignKey("spr_discipline.id", ondelete="SET NULL"),
-        nullable=True,
+        db.ForeignKey("spr_discipline.id", ondelete="SET NULL"), # Был SET NULL
+        nullable=True, # Было True
     )
     used_for_report = db.Column(db.Boolean)
 

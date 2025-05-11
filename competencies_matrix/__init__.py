@@ -21,6 +21,9 @@ def not_found_error(error):
 
 @competencies_matrix_bp.errorhandler(500)
 def internal_error(error):
+    # В production стоит логировать полную ошибку
+    # current_app.logger.error(f"Internal server error: {error}", exc_info=True)
+    # Для пользователя можно вернуть более общее сообщение
     return jsonify({'error': 'Internal server error'}), 500
 
 # Optional settings for integration with main application

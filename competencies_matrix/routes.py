@@ -1,7 +1,6 @@
 # competencies_matrix/routes.py
-"""
-Маршруты (API endpoints) для модуля матрицы компетенций.
-"""
+# Маршруты (API endpoints) для модуля матрицы компетенций.
+#
 
 from flask import request, jsonify, abort
 from . import competencies_matrix_bp
@@ -18,16 +17,15 @@ from .logic import (
     get_external_aups_list, get_external_aup_disciplines,
     # Импортируем функцию обновления компетенции
     update_competency as logic_update_competency,
-    # Импортируем заглушки удаления, если они используются (проверить logic.py)
-    # delete_competency as logic_delete_competency,
-    # update_indicator as logic_update_indicator,
-    # delete_indicator as logic_delete_indicator,
+    delete_competency as logic_delete_competency,
+    update_indicator as logic_update_indicator,
+    delete_indicator as logic_delete_indicator,
 )
 
 from auth.logic import login_required, approved_required, admin_only
 import logging
 # --- Импортируем модели из нашего модуля ---
-from .models import db, Competency, Indicator, CompetencyType # Добавлены импорты Competency, Indicator, CompetencyType
+from .models import db, Competency, Indicator, CompetencyType, ProfStandard # Добавлены импорты Competency, Indicator, CompetencyType
 
 from sqlalchemy.orm import joinedload # Keep joinedload import if needed in this file directly
 
@@ -207,7 +205,7 @@ def delete_competency(comp_id):
     """Delete a competency by ID."""
     try:
         # Assuming logic.delete_competency exists and handles the deletion
-        deleted = logic.delete_competency(comp_id, db.session) # Передаем сессию
+        deleted = logic_delete_competency(comp_id, db.session) # Передаем сессию
 
         if deleted:
             return jsonify({"success": True, "message": "Компетенция успешно удалена"}), 200
@@ -280,7 +278,7 @@ def create_new_indicator():
 @login_required
 @approved_required
 @admin_only
-def update_indicator(ind_id):
+def update_indicator_route(ind_id):
     """Update an indicator by ID."""
     data = request.get_json()
     if not data:
@@ -288,12 +286,15 @@ def update_indicator(ind_id):
 
     try:
         # Assuming logic.update_indicator exists and handles the update
-        updated_ind = logic.update_indicator(ind_id, data) # This function is not implemented in the logic provided
+        updated_ind = logic_update_indicator(ind_id, data) # This function is not implemented in the logic provided
 
         if updated_ind:
             return jsonify(updated_ind.to_dict(rules=['-competency'])), 200
         else:
             return jsonify({"error": "Индикатор не найден"}), 404
+    except ValueError as ve: # Ловим специфическую ошибку валидации кода
+        logger.warning(f"Update indicator route: Validation error for indicator {ind_id}: {ve}")
+        return jsonify({"error": str(ve)}), 400
     except Exception as e:
         logger.error(f"Error updating indicator {ind_id}: {e}", exc_info=True)
         return jsonify({"error": f"Не удалось обновить индикатор: {e}"}), 500
@@ -303,11 +304,11 @@ def update_indicator(ind_id):
 @login_required
 @approved_required
 @admin_only
-def delete_indicator(ind_id):
+def delete_indicator_route(ind_id):
     """Delete an indicator by ID."""
     try:
         # Assuming logic.delete_indicator exists and handles the deletion
-        deleted = logic.delete_indicator(ind_id, db.session) # Передаем сессию
+        deleted = logic_delete_indicator(ind_id, db.session) # Передаем сессию
 
         if deleted:
             return jsonify({"success": True, "message": "Индикатор успешно удалена"}), 200
@@ -506,7 +507,9 @@ def delete_profstandard(ps_id):
     """Delete a Professional Standard by ID."""
     try:
         # Assuming logic.delete_prof_standard exists and handles the deletion
-        deleted = logic.delete_prof_standard(ps_id) # This function is not implemented in the logic provided
+        # deleted = logic.delete_prof_standard(ps_id) # This function is not implemented in the logic provided
+        # Assuming logic.delete_prof_standard exists and handles the deletion
+        deleted = delete_profstandard(ps_id, db.session)
 
         if deleted:
             return jsonify({"success": True, "message": "Профессиональный стандарт успешно удален"}), 200
@@ -526,17 +529,17 @@ def get_external_aups():
     Get list of AUPs from the external KD DB with filters and pagination.
     """
     try:
-        program_code: Optional[str] = request.args.get('program_code')
-        profile_num: Optional[str] = request.args.get('profile_num')
-        profile_name: Optional[str] = request.args.get('profile_name')
-        form_education_name: Optional[str] = request.args.get('form_education')
-        year_beg_str: Optional[str] = request.args.get('year_beg')
+        program_code: Optional[str] = request.args.get('program_code');
+        profile_num: Optional[str] = request.args.get('profile_num');
+        profile_name: Optional[str] = request.args.get('profile_name');
+        form_education_name: Optional[str] = request.args.get('form_education');
+        year_beg_str: Optional[str] = request.args.get('year_beg');
         year_beg: Optional[int] = int(year_beg_str) if year_beg_str and year_beg_str.isdigit() else None
-        degree_education_name: Optional[str] = request.args.get('degree_education')
-        search_query: Optional[str] = request.args.get('search')
-        offset_str: Optional[str] = request.args.get('offset', default='0')
+        degree_education_name: Optional[str] = request.args.get('degree_education');
+        search_query: Optional[str] = request.args.get('search');
+        offset_str: Optional[str] = request.args.get('offset', default='0');
         offset: int = int(offset_str) if offset_str and offset_str.isdigit() else 0
-        limit_str: Optional[str] = request.args.get('limit', default='20')
+        limit_str: Optional[str] = request.args.get('limit', default='20');
         limit: Optional[int] = int(limit_str) if limit_str and limit_str.isdigit() else None
 
         aups_result = get_external_aups_list(
@@ -544,11 +547,11 @@ def get_external_aups():
             form_education_name=form_education_name, year_beg=year_beg,
             degree_education_name=degree_education_name, search_query=search_query,
             offset=offset, limit=limit
-        )
-        return jsonify(aups_result), 200
+        );
+        return jsonify(aups_result), 200;
     except Exception as e:
         logger.error(f"Error in GET /external/aups: {e}", exc_info=True)
-        abort(500, description=f"Ошибка сервера при получении списка АУП из внешней БД: {e}")
+        abort(500, description=f"Ошибка сервера при получении списка АУП из внешней БД: {e}");
 
 
 @competencies_matrix_bp.route('/external/aups/<int:aup_id>/disciplines', methods=['GET'])
@@ -559,8 +562,8 @@ def get_external_aup_disciplines_route(aup_id):
     Get list of discipline entries (AupData) for a specific AUP by its ID from external KD DB.
     """
     try:
-        disciplines_list = get_external_aup_disciplines(aup_id)
-        return jsonify(disciplines_list), 200
+        disciplines_list = get_external_aup_disciplines(aup_id);
+        return jsonify(disciplines_list), 200;
     except Exception as e:
         logger.error(f"Error in GET /external/aups/{aup_id}/disciplines: {e}", exc_info=True)
-        abort(500, description=f"Ошибка сервера при получении списка дисциплин из внешней БД: {e}")
+        abort(500, description=f"Ошибка сервера при получении списка дисциплин из внешней БД: {e}");
