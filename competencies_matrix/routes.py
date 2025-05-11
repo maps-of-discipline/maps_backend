@@ -15,7 +15,13 @@ from .logic import (
     parse_fgos_file, save_fgos_data, get_fgos_list, get_fgos_details, delete_fgos,
     parse_prof_standard_file, save_prof_standard_data,
     get_prof_standards_list, get_prof_standard_details,
-    get_external_aups_list, get_external_aup_disciplines
+    get_external_aups_list, get_external_aup_disciplines,
+    # Импортируем функцию обновления компетенции
+    update_competency as logic_update_competency,
+    # Импортируем заглушки удаления, если они используются (проверить logic.py)
+    # delete_competency as logic_delete_competency,
+    # update_indicator as logic_update_indicator,
+    # delete_indicator as logic_delete_indicator,
 )
 
 from auth.logic import login_required, approved_required, admin_only
@@ -161,26 +167,35 @@ def create_new_competency():
     return jsonify(competency.to_dict(rules=['-indicators'])), 201
 
 
+# --- ИЗМЕНЕНИЕ: Реализация PATCH /competencies/<int:comp_id> ---
 @competencies_matrix_bp.route('/competencies/<int:comp_id>', methods=['PATCH'])
 @login_required
 @approved_required
 @admin_only
-def update_competency(comp_id):
+def update_competency_route(comp_id):
     """Update a competency by ID."""
     data = request.get_json()
     if not data:
+        # Возвращаем 400, если нет данных для обновления
         abort(400, description="Отсутствуют данные для обновления")
 
     try:
-        # Assuming logic.update_competency exists and handles the update
-        updated_comp = logic.update_competency(comp_id, data) # This function is not implemented in the logic provided
+        # Вызываем функцию логики для обновления
+        # logic_update_competency теперь должна быть полноценной функцией
+        updated_comp_dict = logic_update_competency(comp_id, data)
 
-        if updated_comp:
-            return jsonify(updated_comp.to_dict(rules=['-indicators'])), 200
+        if updated_comp_dict is not None:
+            # Если функция логики вернула словарь (успех или нет изменений)
+            # to_dict() уже вызван в логике
+            return jsonify(updated_comp_dict), 200
         else:
+            # Если функция логики вернула None (не найдена или другая ошибка)
+            # Ошибка о "не найдена" должна быть залогирована в логике
             return jsonify({"error": "Компетенция не найдена"}), 404
     except Exception as e:
-        logger.error(f"Error updating competency {comp_id}: {e}", exc_info=True)
+        # Ловим исключения, которые могут быть переброшены из логики (например, ошибки БД)
+        logger.error(f"Error updating competency {comp_id} in route: {e}", exc_info=True)
+        # Возвращаем общую ошибку сервера
         return jsonify({"error": f"Не удалось обновить компетенцию: {e}"}), 500
 
 
@@ -192,7 +207,7 @@ def delete_competency(comp_id):
     """Delete a competency by ID."""
     try:
         # Assuming logic.delete_competency exists and handles the deletion
-        deleted = logic.delete_competency(comp_id) # This function is not implemented in the logic provided
+        deleted = logic.delete_competency(comp_id, db.session) # Передаем сессию
 
         if deleted:
             return jsonify({"success": True, "message": "Компетенция успешно удалена"}), 200
@@ -200,7 +215,7 @@ def delete_competency(comp_id):
             return jsonify({"success": False, "error": "Компетенция не найдена"}), 404
     except Exception as e:
         logger.error(f"Error deleting competency {comp_id}: {e}", exc_info=True)
-        return jsonify({"error": f"Не удалось удалить компетенцию: {e}"}), 500
+        abort(500, description=f"Не удалось удалить компетенцию: {e}")
 
 
 @competencies_matrix_bp.route('/indicators', methods=['GET'])
@@ -210,8 +225,16 @@ def get_all_indicators():
     """Get list of all indicators."""
     try:
         # ИЗМЕНЕНИЕ: Явно импортированы Competency и Indicator, теперь query будет работать
-        indicators = db.session.query(Indicator).all()
-        result = [ind.to_dict(rules=['-competency', '-labor_functions', '-matrix_entries']) for ind in indicators]
+        # Добавляем joinedload для competency, чтобы получить competency_code и name для отображения
+        indicators = db.session.query(Indicator).options(joinedload(Indicator.competency)).all()
+        result = []
+        for ind in indicators:
+             ind_dict = ind.to_dict(rules=['-competency', '-labor_functions', '-matrix_entries'])
+             # Добавляем competency_code и name из связанного объекта competency
+             if ind.competency:
+                  ind_dict['competency_code'] = ind.competency.code
+                  ind_dict['competency_name'] = ind.competency.name
+             result.append(ind_dict)
         return jsonify(result), 200
     except Exception as e:
         logger.error(f"Error in GET /indicators: {e}", exc_info=True)
@@ -284,15 +307,15 @@ def delete_indicator(ind_id):
     """Delete an indicator by ID."""
     try:
         # Assuming logic.delete_indicator exists and handles the deletion
-        deleted = logic.delete_indicator(ind_id) # This function is not implemented in the logic provided
+        deleted = logic.delete_indicator(ind_id, db.session) # Передаем сессию
 
         if deleted:
-            return jsonify({"success": True, "message": "Индикатор успешно удален"}), 200
+            return jsonify({"success": True, "message": "Индикатор успешно удалена"}), 200
         else:
             return jsonify({"success": False, "error": "Индикатор не найден"}), 404
     except Exception as e:
         logger.error(f"Error deleting indicator {ind_id}: {e}", exc_info=True)
-        return jsonify({"error": f"Не удалось удалить индикатор: {e}"}), 500
+        abort(500, description=f"Не удалось удалить индикатор: {e}")
 
 
 # FGOS Endpoints
@@ -491,7 +514,7 @@ def delete_profstandard(ps_id):
             return jsonify({"success": False, "error": "Профессиональный стандарт не найден"}), 404
     except Exception as e:
         logger.error(f"Error deleting professional standard {ps_id}: {e}", exc_info=True)
-        return jsonify({"error": f"Не удалось удалить профессиональный стандарт: {e}"}), 500
+        abort(500, description=f"Не удалось удалить профессиональный стандарт: {e}")
 
 
 # External KD DB Endpoints

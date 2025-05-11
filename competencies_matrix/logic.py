@@ -8,6 +8,7 @@ from flask import current_app
 from sqlalchemy import create_engine, select, exists, and_, or_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
+from sqlalchemy import inspect # Импорт inspect для доступа к полям модели
 
 # --- Импортируем модели из maps.models (локальная БД) ---
 from maps.models import db as local_db, SprDiscipline
@@ -103,11 +104,16 @@ def get_program_details(program_id: int) -> Optional[Dict[str, Any]]:
 
         recommended_ps_list = []
         if program.fgos and program.fgos.recommended_ps_assoc:
-            recommended_ps_list = [
-                assoc.to_dict(rules=['-fgos', '-prof_standard']) |
-                {'prof_standard': assoc.prof_standard.to_dict(rules=['-generalized_labor_functions', '-fgos_assoc', '-educational_program_assoc'])}
-                for assoc in program.fgos.recommended_ps_assoc if assoc.prof_standard
-            ]
+            sorted_ps_assoc = sorted(fgos.recommended_ps_assoc, key=lambda assoc: assoc.prof_standard.code if assoc.prof_standard else '')
+            for assoc in sorted_ps_assoc:
+                if assoc.prof_standard:
+                    recommended_ps_list.append({
+                        'id': assoc.prof_standard.id,
+                        'code': assoc.prof_standard.code,
+                        'name': assoc.prof_standard.name,
+                        'is_mandatory': assoc.is_mandatory,
+                        'description': assoc.description,
+                    })
         details['recommended_ps_list'] = recommended_ps_list
 
         return details
@@ -180,6 +186,7 @@ def get_external_aups_list(
         except Exception as e:
             logger.error(f"Error fetching external AUPs: {e}", exc_info=True)
             raise
+
 
 def get_external_aup_disciplines(aup_id: int) -> List[Dict[str, Any]]:
     """Fetches discipline entries (AupData) for a specific AUP from external KD DB."""
@@ -475,11 +482,49 @@ def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True)
         return { 'success': False, 'status': 'error', 'message': message, 'error_type': 'unexpected_error', 'details': str(e) }
 
 
+# --- Competency and Indicator CRUD ---
+
+def get_all_competencies() -> List[Dict[str, Any]]:
+    """Get list of all competencies."""
+    try:
+        # Fetch from DB, excluding indicators for list view
+        competencies = local_db.session.query(Competency).options(joinedload(Competency.competency_type)).all()
+        result = []
+        for comp in competencies:
+             comp_dict = comp.to_dict(rules=['-indicators', '-fgos', '-based_on_labor_function'])
+             comp_dict['type_code'] = comp.competency_type.code if comp.competency_type else "UNKNOWN"
+             result.append(comp_dict)
+        return result
+    except Exception as e:
+        logger.error(f"Error in get_all_competencies: {e}", exc_info=True)
+        raise
+
+def get_competency_details(comp_id: int) -> Optional[Dict[str, Any]]:
+    """Get one competency by ID with indicators."""
+    try:
+        competency = local_db.session.query(Competency).options(
+            joinedload(Competency.competency_type),
+            joinedload(Competency.indicators)
+        ).get(comp_id)
+        if not competency:
+            logger.warning(f"Competency with id {comp_id} not found for details.")
+            return None
+
+        result = competency.to_dict(rules=['-indicators', '-fgos', '-based_on_labor_function'])
+        result['type_code'] = competency.competency_type.code if competency.competency_type else "UNKNOWN"
+        result['indicators'] = [ind.to_dict() for ind in competency.indicators]
+        return result
+    except Exception as e:
+        logger.error(f"Error in get_competency_details for id {comp_id}: {e}", exc_info=True)
+        raise
+
+
 def create_competency(data: Dict[str, Any]) -> Optional[Competency]:
-    """Creates a new competency (typically ПК)."""
+    """Creates a new competency (typically ПК). Returns the created Competency object on success."""
     required_fields = ['type_code', 'code', 'name']
-    if not all(field in data for field in required_fields):
+    if not all(field in data and data.get(field) is not None and str(data.get(field)).strip() for field in required_fields):
         logger.warning("Missing required fields for competency creation.")
+        # TODO: Return specific error
         return None
 
     try:
@@ -487,39 +532,216 @@ def create_competency(data: Dict[str, Any]) -> Optional[Competency]:
         comp_type = session.query(CompetencyType).filter_by(code=data['type_code']).first()
         if not comp_type:
             logger.warning(f"Competency type with code {data['type_code']} not found.")
+            # TODO: Return a specific error message or raise an exception
             return None
 
-        existing_comp = session.query(Competency).filter_by(
+        # Check for existing competency with the same code and type (and FGOS for UK/OPK)
+        # UK/OPK must be linked to a FGOS. Cannot create manually without FGOS ID?
+        # For manual creation POST, we only support PK for MVP.
+        if data['type_code'] != 'ПК':
+             logger.warning(f"Manual creation endpoint only supports type 'ПК'. Received type '{data['type_code']}'.")
+             # TODO: Return specific error
+             return None
+
+        query = session.query(Competency).filter_by(
              code=data['code'], competency_type_id=comp_type.id
-        ).first()
+        )
+        # If it's UK/OPK, also filter by FGOS - not applicable for manual POST creation (only PK)
+        # if data['type_code'] in ['УК', 'ОПК']:
+        #      fgos_vo_id = data.get('fgos_vo_id')
+        #      if fgos_vo_id is not None:
+        #           query = query.filter_by(fgos_vo_id=fgos_vo_id)
+        #      else:
+        #           # UK/OPK must be linked to a FGOS. Cannot create manually without FGOS ID?
+        #           logger.warning(f"Cannot create UK/OPK '{data['code']}' without fgos_vo_id.")
+        #           # TODO: Return error
+        #           return None
+        
+        existing_comp = query.first()
+
         if existing_comp:
              logger.warning(f"Competency with code {data['code']} and type {data['type_code']} already exists.")
+             # TODO: Return a specific error message or raise an exception
              return None
 
         competency = Competency(
             competency_type_id=comp_type.id,
-            code=data['code'],
-            name=data['name'],
-            description=data.get('description'),
+            # fgos_vo_id=data.get('fgos_vo_id'), # Only set for UK/OPK, not for manual PK creation
+            # based_on_labor_function_id=data.get('based_on_labor_function_id'), # Only set for PK based on PS
+            code=data['code'].strip(),
+            name=data['name'].strip(),
+            description=data.get('description', '').strip(),
         )
         session.add(competency)
         session.commit()
         logger.info(f"Competency created: {competency.code} (ID: {competency.id})")
+        
+        # Return the SQLAlchemy object, route will convert to dict
         return competency
+
+    except IntegrityError as e:
+        session.rollback()
+        logger.error(f"Database IntegrityError creating competency: {e}", exc_info=True)
+        # TODO: Handle specific integrity errors if possible (e.g., duplicate code)
+        return None # Indicate failure
     except SQLAlchemyError as e:
         session.rollback()
         logger.error(f"Database error creating competency: {e}", exc_info=True)
-        return None
+        # TODO: Return a specific error message
+        return None # Indicate failure
     except Exception as e:
         session.rollback()
         logger.error(f"Unexpected error creating competency: {e}", exc_info=True)
-        return None
+        # TODO: Return a specific error message
+        return None # Indicate failure
+
+
+# --- ИЗМЕНЕНИЕ: Реализация update_competency ---
+def update_competency(comp_id: int, data: Dict[str, Any]) -> Optional[Competency]:
+    """Updates an existing competency by ID. Returns updated Competency object on success."""
+    logger.info(f"update_competency: Received update request for competency ID: {comp_id}. Data: {data}")
+    if not data:
+        logger.warning(f"update_competency: No data provided for update for competency ID {comp_id}.")
+        return None # Indicate no changes intended or invalid data
+
+    try:
+        session: Session = local_db.session
+        # Получаем объект компетенции для обновления
+        competency = session.query(Competency).get(comp_id)
+        if not competency:
+            logger.warning(f"update_competency: Competency with id {comp_id} not found.")
+            return None # Indicate not found
+
+        # Разрешенные поля для обновления в MVP ручного режима
+        # Мы не позволяем менять code, type_code, fgos_vo_id, based_on_labor_function_id через этот эндпоинт
+        allowed_fields = {'name', 'description'}
+        updated = False
+        
+        # Проверяем, какие поля из data разрешены и присутствуют в модели
+        mapper = inspect(Competency).mapper
+        
+        for field, value in data.items():
+            if field in allowed_fields and hasattr(competency, field) and mapper.has_property(field):
+                 # Удаляем пробелы у строковых полей
+                 processed_value = value.strip() if isinstance(value, str) else value
+                 
+                 # Сравниваем старое и новое значение для определения изменений
+                 if getattr(competency, field) != processed_value:
+                     setattr(competency, field, processed_value)
+                     updated = True
+                     logger.debug(f"update_competency: Updated field '{field}' for comp {comp_id} to '{processed_value}'")
+            # Игнорируем поля в data, которые не разрешены для обновления этим эндпоинтом
+            elif field in data:
+                 logger.warning(f"update_competency: Ignoring field '{field}' for update of comp {comp_id} as it is not allowed via this endpoint.")
+
+
+        # Сохраняем изменения только если что-то было обновлено
+        if updated:
+            session.add(competency)
+            session.commit() # Коммит изменений
+            logger.info(f"update_competency: Competency {comp_id} updated successfully.")
+        else:
+            logger.info(f"update_competency: No changes detected for competency {comp_id}. No commit needed.")
+            # Если нет изменений, возвращаем существующий объект после загрузки
+
+        # Возвращаем обновленный SQLAlchemy объект (или оригинальный, если не было изменений)
+        return competency.to_dict(rules=['-indicators'])
+
+    except SQLAlchemyError as e:
+        session.rollback() # Откатываем транзакцию при ошибке БД
+        logger.error(f"update_competency: Database error updating competency {comp_id}: {e}", exc_info=True)
+        # Перебрасываем исключение, чтобы вызвать 500 на уровне маршрута
+        raise
+    except Exception as e:
+        session.rollback() # Откатываем на всякий случай
+        logger.error(f"update_competency: Unexpected error updating competency {comp_id}: {e}", exc_info=True)
+        # Перебрасываем исключение
+        raise
+
+
+# --- ЗАГЛУШКА delete_competency ---
+def delete_competency(comp_id: int, session: Session) -> bool:
+    """Deletes a competency by ID. (STUB)"""
+    logger.warning(f"delete_competency: STUB CALLED for competency ID: {comp_id}")
+    # TODO: Implement actual deletion logic including CASCADE to indicators and matrix links
+    # This requires careful handling of cascading deletes or explicit deletion of related entities.
+    # Use session.begin_nested() for the deletion process.
+    # Use session.commit() or session.rollback() within the function or rely on the caller.
+    # Return True if deleted, False if not found. Raise exception on database error.
+    
+    # --- EXAMPLE STUB Implementation (DO NOT USE IN PRODUCTION WITHOUT FULL TESTING) ---
+    try:
+         with session.begin_nested(): # Use savepoint
+              comp_to_delete = session.query(Competency).get(comp_id)
+              if not comp_to_delete:
+                   logger.warning(f"delete_competency: Competency {comp_id} not found for deletion.")
+                   return False
+
+              # SQLAlchemy CASCADE should handle indicators and matrix entries
+              # defined in the models.py. Verify your model definitions have cascade="all, delete-orphan".
+              session.delete(comp_to_delete)
+              logger.info(f"delete_competency: Competency {comp_id} marked for deletion.")
+              # session.flush() # Optional, forces deletion within the savepoint
+
+         # Outer commit needed by caller
+         logger.warning(f"delete_competency: STUB completed for {comp_id}. Outer commit needed.")
+         return True # Indicate that it was found and deletion was attempted
+         
+    except SQLAlchemyError as e:
+         session.rollback()
+         logger.error(f"delete_competency: Database error STUB for {comp_id}: {e}", exc_info=True)
+         raise # Re-raise to trigger rollback in caller
+    except Exception as e:
+         session.rollback()
+         logger.error(f"delete_competency: Unexpected error STUB for {comp_id}: {e}", exc_info=True)
+         raise # Re-raise
+
+
+def get_all_indicators() -> List[Dict[str, Any]]:
+    """Get list of all indicators."""
+    try:
+        # ИЗМЕНЕНИЕ: Явно импортированы Competency и Indicator, теперь query будет работать
+        # Добавляем joinedload для competency, чтобы получить competency_code и name для отображения
+        indicators = local_db.session.query(Indicator).options(joinedload(Indicator.competency)).all()
+        result = []
+        for ind in indicators:
+             ind_dict = ind.to_dict(rules=['-competency', '-labor_functions', '-matrix_entries'])
+             # Добавляем competency_code и name из связанного объекта competency
+             if ind.competency:
+                  ind_dict['competency_code'] = ind.competency.code
+                  ind_dict['competency_name'] = ind.competency.name
+             result.append(ind_dict)
+        return result
+    except Exception as e:
+        logger.error(f"Error in get_all_indicators: {e}", exc_info=True)
+        raise
+
+def get_indicator_details(ind_id: int) -> Optional[Dict[str, Any]]:
+    """Get one indicator by ID."""
+    try:
+        indicator = local_db.session.query(Indicator).options(
+            joinedload(Indicator.competency)
+        ).get(ind_id)
+        if not indicator:
+            logger.warning(f"Indicator with id {ind_id} not found for details.")
+            return None
+
+        result = indicator.to_dict(rules=['-competency', '-labor_functions', '-matrix_entries'])
+        if indicator.competency:
+             result['competency_code'] = indicator.competency.code
+             result['competency_name'] = indicator.competency.name
+        return result
+    except Exception as e:
+        logger.error(f"Error in get_indicator_details for id {ind_id}: {e}", exc_info=True)
+        raise
+
 
 def create_indicator(data: Dict[str, Any]) -> Optional[Indicator]:
-    """Creates a new indicator (ИДК) for an existing competency."""
+    """Creates a new indicator (ИДК) for an existing competency. Returns created Indicator object on success."""
     required_fields = ['competency_id', 'code', 'formulation']
-    if not all(field in data for field in required_fields):
+    if not all(field in data and data.get(field) is not None and str(data.get(field)).strip() for field in required_fields):
         logger.warning("Missing required fields for indicator creation.")
+        # TODO: Return specific error
         return None
 
     try:
@@ -527,6 +749,7 @@ def create_indicator(data: Dict[str, Any]) -> Optional[Indicator]:
         competency = session.query(Competency).get(data['competency_id'])
         if not competency:
             logger.warning(f"Parent competency with id {data['competency_id']} not found.")
+            # TODO: Return specific error
             return None
 
         existing_indicator = session.query(Indicator).filter_by(
@@ -534,26 +757,127 @@ def create_indicator(data: Dict[str, Any]) -> Optional[Indicator]:
         ).first()
         if existing_indicator:
              logger.warning(f"Indicator with code {data['code']} for competency {data['competency_id']} already exists.")
+             # TODO: Return specific error
              return None
 
         indicator = Indicator(
             competency_id=data['competency_id'],
-            code=data['code'],
-            formulation=data['formulation'],
-            source=data.get('source')
+            code=data['code'].strip(),
+            formulation=data['formulation'].strip(),
+            source=data.get('source', '').strip()
         )
         session.add(indicator)
         session.commit()
         logger.info(f"Indicator created: {indicator.code} (ID: {indicator.id}) for competency {indicator.competency_id}")
+        
+        # Return the SQLAlchemy object, route will convert to dict
         return indicator
+
+    except IntegrityError as e:
+        session.rollback()
+        logger.error(f"Database IntegrityError creating indicator: {e}", exc_info=True)
+        # TODO: Handle specific integrity errors if possible (e.g., duplicate code)
+        return None # Indicate failure
     except SQLAlchemyError as e:
         session.rollback()
         logger.error(f"Database error creating indicator: {e}", exc_info=True)
-        return None
+        # TODO: Return a specific error message
+        return None # Indicate failure
     except Exception as e:
         session.rollback()
         logger.error(f"Unexpected error creating indicator: {e}", exc_info=True)
-        return None
+        # TODO: Return a specific error message
+        return None # Indicate failure
+
+# --- ЗАГЛУШКА update_indicator ---
+def update_indicator(ind_id: int, data: Dict[str, Any]) -> Optional[Indicator]:
+    """Updates an existing indicator by ID. Returns updated Indicator object on success. (STUB)"""
+    logger.warning(f"update_indicator: STUB CALLED for indicator ID: {ind_id}. Data: {data}")
+    # TODO: Implement actual update logic (allow updating code, formulation, source)
+    # Similar to update_competency, but for Indicator model.
+    # Ensure you cannot change competency_id via this endpoint.
+    # Return the updated object as dict on success.
+    # Return None if not found or validation fails. Raise exception on DB error.
+    
+    try:
+        session: Session = local_db.session
+        indicator = session.query(Indicator).get(ind_id)
+        if not indicator:
+            logger.warning(f"update_indicator: Indicator with id {ind_id} not found.")
+            return None
+
+        allowed_fields = {'code', 'formulation', 'source'}
+        updated = False
+        mapper = inspect(Indicator).mapper
+        
+        for field, value in data.items():
+            if field in allowed_fields and hasattr(indicator, field) and mapper.has_property(field):
+                 processed_value = value.strip() if isinstance(value, str) else value
+                 if getattr(indicator, field) != processed_value:
+                      setattr(indicator, field, processed_value)
+                      updated = True
+                      logger.debug(f"update_indicator: Updated field '{field}' for ind {ind_id} to '{processed_value}'")
+            elif field in data and hasattr(indicator, field):
+                 logger.warning(f"update_indicator: Field '{field}' is not allowed for update via this endpoint for ind {ind_id}.")
+
+        if updated:
+            session.add(indicator)
+            session.commit()
+            logger.info(f"update_indicator: Indicator {ind_id} updated successfully.")
+        else:
+            logger.info(f"update_indicator: No changes detected for indicator {ind_id}. No commit needed.")
+            
+        return indicator
+
+    except IntegrityError as e:
+        session.rollback()
+        logger.error(f"update_indicator: Database IntegrityError STUB for {ind_id}: {e}", exc_info=True)
+        # TODO: Handle specific integrity errors if possible (e.g., duplicate code)
+        return None # Indicate failure
+    except SQLAlchemyError as e:
+        session.rollback()
+        logger.error(f"update_indicator: Database error STUB for {ind_id}: {e}", exc_info=True)
+        # TODO: Return a specific error message
+        return None # Indicate failure
+    except Exception as e:
+        session.rollback()
+        logger.error(f"update_indicator: Unexpected error STUB for {ind_id}: {e}", exc_info=True)
+        # TODO: Return a specific error message
+        return None # Indicate failure
+
+
+# --- ЗАГЛУШКА delete_indicator ---
+def delete_indicator(ind_id: int, session: Session) -> bool:
+    """Deletes an indicator by ID. (STUB)"""
+    logger.warning(f"delete_indicator: STUB CALLED for indicator ID: {ind_id}")
+    # TODO: Implement actual deletion logic including CASCADE to matrix links
+    # Use session.begin_nested() and session.delete()
+    # Return True if deleted, False if not found. Raise exception on database error.
+
+    try:
+         with session.begin_nested(): # Use savepoint
+              ind_to_delete = session.query(Indicator).get(ind_id)
+              if not ind_to_delete:
+                   logger.warning(f"delete_indicator: Indicator {ind_id} not found for deletion.")
+                   return False
+
+              # SQLAlchemy CASCADE should handle matrix entries. Verify model definition.
+              session.delete(ind_to_delete)
+              logger.info(f"delete_indicator: Indicator {ind_id} marked for deletion.")
+              # session.flush() # Optional
+
+         # Outer commit needed by caller
+         logger.warning(f"delete_indicator: STUB completed for {ind_id}. Outer commit needed.")
+         return True # Indicate that it was found and deletion was attempted
+         
+    except SQLAlchemyError as e:
+         session.rollback()
+         logger.error(f"delete_indicator: Database error STUB for {ind_id}: {e}", exc_info=True)
+         raise # Re-raise to trigger rollback in caller
+    except Exception as e:
+         session.rollback()
+         logger.error(f"delete_indicator: Unexpected error STUB for {ind_id}: {e}", exc_info=True)
+         raise # Re-raise
 
 # --- FGOS Functions ---
 
@@ -988,8 +1312,8 @@ def get_prof_standard_details(ps_id: int) -> Optional[Dict[str, Any]]:
 
         ps = session.query(ProfStandard).options(
             selectinload(ProfStandard.generalized_labor_functions).selectinload(GeneralizedLaborFunction.labor_functions).selectinload(LaborFunction.labor_actions),
-            selectinload(ProfStandard.generalized_labor_functions).selectinload(GeneralizedLaborFunction.labor_functions).selectinload(LaborFunction.required_skills),
-            selectinload(ProfStandard.generalized_labor_functions).selectinload(GeneralizedLaborFunction.labor_functions).selectinload(LaborFunction.required_knowledge),
+            selectinload(ProfStandard.generalized_labor_functions).selectinload(LaborFunction.required_skills),
+            selectinload(ProfStandard.generalized_labor_functions).selectinload(LaborFunction.required_knowledge),
         ).get(ps_id)
 
         if not ps:
