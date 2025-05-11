@@ -340,7 +340,6 @@ class Groups(db.Model):
     created_by = db.Column(
         db.Integer, 
         db.ForeignKey("tbl_users.id_user", ondelete="RESTRICT"), 
-        nullable=False,
     )
     
     creator = db.relationship("Users", foreign_keys=[created_by])

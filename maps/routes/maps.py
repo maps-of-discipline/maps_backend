@@ -289,13 +289,13 @@ def getAllMaps():
 @login_required(request)
 @aup_require(request)
 def AddNewGroup():
-    request_data = request.get_json()
+    request_data: dict = request.get_json()
     if request_data["name"] == "":
         return make_response(jsonify("Введите название группировки"), 400)
     data = Groups(
         name_group=request_data["name"], 
         color=request_data["color"],
-        created_by = request_data["user_id"] if request_data["user_id"]  != "1" else "1",
+        created_by = request_data["user_id"] if "user_id" in request_data.keys() else None,
         )
     db.session.add(data)
     db.session.commit()
@@ -313,15 +313,42 @@ def AddNewGroup():
 def DeleteGroup():
     request_data = request.get_json()
 
-    gr = Groups.query.filter_by(id_group=request_data["id"]).first()
+    gr: Groups = Groups.query.filter_by(id_group=request_data["id"]).first()
     if gr.created_by != 1: #idk может быть другой id у System
         gr.is_deleted = True 
         db.session.add(gr)
+        aup_data_query : AupData = (
+            AupData.query
+            .filter_by(id_group=request_data["id"])
+            .order_by(AupData.id)
+            .first()
+        )
+        if not aup_data_query:
+            return make_response(jsonify("Ошибк\../("), 400)
+        
+        load_query:D_EdIzmereniya = (
+            D_EdIzmereniya.query
+            .filter_by(id = aup_data_query.id_edizm)
+            .first()
+        )
+        if not load_query: 
+            return make_response(jsonify("..."), 400)
+
+        changes: list[ChangeLog | None] = update_fields(
+            aup_data = aup_data_query,
+            discipline = {"id_group": 1},
+            load = {
+                    "amount_type": load_query.title,
+                    "amount": aup_data_query.amount, 
+                    },
+        ) 
+
+        create_changes_revision(request_data["user_id"], aup_data_query.id_aup, changes)
         db.session.commit()
+        
         return make_response(jsonify("OK"), 200)
     
     return make_response(jsonify("У вас нет прав на удаление этой группировки"), 400)
-
 
 @maps.route("/get-group-by-aup/<string:aup>", methods=["GET"])
 def GetGroupByAup(aup):
