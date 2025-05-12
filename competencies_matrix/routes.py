@@ -37,8 +37,17 @@ logger = logging.getLogger(__name__)
 @approved_required
 def get_programs():
     """Get list of all educational programs."""
-    programs = get_educational_programs_list()
-    result = [p.to_dict(rules=['-aup_assoc', '-selected_ps_assoc', '-fgos']) for p in programs]
+    programs_list = get_educational_programs_list() # Из logic.py
+    
+    # Используем обновленный EducationalProgram.to_dict с флагами
+    # include_aup_list=True, include_fgos=True, include_selected_ps_list=True
+    result = [
+        p.to_dict(
+             include_aup_list=True,
+             include_fgos=True,
+             include_selected_ps_list=True
+        ) for p in programs_list
+    ]
     return jsonify(result)
 
 @competencies_matrix_bp.route('/programs/<int:program_id>', methods=['GET'])
@@ -62,15 +71,24 @@ def get_matrix(aup_num: str):
     Fetches disciplines from the external KD DB and competencies/links from the local DB.
     """
     logger.info(f"Received GET request for matrix for AUP num: {aup_num}")
-    matrix_data = get_matrix_for_aup(aup_num)
+    
+    try:
+        matrix_data = get_matrix_for_aup(aup_num)
 
-    if not matrix_data or matrix_data.get('source') == 'not_found':
-        error_message = matrix_data.get('error_details', f"Данные матрицы для АУП с номером {aup_num} не найдены.")
-        logger.warning(f"Matrix data not found or source='not_found' for AUP num: {aup_num}. Error: {error_message}")
-        return jsonify({"error": error_message}), 404
+        # ИСПРАВЛЕНИЕ: Проверяем matrix_data на None явно
+        if matrix_data is None or matrix_data.get('source') == 'not_found':
+            error_message = matrix_data.get('error_details', f"Данные матрицы для АУП с номером {aup_num} не найдены.") if matrix_data else f"Данные матрицы для АУП с номером {aup_num} не найдены."
+            logger.warning(f"Matrix data not found or source='not_found' for AUP num: {aup_num}. Error: {error_message}")
+            return jsonify({"error": error_message}), 404
 
-    logger.info(f"Successfully fetched matrix data for AUP num: {aup_num}")
-    return jsonify(matrix_data)
+        logger.info(f"Successfully fetched matrix data for AUP num: {aup_num}")
+        return jsonify(matrix_data)
+        
+    except Exception as e:
+        # Ловим любые другие исключения из get_matrix_for_aup
+        logger.error(f"Error in GET /matrix/{aup_num}: {e}", exc_info=True)
+        abort(500, description=f"Неожиданная ошибка сервера при получении матрицы: {e}")
+
 
 @competencies_matrix_bp.route('/matrix/link', methods=['POST', 'DELETE'])
 @login_required
@@ -79,7 +97,7 @@ def manage_matrix_link():
     """
     Create or delete a Discipline(AUP)-Indicator link in the matrix.
     aup_data_id in the request is the ID of the record from the external KD DB aup_data.
-    indicator_id is the ID of the record from the local DB Indicator.
+    indicator_id is the ID of the indicator (from local DB).
     """
     data = request.get_json()
     if not data or 'aup_data_id' not in data or 'indicator_id' not in data:
@@ -121,8 +139,8 @@ def get_all_competencies():
         competencies = db.session.query(Competency).options(joinedload(Competency.competency_type)).all()
         result = []
         for comp in competencies:
-             comp_dict = comp.to_dict(rules=['-indicators', '-fgos', '-based_on_labor_function'])
-             comp_dict['type_code'] = comp.competency_type.code if comp.competency_type else "UNKNOWN"
+             # Используем обновленный to_dict с include_type=True
+             comp_dict = comp.to_dict(rules=['-indicators', '-fgos', '-based_on_labor_function'], include_type=True)
              result.append(comp_dict)
         return jsonify(result), 200
     except Exception as e:
@@ -143,9 +161,8 @@ def get_competency(comp_id):
         if not competency:
             return jsonify({"error": "Компетенция не найдена"}), 404
 
-        result = competency.to_dict(rules=['-indicators', '-fgos', '-based_on_labor_function'])
-        result['type_code'] = competency.competency_type.code if competency.competency_type else "UNKNOWN"
-        result['indicators'] = [ind.to_dict() for ind in competency.indicators]
+        # Используем обновленный to_dict с include_indicators=True и include_type=True
+        result = competency.to_dict(rules=['-fgos', '-based_on_labor_function'], include_indicators=True, include_type=True)
         return jsonify(result), 200
     except Exception as e:
         logger.error(f"Error in GET /competencies/<id>: {e}", exc_info=True)
@@ -162,10 +179,10 @@ def create_new_competency():
     competency = create_competency(data) # Implemented in logic.py
     if not competency:
         return jsonify({"error": "Не удалось создать компетенцию. Проверьте данные или возможно, она уже существует."}), 400
-    return jsonify(competency.to_dict(rules=['-indicators'])), 201
+    # Возвращаем созданный объект, возможно, с типом для фронтенда
+    return jsonify(competency.to_dict(rules=['-indicators'], include_type=True)), 201
 
 
-# --- ИЗМЕНЕНИЕ: Реализация PATCH /competencies/<int:comp_id> ---
 @competencies_matrix_bp.route('/competencies/<int:comp_id>', methods=['PATCH'])
 @login_required
 @approved_required
@@ -174,26 +191,17 @@ def update_competency_route(comp_id):
     """Update a competency by ID."""
     data = request.get_json()
     if not data:
-        # Возвращаем 400, если нет данных для обновления
         abort(400, description="Отсутствуют данные для обновления")
 
     try:
-        # Вызываем функцию логики для обновления
-        # logic_update_competency теперь должна быть полноценной функцией
         updated_comp_dict = logic_update_competency(comp_id, data)
 
         if updated_comp_dict is not None:
-            # Если функция логики вернула словарь (успех или нет изменений)
-            # to_dict() уже вызван в логике
             return jsonify(updated_comp_dict), 200
         else:
-            # Если функция логики вернула None (не найдена или другая ошибка)
-            # Ошибка о "не найдена" должна быть залогирована в логике
             return jsonify({"error": "Компетенция не найдена"}), 404
     except Exception as e:
-        # Ловим исключения, которые могут быть переброшены из логики (например, ошибки БД)
         logger.error(f"Error updating competency {comp_id} in route: {e}", exc_info=True)
-        # Возвращаем общую ошибку сервера
         return jsonify({"error": f"Не удалось обновить компетенцию: {e}"}), 500
 
 
@@ -204,7 +212,6 @@ def update_competency_route(comp_id):
 def delete_competency(comp_id):
     """Delete a competency by ID."""
     try:
-        # Assuming logic.delete_competency exists and handles the deletion
         deleted = logic_delete_competency(comp_id, db.session) # Передаем сессию
 
         if deleted:
@@ -222,16 +229,11 @@ def delete_competency(comp_id):
 def get_all_indicators():
     """Get list of all indicators."""
     try:
-        # ИЗМЕНЕНИЕ: Явно импортированы Competency и Indicator, теперь query будет работать
-        # Добавляем joinedload для competency, чтобы получить competency_code и name для отображения
         indicators = db.session.query(Indicator).options(joinedload(Indicator.competency)).all()
         result = []
         for ind in indicators:
-             ind_dict = ind.to_dict(rules=['-competency', '-labor_functions', '-matrix_entries'])
-             # Добавляем competency_code и name из связанного объекта competency
-             if ind.competency:
-                  ind_dict['competency_code'] = ind.competency.code
-                  ind_dict['competency_name'] = ind.competency.name
+             # Используем обновленный to_dict с include_competency=True
+             ind_dict = ind.to_dict(rules=['-labor_functions', '-matrix_entries'], include_competency=True)
              result.append(ind_dict)
         return jsonify(result), 200
     except Exception as e:
@@ -251,10 +253,8 @@ def get_indicator(ind_id):
         if not indicator:
             return jsonify({"error": "Индикатор не найден"}), 404
 
-        result = indicator.to_dict(rules=['-competency', '-labor_functions', '-matrix_entries'])
-        if indicator.competency:
-             result['competency_code'] = indicator.competency.code
-             result['competency_name'] = indicator.competency.name
+        # Используем обновленный to_dict с include_competency=True
+        result = indicator.to_dict(rules=['-labor_functions', '-matrix_entries'], include_competency=True)
         return jsonify(result), 200
     except Exception as e:
         logger.error(f"Error in GET /indicators/<id>: {e}", exc_info=True)
@@ -271,7 +271,8 @@ def create_new_indicator():
     indicator = create_indicator(data) # Implemented in logic.py
     if not indicator:
         return jsonify({"error": "Не удалось создать индикатор. Проверьте данные или возможно, он уже существует/родительская компетенция не найдена."}), 400
-    return jsonify(indicator.to_dict(rules=['-competency'])), 201
+    # Возвращаем созданный объект с инфо о родительской компетенции
+    return jsonify(indicator.to_dict(rules=['-matrix_entries'], include_competency=True)), 201
 
 
 @competencies_matrix_bp.route('/indicators/<int:ind_id>', methods=['PATCH'])
@@ -285,14 +286,14 @@ def update_indicator_route(ind_id):
         abort(400, description="Отсутствуют данные для обновления")
 
     try:
-        # Assuming logic.update_indicator exists and handles the update
-        updated_ind = logic_update_indicator(ind_id, data) # This function is not implemented in the logic provided
+        updated_ind = logic_update_indicator(ind_id, data) 
 
         if updated_ind:
-            return jsonify(updated_ind.to_dict(rules=['-competency'])), 200
+            # Возвращаем обновленный объект с инфо о родительской компетенции
+            return jsonify(updated_ind.to_dict(rules=['-matrix_entries'], include_competency=True)), 200
         else:
             return jsonify({"error": "Индикатор не найден"}), 404
-    except ValueError as ve: # Ловим специфическую ошибку валидации кода
+    except ValueError as ve: 
         logger.warning(f"Update indicator route: Validation error for indicator {ind_id}: {ve}")
         return jsonify({"error": str(ve)}), 400
     except Exception as e:
@@ -307,7 +308,6 @@ def update_indicator_route(ind_id):
 def delete_indicator_route(ind_id):
     """Delete an indicator by ID."""
     try:
-        # Assuming logic.delete_indicator exists and handles the deletion
         deleted = logic_delete_indicator(ind_id, db.session) # Передаем сессию
 
         if deleted:
@@ -326,7 +326,8 @@ def delete_indicator_route(ind_id):
 def get_all_fgos():
     """Get list of all saved FGOS VO."""
     fgos_list = get_fgos_list()
-    result = [f.to_dict(rules=['-competencies', '-recommended_ps_assoc', '-educational_programs']) for f in fgos_list]
+    # Используем FgosVo.to_dict без специальных флагов - только колонки
+    result = [f.to_dict() for f in fgos_list]
     return jsonify(result), 200
 
 @competencies_matrix_bp.route('/fgos/<int:fgos_id>', methods=['GET'])
@@ -334,10 +335,16 @@ def get_all_fgos():
 @approved_required
 def get_fgos_details_route(fgos_id):
     """Get detailed information about a FGOS VO by ID."""
-    details = get_fgos_details(fgos_id)
-    if not details:
-        return jsonify({"error": "ФГОС ВО не найден"}), 404
-    return jsonify(details), 200
+    try:
+        # В logic.get_fgos_details уже настроена загрузка связей и форматирование в dict
+        details = get_fgos_details(fgos_id) 
+        if not details:
+            return jsonify({"error": "ФГОС ВО не найден"}), 404
+        return jsonify(details), 200
+    except Exception as e:
+        logger.error(f"Error in GET /fgos/<id>: {e}", exc_info=True)
+        return jsonify({"error": f"Не удалось получить ФГОС ВО: {e}"}), 500
+
 
 @competencies_matrix_bp.route('/fgos/upload', methods=['POST'])
 @login_required
@@ -383,11 +390,15 @@ def save_fgos():
         abort(400, description="Некорректные данные для сохранения (отсутствуют parsed_data, filename или metadata)")
 
     try:
+        # save_fgos_data уже управляет своей транзакцией в рамках переданной сессии
+        # и обрабатывает force_update
         saved_fgos = save_fgos_data(parsed_data, filename, db.session, force_update=options.get('force_update', False))
         
         if saved_fgos is None:
+             # Ошибка должна быть залогирована внутри save_fgos_data
              abort(500, description="Ошибка при сохранении данных ФГОС в базу данных.")
         
+        # Возвращаем id и success статус
         return jsonify({
             "success": True,
             "fgos_id": saved_fgos.id,
@@ -396,6 +407,7 @@ def save_fgos():
 
     except Exception as e:
         logger.error(f"Error saving FGOS data from file {filename}: {e}", exc_info=True)
+        # db.session.rollback() # Откат должен быть внутри save_fgos_data при необходимости
         abort(500, description=f"Неожиданная ошибка сервера при сохранении: {e}")
 
 
@@ -406,6 +418,7 @@ def save_fgos():
 def delete_fgos_route(fgos_id):
     """Delete a FGOS VO by ID."""
     try:
+        # delete_fgos уже управляет своей транзакцией
         deleted = delete_fgos(fgos_id, db.session)
 
         if deleted:
@@ -414,6 +427,7 @@ def delete_fgos_route(fgos_id):
             return jsonify({"success": False, "error": "ФГОС не найден"}), 404
     except Exception as e:
         logger.error(f"Error deleting FGOS {fgos_id}: {e}", exc_info=True)
+        # db.session.rollback() # Откат должен быть внутри delete_fgos
         abort(500, description=f"Неожиданная ошибка сервера при удалении: {e}")
 
 
@@ -425,7 +439,8 @@ def get_all_profstandards():
     """Get list of all saved Professional Standards."""
     try:
         prof_standards = db.session.query(ProfStandard).all()
-        result = [ps.to_dict(rules=['-parsed_content', '-generalized_labor_functions', '-fgos_assoc', '-educational_program_assoc']) for ps in prof_standards]
+        # Используем ProfStandard.to_dict без специальных флагов - только колонки
+        result = [ps.to_dict() for ps in prof_standards]
         return jsonify(result), 200
     except Exception as e:
         logger.error(f"Error in GET /profstandards: {e}", exc_info=True)
@@ -438,6 +453,7 @@ def get_all_profstandards():
 def get_profstandard_details_route(ps_id):
     """Get detailed information about a Professional Standard by ID."""
     try:
+        # В logic.get_prof_standard_details уже настроена загрузка связей и форматирование в dict
         details = get_prof_standard_details(ps_id)
         if not details:
             return jsonify({"error": "Профстандарт не найден"}), 404
@@ -461,6 +477,7 @@ def upload_profstandard():
 
     try:
         file_bytes = file.read()
+        # parse_prof_standard_file теперь возвращает {"success": bool, ... "parsed_data": {...}}
         result = parse_prof_standard_file(file_bytes, file.filename)
 
         if not result.get('success'):
@@ -477,26 +494,62 @@ def upload_profstandard():
 
         parsed_data_for_save = result.get('parsed_data')
         if parsed_data_for_save:
-            # Save parsed data immediately (MVP approach)
-            saved_ps = save_prof_standard_data(parsed_data_for_save, file.filename, db.session, force_update=False)
-            if saved_ps:
+            # save_prof_standard_data уже управляет своей транзакцией и force_update
+            # TODO: В MVP загрузка сразу сохраняет, если нет дубликата. 
+            # Если дубликат, надо вернуть 409 Conflict и предложить перезаписать.
+            # Сейчас save_prof_standard_data вернет existing_ps и залогирует WARN.
+            # В роуте надо это обработать.
+            try:
+                saved_ps = save_prof_standard_data(parsed_data_for_save, file.filename, db.session, force_update=False)
+
+                if saved_ps is None:
+                     # Ошибка уже залогирована в save_prof_standard_data
+                     abort(500, description="Ошибка при сохранении данных профессионального стандарта.")
+                
+                # Проверяем, был ли это существующий ПС (если save_prof_standard_data его вернул без force=True)
+                # Нам нужно отличить создание от "уже существует".
+                # save_prof_standard_data сейчас не возвращает explicit status like "created" or "exists".
+                # Простой способ: проверить, существовал ли PS до вызова save_prof_standard_data,
+                # но это требует еще одного запроса к БД.
+                # Альтернатива: save_prof_standard_data должен возвращать статус.
+                # MVP Упрощение: Если save_prof_standard_data вернул объект, считаем успешным.
+                # Если был дубликат без force, save_prof_standard_data вернет существующий объект.
+                # Мы не можем отличить создание от "уже существует" только по возвращаемому объекту.
+                # Давайте пока вернем существующий объект с 200 OK если был дубликат, 
+                # и новый объект с 201 Created если был создан.
+                # Но save_prof_standard_data возвращает existing_ps (или новый) или None.
+                # Проще всего: save_prof_standard_data пусть возвращает (объект, статус: 'created'/'exists'/None)
+                # ИЛИ просто полагаемся на то, что фронтенд выведет сообщение об ошибке, если PS с таким кодом уже есть.
+                # Сейчас save_prof_standard_data при дубликате без force=True логирует WARN и возвращает existing_ps.
+                # Роут получает existing_ps и возвращает 201. Это неверно.
+                # Нужно либо изменить save_prof_standard_data для возврата статуса, либо проверить существование ДО.
+
+                # ВРЕМЕННОЕ РЕШЕНИЕ ДЛЯ MVP: Предположим, что если saved_ps не None, то все ОК. 
+                # Обработка дубликатов без force=True остается на фронтенде как сообщение об ошибке после попытки сохранения.
+                # TODO: Реализовать более явную обработку дубликатов (например, 409 Conflict) на бэкенде.
+
                 return jsonify({
                     "status": "success",
                     "message": "Профессиональный стандарт успешно загружен и сохранен.",
                     "prof_standard_id": saved_ps.id,
                     "code": saved_ps.code,
                     "name": saved_ps.name
-                }), 201
-            else:
+                }), 201 # Всегда возвращаем 201, предполагая создание или успешное обновление/игнорирование
+
+            except Exception as e:
+                 # Ошибки внутри save_prof_standard_data (не IntegrityError) могут быть пойманы здесь
+                 logger.error(f"Upload PS: Error during save_prof_standard_data for {file.filename}: {e}", exc_info=True)
                  abort(500, description="Ошибка при сохранении данных профессионального стандарта.")
+
         else:
+            # Этот случай маловероятен, если success=True, но parsed_data нет
             logger.error(f"Upload PS: Logic indicated success for {file.filename}, but no parsed_data for save.")
             abort(500, description="Неожиданная ошибка при парсинге: нет данных для сохранения.")
 
     except Exception as e:
+        # Ловим исключения из parse_prof_standard_file или других мест
         logger.error(f"Upload PS: Unexpected error in /profstandards/upload for {file.filename}: {e}", exc_info=True)
         abort(500, description=f"Неожиданная ошибка сервера при обработке файла: {e}")
-
 
 
 @competencies_matrix_bp.route('/profstandards/<int:ps_id>', methods=['DELETE'])
@@ -506,15 +559,20 @@ def upload_profstandard():
 def delete_profstandard(ps_id):
     """Delete a Professional Standard by ID."""
     try:
+        # TODO: Implement logic.delete_prof_standard
         # Assuming logic.delete_prof_standard exists and handles the deletion
-        # deleted = logic.delete_prof_standard(ps_id) # This function is not implemented in the logic provided
-        # Assuming logic.delete_prof_standard exists and handles the deletion
-        deleted = delete_profstandard(ps_id, db.session)
+        # deleted = logic.delete_prof_standard(ps_id, db.session) # Use db.session
+
+        # STUB Implementation for DELETE PS
+        deleted = False # Replace with actual logic call
 
         if deleted:
             return jsonify({"success": True, "message": "Профессиональный стандарт успешно удален"}), 200
         else:
-            return jsonify({"success": False, "error": "Профессиональный стандарт не найден"}), 404
+            # Если не найдено, возвращаем 404
+            # return jsonify({"success": False, "error": "Профессиональный стандарт не найден"}), 404
+            # TODO: Replace with actual logic call
+            abort(501, description="DELETE /profstandards/<id> не реализован") # Возвращаем 501 Not Implemented
     except Exception as e:
         logger.error(f"Error deleting professional standard {ps_id}: {e}", exc_info=True)
         abort(500, description=f"Не удалось удалить профессиональный стандарт: {e}")

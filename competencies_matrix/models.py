@@ -1,10 +1,22 @@
 # competencies_matrix/models.py
 # При изменении моделей в этом файле, не забудьте обновить Alembic миграции
 from maps.models import db, AupInfo, AupData, SprDiscipline
+# Assuming Users model is in auth.models, let's import it
+# If it's in maps.models, adjust this import path
+try:
+    from auth.models import Users # Correct import path for Users model
+    USERS_MODEL_AVAILABLE = True
+except ImportError:
+    USERS_MODEL_AVAILABLE = False
+    class Users: # Dummy class if Users model is not available
+        id_user = None
+        pass
+
+
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy import inspect
-from typing import List, Dict, Any, Optional, Set, Union
+from typing import List, Dict, Any, Optional, Set, Union # Убедимся, что Union импортирован
 import datetime
 
 # Базовый класс для всех моделей
@@ -20,33 +32,39 @@ class BaseModel:
     updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(),
                            onupdate=db.func.current_timestamp())
 
+    # Упрощенный to_dict - только сериализует столбцы.
+    # Связанные объекты должны быть добавлены явно в to_dict потомков.
     def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None) -> Dict[str, Any]:
         """
-        Сериализует модель в словарь.
+        Сериализует модель в словарь (только колонки).
 
         Args:
-            rules: Правила сериализации (напр. ['-password', '-tokens'])
+            rules: Правила исключения полей (напр. ['-password', '-tokens'])
             only: Если указано, возвращает только перечисленные поля
 
         Returns:
             Словарь с данными модели
         """
         result = {}
-
-        # Обрабатываем список исключений
         exclude_columns = set()
         if rules:
             for rule in rules:
                 if rule.startswith('-'):
                     exclude_columns.add(rule[1:])
 
-        # Получаем атрибуты модели
         for c in inspect(self).mapper.column_attrs:
             if only and c.key not in only:
                 continue
             if c.key in exclude_columns:
                 continue
-            result[c.key] = getattr(self, c.key)
+            value = getattr(self, c.key)
+            if isinstance(value, (datetime.date, datetime.datetime)):
+                 result[c.key] = value.isoformat() # Сериализуем дату в ISO формат
+            else:
+                 result[c.key] = value
+
+        # Важно: Этот базовый to_dict НЕ обрабатывает relationships.
+        # Их нужно добавлять в to_dict потомков явно.
 
         return result
 
@@ -70,10 +88,18 @@ class FgosVo(db.Model, BaseModel):
 
     # Связи
     educational_programs = relationship('EducationalProgram', back_populates='fgos')
-    recommended_ps_assoc = relationship('FgosRecommendedPs', back_populates='fgos')
+    recommended_ps_assoc = relationship('FgosRecommendedPs', back_populates='fgos', cascade="all, delete-orphan")
+    competencies = relationship('Competency', back_populates='fgos', cascade="all, delete-orphan")
+
 
     def __repr__(self):
         return f"<ФГОС {self.direction_code} ({self.generation})>"
+
+    def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Сериализует FgosVo, включая базовые колонки."""
+        # Если нужно включить competencies или recommended_ps_assoc, это делается в get_fgos_details
+        # или в to_dict родительских объектов (например, EducationalProgram)
+        return super().to_dict(rules=rules, only=only)
 
 
 class EducationalProgram(db.Model, BaseModel):
@@ -90,30 +116,138 @@ class EducationalProgram(db.Model, BaseModel):
 
     # Relationships
     fgos = relationship('FgosVo', back_populates='educational_programs')
-    aup_assoc = relationship('EducationalProgramAup', back_populates='educational_program')
-    selected_ps_assoc = relationship('EducationalProgramPs', back_populates='educational_program')
+    aup_assoc = relationship('EducationalProgramAup', back_populates='educational_program', cascade="all, delete-orphan")
+    selected_ps_assoc = relationship('EducationalProgramPs', back_populates='educational_program', cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<EducationalProgram {self.code} {self.title}>"
+
+    # Переопределяем to_dict, чтобы явно включить связанные данные
+    def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None,
+                include_fgos: bool = False, include_aup_list: bool = False, include_selected_ps_list: bool = False,
+                include_recommended_ps_list: bool = False) -> Dict[str, Any]:
+        
+        # Get base model data (columns)
+        data = super().to_dict(rules=rules, only=only) 
+
+        # Helper to check if a field should be included based on rules and only
+        def _should_include(field_name: str, current_rules: Optional[List[str]], current_only: Optional[List[str]]) -> bool:
+            if current_rules:
+                for rule in current_rules:
+                    if rule.startswith('-') and rule[1:] == field_name:
+                        return False
+            if current_only and field_name not in current_only:
+                return False
+            return True
+
+        # Обработка fgos (as fgos_details) - только если запрошено и не исключено
+        if include_fgos and _should_include('fgos_details', rules, only):
+            if self.fgos:
+                # Include basic FGOS details
+                data['fgos_details'] = self.fgos.to_dict() # Default to_dict for FGOS
+            else:
+                data['fgos_details'] = None
+        
+        # Обработка aup_assoc (as aup_list) - только если запрошено и не исключено
+        if include_aup_list and _should_include('aup_list', rules, only):
+            data['aup_list'] = []
+            if hasattr(self, 'aup_assoc') and self.aup_assoc:
+                for assoc in self.aup_assoc:
+                    # Call to_dict on the association object itself
+                    # EducationalProgramAup.to_dict will handle including the AupInfo object
+                    assoc_data = assoc.to_dict() 
+                    data['aup_list'].append(assoc_data)
+        
+        # Обработка selected_ps_assoc (as selected_ps_list) - только если запрошено и не исключено
+        if include_selected_ps_list and _should_include('selected_ps_list', rules, only):
+            data['selected_ps_list'] = []
+            if hasattr(self, 'selected_ps_assoc') and self.selected_ps_assoc:
+                for assoc in self.selected_ps_assoc:
+                    # We want the prof_standard part of the association
+                    if assoc.prof_standard:
+                        data['selected_ps_list'].append(
+                            assoc.prof_standard.to_dict(rules=['-generalized_labor_functions', '-fgos_assoc', '-educational_program_assoc']) # Exclude recursive relationships from PS
+                        )
+
+        # Рекомендованные ПС (recommended_ps_list) - только если запрошено, не исключено и ФГОС есть
+        if include_recommended_ps_list and _should_include('recommended_ps_list', rules, only) and self.fgos:
+            recommended_ps_list_data = []
+            if self.fgos.recommended_ps_assoc:
+                # Sort by prof_standard.code if prof_standard exists
+                sorted_ps_assoc = sorted(
+                    [psa for psa in self.fgos.recommended_ps_assoc if psa.prof_standard], 
+                    key=lambda ps_assoc_item: ps_assoc_item.prof_standard.code
+                )
+                for assoc_item in sorted_ps_assoc:
+                    # prof_standard should exist due to pre-filtering for sort
+                    recommended_ps_list_data.append({
+                        'id': assoc_item.prof_standard.id,
+                        'code': assoc_item.prof_standard.code,
+                        'name': assoc_item.prof_standard.name,
+                        'is_mandatory': assoc_item.is_mandatory,
+                        'description': assoc_item.description,
+                    })
+            data['recommended_ps_list'] = recommended_ps_list_data
+
+
+        return data
 
 
 class EducationalProgramAup(db.Model, BaseModel):
     """Связь Образовательной программы и АУП"""
     __tablename__ = 'competencies_educational_program_aup'
 
-    educational_program_id = db.Column(db.Integer, db.ForeignKey('competencies_educational_program.id'), nullable=False)
-    # Добавим ondelete="CASCADE" здесь
+    educational_program_id = db.Column(db.Integer, db.ForeignKey('competencies_educational_program.id', ondelete="CASCADE"), nullable=False)
     aup_id = db.Column(db.Integer, db.ForeignKey('tbl_aup.id_aup', ondelete="CASCADE"), nullable=False)
-    # Дополнительные мета-данные о связи (приоритет, основной АУП и т.д.)
     is_primary = db.Column(db.Boolean, default=False, comment='Является ли этот АУП основным для программы')
 
-    # Определяем отношения
     educational_program = relationship('EducationalProgram', back_populates='aup_assoc')
-    aup = relationship('AupInfo', backref='education_programs_assoc')  # Предполагаем, что AupInfo импортирована
+    # Имя backref для использования в AupInfo
+    aup = relationship('AupInfo', backref=backref('educational_program_links', cascade="all, delete-orphan", passive_deletes=True))
+
 
     __table_args__ = (
         db.UniqueConstraint('educational_program_id', 'aup_id', name='uq_educational_program_aup'),
     )
+
+    # Переопределяем to_dict, чтобы явно включить связанный AupInfo
+    def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None,
+                include_aup: bool = True) -> Dict[str, Any]: # По умолчанию включаем AupInfo
+        
+        # Get base model data (columns)
+        data = super().to_dict(rules=rules, only=only)
+
+        # Helper to check if a field should be included
+        def _should_include(field_name: str, current_rules: Optional[List[str]], current_only: Optional[List[str]]) -> bool:
+            if current_rules:
+                for rule in current_rules:
+                    if rule.startswith('-') and rule[1:] == field_name:
+                        return False
+            if current_only and field_name not in current_only:
+                return False
+            return True
+
+        # Обработка aup - только если запрошено и не исключено
+        if include_aup and _should_include('aup', rules, only):
+            if hasattr(self, 'aup') and self.aup:
+                # Используем as_dict() из модели AupInfo (maps.models)
+                # Предполагаем, что AupInfo.as_dict() возвращает нужные поля
+                # включая num_aup, profile, etc.
+                if hasattr(self.aup, 'as_dict') and callable(self.aup.as_dict):
+                    data['aup'] = self.aup.as_dict() 
+                else: 
+                    # Fallback if AupInfo doesn't have as_dict (должно быть, если models.py актуален)
+                    data['aup'] = {
+                        'id_aup': self.aup.id_aup,
+                        'num_aup': self.aup.num_aup,
+                        # Add other relevant fields if available
+                        'file': getattr(self.aup, 'file', None), # Пример
+                        'year_beg': getattr(self.aup, 'year_beg', None), # Пример
+                    }
+            else:
+                data['aup'] = None # Явно указываем null если AupInfo не загружено или None
+
+        return data
 
 
 # === Модели для профстандартов ===
@@ -122,161 +256,149 @@ class ProfStandard(db.Model, BaseModel):
     """Профессиональный стандарт"""
     __tablename__ = 'competencies_prof_standard'
 
-    # Основные поля
-    code = db.Column(db.String(50), nullable=False, comment='Код профстандарта, например 06.001')
+    code = db.Column(db.String(50), nullable=False, unique=True, comment='Код профстандарта, например 06.001')
     name = db.Column(db.String(255), nullable=False, comment='Название профстандарта')
     order_number = db.Column(db.String(50), nullable=True, comment='Номер приказа')
     order_date = db.Column(db.Date, nullable=True, comment='Дата приказа')
     registration_number = db.Column(db.String(50), nullable=True, comment='Рег. номер Минюста')
     registration_date = db.Column(db.Date, nullable=True, comment='Дата регистрации в Минюсте')
-
-    # Хранение разобранного содержимого
     parsed_content = db.Column(db.Text, nullable=True, comment='Содержимое стандарта в Markdown')
 
-    # Связи
-    generalized_labor_functions = relationship('GeneralizedLaborFunction', back_populates='prof_standard')
-    fgos_assoc = relationship('FgosRecommendedPs', back_populates='prof_standard')
-    educational_program_assoc = relationship('EducationalProgramPs', back_populates='prof_standard')
+    generalized_labor_functions = relationship('GeneralizedLaborFunction', back_populates='prof_standard', cascade="all, delete-orphan")
+    fgos_assoc = relationship('FgosRecommendedPs', back_populates='prof_standard', cascade="all, delete-orphan")
+    educational_program_assoc = relationship('EducationalProgramPs', back_populates='prof_standard', cascade="all, delete-orphan")
+    
+    def __repr__(self): return f"<ПС {self.code} {self.name[:30]}...>"
 
-    def __repr__(self):
-        return f"<ПС {self.code} {self.name[:30]}...>"
+    def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Сериализует ProfStandard, включая базовые колонки."""
+        # Если нужно включить generalized_labor_functions, это делается в get_prof_standard_details
+        # или в to_dict родительских объектов
+        return super().to_dict(rules=rules, only=only)
 
 
 class FgosRecommendedPs(db.Model, BaseModel):
     """Связь между ФГОС и рекомендованными в нем профстандартами"""
     __tablename__ = 'competencies_fgos_recommended_ps'
 
-    fgos_vo_id = db.Column(db.Integer, db.ForeignKey('competencies_fgos_vo.id'), nullable=False)
-    prof_standard_id = db.Column(db.Integer, db.ForeignKey('competencies_prof_standard.id'), nullable=False)
-
-    # Флаг, указывающий что это за ПС - обязательный или рекомендованный
+    fgos_vo_id = db.Column(db.Integer, db.ForeignKey('competencies_fgos_vo.id', ondelete="CASCADE"), nullable=False)
+    prof_standard_id = db.Column(db.Integer, db.ForeignKey('competencies_prof_standard.id', ondelete="CASCADE"), nullable=False)
     is_mandatory = db.Column(db.Boolean, default=False, comment='Обязательный ПС или рекомендованный')
-
-    # Дополнительные мета-данные
     description = db.Column(db.String(255), nullable=True, comment='Примечание к связи')
 
-    # Определяем отношения
     fgos = relationship('FgosVo', back_populates='recommended_ps_assoc')
     prof_standard = relationship('ProfStandard', back_populates='fgos_assoc')
 
-    __table_args__ = (
-        db.UniqueConstraint('fgos_vo_id', 'prof_standard_id', name='uq_fgos_ps'),
-    )
+    __table_args__ = (db.UniqueConstraint('fgos_vo_id', 'prof_standard_id', name='uq_fgos_ps'),)
+
+    def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None,
+                include_prof_standard: bool = True) -> Dict[str, Any]:
+        data = super().to_dict(rules=rules, only=only)
+        if include_prof_standard and hasattr(self, 'prof_standard') and self.prof_standard:
+             data['prof_standard'] = self.prof_standard.to_dict() # Default to_dict for ProfStandard
+        return data
 
 
 class EducationalProgramPs(db.Model, BaseModel):
     """Связь между Образовательной программой и выбранными профстандартами"""
     __tablename__ = 'competencies_educational_program_ps'
 
-    educational_program_id = db.Column(db.Integer, db.ForeignKey('competencies_educational_program.id'), nullable=False)
-    prof_standard_id = db.Column(db.Integer, db.ForeignKey('competencies_prof_standard.id'), nullable=False)
-
-    # Дополнительные мета-данные
+    educational_program_id = db.Column(db.Integer, db.ForeignKey('competencies_educational_program.id', ondelete="CASCADE"), nullable=False)
+    prof_standard_id = db.Column(db.Integer, db.ForeignKey('competencies_prof_standard.id', ondelete="CASCADE"), nullable=False)
     priority = db.Column(db.Integer, default=0, comment='Приоритет ПС в рамках ОП')
 
-    # Определяем отношения
     educational_program = relationship('EducationalProgram', back_populates='selected_ps_assoc')
     prof_standard = relationship('ProfStandard', back_populates='educational_program_assoc')
 
-    __table_args__ = (
-        db.UniqueConstraint('educational_program_id', 'prof_standard_id', name='uq_educational_program_ps'),
-    )
+    __table_args__ = (db.UniqueConstraint('educational_program_id', 'prof_standard_id', name='uq_educational_program_ps'),)
+
+    def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None,
+                include_prof_standard: bool = True) -> Dict[str, Any]:
+        data = super().to_dict(rules=rules, only=only)
+        if include_prof_standard and hasattr(self, 'prof_standard') and self.prof_standard:
+             data['prof_standard'] = self.prof_standard.to_dict() # Default to_dict for ProfStandard
+        return data
 
 
 class GeneralizedLaborFunction(db.Model, BaseModel):
     """Обобщенная трудовая функция (ОТФ)"""
     __tablename__ = 'competencies_generalized_labor_function'
 
-    # Связь с ПС
-    prof_standard_id = db.Column(db.Integer, db.ForeignKey('competencies_prof_standard.id'), nullable=False)
+    prof_standard_id = db.Column(db.Integer, db.ForeignKey('competencies_prof_standard.id', ondelete="CASCADE"), nullable=False)
     prof_standard = relationship('ProfStandard', back_populates='generalized_labor_functions')
-
-    # Основные поля
     code = db.Column(db.String(10), nullable=False, comment='Код ОТФ, например A')
     name = db.Column(db.String(255), nullable=False, comment='Название ОТФ')
     qualification_level = db.Column(db.String(10), nullable=True, comment='Уровень квалификации')
+    
+    labor_functions = relationship('LaborFunction', back_populates='generalized_labor_function', cascade="all, delete-orphan")
+    
+    def __repr__(self): return f"<ОТФ {self.code} {self.name[:30]}...>"
 
-    # Связь с ТФ
-    labor_functions = relationship('LaborFunction', back_populates='generalized_labor_function')
-
-    def __repr__(self):
-        return f"<ОТФ {self.code} {self.name[:30]}...>"
+    def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None) -> Dict[str, Any]:
+        data = super().to_dict(rules=rules, only=only)
+        # If including labor_functions is needed, add here
+        return data
 
 
 class LaborFunction(db.Model, BaseModel):
     """Трудовая функция (ТФ)"""
     __tablename__ = 'competencies_labor_function'
 
-    # Связь с ОТФ
-    generalized_labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_generalized_labor_function.id'), nullable=False)
+    generalized_labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_generalized_labor_function.id', ondelete="CASCADE"), nullable=False)
     generalized_labor_function = relationship('GeneralizedLaborFunction', back_populates='labor_functions')
-
-    # Основные поля
     code = db.Column(db.String(10), nullable=False, comment='Код ТФ, например A/01.6')
     name = db.Column(db.String(255), nullable=False, comment='Название ТФ')
     qualification_level = db.Column(db.String(10), nullable=True, comment='Уровень квалификации')
 
-    # Связи с другими сущностями
-    labor_actions = relationship('LaborAction', back_populates='labor_function')
-    required_skills = relationship('RequiredSkill', back_populates='labor_function')
-    required_knowledge = relationship('RequiredKnowledge', back_populates='labor_function')
-
-    # Индикаторы, связанные с этой ТФ (например, для оценки соответствия)
+    labor_actions = relationship('LaborAction', back_populates='labor_function', cascade="all, delete-orphan")
+    required_skills = relationship('RequiredSkill', back_populates='labor_function', cascade="all, delete-orphan")
+    required_knowledge = relationship('RequiredKnowledge', back_populates='labor_function', cascade="all, delete-orphan")
+    
     indicators = relationship('Indicator', secondary='competencies_indicator_ps_link', back_populates='labor_functions')
-
-    # Компетенции, созданные на основе этой ТФ
     competencies = relationship('Competency', back_populates='based_on_labor_function', primaryjoin="LaborFunction.id==Competency.based_on_labor_function_id")
+    
+    def __repr__(self): return f"<ТФ {self.code} {self.name[:30]}...>"
 
-    def __repr__(self):
-        return f"<ТФ {self.code} {self.name[:30]}...>"
+    def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None) -> Dict[str, Any]:
+        data = super().to_dict(rules=rules, only=only)
+        # If including actions/skills/knowledge/indicators/competencies is needed, add here
+        return data
 
 
 class LaborAction(db.Model, BaseModel):
     """Трудовое действие"""
     __tablename__ = 'competencies_labor_action'
 
-    # Связь с ТФ
-    labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_labor_function.id'), nullable=False)
+    labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_labor_function.id', ondelete="CASCADE"), nullable=False)
     labor_function = relationship('LaborFunction', back_populates='labor_actions')
-
-    # Основные поля
     description = db.Column(db.Text, nullable=False, comment='Описание трудового действия')
     order = db.Column(db.Integer, default=0, comment='Порядок в списке')
-
-    def __repr__(self):
-        return f"<ТД {self.description[:50]}...>"
+    
+    def __repr__(self): return f"<ТД {self.description[:50]}...>"
 
 
 class RequiredSkill(db.Model, BaseModel):
     """Необходимое умение"""
     __tablename__ = 'competencies_required_skill'
 
-    # Связь с ТФ
-    labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_labor_function.id'), nullable=False)
+    labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_labor_function.id', ondelete="CASCADE"), nullable=False)
     labor_function = relationship('LaborFunction', back_populates='required_skills')
-
-    # Основные поля
     description = db.Column(db.Text, nullable=False, comment='Описание необходимого умения')
     order = db.Column(db.Integer, default=0, comment='Порядок в списке')
 
-    def __repr__(self):
-        return f"<Умение {self.description[:50]}...>"
+    def __repr__(self): return f"<Умение {self.description[:50]}...>"
 
 
 class RequiredKnowledge(db.Model, BaseModel):
     """Необходимое знание"""
     __tablename__ = 'competencies_required_knowledge'
 
-    # Связь с ТФ
-    labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_labor_function.id'), nullable=False)
+    labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_labor_function.id', ondelete="CASCADE"), nullable=False)
     labor_function = relationship('LaborFunction', back_populates='required_knowledge')
-
-    # Основные поля
     description = db.Column(db.Text, nullable=False, comment='Описание необходимого знания')
     order = db.Column(db.Integer, default=0, comment='Порядок в списке')
 
-    def __repr__(self):
-        return f"<Знание {self.description[:50]}...>"
+    def __repr__(self): return f"<Знание {self.description[:50]}...>"
 
 
 # === Модели для компетенций и индикаторов ===
@@ -288,81 +410,82 @@ class CompetencyType(db.Model, BaseModel):
     name = db.Column(db.String(100), nullable=False, comment='Название типа компетенции')
     code = db.Column(db.String(10), nullable=False, unique=True, comment='Код типа (УК, ОПК, ПК)')
     description = db.Column(db.Text, nullable=True, comment='Описание типа компетенции')
-
-    # Связь
     competencies = relationship('Competency', back_populates='competency_type')
-
-    def __repr__(self):
-        return f"<Тип {self.code} {self.name}>"
+    
+    def __repr__(self): return f"<Тип {self.code} {self.name}>"
 
 
 class Competency(db.Model, BaseModel):
     """Компетенция (УК, ОПК, ПК)"""
     __tablename__ = 'competencies_competency'
 
-    # Тип компетенции (УК, ОПК, ПК)
     competency_type_id = db.Column(db.Integer, db.ForeignKey('competencies_competency_type.id'), nullable=False)
     competency_type = relationship('CompetencyType', back_populates='competencies')
 
-    # Связь с ФГОС (для УК, ОПК)
     fgos_vo_id = db.Column(db.Integer, db.ForeignKey('competencies_fgos_vo.id'), nullable=True)
-    fgos = relationship('FgosVo', backref='competencies')
+    fgos = relationship('FgosVo', back_populates='competencies') 
 
-    # Связь с ТФ (для ПК)
     based_on_labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_labor_function.id'), nullable=True)
     based_on_labor_function = relationship('LaborFunction', back_populates='competencies', foreign_keys=[based_on_labor_function_id])
 
-    # Основные поля
     code = db.Column(db.String(20), nullable=False, comment='Код компетенции (УК-1, ОПК-2, ПК-3...)')
     name = db.Column(db.Text, nullable=False, comment='Формулировка компетенции')
     description = db.Column(db.Text, nullable=True, comment='Дополнительное описание компетенции')
 
-    # Индикаторы компетенции
-    indicators = relationship('Indicator', back_populates='competency')
+    indicators = relationship('Indicator', back_populates='competency', cascade="all, delete-orphan")
 
     __table_args__ = (
-        db.UniqueConstraint('code', 'fgos_vo_id', name='uq_competency_code_fgos'),
+        db.UniqueConstraint('code', 'fgos_vo_id', 'competency_type_id', name='uq_competency_code_fgos_type'),
     )
 
-    def __repr__(self):
-        return f"<{self.code} {self.name[:30]}...>"
+    def __repr__(self): return f"<{self.code} {self.name[:30]}...>"
+
+    def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None,
+                include_indicators: bool = False, include_type: bool = False) -> Dict[str, Any]:
+        data = super().to_dict(rules=rules, only=only)
+        if include_indicators and hasattr(self, 'indicators') and self.indicators is not None:
+             data['indicators'] = [ind.to_dict() for ind in self.indicators] # Default to_dict for Indicator
+        if include_type and hasattr(self, 'competency_type') and self.competency_type is not None:
+             data['type_code'] = self.competency_type.code
+        return data
 
 
 class Indicator(db.Model, BaseModel):
     """Индикатор достижения компетенции (ИДК)"""
     __tablename__ = 'competencies_indicator'
 
-    # Связь с компетенцией
-    competency_id = db.Column(db.Integer, db.ForeignKey('competencies_competency.id'), nullable=False)
+    competency_id = db.Column(db.Integer, db.ForeignKey('competencies_competency.id', ondelete="CASCADE"), nullable=False)
     competency = relationship('Competency', back_populates='indicators')
 
-    # Основные поля
     code = db.Column(db.String(20), nullable=False, comment='Код индикатора (ИУК-1.1, ИОПК-2.3, ИПК-3.2...)')
     formulation = db.Column(db.Text, nullable=False, comment='Формулировка индикатора')
     source = db.Column(db.String(255), nullable=True, comment='Источник (ФГОС, ПООП, ВУЗ, ПС...)')
 
-    # Связь с ТФ в профстандартах (многие-ко-многим)
     labor_functions = relationship('LaborFunction', secondary='competencies_indicator_ps_link', back_populates='indicators')
-
-    # Связь с матрицей компетенций
     matrix_entries = relationship('CompetencyMatrix', back_populates='indicator', cascade="all, delete-orphan")
 
     __table_args__ = (
         db.UniqueConstraint('code', 'competency_id', name='uq_indicator_code_competency'),
     )
 
-    def __repr__(self):
-        return f"<{self.code} {self.formulation[:30]}...>"
+    def __repr__(self): return f"<{self.code} {self.formulation[:30]}...>"
+
+    def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None,
+                include_competency: bool = False) -> Dict[str, Any]:
+        data = super().to_dict(rules=rules, only=only)
+        if include_competency and hasattr(self, 'competency') and self.competency is not None:
+             # Include basic parent competency info for display (code, name)
+             data['competency_code'] = self.competency.code
+             data['competency_name'] = self.competency.name
+        return data
 
 
 class IndicatorPsLink(db.Model, BaseModel):
     """Связь между индикатором компетенции и трудовой функцией"""
     __tablename__ = 'competencies_indicator_ps_link'
 
-    indicator_id = db.Column(db.Integer, db.ForeignKey('competencies_indicator.id'), nullable=False)
-    labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_labor_function.id'), nullable=False)
-
-    # Мета-данные связи
+    indicator_id = db.Column(db.Integer, db.ForeignKey('competencies_indicator.id', ondelete="CASCADE"), nullable=False)
+    labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_labor_function.id', ondelete="CASCADE"), nullable=False)
     relevance_score = db.Column(db.Float, nullable=True, comment='Оценка релевантности (от 0 до 1)')
     is_manual = db.Column(db.Boolean, default=False, comment='Связь установлена вручную')
 
@@ -375,16 +498,16 @@ class CompetencyMatrix(db.Model, BaseModel):
     """Матрица компетенций - связь между дисциплиной (AupData) и индикатором компетенции"""
     __tablename__ = 'competencies_matrix'
 
-    # Добавим ondelete="CASCADE" здесь
     aup_data_id = db.Column(db.Integer, db.ForeignKey('aup_data.id', ondelete="CASCADE"), nullable=False)
-    indicator_id = db.Column(db.Integer, db.ForeignKey('competencies_indicator.id'), nullable=False)
-
-    # Мета-данные связи
+    indicator_id = db.Column(db.Integer, db.ForeignKey('competencies_indicator.id', ondelete="CASCADE"), nullable=False)
     relevance_score = db.Column(db.Float, nullable=True, comment='Оценка релевантности (от 0 до 1)')
     is_manual = db.Column(db.Boolean, default=False, comment='Связь установлена вручную')
-    created_by = db.Column(db.Integer, nullable=True, comment='ID пользователя, создавшего связь')
+    
+    # Связь с Users моделью, только если она доступна
+    created_by = db.Column(db.Integer, db.ForeignKey('tbl_users.id_user'), nullable=True, comment='ID пользователя, создавшего связь') 
+    if USERS_MODEL_AVAILABLE:
+        creator = relationship('Users', foreign_keys=[created_by]) 
 
-    # Отношения
     indicator = relationship('Indicator', back_populates='matrix_entries')
     aup_data_entry = relationship('AupData', back_populates='matrix_entries')
 
@@ -395,27 +518,27 @@ class CompetencyMatrix(db.Model, BaseModel):
     def __repr__(self):
         return f"<Связь AupData({self.aup_data_id})<->Indicator({self.indicator_id})>"
 
+    def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None) -> Dict[str, Any]:
+        # Default to_dict works fine for this simple model, only including columns
+        return super().to_dict(rules=rules, only=only)
+
+
 # Определяем отношения для моделей AupData из maps.models
 # Добавляем атрибут matrix_entries в модель AupData
-from maps.models import AupData
-
 # Используем event listener для добавления relationship к существующей модели AupData
-# В listener для AupData тоже нужно обновить cascade для matrix_entries
+from maps.models import AupData
 @db.event.listens_for(AupData, 'mapper_configured', once=True)
 def add_aupdata_relationships(mapper, class_):
     if not hasattr(class_, 'matrix_entries'):
         class_.matrix_entries = relationship(
             'CompetencyMatrix',
             back_populates='aup_data_entry',
-            # Убедитесь, что cascade включает delete-orphan,
-            # а ondelete="CASCADE" на FK в CompetencyMatrix
-            # обеспечивает удаление на уровне БД при удалении AupData
             cascade="all, delete-orphan",
             lazy='dynamic'
         )
-        print(f"Dynamically added 'matrix_entries' relationship to AupData")
+        # print(f"Dynamically added 'matrix_entries' relationship to AupData") # Optional: for debugging
 
     # Remove the old indicators relationship if it exists
-    if hasattr(class_, 'indicators'):
+    if hasattr(class_, 'indicators'): # This was in the original and new code
         delattr(class_, 'indicators')
-        print(f"Removed 'indicators' relationship from AupData")
+        # print(f"Removed old 'indicators' relationship from AupData") # Optional: for debugging
