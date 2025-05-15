@@ -317,33 +317,39 @@ def DeleteGroup():
     if gr.created_by != 1: #idk может быть другой id у System
         gr.is_deleted = True 
         db.session.add(gr)
-        aup_data_query : AupData = (
+        changes: list[ChangeLog | None]
+        aup_data_query: AupData = (
             AupData.query
             .filter_by(id_group=request_data["id"])
             .order_by(AupData.id)
-            .first()
+            .all()
         )
-        if not aup_data_query:
-            return make_response(jsonify("Ошибк\../("), 400)
         
-        load_query:D_EdIzmereniya = (
-            D_EdIzmereniya.query
-            .filter_by(id = aup_data_query.id_edizm)
-            .first()
-        )
-        if not load_query: 
-            return make_response(jsonify("..."), 400)
+        for el in aup_data_query:
+            el.id_group = 1
+            db.session.add(el)
 
-        changes: list[ChangeLog | None] = update_fields(
-            aup_data = aup_data_query,
-            discipline = {"id_group": 1},
-            load = {
+            load_query: D_EdIzmereniya = (
+                D_EdIzmereniya.query
+                .filter_by(id = el.id_edizm)
+                .first()
+            )
+
+            changes += update_fields(
+                aup_data = el,
+                discipline = {"id_group": 1},
+                load = {
                     "amount_type": load_query.title,
-                    "amount": aup_data_query.amount, 
+                    "amount": el.amount, 
                     },
-        ) 
+            )
+            
 
-        create_changes_revision(request_data["user_id"], aup_data_query.id_aup, changes)
+        create_changes_revision(
+            user_id = request_data["user_id"],
+            aup_info_id = aup_data_query[0].id_aup,
+            changes = changes)
+        
         db.session.commit()
         
         return make_response(jsonify("OK"), 200)
@@ -373,7 +379,6 @@ def GetGroupByAup(aup):
         )    
     return make_response(jsonify(groups), 200)
 
-#@maps.route("/recover-deleted-group/<string:group>")
 @maps.route("/get-modules-by-aup/<string:aup>", methods=["GET"])
 def GetModulesByAup(aup):
     aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
