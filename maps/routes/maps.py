@@ -326,9 +326,6 @@ def DeleteGroup():
         )
         
         for el in aup_data_query:
-            el.id_group = 1
-            db.session.add(el)
-
             load_query: D_EdIzmereniya = (
                 D_EdIzmereniya.query
                 .filter_by(id = el.id_edizm)
