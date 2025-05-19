@@ -262,8 +262,6 @@ def create_name_op(header: DataFrame):
 
 @timeit
 def fill_spr_from_aup_data_values(values, model, **kwargs):
-    # TODO: Change this
-    print(model.__name__, end="\t")
     values = list(values)
 
     instances = model.query.all()
@@ -290,7 +288,12 @@ def fill_groups_from_aup_data_values(values):
     created_instances = []
     for el in values:
         if el not in instances:
-            created_instances.append({"name_group": el, "color": "#5f60ec"})
+            created_instances.append(
+                {"name_group": el,
+                 "color": "#5f60ec",
+                 "created_by": None, 
+                }
+            )
             instances.update({el: None})
 
     if len(created_instances) == 0:
