@@ -314,44 +314,55 @@ def DeleteGroup():
     request_data = request.get_json()
 
     gr: Groups = Groups.query.filter_by(id_group=request_data["id"]).first()
-    if gr.created_by != 1: #idk может быть другой id у System
-        gr.is_deleted = True 
-        db.session.add(gr)
-        changes: list[ChangeLog | None]
-        aup_data_query: AupData = (
-            AupData.query
-            .filter_by(id_group=request_data["id"])
-            .order_by(AupData.id)
-            .all()
-        )
-        
-        for el in aup_data_query:
-            load_query: D_EdIzmereniya = (
-                D_EdIzmereniya.query
-                .filter_by(id = el.id_edizm)
-                .first()
-            )
+    if gr.created_by == None:
+        return make_response(jsonify("У вас нет прав на удаление этой группировки"), 400)
+    
+    gr.is_deleted = True 
+    db.session.add(gr)
 
-            changes += update_fields(
-                aup_data = el,
-                discipline = {"id_group": 1},
-                load = {
-                    "amount_type": load_query.title,
-                    "amount": el.amount, 
-                    },
+    changes: list[ChangeLog | None]
+    aup_data_query: list[AupData] = (
+        AupData.query
+        .filter_by(id_group=request_data["id"])
+        .order_by(AupData.id)
+        .all()
+    )
+
+    default_group: Groups = (
+        Groups.query
+        .filter_by(
+            created_by = None,
+            is_default_group = True,
             )
+        .first()
+    )
+
+    for el in aup_data_query:
+        load_query: D_EdIzmereniya = (
+            D_EdIzmereniya.query
+            .filter_by(id = el.id_edizm)
+            .first()
+        )
+
+        changes += update_fields(
+            aup_data = el,
+            discipline = {"id_group": default_group.id_group},
+            load = {
+                "amount_type": load_query.title,
+                "amount": el.amount, 
+                },
+        )
             
 
-        create_changes_revision(
-            user_id = request_data["user_id"],
-            aup_info_id = aup_data_query[0].id_aup,
-            changes = changes)
+    create_changes_revision(
+        user_id = request_data["user_id"],
+        aup_info_id = aup_data_query[0].id_aup,
+        changes = changes
+    )
         
-        db.session.commit()
-        
-        return make_response(jsonify("OK"), 200)
+    db.session.commit()
+    return make_response(jsonify("OK"), 200)
     
-    return make_response(jsonify("У вас нет прав на удаление этой группировки"), 400)
 
 @maps.route("/get-group-by-aup/<string:aup>", methods=["GET"])
 def GetGroupByAup(aup):
@@ -532,7 +543,20 @@ def revert_revision(id_revision):
         for change in revision.logs:
             change: ChangeLog
 
-            aup_data_row = aup_data_mapper[change.row_id]
+            aup_data_row: AupData = aup_data_mapper[change.row_id]
+
+            # Проверяем на наличие группировки
+            if Groups.query.filter_by(aup_data_row.id_group).first().is_deleted:
+                # Если нет, то
+                aup_data_row.id_group = (
+                    Groups.query
+                    .filter_by(
+                        created_by = None,
+                        is_default_group = True,
+                    )
+                .first()
+                ).id_group
+
             setattr(aup_data_row, change.field, change.old)
             db.session.add(aup_data_row)
 
