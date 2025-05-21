@@ -3,17 +3,15 @@ from typing import Dict, List, Any, Optional
 import datetime
 import traceback
 import logging
-# import functools # Not currently used
 
 from flask import current_app
 from sqlalchemy import create_engine, select, exists, and_, or_
-from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError # Импортируем IntegrityError
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
-# from sqlalchemy import inspect # Not currently used directly in this selection
 
 # --- Local DB models (maps.models) ---
 from maps.models import db as local_db, SprDiscipline
-from maps.models import AupInfo as LocalAupInfo, AupData as LocalAupData # AupInfo here is maps.models.AupInfo
+from maps.models import AupInfo as LocalAupInfo, AupData as LocalAupData 
 
 # --- Competency models ---
 from .models import (
@@ -30,9 +28,9 @@ from .external_models import (
 )
 
 # --- Parsers ---
-from .fgos_parser import (
-    parse_fgos_pdf, # For parsing FGOS PDF
-    parse_prof_standard, # For parsing PS files (orchestrator)
+from .parsers import (
+    parse_fgos_pdf, 
+    parse_prof_standard, # Оркестратор парсинга ПС
 )
 
 logger = logging.getLogger(__name__)
@@ -60,8 +58,6 @@ def get_external_db_engine():
 def get_educational_programs_list() -> List[EducationalProgram]:
     """Fetches list of all educational programs."""
     try:
-        # При загрузке списка программ, явно загружаем связанные AupInfo
-        # чтобы EducationalProgram.to_dict мог их включить
         programs = EducationalProgram.query.options(
              selectinload(EducationalProgram.aup_assoc).selectinload(EducationalProgramAup.aup)
         ).order_by(EducationalProgram.title).all()
@@ -74,21 +70,20 @@ def get_program_details(program_id: int) -> Optional[Dict[str, Any]]:
     """Fetches detailed information about an educational program."""
     try:
         program = EducationalProgram.query.options(
-            selectinload(EducationalProgram.fgos), # Eager load FGOS
-            selectinload(EducationalProgram.aup_assoc).selectinload(EducationalProgramAup.aup), # Eager load AUPs
-            selectinload(EducationalProgram.selected_ps_assoc).selectinload(EducationalProgramPs.prof_standard) # Eager load selected PS
+            selectinload(EducationalProgram.fgos), 
+            selectinload(EducationalProgram.aup_assoc).selectinload(EducationalProgramAup.aup), 
+            selectinload(EducationalProgram.selected_ps_assoc).selectinload(EducationalProgramPs.prof_standard) 
         ).get(program_id)
 
         if not program:
             logger.warning(f"Program with id {program_id} not found for details.")
             return None
         
-        # Явно указываем, какие связанные данные включить при сериализации
         details = program.to_dict(
             include_fgos=True,
             include_aup_list=True,
             include_selected_ps_list=True,
-            include_recommended_ps_list=True # Также включаем рекомендованные ПС из ФГОС
+            include_recommended_ps_list=True 
         )
         return details
 
@@ -215,9 +210,8 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
     fgos: Optional[FgosVo] = None
     
     try:
-        # ИСПРАВЛЕНИЕ: Используем правильное имя backref-отношения 'educational_program_links'
         local_aup_info_entry = session.query(LocalAupInfo).options(
-            selectinload(LocalAupInfo.educational_program_links) # ИЗМЕНЕНО
+            selectinload(LocalAupInfo.educational_program_links) 
                 .selectinload(EducationalProgramAup.educational_program)
                 .selectinload(EducationalProgram.fgos)
         ).filter_by(num_aup=aup_num).first()
@@ -233,7 +227,6 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
                     'num_aup': local_aup_info_entry.num_aup,
                 }
             
-            # ИСПРАВЛЕНИЕ: Используем правильное имя backref-отношения
             if local_aup_info_entry.educational_program_links:
                 primary_assoc = next((assoc for assoc in local_aup_info_entry.educational_program_links if assoc.is_primary), None)
                 assoc_to_use = primary_assoc or local_aup_info_entry.educational_program_links[0]
@@ -247,9 +240,7 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
         current_error_details = matrix_response.get("error_details", "") or ""
         matrix_response["error_details"] = (current_error_details +
                                             f" Error finding local AUP record {aup_num}: {e_local_aup}.")
-        # Не прерываем выполнение, попробуем загрузить из внешней БД
 
-    # ... (остальная часть функции без изменений) ...
     external_disciplines: List[Dict[str, Any]] = []
     external_aup_id_for_disciplines: Optional[int] = None
     attempted_external_fetch = False
@@ -357,7 +348,7 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
                     selectinload(Competency.indicators), selectinload(Competency.competency_type)
                 ).filter(Competency.fgos_vo_id == fgos_id_to_load, Competency.competency_type_id.in_(uk_opk_ids_to_load)).all()
                 relevant_competencies.extend(uk_opk_competencies)
-                logger.debug(f"     - Loaded {len(uk_opk_competencies)} УК/ОПК for FGOS ID {fgos_id_to_load}.")
+                logger.debug(f"     - Loaded {len(uk_opk_competencies)} УК/ОПК для FGOS ID {fgos_id_to_load}.")
             else: logger.warning(f"     - Competency types УК/ОПК not found in DB. Cannot load УК/ОПК for FGOS ID {fgos_id_to_load}.")
 
         elif educational_program and not educational_program.fgos:
@@ -379,7 +370,7 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
             else: 
                 logger.warning(f"     - No Educational Program linked to local AUP {aup_num} or no selected PS for program. Skipping PK loading.")
         else: 
-            logger.warning("     - Competency type ПК not found in DB. Skipping PK loading.")
+            logger.warning("     - Competency type ПК not found in DB. Skipping ПК loading.")
 
         competencies_data = []; all_indicator_ids_for_matrix = set()
         comp_type_id_sort_order = {ct.id: i for i, ct_code in enumerate(['УК', 'ОПК', 'ПК']) for ct in comp_types_q if ct.code == ct_code}
@@ -497,76 +488,98 @@ def get_competency_details(comp_id: int) -> Optional[Dict[str, Any]]:
             joinedload(Competency.competency_type), joinedload(Competency.indicators)
         ).get(comp_id)
         if not competency: logger.warning(f"Competency with id {comp_id} not found for details."); return None
-        result = competency.to_dict(rules=['-indicators', '-fgos', '-based_on_labor_function'])
-        result['type_code'] = competency.competency_type.code if competency.competency_type else "UNKNOWN"
-        result['indicators'] = [ind.to_dict() for ind in competency.indicators] if competency.indicators else []
+        result = competency.to_dict(rules=['-fgos', '-based_on_labor_function'], include_indicators=True, include_type=True)
         return result
     except Exception as e: logger.error(f"Error in get_competency_details for id {comp_id}: {e}", exc_info=True); raise
 
 def create_competency(data: Dict[str, Any]) -> Optional[Competency]:
     required_fields = ['type_code', 'code', 'name']
     if not all(field in data and data[field] is not None and str(data[field]).strip() for field in required_fields):
-        logger.warning("Missing required fields for competency creation."); return None
+        logger.warning("Missing required fields for competency creation."); raise ValueError("Отсутствуют обязательные поля: type_code, code, name.")
     try:
         session: Session = local_db.session
         comp_type = session.query(CompetencyType).filter_by(code=data['type_code']).first()
-        if not comp_type: logger.warning(f"Competency type with code {data['type_code']} not found."); return None
-        if data['type_code'] != 'ПК': logger.warning(f"Manual creation endpoint only supports type 'ПК'. Received type '{data['type_code']}'."); return None
-        query = session.query(Competency).filter_by(code=str(data['code']).strip(), competency_type_id=comp_type.id)
-        existing_comp = query.first()
-        if existing_comp: logger.warning(f"Competency with code {data['code']} and type {data['type_code']} already exists."); return None
+        if not comp_type: raise ValueError(f"Тип компетенции с кодом '{data['type_code']}' не найден.")
+        if data['type_code'] != 'ПК': raise ValueError(f"Данный эндпоинт предназначен только для создания ПК. Получен тип '{data['type_code']}'.")
+        
+        # Проверяем на дубликат перед созданием
+        existing_comp = session.query(Competency).filter_by(code=str(data['code']).strip(), competency_type_id=comp_type.id).first()
+        if existing_comp: raise IntegrityError(f"Competency with code {data['code']} already exists for this type.", {}, None) # Поднимаем IntegrityError для обработки 409 Conflict
+        
         competency = Competency(
             competency_type_id=comp_type.id, code=str(data['code']).strip(), name=str(data['name']).strip(),
             description=str(data['description']).strip() if data.get('description') is not None else None,
         )
-        session.add(competency); session.commit()
+        session.add(competency)
+        session.commit() # Коммитим изменения
         logger.info(f"Competency created: {competency.code} (ID: {competency.id})"); return competency
-    except IntegrityError as e: session.rollback(); logger.error(f"Database IntegrityError creating competency: {e}", exc_info=True); return None 
-    except SQLAlchemyError as e: session.rollback(); logger.error(f"Database error creating competency: {e}", exc_info=True); return None
-    except Exception as e: session.rollback(); logger.error(f"Unexpected error creating competency: {e}", exc_info=True); return None
+    except IntegrityError as e: session.rollback(); logger.error(f"Database IntegrityError creating competency: {e}", exc_info=True); raise e 
+    except SQLAlchemyError as e: session.rollback(); logger.error(f"Database error creating competency: {e}", exc_info=True); raise e
+    except Exception as e: session.rollback(); logger.error(f"Unexpected error creating competency: {e}", exc_info=True); raise e
 
 def update_competency(comp_id: int, data: Dict[str, Any]) -> Optional[Dict[str, Any]]: 
     logger.info(f"update_competency: Received update request for competency ID: {comp_id}. Data: {data}")
-    if not data: logger.warning(f"update_competency: No data provided for update for competency ID {comp_id}."); return None 
+    if not data: raise ValueError("Отсутствуют данные для обновления.")
     try:
         session: Session = local_db.session
         competency = session.query(Competency).get(comp_id)
-        if not competency: logger.warning(f"update_competency: Competency with id {comp_id} not found."); return None 
-        allowed_fields = {'name', 'description'}; updated = False
+        if not competency: return None # Возвращаем None, если компетенция не найдена
+        
+        allowed_fields = {'name', 'description'} # 'code' не должен меняться через PATCH для УК/ОПК/ПК
+        updated = False
+        
         for field in data:
-            if field in allowed_fields and hasattr(competency, field):
-                 processed_value = str(data[field]).strip()
-                 if field == 'description':
-                      if processed_value == '': processed_value = None
-                      if competency.description == processed_value: continue 
-                 else:
-                     if getattr(competency, field) == processed_value: continue 
-                 setattr(competency, field, processed_value); updated = True
-                 logger.debug(f"update_competency: Updated field '{field}' for comp {comp_id} to '{processed_value}'")
-            elif field in data: logger.warning(f"update_competency: Ignoring field '{field}' for update of comp {comp_id} as it is not allowed via this endpoint.")
-        if updated: session.add(competency); session.commit(); logger.info(f"update_competency: Competency {comp_id} updated successfully.")
-        else: logger.info(f"update_competency: No changes detected for competency {comp_id}. No commit needed.")
-        return competency.to_dict(rules=['-indicators'])
+            if field in allowed_fields:
+                 processed_value = str(data[field]).strip() if data[field] is not None else None
+                 if field == 'description' and processed_value == '': processed_value = None # Пустая строка -> None
+                 
+                 # Проверяем, изменилось ли значение
+                 if getattr(competency, field) != processed_value:
+                     setattr(competency, field, processed_value)
+                     updated = True
+                     logger.debug(f"update_competency: Updated field '{field}' for comp {comp_id} to '{processed_value}'")
+            else: 
+                logger.warning(f"update_competency: Ignoring field '{field}' for update of comp {comp_id} as it is not allowed via this endpoint.")
+        
+        if updated: 
+            session.add(competency)
+            session.commit() # Коммитим изменения
+            logger.info(f"update_competency: Competency {comp_id} updated successfully.")
+        else: 
+            logger.info(f"update_competency: No changes detected for competency {comp_id}. No commit needed.")
+        
+        # Возвращаем обновленный объект
+        session.refresh(competency) # Обновляем объект, чтобы получить актуальные данные из БД (если были триггеры/дефолты)
+        return competency.to_dict(rules=['-indicators'], include_type=True) # Включаем тип для фронтенда
+
+    except IntegrityError as e: session.rollback(); logger.error(f"update_competency: Database IntegrityError for {comp_id}: {e}", exc_info=True); raise e 
     except SQLAlchemyError as e: session.rollback(); logger.error(f"update_competency: Database error updating competency {comp_id}: {e}", exc_info=True); raise e 
     except Exception as e: session.rollback(); logger.error(f"update_competency: Unexpected error updating competency {comp_id}: {e}", exc_info=True); raise e 
 
 def delete_competency(comp_id: int, session: Session) -> bool:
     logger.info(f"delete_competency: Attempting to delete competency ID: {comp_id}")
     try:
-         with session.begin_nested(): 
-              comp_to_delete = session.query(Competency).get(comp_id)
-              if not comp_to_delete: logger.warning(f"delete_competency: Competency {comp_id} not found for deletion."); return False 
-              session.delete(comp_to_delete); logger.info(f"delete_competency: Competency {comp_id} marked for deletion.")
-         logger.info(f"delete_competency: Deletion for {comp_id} prepared in session. Outer commit needed."); return True 
-    except SQLAlchemyError as e: session.rollback(); logger.error(f"delete_competency: Database error for {comp_id}: {e}", exc_info=True); raise e 
-    except Exception as e: session.rollback(); logger.error(f"delete_competency: Unexpected error for {comp_id}: {e}", exc_info=True); raise e 
+         comp_to_delete = session.query(Competency).get(comp_id)
+         if not comp_to_delete: logger.warning(f"delete_competency: Competency {comp_id} not found for deletion."); return False 
+         
+         # Note: Cascade "all, delete-orphan" on relationship should handle indicators and matrix entries
+         # For other relationships (like based_on_labor_function_id), ensure they are nullable or set to null on delete
+         
+         session.delete(comp_to_delete)
+         # Коммит делается вызывающей функцией, если транзакция управляется извне (например, db.session.begin() в роуте/CLI)
+         # Если это отдельный commit здесь, это должно быть session.commit()
+         # Для delete_competency, вызываемый маршрутом, предполагается, что он будет в db.session.begin()
+         logger.info(f"delete_competency: Competency {comp_id} marked for deletion.")
+         return True 
+    except SQLAlchemyError as e: logger.rollback(); logger.error(f"delete_competency: Database error for {comp_id}: {e}", exc_info=True); raise e 
+    except Exception as e: logger.rollback(); logger.error(f"delete_competency: Unexpected error for {comp_id}: {e}", exc_info=True); raise e 
 
 def get_all_indicators() -> List[Dict[str, Any]]:
     try:
         indicators = local_db.session.query(Indicator).options(joinedload(Indicator.competency)).all()
         result = []
         for ind in indicators:
-             ind_dict = ind.to_dict(rules=['-competency', '-labor_functions', '-matrix_entries'])
+             ind_dict = ind.to_dict(rules=['-labor_functions', '-matrix_entries'])
              if ind.competency: ind_dict['competency_code'] = ind.competency.code; ind_dict['competency_name'] = ind.competency.name
              result.append(ind_dict)
         return result
@@ -584,51 +597,71 @@ def get_indicator_details(ind_id: int) -> Optional[Dict[str, Any]]:
 def create_indicator(data: Dict[str, Any]) -> Optional[Indicator]:
     required_fields = ['competency_id', 'code', 'formulation']
     if not all(field in data and data[field] is not None and str(data[field]).strip() for field in required_fields):
-        logger.warning("Missing required fields for indicator creation."); return None
+        logger.warning("Missing required fields for indicator creation."); raise ValueError("Отсутствуют обязательные поля: competency_id, code, formulation.")
     try:
         session: Session = local_db.session
         competency = session.query(Competency).get(data['competency_id'])
-        if not competency: logger.warning(f"Parent competency with id {data['competency_id']} not found."); return None
+        if not competency: raise ValueError(f"Родительская компетенция с ID '{data['competency_id']}' не найдена.")
+        
+        # Проверяем на дубликат
         existing_indicator = session.query(Indicator).filter_by(code=str(data['code']).strip(), competency_id=data['competency_id']).first()
-        if existing_indicator: logger.warning(f"Indicator with code {data['code']} for competency {data['competency_id']} already exists."); return None
+        if existing_indicator: raise IntegrityError(f"Indicator with code {data['code']} already exists for competency {data['competency_id']}.", {}, None)
+        
         indicator = Indicator(
             competency_id=data['competency_id'], code=str(data['code']).strip(), formulation=str(data['formulation']).strip(),
             source=str(data['source']).strip() if data.get('source') is not None else None,
         )
-        session.add(indicator); session.commit()
+        session.add(indicator)
+        session.commit() # Коммитим изменения
         logger.info(f"Indicator created: {indicator.code} (ID: {indicator.id}) for competency {indicator.competency_id}"); return indicator
-    except IntegrityError as e: session.rollback(); logger.error(f"Database IntegrityError creating indicator: {e}", exc_info=True); return None
-    except SQLAlchemyError as e: session.rollback(); logger.error(f"Database error creating indicator: {e}", exc_info=True); return None
-    except Exception as e: session.rollback(); logger.error(f"Unexpected error creating indicator: {e}", exc_info=True); return None
+    except IntegrityError as e: session.rollback(); logger.error(f"Database IntegrityError creating indicator: {e}", exc_info=True); raise e
+    except SQLAlchemyError as e: session.rollback(); logger.error(f"Database error creating indicator: {e}", exc_info=True); raise e
+    except Exception as e: session.rollback(); logger.error(f"Unexpected error creating indicator: {e}", exc_info=True); raise e
 
 def update_indicator(ind_id: int, data: Dict[str, Any]) -> Optional[Indicator]:
     logger.info(f"update_indicator: Received update request for indicator ID: {ind_id}. Data: {data}")
-    if not data: logger.warning(f"update_indicator: No data provided for update for indicator ID {ind_id}."); return None
+    if not data: raise ValueError("Отсутствуют данные для обновления.")
     try:
         session: Session = local_db.session
         indicator = session.query(Indicator).get(ind_id)
-        if not indicator: logger.warning(f"update_indicator: Indicator with id {ind_id} not found."); return None 
-        allowed_fields = {'code', 'formulation', 'source'}; updated = False
+        if not indicator: return None # Возвращаем None, если индикатор не найден
+        
+        allowed_fields = {'code', 'formulation', 'source'} # 'competency_id' не должен меняться через PATCH
+        updated = False
+        
         for field in data:
-            if field in allowed_fields and hasattr(indicator, field):
-                 processed_value = str(data[field]).strip()
-                 if field == 'source':
-                      if processed_value == '': processed_value = None
-                      if indicator.source == processed_value: continue 
-                 elif field == 'code':
-                      if processed_value != indicator.code:
-                           existing_with_new_code = session.query(Indicator).filter_by(code=processed_value, competency_id=indicator.competency_id).first()
-                           if existing_with_new_code: logger.warning(f"update_indicator: Indicator with code {processed_value} already exists for competency {indicator.competency_id}."); raise ValueError(f"Indicator with code {processed_value} already exists for this competency.")
-                      if indicator.code == processed_value: continue 
-                 else: 
-                     if getattr(indicator, field) == processed_value: continue 
-                 setattr(indicator, field, processed_value); updated = True
-                 logger.debug(f"update_indicator: Updated field '{field}' for ind {ind_id} to '{processed_value}'")
-            elif field in data and hasattr(indicator, field): logger.warning(f"update_indicator: Field '{field}' is not allowed for update via this endpoint for ind {ind_id}.")
-        if updated: session.add(indicator); session.commit(); logger.info(f"update_indicator: Indicator {ind_id} updated successfully.")
-        else: logger.info(f"update_indicator: No changes detected for indicator {ind_id}. No commit needed.")
-        return indicator 
-    except ValueError as ve: session.rollback(); logger.warning(f"update_indicator: Validation error for indicator {ind_id}: {ve}"); raise ve 
+            if field in allowed_fields:
+                 processed_value = str(data[field]).strip() if data[field] is not None else None
+                 
+                 if field == 'source' and processed_value == '': processed_value = None
+                 
+                 # Проверяем уникальность кода индикатора для той же родительской компетенции
+                 if field == 'code' and processed_value != indicator.code:
+                      existing_with_new_code = session.query(Indicator).filter_by(
+                           code=processed_value, competency_id=indicator.competency_id
+                      ).first()
+                      if existing_with_new_code and existing_with_new_code.id != indicator.id: # Убедимся, что это не сам обновляемый индикатор
+                           raise IntegrityError(f"Indicator with code {processed_value} already exists for competency {indicator.competency_id}.", {}, None)
+                 
+                 # Проверяем, изменилось ли значение
+                 if getattr(indicator, field) != processed_value:
+                     setattr(indicator, field, processed_value)
+                     updated = True
+                     logger.debug(f"update_indicator: Updated field '{field}' for ind {ind_id} to '{processed_value}'")
+            else: 
+                logger.warning(f"update_indicator: Ignoring field '{field}' for update of ind {ind_id} as it is not allowed via this endpoint.")
+        
+        if updated: 
+            session.add(indicator)
+            session.commit() # Коммитим изменения
+            logger.info(f"update_indicator: Indicator {ind_id} updated successfully.")
+        else: 
+            logger.info(f"update_indicator: No changes detected for indicator {ind_id}. No commit needed.")
+        
+        # Возвращаем обновленный объект
+        session.refresh(indicator) # Обновляем объект
+        return indicator # Возвращаем объект (to_dict будет вызван в роуте)
+
     except IntegrityError as e: session.rollback(); logger.error(f"update_indicator: Database IntegrityError for {ind_id}: {e}", exc_info=True); raise e 
     except SQLAlchemyError as e: session.rollback(); logger.error(f"update_indicator: Database error for {ind_id}: {e}", exc_info=True); raise e 
     except Exception as e: session.rollback(); logger.error(f"update_indicator: Unexpected error for {ind_id}: {e}", exc_info=True); raise e 
@@ -636,13 +669,15 @@ def update_indicator(ind_id: int, data: Dict[str, Any]) -> Optional[Indicator]:
 def delete_indicator(ind_id: int, session: Session) -> bool:
     logger.info(f"delete_indicator: Attempting to delete indicator ID: {ind_id}")
     try:
-         with session.begin_nested(): 
-              ind_to_delete = session.query(Indicator).get(ind_id)
-              if not ind_to_delete: logger.warning(f"delete_indicator: Indicator {ind_id} not found for deletion."); return False 
-              session.delete(ind_to_delete); logger.info(f"delete_indicator: Indicator {ind_id} marked for deletion.")
-         logger.info(f"delete_indicator: Deletion for {ind_id} prepared in session. Outer commit needed."); return True 
-    except SQLAlchemyError as e: session.rollback(); logger.error(f"delete_indicator: Database error for {ind_id}: {e}", exc_info=True); raise e 
-    except Exception as e: session.rollback(); logger.error(f"delete_indicator: Unexpected error for {ind_id}: {e}", exc_info=True); raise e 
+         ind_to_delete = session.query(Indicator).get(ind_id)
+         if not ind_to_delete: logger.warning(f"delete_indicator: Indicator {ind_id} not found for deletion."); return False 
+         
+         # Note: Cascade "all, delete-orphan" on relationship should handle matrix entries and IndicatorPsLink
+         session.delete(ind_to_delete)
+         logger.info(f"delete_indicator: Indicator {ind_id} marked for deletion.")
+         return True 
+    except SQLAlchemyError as e: logger.rollback(); logger.error(f"delete_indicator: Database error for {ind_id}: {e}", exc_info=True); raise e 
+    except Exception as e: logger.rollback(); logger.error(f"delete_indicator: Unexpected error for {ind_id}: {e}", exc_info=True); raise e 
 
 def parse_fgos_file(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     try:
@@ -659,51 +694,50 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
     logger.info(f"save_fgos_data: Attempting to save data for FGOS from '{filename}'. force_update: {force_update}")
     if not parsed_data or not parsed_data.get('metadata'): logger.warning("save_fgos_data: No parsed data or metadata provided for saving."); return None
     metadata = parsed_data.get('metadata', {}); fgos_number = metadata.get('order_number'); fgos_date_obj = metadata.get('order_date'); fgos_direction_code = metadata.get('direction_code'); fgos_education_level = metadata.get('education_level'); fgos_generation = metadata.get('generation'); fgos_direction_name = metadata.get('direction_name')
-    if not all((fgos_number, fgos_date_obj, fgos_direction_code, fgos_education_level)): logger.error("save_fgos_data: Missing core metadata from parsed data for saving."); return None
+    if not all((fgos_number, fgos_date_obj, fgos_direction_code, fgos_education_level)): logger.error("save_fgos_data: Missing core metadata from parsed data for saving."); raise ValueError("Missing core FGOS metadata from parsed data for saving.")
     try:
-        with session.begin_nested(): 
-            existing_fgos = session.query(FgosVo).filter_by(direction_code=fgos_direction_code, education_level=fgos_education_level, number=fgos_number, date=fgos_date_obj).first()
-            fgos_vo = None 
-            if existing_fgos:
-                if force_update:
-                    logger.info(f"save_fgos_data: Existing FGOS found ({existing_fgos.id}). Force update. Deleting old comps/links...")
-                    session.query(Competency).filter_by(fgos_vo_id=existing_fgos.id).delete(synchronize_session='fetch')
-                    session.query(FgosRecommendedPs).filter_by(fgos_vo_id=existing_fgos.id).delete(synchronize_session='fetch'); session.flush()
-                    fgos_vo = existing_fgos; fgos_vo.direction_name = fgos_direction_name or 'Not specified'; fgos_vo.generation = fgos_generation; fgos_vo.file_path = filename
-                    session.add(fgos_vo); session.flush(); logger.info(f"save_fgos_data: Existing FGOS ({fgos_vo.id}) updated.")
-                else: logger.warning(f"save_fgos_data: FGOS with same key data already exists ({existing_fgos.id}). Skipping save."); return existing_fgos
-            else: 
-                fgos_vo = FgosVo(number=fgos_number, date=fgos_date_obj, direction_code=fgos_direction_code, direction_name=fgos_direction_name or 'Not specified', education_level=fgos_education_level, generation=fgos_generation, file_path=filename)
-                session.add(fgos_vo); session.flush(); logger.info(f"save_fgos_data: New FgosVo created with ID {fgos_vo.id} for {fgos_vo.direction_code}.")
-            comp_types_map = {ct.code: ct for ct in session.query(CompetencyType).filter(CompetencyType.code.in_(['УК', 'ОПК'])).all()}
-            if not comp_types_map: logger.error("save_fgos_data: CompetencyType (УК, ОПК) not found. Cannot save competencies."); raise ValueError("CompetencyType (УК, ОПК) not found.")
-            saved_competencies_count = 0; all_parsed_competencies = parsed_data.get('uk_competencies', []) + parsed_data.get('opk_competencies', [])
-            for parsed_comp in all_parsed_competencies:
-                comp_code = parsed_comp.get('code'); comp_name = parsed_comp.get('name')
-                if not comp_code or not comp_name: logger.warning(f"save_fgos_data: Skipping competency due to missing code/name: {parsed_comp}"); continue
-                comp_prefix = comp_code.split('-')[0].upper(); comp_type = comp_types_map.get(comp_prefix)
-                if not comp_type: logger.warning(f"save_fgos_data: Skipping competency {comp_code}: Competency type {comp_prefix} not found."); continue
-                existing_comp_for_fgos = session.query(Competency).filter_by(code=comp_code, competency_type_id=comp_type.id, fgos_vo_id=fgos_vo.id).first()
-                if existing_comp_for_fgos: logger.warning(f"save_fgos_data: Competency {comp_code} already exists for FGOS {fgos_vo.id}. Skipping."); continue 
-                competency = Competency(competency_type_id=comp_type.id, fgos_vo_id=fgos_vo.id, code=comp_code, name=comp_name)
-                session.add(competency); session.flush(); saved_competencies_count += 1; logger.debug(f"save_fgos_data: Created Competency {competency.code} (ID: {competency.id}) for FGOS {fgos_vo.id}.")
-            logger.info(f"save_fgos_data: Saved {saved_competencies_count} competencies for FGOS {fgos_vo.id}.")
-            recommended_ps_codes = parsed_data.get('recommended_ps_codes', []); logger.info(f"save_fgos_data: Found {len(recommended_ps_codes)} potential recommended PS codes.")
-            if len(recommended_ps_codes) > 0:
-                 existing_prof_standards = session.query(ProfStandard).filter(ProfStandard.code.in_(recommended_ps_codes)).all(); ps_by_code = {ps.code: ps for ps in existing_prof_standards}
-                 linked_ps_count = 0
-                 for ps_code in recommended_ps_codes:
-                    prof_standard = ps_by_code.get(ps_code)
-                    if prof_standard:
-                        existing_link = session.query(FgosRecommendedPs).filter_by(fgos_vo_id=fgos_vo.id, prof_standard_id=prof_standard.id).first()
-                        if not existing_link: link = FgosRecommendedPs(fgos_vo_id=fgos_vo.id, prof_standard_id=prof_standard.id, is_mandatory=False); session.add(link); linked_ps_count += 1; logger.debug(f"save_fgos_data: Created link FGOS {fgos_vo.id} <-> PS {prof_standard.code}.")
-                        else: logger.debug(f"save_fgos_data: Link between FGOS {fgos_vo.id} and PS {prof_standard.code} already exists.")
-                    else: logger.warning(f"save_fgos_data: Recommended PS with code {ps_code} not found in DB. Skipping link.")
-                 logger.info(f"save_fgos_data: Queued {linked_ps_count} new recommended PS links.")
+        existing_fgos = session.query(FgosVo).filter_by(direction_code=fgos_direction_code, education_level=fgos_education_level, number=fgos_number, date=fgos_date_obj).first()
+        fgos_vo = None 
+        if existing_fgos:
+            if force_update:
+                logger.info(f"save_fgos_data: Existing FGOS found ({existing_fgos.id}). Force update. Deleting old comps/links...")
+                session.query(Competency).filter_by(fgos_vo_id=existing_fgos.id).delete(synchronize_session='fetch')
+                session.query(FgosRecommendedPs).filter_by(fgos_vo_id=existing_fgos.id).delete(synchronize_session='fetch'); session.flush()
+                fgos_vo = existing_fgos; fgos_vo.direction_name = fgos_direction_name or 'Not specified'; fgos_vo.generation = fgos_generation; fgos_vo.file_path = filename
+                session.add(fgos_vo); session.flush(); logger.info(f"save_fgos_data: Existing FGOS ({fgos_vo.id}) updated.")
+            else: logger.warning(f"save_fgos_data: FGOS with same key data already exists ({existing_fgos.id}). Skipping save."); raise IntegrityError("FGOS with this direction, number, and date already exists.", {}, None) # Поднимаем ошибку
+        else: 
+            fgos_vo = FgosVo(number=fgos_number, date=fgos_date_obj, direction_code=fgos_direction_code, direction_name=fgos_direction_name or 'Not specified', education_level=fgos_education_level, generation=fgos_generation, file_path=filename)
+            session.add(fgos_vo); session.flush(); logger.info(f"save_fgos_data: New FgosVo created with ID {fgos_vo.id} for {fgos_vo.direction_code}.")
+        comp_types_map = {ct.code: ct for ct in session.query(CompetencyType).filter(CompetencyType.code.in_(['УК', 'ОПК'])).all()}
+        if not comp_types_map: logger.error("save_fgos_data: CompetencyType (УК, ОПК) not found. Cannot save competencies."); raise ValueError("CompetencyType (УК, ОПК) not found.")
+        saved_competencies_count = 0; all_parsed_competencies = parsed_data.get('uk_competencies', []) + parsed_data.get('opk_competencies', [])
+        for parsed_comp in all_parsed_competencies:
+            comp_code = parsed_comp.get('code'); comp_name = parsed_comp.get('name')
+            if not comp_code or not comp_name: logger.warning(f"save_fgos_data: Skipping competency due to missing code/name: {parsed_comp}"); continue
+            comp_prefix = comp_code.split('-')[0].upper(); comp_type = comp_types_map.get(comp_prefix)
+            if not comp_type: logger.warning(f"save_fgos_data: Skipping competency {comp_code}: Competency type {comp_prefix} not found."); continue
+            existing_comp_for_fgos = session.query(Competency).filter_by(code=comp_code, competency_type_id=comp_type.id, fgos_vo_id=fgos_vo.id).first()
+            if existing_comp_for_fgos: logger.warning(f"save_fgos_data: Competency {comp_code} already exists for FGOS {fgos_vo.id}. Skipping."); continue 
+            competency = Competency(competency_type_id=comp_type.id, fgos_vo_id=fgos_vo.id, code=comp_code, name=comp_name)
+            session.add(competency); session.flush(); saved_competencies_count += 1; logger.debug(f"save_fgos_data: Created Competency {competency.code} (ID: {competency.id}) for FGOS {fgos_vo.id}.")
+        logger.info(f"save_fgos_data: Saved {saved_competencies_count} competencies for FGOS {fgos_vo.id}.")
+        recommended_ps_codes = parsed_data.get('recommended_ps_codes', []); logger.info(f"save_fgos_data: Found {len(recommended_ps_codes)} potential recommended PS codes.")
+        if len(recommended_ps_codes) > 0:
+             existing_prof_standards = session.query(ProfStandard).filter(ProfStandard.code.in_(recommended_ps_codes)).all(); ps_by_code = {ps.code: ps for ps in existing_prof_standards}
+             linked_ps_count = 0
+             for ps_code in recommended_ps_codes:
+                prof_standard = ps_by_code.get(ps_code)
+                if prof_standard:
+                    existing_link = session.query(FgosRecommendedPs).filter_by(fgos_vo_id=fgos_vo.id, prof_standard_id=prof_standard.id).first()
+                    if not existing_link: link = FgosRecommendedPs(fgos_vo_id=fgos_vo.id, prof_standard_id=prof_standard.id, is_mandatory=False); session.add(link); linked_ps_count += 1; logger.debug(f"save_fgos_data: Created link FGOS {fgos_vo.id} <-> PS {prof_standard.code}.")
+                    else: logger.debug(f"save_fgos_data: Link between FGOS {fgos_vo.id} and PS {prof_standard.code} already exists.")
+                else: logger.warning(f"save_fgos_data: Recommended PS with code {ps_code} not found in DB. Skipping link.")
+             logger.info(f"save_fgos_data: Queued {linked_ps_count} new recommended PS links.")
         logger.info(f"save_fgos_data: Changes for FGOS ID {fgos_vo.id} prepared. Outer commit required."); return fgos_vo
-    except IntegrityError as e: logger.error(f"save_fgos_data: Integrity error for FGOS from '{filename}': {e}", exc_info=True); return None 
-    except SQLAlchemyError as e: logger.error(f"save_fgos_data: Database error for FGOS from '{filename}': {e}", exc_info=True); return None
-    except Exception as e: logger.error(f"save_fgos_data: Unexpected error for FGOS from '{filename}': {e}", exc_info=True); return None
+    except IntegrityError as e: logger.error(f"save_fgos_data: Integrity error for FGOS from '{filename}': {e}", exc_info=True); raise e 
+    except SQLAlchemyError as e: logger.error(f"save_fgos_data: Database error for FGOS from '{filename}': {e}", exc_info=True); raise e
+    except Exception as e: logger.error(f"save_fgos_data: Unexpected error for FGOS from '{filename}': {e}", exc_info=True); raise e
 
 def get_fgos_list() -> List[FgosVo]:
     try:
@@ -748,69 +782,171 @@ def get_fgos_details(fgos_id: int) -> Optional[Dict[str, Any]]:
 def delete_fgos(fgos_id: int, session: Session) -> bool:
     logger.info(f"delete_fgos: Attempting to delete FGOS with id: {fgos_id}")
     try:
-        with session.begin_nested(): 
-            fgos_to_delete = session.query(FgosVo).get(fgos_id)
-            if not fgos_to_delete: logger.warning(f"delete_fgos: FGOS with id {fgos_id} not found for deletion."); return False 
-            session.delete(fgos_to_delete); logger.info(f"delete_fgos: FGOS with id {fgos_id} and related entities marked for deletion.")
-        logger.info(f"delete_fgos: Deletion for FGOS {fgos_id} prepared. Outer commit required."); return True 
-    except SQLAlchemyError as e: logger.error(f"delete_fgos: Database error deleting FGOS {fgos_id}: {e}", exc_info=True); raise e 
-    except Exception as e: logger.error(f"delete_fgos: Unexpected error deleting FGOS {fgos_id}: {e}", exc_info=True); raise e 
+         fgos_to_delete = session.query(FgosVo).get(fgos_id)
+         if not fgos_to_delete: logger.warning(f"delete_fgos: FGOS with id {fgos_id} not found for deletion."); return False 
+         
+         session.delete(fgos_to_delete)
+         logger.info(f"delete_fgos: FGOS with id {fgos_id} and related entities marked for deletion.")
+         return True 
+    except SQLAlchemyError as e: logger.rollback(); logger.error(f"delete_fgos: Database error deleting FGOS {fgos_id}: {e}", exc_info=True); raise e 
+    except Exception as e: logger.rollback(); logger.error(f"delete_fgos: Unexpected error deleting FGOS {fgos_id}: {e}", exc_info=True); raise e 
 
-def _prepare_ps_structure_from_dict(structure_dict: Dict[str, Any], session: Session) -> List[Any]:
-    logger.debug("_prepare_ps_structure_from_dict: Preparing PS structure objects.")
-    objects = []
-    for otf_data in structure_dict.get('generalized_labor_functions', []):
-        otf_obj = GeneralizedLaborFunction(code=otf_data.get('code'), name=otf_data.get('name'), qualification_level=otf_data.get('qualification_level')); objects.append(otf_obj)
-        for tf_data in otf_data.get('labor_functions', []):
-            tf_obj = LaborFunction(code=tf_data.get('code'), name=tf_data.get('name'), qualification_level=tf_data.get('qualification_level'), generalized_labor_function=otf_obj); objects.append(tf_obj)
-            for i, la_data in enumerate(tf_data.get('labor_actions', [])): objects.append(LaborAction(labor_function=tf_obj, description=la_data.get('description'), order=i))
-            for i, rs_data in enumerate(tf_data.get('required_skills', [])): objects.append(RequiredSkill(labor_function=tf_obj, description=rs_data.get('description'), order=i))
-            for i, rk_data in enumerate(tf_data.get('required_knowledge', [])): objects.append(RequiredKnowledge(labor_function=tf_obj, description=rk_data.get('description'), order=i))
-    return objects
+# ИЗМЕНЕНИЕ: Функция парсинга и предпросмотра ПС
+def handle_prof_standard_upload_parsing(file_bytes: bytes, filename: str) -> Dict[str, Any]:
+    """
+    Handles the parsing of a PS file after upload. Calls the appropriate parser orchestrator.
+    Returns the parsed data dictionary or an error result.
+    This function is called by the /profstandards/parse-preview route.
+    """
+    logger.info(f"handle_prof_standard_upload_parsing: Processing upload for file: {filename}")
+    # parse_prof_standard - это оркестратор в parsers.py, который вызывает нужный парсер (сейчас только XML)
+    return parse_prof_standard(file_bytes, filename)
 
-def parse_prof_standard_file(file_bytes: bytes, filename: str) -> Dict[str, Any]:
-    logger.info(f"parse_prof_standard_file: Starting PS parsing for file: {filename}")
-    try:
-        result = parse_prof_standard(file_bytes, filename) 
-        if result.get('success') and result.get('parsed_data'): logger.info(f"parse_prof_standard_file: Parsing successful for {filename}."); return result 
-        else: logger.warning(f"parse_prof_standard_file: Parsing failed or no data for {filename}. Error: {result.get('error')}"); return result 
-    except Exception as e: logger.error(f"parse_prof_standard_file: Unexpected error during PS parsing for {filename}: {e}", exc_info=True); return {"success": False, "error": f"Unexpected error parsing file '{filename}': {e}", "filename": filename, "error_type": "unexpected_error"}
 
+# ИЗМЕНЕНИЕ: Функция сохранения ПС после предпросмотра
 def save_prof_standard_data(parsed_data: Dict[str, Any], filename: str, session: Session, force_update: bool = False) -> Optional[ProfStandard]:
+    """
+    Saves the parsed professional standard data (including structure) to the database.
+    Handles finding/creating ProfStandard and its nested elements.
+    This function is called by the /profstandards/save route and the CLI command.
+    """
     logger.info(f"save_prof_standard_data: Saving PS data from '{filename}'. force_update: {force_update}")
-    if not isinstance(parsed_data, dict): logger.error("save_prof_standard_data: Invalid parsed_data format (not a dict)."); return None
-    ps_code = parsed_data.get('code'); ps_name = parsed_data.get('name'); ps_markdown = parsed_data.get('parsed_content_markdown')
-    structure_dict = parsed_data.get('structure') 
-    if not structure_dict: logger.warning(f"save_prof_standard_data: No detailed structure in parsed_data for PS {ps_code}. Saving metadata/markdown only."); structure_dict = {} 
-    if not ps_code or not ps_name or ps_markdown is None: logger.error("save_prof_standard_data: Missing essential data (code, name, markdown) from parsed data."); return None
-    try:
-        with session.begin_nested(): 
-            existing_ps = session.query(ProfStandard).filter_by(code=ps_code).first(); prof_standard = None 
-            if existing_ps:
-                if force_update:
-                    logger.info(f"save_prof_standard_data: Existing PS ({existing_ps.id}, code: {ps_code}). Force update. Deleting old structure...")
-                    session.query(GeneralizedLaborFunction).filter_by(prof_standard_id=existing_ps.id).delete(synchronize_session='fetch'); session.flush() 
-                    prof_standard = existing_ps; prof_standard.name = ps_name; prof_standard.parsed_content = ps_markdown 
-                    prof_standard.order_number = parsed_data.get('order_number', prof_standard.order_number); prof_standard.order_date = parsed_data.get('order_date', prof_standard.order_date)
-                    prof_standard.registration_number = parsed_data.get('registration_number', prof_standard.registration_number); prof_standard.registration_date = parsed_data.get('registration_date', prof_standard.registration_date)
-                    session.add(prof_standard); session.flush(); logger.info(f"save_prof_standard_data: Existing PS ({prof_standard.id}) updated.")
-                else: logger.warning(f"save_prof_standard_data: PS {ps_code} already exists ({existing_ps.id}). No force update. Skipping."); return existing_ps 
-            else: 
-                prof_standard = ProfStandard(code=ps_code, name=ps_name, parsed_content=ps_markdown, order_number = parsed_data.get('order_number'), order_date = parsed_data.get('order_date'), registration_number = parsed_data.get('registration_number'), registration_date = parsed_data.get('registration_date'))
-                session.add(prof_standard); session.flush(); logger.info(f"save_prof_standard_data: New ProfStandard created (ID {prof_standard.id}, code {ps_code}).")
-            if structure_dict and isinstance(structure_dict.get('generalized_labor_functions'), list):
-                 ps_structure_objects = _prepare_ps_structure_from_dict(structure_dict, session)
-                 for obj in ps_structure_objects:
-                     if hasattr(obj, 'prof_standard_id'): obj.prof_standard_id = prof_standard.id
-                     session.add(obj)
-                 session.flush(); logger.info(f"save_prof_standard_data: Saved structure for PS {prof_standard.code}.")
-            elif structure_dict and structure_dict.get('generalized_labor_functions') is not None: logger.warning(f"save_prof_standard_data: 'generalized_labor_functions' in parsed structure is not a list for PS {ps_code}. Skipping structure save.")
-            else: logger.debug(f"save_prof_standard_data: No detailed structure parsed/provided for PS {ps_code}.")
-        logger.info(f"save_prof_standard_data: Final changes for PS ID {prof_standard.id} prepared. Outer commit required."); return prof_standard
-    except IntegrityError as e: message = f"save_prof_standard_data: Integrity error for PS '{ps_code}' from '{filename}': {e}"; logger.error(message, exc_info=True); return None 
-    except SQLAlchemyError as e: message = f"save_prof_standard_data: Database error for PS '{ps_code}' from '{filename}': {e}"; logger.error(message, exc_info=True); return None
-    except Exception as e: message = f"save_prof_standard_data: Unexpected error for PS '{ps_code}' from '{filename}': {e}"; logger.error(message, exc_info=True); return None
 
+    ps_code = parsed_data.get('code')
+    ps_name = parsed_data.get('name')
+    generalized_labor_functions_data = parsed_data.get('generalized_labor_functions', [])
+
+    if not ps_code or not ps_name:
+        logger.error("save_prof_standard_data: Missing essential PS metadata (code or name) in parsed_data.")
+        raise ValueError("Неполные данные ПС для сохранения: отсутствует код или название.")
+
+    if not isinstance(generalized_labor_functions_data, list):
+         logger.error("save_prof_standard_data: 'generalized_labor_functions' in parsed_data is not a list.")
+         raise ValueError("Неверный формат данных структуры ПС.")
+
+    try:
+        existing_ps = session.query(ProfStandard).filter_by(code=ps_code).first()
+        current_ps = None
+
+        if existing_ps:
+            if force_update:
+                logger.info(f"Найден существующий ПС (ID: {existing_ps.id}) для кода {ps_code}. force_update=True. Удаление старой структуры...")
+                
+                session.query(GeneralizedLaborFunction).filter_by(prof_standard_id=existing_ps.id).delete(synchronize_session='fetch')
+                session.flush() 
+
+                existing_ps.name = ps_name
+                existing_ps.order_number = parsed_data.get('order_number')
+                existing_ps.order_date = parsed_data.get('order_date') 
+                existing_ps.registration_number = parsed_data.get('registration_number')
+                existing_ps.registration_date = parsed_data.get('registration_date') 
+                existing_ps.parsed_content = parsed_data.get('parsed_content_markdown') # Если в парсере XML есть это поле
+                
+                session.add(existing_ps) 
+                current_ps = existing_ps
+                logger.info(f"save_prof_standard_data: Существующий ПС ({current_ps.id}) обновлен.")
+
+            else:
+                logger.warning(f"ПС с кодом {ps_code} уже существует (ID: {existing_ps.id}). force_update=False. Пропуск сохранения.")
+                raise IntegrityError(f"Профессиональный стандарт с кодом {ps_code} уже существует.", {}, None) # Поднимаем ошибку для 409 Conflict
+        else:
+            logger.info(f"Создание нового ПС с кодом {ps_code}.")
+            current_ps = ProfStandard(
+                code=ps_code,
+                name=ps_name,
+                order_number=parsed_data.get('order_number'),
+                order_date=parsed_data.get('order_date'), 
+                registration_number=parsed_data.get('registration_number'),
+                registration_date=parsed_data.get('registration_date'), 
+                parsed_content=parsed_data.get('parsed_content_markdown') # Если в парсере XML есть это поле
+            )
+            session.add(current_ps)
+            session.flush() 
+            logger.info(f"save_prof_standard_data: Новый ProfStandard создан с ID {current_ps.id} для кода {current_ps.code}.")
+
+        saved_glf_count = 0
+        for otf_data in generalized_labor_functions_data:
+            otf_code = otf_data.get('code')
+            otf_name = otf_data.get('name')
+            otf_level = otf_data.get('qualification_level')
+            tf_list_data = otf_data.get('labor_functions', [])
+
+            if not otf_code or not otf_name or not isinstance(tf_list_data, list):
+                 logger.warning(f"save_prof_standard_data: Пропуск ОТФ из-за неполных данных или неверного формата ТФ списка: {otf_data}")
+                 continue 
+
+            new_otf = GeneralizedLaborFunction(
+                prof_standard_id=current_ps.id, 
+                code=otf_code,
+                name=otf_name,
+                qualification_level=otf_level
+            )
+            session.add(new_otf)
+            session.flush() 
+            saved_glf_count += 1
+            logger.debug(f"save_prof_standard_data:   Создана ОТФ {new_otf.code} (ID: {new_otf.id})")
+
+            saved_tf_count = 0
+            for tf_data in tf_list_data:
+                tf_code = tf_data.get('code')
+                tf_name = tf_data.get('name')
+                tf_level = tf_data.get('qualification_level')
+                la_list_data = tf_data.get('labor_actions', [])
+                rs_list_data = tf_data.get('required_skills', [])
+                rk_list_data = tf_data.get('required_knowledge', [])
+
+                if not tf_code or not tf_name or not isinstance(la_list_data, list) or not isinstance(rs_list_data, list) or not isinstance(rk_list_data, list):
+                     logger.warning(f"save_prof_standard_data:   Пропуск ТФ из-за неполных данных или неверного формата списков: {tf_data}")
+                     continue 
+
+                new_tf = LaborFunction(
+                    generalized_labor_function_id=new_otf.id, 
+                    code=tf_code,
+                    name=tf_name,
+                    qualification_level=tf_level
+                )
+                session.add(new_tf)
+                session.flush() 
+                saved_tf_count += 1
+                logger.debug(f"save_prof_standard_data:     Создана ТФ {new_tf.code} (ID: {new_tf.id})")
+
+                for i, la_data in enumerate(la_list_data):
+                     la_description = la_data.get('description')
+                     if la_description: 
+                         session.add(LaborAction(labor_function_id=new_tf.id, description=la_description.strip(), order=la_data.get('order', i))) # Использовать order из данных, или i
+
+                for i, rs_data in enumerate(rs_list_data):
+                     rs_description = rs_data.get('description')
+                     if rs_description: 
+                         session.add(RequiredSkill(labor_function_id=new_tf.id, description=rs_description.strip(), order=rs_data.get('order', i)))
+
+                for i, rk_data in enumerate(rk_list_data):
+                     rk_description = rk_data.get('description')
+                     if rk_description: 
+                         session.add(RequiredKnowledge(labor_function_id=new_tf.id, description=rk_description.strip(), order=rk_data.get('order', i)))
+
+            logger.debug(f"save_prof_standard_data:   Сохранено {saved_tf_count} ТФ для ОТФ {new_otf.code}.")
+
+        logger.info(f"save_prof_standard_data: Сохранено {saved_glf_count} ОТФ для ПС {current_ps.code}.")
+
+        logger.info(f"save_prof_standard_data: Changes for PS ID {current_ps.id} prepared. Outer commit required.")
+        
+        return current_ps
+
+    except IntegrityError as e:
+        session.rollback() # Откат, если произошла ошибка
+        logger.error(f"save_prof_standard_data: Ошибка целостности БД при сохранении ПС '{ps_code}': {e}", exc_info=True)
+        raise  # Перебрасываем исключение
+    except SQLAlchemyError as e:
+        session.rollback()
+        logger.error(f"save_prof_standard_data: Ошибка SQLAlchemy при сохранении ПС '{ps_code}': {e}", exc_info=True)
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"save_prof_standard_data: Неожиданная ошибка при сохранении ПС '{ps_code}': {e}", exc_info=True)
+        raise
+
+# ... (остальные функции ProfStandard Fetching Functions) ...
 def get_prof_standards_list() -> List[ProfStandard]:
     logger.debug("get_prof_standards_list: Fetching all ProfStandards.")
     try:
@@ -829,22 +965,36 @@ def get_prof_standard_details(ps_id: int) -> Optional[Dict[str, Any]]:
             selectinload(ProfStandard.generalized_labor_functions).selectinload(GeneralizedLaborFunction.labor_functions).selectinload(LaborFunction.required_knowledge) 
         ).get(ps_id)
         if not ps: logger.warning(f"get_prof_standard_details: PS with ID {ps_id} not found."); return None
+        
+        # NOTE: ps.parsed_content - это Markdown, который был сохранен.
+        # Для отображения структуры в ProfStandardPreviewModal, фронтенд ожидает structured_data.
+        # Если `parse_prof_standard_xml` в parsers.py сохраняет полную структуру в `parsed_data`,
+        # а затем save_prof_standard_data сохраняет только метаданные и markdown,
+        # то get_prof_standard_details должен явно вытаскивать иерархию из БД.
+        # Сейчас get_prof_standard_details УЖЕ загружает иерархию через selectinload.
+        # Поэтому просто сериализуем ее.
+        
         details = ps.to_dict(rules=['-generalized_labor_functions', '-fgos_assoc', '-educational_program_assoc'])
-        details['parsed_content_markdown'] = ps.parsed_content; otf_list = []
-        if len(ps.generalized_labor_functions) > 0:
+        details['parsed_content_markdown'] = ps.parsed_content # Здесь будет сырой XML или Markdown
+        
+        # Сериализуем иерархию ОТФ, ТФ, ТД, НУ, НЗ
+        otf_list = []
+        if ps.generalized_labor_functions:
             sorted_otfs = sorted(ps.generalized_labor_functions, key=lambda otf: otf.code)
             for otf_item in sorted_otfs:
-                 otf_dict = otf_item.to_dict(rules=['-prof_standard', '-labor_functions']); otf_dict['labor_functions'] = []
-                 if len(otf_item.labor_functions) > 0:
-                      sorted_tfs = sorted(otf_item.labor_functions, key=lambda tf: tf.code)
-                      for tf_item in sorted_tfs:
-                           tf_dict = tf_item.to_dict(rules=['-generalized_labor_function', '-labor_actions', '-required_skills', '-required_knowledge', '-indicators', '-competencies'])
-                           tf_dict['labor_actions'] = sorted([la.to_dict() for la in tf_item.labor_actions], key=lambda x: x.get('order', 0))
-                           tf_dict['required_skills'] = sorted([rs.to_dict() for rs in tf_item.required_skills], key=lambda x: x.get('order', 0))
-                           tf_dict['required_knowledge'] = sorted([rk.to_dict() for rk in tf_item.required_knowledge], key=lambda x: x.get('order', 0))
-                           otf_dict['labor_functions'].append(tf_dict)
-                 otf_list.append(otf_dict)
+                otf_dict = otf_item.to_dict(rules=['-prof_standard', '-labor_functions'])
+                otf_dict['labor_functions'] = []
+                if otf_item.labor_functions:
+                    sorted_tfs = sorted(otf_item.labor_functions, key=lambda tf: tf.code)
+                    for tf_item in sorted_tfs:
+                        tf_dict = tf_item.to_dict(rules=['-generalized_labor_function', '-labor_actions', '-required_skills', '-required_knowledge', '-indicators', '-competencies'])
+                        tf_dict['labor_actions'] = sorted([la.to_dict() for la in tf_item.labor_actions], key=lambda x: x.get('order', 0) if x.get('order') is not None else float('inf'))
+                        tf_dict['required_skills'] = sorted([rs.to_dict() for rs in tf_item.required_skills], key=lambda x: x.get('order', 0) if x.get('order') is not None else float('inf'))
+                        tf_dict['required_knowledge'] = sorted([rk.to_dict() for rk in tf_item.required_knowledge], key=lambda x: x.get('order', 0) if x.get('order') is not None else float('inf'))
+                        otf_dict['labor_functions'].append(tf_dict)
+                otf_list.append(otf_dict)
         details['generalized_labor_functions'] = otf_list
+        
         logger.debug(f"get_prof_standard_details: Fetched details for PS {ps_id}."); return details
     except SQLAlchemyError as e: logger.error(f"get_prof_standard_details: Database error for PS ID {ps_id}: {e}", exc_info=True); return None
     except Exception as e: logger.error(f"get_prof_standard_details: Unexpected error for PS ID {ps_id}: {e}", exc_info=True); return None

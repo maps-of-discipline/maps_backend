@@ -1,0 +1,325 @@
+type: collection.insomnia.rest/5.0
+name: Scratch Pad
+meta:
+  id: wrk_scratchpad
+  created: 1744366275666
+  modified: 1744366275666
+collection:
+  - url: "{{ base_url }}/api/auth/login"
+    name: 1. Login Test User
+    meta:
+      id: req_81f9765d7a2c4d3086935e373cc6dbb1
+      created: 1744399150000
+      modified: 1744399250000
+      isPrivate: false
+      description: Получает access и refresh токены для пользователя testuser/password
+      sortKey: -1000
+    method: POST
+    body:
+      mimeType: application/json
+      text: |-
+        {
+        	"login": "testuser",
+        	"password": "password"
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
+        id: pair_h1
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ base_url }}/api/competencies/matrix/{{ test_aup_id }}"
+    name: 2. Get Matrix Data (Test AUP)
+    meta:
+      id: req_556bfd3161334a1b8156bbe2e0b3cac1
+      created: 1744399200000
+      modified: 1747079864269
+      isPrivate: false
+      description: "Получает данные для матрицы тестового АУП (ID: {{ test_aup_id }})"
+      sortKey: -900
+    method: GET
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ base_url }}/api/competencies/matrix/link"
+    name: 3. Add Matrix Link (Test)
+    meta:
+      id: req_e749bf205b7641a08443dd000fddb829
+      created: 1744399250000
+      modified: 1746815613727
+      isPrivate: false
+      description: "Добавляет связь: Дисциплина (AupData ID={{ test_aup_data_id_2 }})
+        <-> Индикатор (ID={{ test_indicator_id_1 }})"
+      sortKey: -800
+    method: POST
+    body:
+      mimeType: application/json
+      text: |-
+        {
+        	"aup_data_id": {{ test_aup_data_id_2 }},
+        	"indicator_id": {{ test_indicator_id_1 }}
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
+        id: pair_h2
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ base_url }}/api/competencies/matrix/link"
+    name: 4. Delete Matrix Link (Test)
+    meta:
+      id: req_ea220ce4372f499fb390f55fbb652b10
+      created: 1744399300000
+      modified: 1744386110027
+      isPrivate: false
+      description: "Удаляет связь: Дисциплина (AupData ID={{ test_aup_data_id_1 }})
+        <-> Индикатор (ID={{ test_indicator_id_1 }})"
+      sortKey: -700
+    method: DELETE
+    body:
+      mimeType: application/json
+      text: |-
+        {
+        	"aup_data_id": {{ test_aup_data_id_2 }},
+        	"indicator_id": {{ test_indicator_id_1 }}
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
+        id: pair_h3
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ base_url }}/api/competencies/programs"
+    name: 5. Get All Programs
+    meta:
+      id: req_da05c85bf564400d8962dc3b992bde4d
+      created: 1744399500000
+      modified: 1747079151357
+      isPrivate: false
+      description: Получает список всех образовательных программ
+      sortKey: -600
+    method: GET
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ base_url }}/api/competencies/programs/{{ test_program_id }}"
+    name: 6. Get Program Details (Test)
+    meta:
+      id: req_5b730e47196e4abc950e495477317c00
+      created: 1744399600000
+      modified: 1747080885656
+      isPrivate: false
+      description: "Получает детали тестовой ОП (ID: {{ test_program_id }})"
+      sortKey: -500
+    method: GET
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ base_url }}/api/competencies/competencies"
+    name: 7. Create Competency (Test PC)
+    meta:
+      id: req_1fd70e5706494c4f8f1ae30eddaae7ce
+      created: 1744399700000
+      modified: 1744400200000
+      isPrivate: false
+      description: Создает новую тестовую ПК
+      sortKey: -400
+    method: POST
+    body:
+      mimeType: application/json
+      text: |-
+        {
+          "type_code": "ПК",
+          "code": "ПК-Тест99",
+          "name": "Тестовая компетенция для Insomnia",
+          "description": "Создана через API тест"
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
+        id: pair_h4
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ base_url }}/api/competencies/indicators"
+    name: 8. Create Indicator (Test)
+    meta:
+      id: req_0c6642746928445aaf3571dd0005dcd0
+      created: 1744399800000
+      modified: 1744400300000
+      isPrivate: false
+      description: "Создает новый тестовый индикатор для компетенции ПК-1 (ID: {{
+        test_competency_id }})"
+      sortKey: -300
+    method: POST
+    body:
+      mimeType: application/json
+      text: |-
+        {
+          "competency_id": {{ test_competency_id }},
+          "code": "ИПК-Тест99.1",
+          "formulation": "Тестовая формулировка индикатора из Insomnia",
+          "source": "Insomnia Test"
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
+        id: pair_h5
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ base_url }}/api/competencies/profstandards/upload"
+    name: 9. Upload ProfStandard (Test)
+    meta:
+      id: req_b7d91a0a93d647a7966a7e80d7ecaf4b
+      created: 1744399900000
+      modified: 1744400400000
+      isPrivate: false
+      description: Загружает файл профстандарта (выберите файл вручную)
+      sortKey: -200
+    method: POST
+    body:
+      mimeType: multipart/form-data
+      params:
+        - id: file_ps_1
+          name: file
+          type: file
+          disabled: false
+          multiline: false
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ base_url }}/api/competencies/external/aups"
+    name: 10. Get External Disciplines
+    meta:
+      id: req_98e9153a4b1d49b6814efe07ce043f2b
+      created: 1746815899896
+      modified: 1746891816376
+      isPrivate: false
+      description: Получает список всех образовательных программ
+      sortKey: -550
+    method: GET
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+cookieJar:
+  name: Default Jar
+  meta:
+    id: jar_99d30891da4bdcebc63947a8fc17f076de878684
+    created: 1744366290279
+    modified: 1744366290279
+environments:
+  name: Base Environment
+  meta:
+    id: env_99d30891da4bdcebc63947a8fc17f076de878684
+    created: 1744366290179
+    modified: 1747078987573
+    isPrivate: false
+  data:
+    base_url: http://127.0.0.1:5000
+    auth_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxMywibmFtZSI6Ilx1MDQyMlx1MDQzNVx1MDQ0MVx1MDQ0Mlx1MDQzZVx1MDQzMlx1MDQ0Ylx1MDQzOSBcdTA0MWNcdTA0MzVcdTA0NDJcdTA0M2VcdTA0MzRcdTA0MzhcdTA0NDFcdTA0NDIiLCJsb2dpbiI6InRlc3R1c2VyIiwicm9sZXMiOlt7ImlkIjoyLCJuYW1lIjoibWV0aG9kb2xvZ2lzdCJ9XSwiZGVwYXJ0bWVudF9pZCI6bnVsbCwiZmFjdWx0aWVzIjpbXSwiZXhwIjoxNzQ3MDgyNTc5LCJjYW5fZWRpdCI6W10sImFwcHJvdmVkX2xrIjp0cnVlfQ.DLo3_bCCdS6YuuubApGKZXQuP-m-XfzNzCq5eTD3H-Q
+    test_program_id: "1"
+    test_aup_id: B093011451
+    test_competency_id: "201"
+    test_aup_data_id_1: "501"
+    test_aup_data_id_2: "502"
+    test_indicator_id_1: "10"
+    test_indicator_id_2: "210"

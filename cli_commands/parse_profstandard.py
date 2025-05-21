@@ -8,12 +8,12 @@ import logging
 
 # Импорты из вашего приложения
 from maps.models import db # db используется для доступа к сессии
-# from competencies_matrix.logic import save_prof_standard_data, parse_prof_standard_file # <--- ИСПРАВЛЕНО
+# from competencies_matrix.logic import save_prof_standard_data, handle_prof_standard_upload_parsing # <--- ИСПРАВЛЕНО
 from competencies_matrix.logic import (
     save_prof_standard_data, # Импортируем функцию сохранения из logic.py
-    parse_prof_standard_file # Импортируем оркестратор парсинга из logic.py
+    handle_prof_standard_upload_parsing # Импортируем оркестратор парсинга из logic.py
 )
-# from competencies_matrix.parsers import parse_prof_standard_file # <-- Был импорт из parsers, теперь парсинг оркестрируется в logic
+# from competencies_matrix.parsers import handle_prof_standard_upload_parsing # <-- Был импорт из parsers, теперь парсинг оркестрируется в logic
 
 # Настройка логирования
 logger = logging.getLogger(__name__)
@@ -43,8 +43,8 @@ def parse_ps_command(filepath, force, dry_run):
     try:
         # 1. Парсинг файла (используем оркестратор из logic.py)
         print(f"Parsing file: {filename}...")
-        # parse_prof_standard_file теперь возвращает {'success': bool, 'error': str, 'parsed_data': {...}}
-        parse_result = parse_prof_standard_file(filepath) # Теперь принимает путь, читает файл внутри
+        # handle_prof_standard_upload_parsing теперь возвращает {'success': bool, 'error': str, 'parsed_data': {...}}
+        parse_result = handle_prof_standard_upload_parsing(filepath) # Теперь принимает путь, читает файл внутри
 
         if not parse_result['success']:
              print(f"\n!!! PARSING FAILED: {parse_result['error']} !!!")
@@ -53,7 +53,7 @@ def parse_ps_command(filepath, force, dry_run):
 
         parsed_data = parse_result.get('parsed_data')
         if not parsed_data or not parsed_data.get('code') or not parsed_data.get('name'):
-             # Эта проверка может быть избыточна, если parse_prof_standard_file выбрасывает исключения или возвращает success=False
+             # Эта проверка может быть избыточна, если handle_prof_standard_upload_parsing выбрасывает исключения или возвращает success=False
              print("\n!!! PARSING FAILED or incomplete: Could not extract code/name after successful parse. Aborting. !!!")
              return
 

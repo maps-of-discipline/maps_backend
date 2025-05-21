@@ -1,4 +1,4 @@
-# cli_commands/fgos_import.py
+# filepath: cli_commands/fgos_import.py
 import click
 from flask.cli import with_appcontext
 import os
@@ -9,10 +9,9 @@ import logging
 # --- Импортируем необходимые компоненты ---
 from maps.models import db
 # Импортируем функции из логики модуля компетенций
+# ИСПРАВЛЕНО: parse_fgos_file теперь импортируется из logic, как и save_fgos_data
 from competencies_matrix.logic import save_fgos_data, delete_fgos, parse_fgos_file
 from competencies_matrix.models import FgosVo # Нужно для поиска
-# Импортируем парсер напрямую, чтобы управлять его логированием
-from competencies_matrix import fgos_parser # Import the module itself
 
 # Настройка логирования
 logger = logging.getLogger(__name__)
@@ -26,7 +25,7 @@ logger = logging.getLogger(__name__)
 @click.option('--dry-run', is_flag=True, default=False,
               help='Perform read and validation without saving or deleting.')
 @click.option('--debug-parser', is_flag=True, default=False,
-              help='Enable DEBUG logging for the FGOS parser.')
+              help='Enable DEBUG logging for the FGOS parser (in competencies_matrix.parsers).')
 @with_appcontext
 def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
     """
@@ -36,7 +35,8 @@ def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
     FILEPATH: Путь к PDF файлу ФГОС для импорта.
     """
     # Временно повышаем уровень логирования для парсера, если включен флаг отладки
-    parser_logger = logging.getLogger(fgos_parser.__name__)
+    # ИСПРАВЛЕНО: Путь к логгеру парсера
+    parser_logger = logging.getLogger('competencies_matrix.parsers')
     original_parser_level = parser_logger.level
     if debug_parser:
         parser_logger.setLevel(logging.DEBUG)
@@ -75,13 +75,20 @@ def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
              logger.info("\n---> DELETE ONLY mode enabled.")
              fgos_to_delete = None
              
-             if metadata.get('direction_code') and metadata.get('education_level') and metadata.get('order_number') and metadata.get('order_date'):
+             # ИСПРАВЛЕНО: Использование metadata.get() для безопасного доступа
+             # ИСПРАВЛЕНО: Передача datetime.date объекта напрямую, если он есть
+             fgos_number = metadata.get('order_number')
+             fgos_date = metadata.get('order_date')
+             fgos_direction_code = metadata.get('direction_code')
+             fgos_education_level = metadata.get('education_level')
+
+             if fgos_number and fgos_date and fgos_direction_code and fgos_education_level:
                   try:
                        fgos_to_delete = db.session.query(FgosVo).filter_by(
-                            direction_code=metadata['direction_code'],
-                            education_level=metadata['education_level'],
-                            number=metadata['order_number'],
-                            date=metadata['order_date'] # Use the parsed date object directly
+                            number=fgos_number,
+                            date=fgos_date,
+                            direction_code=fgos_direction_code,
+                            education_level=fgos_education_level
                        ).first()
                   except SQLAlchemyError as e:
                         logger.error(f"   - Database error during lookup for delete: {e}")
@@ -93,7 +100,9 @@ def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
              if fgos_to_delete:
                   if not dry_run:
                        logger.info(f"   - Found existing FGOS (id: {fgos_to_delete.id}, code: {fgos_to_delete.direction_code}). Deleting...")
-                       deleted = delete_fgos(fgos_to_delete.id, db.session) # delete_fgos manages its own transaction
+                       # ИСПРАВЛЕНО: Используем db.session.begin() для CLI-транзакции
+                       with db.session.begin(): # Начинаем явную транзакцию
+                            deleted = delete_fgos(fgos_to_delete.id, db.session) # delete_fgos теперь не делает commit
                        if deleted: logger.info("   - FGOS deleted successfully.")
                        else: logger.error("   - Failed to delete FGOS (check logs).")
                   else:
@@ -106,8 +115,10 @@ def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
 
         if not dry_run:
             logger.info("Saving data to database...")
-            saved_fgos = save_fgos_data(parsed_data, filename, db.session, force_update=force)
-
+            # ИСПРАВЛЕНО: Используем db.session.begin() для CLI-транзакции
+            with db.session.begin(): # Начинаем явную транзакцию
+                 saved_fgos = save_fgos_data(parsed_data, filename, db.session, force_update=force)
+            
             if saved_fgos is None:
                  logger.error("\n!!! SAVE FAILED !!!")
                  # Specific error logged in save_fgos_data
@@ -126,9 +137,14 @@ def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
     except ValueError as e:
         logger.error(f"\n!!! PARSING ERROR: {e} !!!")
         logger.error(f"   - Error occurred during parsing file '{filename}'.")
-        if not dry_run: db.session.rollback()
+        # ИСПРАВЛЕНО: db.session.rollback() здесь не нужен, если транзакция управляется `with db.session.begin()`
+        # если произошла ошибка до `with` блока, то сессия и так чистая.
+    except IntegrityError as e: # ИСПРАВЛЕНО: Отлавливаем IntegrityError отдельно
+        # db.session.rollback() # Управляется with db.session.begin()
+        logger.error(f"\n!!! DATABASE INTEGRITY ERROR during import: {e.orig} !!!", exc_info=True)
+        logger.error(f"   - An FGOS with the same identifying data (number, date, direction code, education level) already exists.")
     except Exception as e:
-        if not dry_run: db.session.rollback()
+        # ИСПРАВЛЕНО: db.session.rollback() здесь не нужен, если транзакция управляется `with db.session.begin()`
         logger.error(f"\n!!! UNEXPECTED ERROR during import: {e} !!!", exc_info=True)
     finally:
          parser_logger.setLevel(original_parser_level)
