@@ -5,7 +5,7 @@ from collections import defaultdict
 from itertools import chain
 from pprint import pprint
 
-from flask import Blueprint, make_response, jsonify, request, send_file
+from flask import Blueprint, Response, make_response, jsonify, request, send_file
 
 from app import cache
 
@@ -19,6 +19,12 @@ from utils.logging import logger
 
 from grpc_service.auth_service import AuthGRPCService
 from grpc_service.permission_service import permissionGRPCService
+
+from auth.enum import PermissionsEnum as p
+from auth import require
+from auth.models import Users
+
+from utils.exceptions import EntityNotFoundException, MethodNotAllowed
 
 maps = Blueprint("maps", __name__, url_prefix="/api", static_folder="static")
 
@@ -34,10 +40,10 @@ def getMap(aup):
 
     return make_response(jsonify(json), 200)
 
-
+# 
 @maps.route("/save/<string:aup>", methods=["POST"])
-# @login_required(request)
-def save_map(aup):
+@require(p.canEditOwnMap)
+def save_map(aup: str, authenticated_user: Users) -> Response:
     data = request.get_json()
 
     aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
@@ -61,8 +67,7 @@ def save_map(aup):
                 db.session.add(aup_data)
 
     if changes:
-        payload, verify_result = verify_jwt_token(request.headers["Authorization"])
-        create_changes_revision(payload["user_id"], aup_info.id_aup, changes)
+        create_changes_revision(authenticated_user.id, aup_info.id_aup, changes)
 
     if aup_data_id_map.keys():
         for el in AupData.query.filter(AupData.id.in_(aup_data_id_map.keys())):
@@ -71,8 +76,8 @@ def save_map(aup):
     db.session.commit()
     return make_response(jsonify(create_json(aup)), 200)
 
-
-@maps.route("/meta-info", methods=["GET"])
+#
+@maps.route("/info", methods=["GET"])
 def get_id_edizm():
     measure_coefs = [
         {"id_edizm": 1, "kratn": 2, "value": "Часы", "coef": 0.0625},
@@ -109,16 +114,15 @@ def get_id_edizm():
         200,
     )
 
-
+# 
 @maps.route("/upload", methods=["POST"])
-# @timeit
-# #@login_required(request)
+@require(p.canUploadPlan)
 def upload():
     logger.info("/upload - processing files uploading")
     options = dict(json.loads(request.form["options"]))
     logger.debug(f"/upload - options: {options}")
     res = save_excel_files(request.files, options)
-    return jsonify(res), 200
+    return make_response(jsonify(res), 200)
 
 
 @maps.route("/save_excel/<string:aup>", methods=["GET"])
@@ -174,10 +178,9 @@ def get_modules():
         res.append(module_as_dict)
     return jsonify(res)
 
-
+# 
 @maps.route("/add-module", methods=["POST"])
-# @login_required(request)
-# @aup_require(request)
+@require(p.canAddModule)
 def add_module():
     module = request.get_json()
     if not module["name"]:
@@ -196,14 +199,13 @@ def add_module():
         {"id": new_module.id, "name": new_module.title, "color": new_module.color}
     ), 200
 
-
+# 1
 @maps.route("/modules/<int:id>", methods=["PUT", "DELETE"])
-# @login_required(request)
-# @aup_require(request)
-def edit_or_delete_module(id: int):
+@require(p.canChangeModule)
+def edit_or_delete_module(id: int) -> Response:
     module = D_Modules.query.get(id)
     if not module:
-        return jsonify({"result": "error", "message": "not found"}), 404
+        raise EntityNotFoundException("Module")
 
     if request.method == "DELETE":
         for el in AupData.query.filter_by(id_module=module.id).all():
@@ -212,7 +214,7 @@ def edit_or_delete_module(id: int):
 
         db.session.delete(module)
         db.session.commit()
-        return jsonify({"result": "ok"}), 200
+        return jsonify({"result": "ok"})
 
     elif request.method == "PUT":
         data = request.get_json()
@@ -222,7 +224,10 @@ def edit_or_delete_module(id: int):
         db.session.add(module)
         db.session.commit()
 
-        return jsonify(module.as_dict()), 200
+        return jsonify(module.as_dict())
+    
+    else:
+        raise MethodNotAllowed("Метод не определен")
 
 
 @maps.route("/getAllMaps")
@@ -271,10 +276,9 @@ def getAllMaps():
         )
     return jsonify(li)
 
-
+# 1
 @maps.route("/add-group", methods=["POST"])
-# @login_required(request)
-# @aup_require(request)
+@require(p.canAddGroup)
 def AddNewGroup():
     request_data = request.get_json()
     if request_data["name"] == "":
@@ -289,10 +293,9 @@ def AddNewGroup():
     d["color"] = data.color
     return make_response(jsonify(d), 200)
 
-
+# 
 @maps.route("/delete-group", methods=["POST"])
-# @login_required(request)
-# @aup_require(request)
+@require(p.canDeleteGroup)
 def DeleteGroup():
     request_data = request.get_json()
     d = AupData.query.filter_by(id_group=request_data["id"]).all()
@@ -346,10 +349,9 @@ def GetModulesByAup(aup):
             )
     return make_response(jsonify(modules), 200)
 
-
+# 
 @maps.route("/update-group", methods=["POST"])
-# @login_required(request)
-# @aup_require(request)
+@require(p.canUpdateGroup)
 def UpdateGroup():
     request_data = request.get_json()
     gr = Groups.query.filter_by(id_group=request_data["id"]).first()
@@ -402,10 +404,9 @@ def export_aup_excel(aup: str):
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
-
+# 
 @maps.route("/weeks/<string:aup>/save", methods=["POST"])
-# @login_required(request)
-# @aup_require(request)
+@require(p.canSaveWeeks)
 def save_weeks(aup: str):
     data: dict = dict(request.get_json())
     data = {int(k): int(v) for k, v in data.items()}
@@ -534,10 +535,9 @@ def get_op_names():
     res = [el.as_dict() for el in names]
     return jsonify(res), 200
 
-
+# 1
 @maps.route("/reports/save-choosen-displines", methods=["POST"])
-# @login_required(request)
-# @aup_require(request)
+@require(p.canSaveReports)
 def save_choosen_displines():
     data: dict = dict(request.get_json())
     data["aup_id"] = int(data["aup_id"])
@@ -556,10 +556,12 @@ def save_choosen_displines():
     if query:
         query.used_for_report = True
     db.session.commit()
+    
+    return jsonify({"result": "ok"})
 
-
+# 1
 @maps.route("/practical_training_report", methods=["GET"])
-# #@login_required(request)
+@require()
 @cache.cached(timeout=0)
 def data_monitoring_of_practical_training():
     query = (
@@ -619,13 +621,10 @@ def data_monitoring_of_practical_training():
 
     return jsonify(data)
 
-
+# 1
 @maps.route("/short-control-types", methods=["GET"])
-# @login_required(request)
-def get_short_control_types():
-    payload, _ = verify_jwt_token(request.headers["Authorization"])
-    user_id = payload["user_id"]
-
+@require()
+def get_short_control_types(authenticated_user: Users) -> Response:
     # сокращённые формы, созданные пользователем
     user_shortnames = {
         item.control_type_id: {
@@ -633,7 +632,7 @@ def get_short_control_types():
             "shortname": item.shortname,
         }
         for item in db.session.query(ControlTypeShortName)
-        .filter_by(user_id=user_id)
+        .filter_by(user_id=authenticated_user.id)
         .all()
     }
 
@@ -650,16 +649,13 @@ def get_short_control_types():
 
     return jsonify(combined_result)
 
-
+# 1
 @maps.route("/short-control-types", methods=["POST"])
-# @login_required(request)
-def update_short_control_types():
-    payload, _ = verify_jwt_token(request.headers["Authorization"])
-    user_id = payload["user_id"]
-
+@require()
+def update_short_control_types(authenticated_user: Users) -> Response:
     data = request.get_json()
     if not data:
-        return jsonify({"status": "error", "message": "no data"}), 400
+        return jsonify({"status": "error", "message": "no data"})
 
     for new_short_form in data:
         control_type_id = new_short_form.get("id")
@@ -673,7 +669,7 @@ def update_short_control_types():
             db.session.query(ControlTypeShortName)
             .filter(
                 ControlTypeShortName.control_type_id == control_type_id,
-                ControlTypeShortName.user_id == user_id,
+                ControlTypeShortName.user_id == authenticated_user.id,
             )
             .first()
         )
@@ -684,10 +680,10 @@ def update_short_control_types():
         else:
             # запись не существует, создаем новую
             new_form = ControlTypeShortName(
-                user_id=user_id, control_type_id=control_type_id, shortname=title
+                user_id=authenticated_user.id, control_type_id=control_type_id, shortname=title
             )
             db.session.add(new_form)
 
     db.session.commit()
 
-    return jsonify({"status": "ok"}), 200
+    return jsonify({"status": "ok"})

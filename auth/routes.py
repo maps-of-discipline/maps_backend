@@ -27,15 +27,15 @@ def test2(user_with_one_of_permissions: Users) -> Response:
 
 
 @router.route("/test3")
-@require(p.canEditAnyFaculty, p.CanEditOwnMap)
+@require(p.canEditAnyFaculty, p.canEditOwnMap)
 def test3(user_with_permission: Users) -> Response:
     return jsonify({"res": "ok"})
 
 
 @router.route("/test4")
 @require(
-    p.CanEditOwnMap,
-    p.CanEditOwnFaculty,
+    p.canEditOwnMap,
+    p.canEditOwnFaculty,
 )
 def test4(user_with_combined_permissions: Users) -> Response:
     return jsonify({"res": "ok"})

@@ -31,3 +31,9 @@ class EntityNotFoundException(HttpException):
 
     def __init__(self, entity: str):
         super().__init__(f"{entity} not exists")
+
+class MethodNotAllowed(HttpException):
+    status: int = 405
+    
+    def __init__(self, message: str = "Method Not Allowed"):
+        super().__init__(message)
