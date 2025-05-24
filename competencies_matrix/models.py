@@ -32,10 +32,12 @@ class BaseModel:
     def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None) -> Dict[str, Any]:
         result = {}
         exclude_columns = set()
-        if rules:
-            for rule in rules:
-                if rule.startswith('-'):
-                    exclude_columns.add(rule[1:])
+        # Используем "rules or []" чтобы гарантировать итерируемый объект, даже если rules == None
+        # Используем другое имя переменной для итерации, чтобы избежать конфликта
+        if rules: # Проверяем, что rules не None и не пустой список
+            for exclusion_rule in rules:
+                if exclusion_rule.startswith('-'):
+                    exclude_columns.add(exclusion_rule[1:])
 
         for c in inspect(self).mapper.column_attrs:
             if only and c.key not in only:
