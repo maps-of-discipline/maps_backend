@@ -11,7 +11,7 @@ from .logic import (
     create_competency, create_indicator,
     parse_fgos_file, save_fgos_data, get_fgos_list, get_fgos_details, delete_fgos,
     handle_prof_standard_upload_parsing,
-    save_prof_standard_data, # ИСПРАВЛЕНО: удаляем старый импорт
+    save_prof_standard_data, 
     get_prof_standards_list, get_prof_standard_details,
     get_all_competencies as logic_get_all_competencies,
     get_all_indicators as logic_get_all_indicators,
@@ -24,10 +24,9 @@ from .logic import (
 
 from auth.logic import login_required, approved_required, admin_only
 import logging
-from .models import db, Competency, Indicator, CompetencyType, ProfStandard 
-
-from sqlalchemy.orm import joinedload 
-from sqlalchemy.exc import IntegrityError
+from .models import db, Competency, Indicator, CompetencyType, ProfStandard # НОВОЕ: Импорт ProfStandard для получения по ID при сравнении
+from sqlalchemy.orm import joinedload # Добавим для использования в to_dict
+from sqlalchemy.exc import IntegrityError # Добавим для использования в to_dict
 
 logger = logging.getLogger(__name__)
 
@@ -156,12 +155,15 @@ def create_new_competency():
     """Create a new competency (typically ПК)."""
     data = request.get_json()
     try:
-        # ИСПРАВЛЕНО: Удален with db.session.begin(), т.к. сессия уже управляется.
-        # Коммит делается внутри logic.create_competency
-        competency = create_competency(data) 
+        with db.session.begin(): # Используем транзакцию для создания компетенции и связей
+            # НОВОЕ: Передаем data в create_competency (включая based_on_labor_function_id и educational_program_ids)
+            competency = create_competency(data, db.session) 
+        
         if not competency:
             return jsonify({"error": "Не удалось создать компетенцию. Проверьте данные или возможно, она уже существует."}), 400
-        return jsonify(competency.to_dict(rules=['-indicators'], include_type=True)), 201
+        
+        # НОВОЕ: Включаем образовательные программы в to_dict
+        return jsonify(competency.to_dict(rules=['-indicators'], include_type=True, include_educational_programs=True)), 201
     except ValueError as e:
         logger.error(f"Validation error creating competency: {e}")
         return jsonify({"error": str(e)}), 400
@@ -170,7 +172,6 @@ def create_new_competency():
         return jsonify({"error": "Компетенция с таким кодом уже существует для этого типа и ФГОС (если применимо)."}), 409
     except Exception as e:
         logger.error(f"Unexpected error creating competency: {e}", exc_info=True)
-        # ИСПРАВЛЕНО: db.session.rollback() здесь не нужен, т.к. ошибка перехватывается в logic и там откатывается
         return jsonify({"error": f"Неожиданная ошибка сервера при создании компетенции: {e}"}), 500
 
 
@@ -185,9 +186,9 @@ def update_competency_route(comp_id):
         abort(400, description="Отсутствуют данные для обновления")
 
     try:
-        # ИСПРАВЛЕНО: Удален with db.session.begin(), т.к. сессия уже управляется.
-        # Коммит делается внутри logic.update_competency
-        updated_comp_dict = logic_update_competency(comp_id, data)
+        with db.session.begin(): # Используем транзакцию для обновления компетенции и связей
+            # НОВОЕ: Передаем data в update_competency (включая educational_program_ids)
+            updated_comp_dict = logic_update_competency(comp_id, data, db.session)
 
         if updated_comp_dict is not None:
             return jsonify(updated_comp_dict), 200
@@ -201,7 +202,6 @@ def update_competency_route(comp_id):
         return jsonify({"error": "Компетенция с таким кодом уже существует."}), 409
     except Exception as e:
         logger.error(f"Error updating competency {comp_id} in route: {e}", exc_info=True)
-        # ИСПРАВЛЕНО: db.session.rollback() здесь не нужен, т.к. ошибка перехватывается в logic и там откатывается
         return jsonify({"error": f"Не удалось обновить компетенцию: {e}"}), 500
 
 
@@ -212,9 +212,8 @@ def update_competency_route(comp_id):
 def delete_competency_route(comp_id):
     """Delete a competency by ID."""
     try:
-        # ИСПРАВЛЕНО: Удален with db.session.begin(), т.к. сессия уже управляется.
-        # Коммит делается внутри logic.delete_competency
-        deleted = logic_delete_competency(comp_id, db.session) 
+        with db.session.begin(): # Используем транзакцию для удаления
+            deleted = logic_delete_competency(comp_id, db.session) 
 
         if deleted:
             return jsonify({"success": True, "message": "Компетенция успешно удалена"}), 200
@@ -222,7 +221,6 @@ def delete_competency_route(comp_id):
             return jsonify({"success": False, "error": "Компетенция не найдена"}), 404
     except Exception as e:
         logger.error(f"Error deleting competency {comp_id}: {e}", exc_info=True)
-        # ИСПРАВЛЕНО: db.session.rollback() здесь не нужен, т.к. ошибка перехватывается в logic и там откатывается
         abort(500, description=f"Не удалось удалить компетенцию: {e}")
 
 
@@ -266,9 +264,8 @@ def create_new_indicator():
     """Create a new indicator for an existing competency."""
     data = request.get_json()
     try:
-        # ИСПРАВЛЕНО: Удален with db.session.begin(), т.к. сессия уже управляется.
-        # Коммит делается внутри logic.create_indicator
-        indicator = create_indicator(data)
+        with db.session.begin(): # Используем транзакцию для создания индикатора
+            indicator = create_indicator(data, db.session)
         if not indicator:
             return jsonify({"error": "Не удалось создать индикатор. Проверьте данные или возможно, он уже существует/родительская компетенция не найдена."}), 400
         return jsonify(indicator.to_dict(rules=['-matrix_entries'], include_competency=True)), 201
@@ -280,7 +277,6 @@ def create_new_indicator():
         return jsonify({"error": "Индикатор с таким кодом уже существует для этой компетенции."}), 409
     except Exception as e:
         logger.error(f"Unexpected error creating indicator: {e}", exc_info=True)
-        # ИСПРАВЛЕНО: db.session.rollback() здесь не нужен, т.к. ошибка перехватывается в logic и там откатывается
         return jsonify({"error": f"Неожиданная ошибка сервера при создании индикатора: {e}"}), 500
 
 
@@ -295,9 +291,8 @@ def update_indicator_route(ind_id):
         abort(400, description="Отсутствуют данные для обновления")
 
     try:
-        # ИСПРАВЛЕНО: Удален with db.session.begin(), т.к. сессия уже управляется.
-        # Коммит делается внутри logic.update_indicator
-        updated_ind = logic_update_indicator(ind_id, data) 
+        with db.session.begin(): # Используем транзакцию для обновления
+            updated_ind = logic_update_indicator(ind_id, data, db.session) 
 
         if updated_ind:
             return jsonify(updated_ind.to_dict(rules=['-matrix_entries'], include_competency=True)), 200
@@ -311,7 +306,6 @@ def update_indicator_route(ind_id):
         return jsonify({"error": "Индикатор с таким кодом уже существует для этой компетенции."}), 409
     except Exception as e:
         logger.error(f"Error updating indicator {ind_id}: {e}", exc_info=True)
-        # ИСПРАВЛЕНО: db.session.rollback() здесь не нужен, т.к. ошибка перехватывается в logic и там откатывается
         return jsonify({"error": f"Не удалось обновить индикатор: {e}"}), 500
 
 
@@ -322,9 +316,8 @@ def update_indicator_route(ind_id):
 def delete_indicator_route(ind_id):
     """Delete an indicator by ID."""
     try:
-        # ИСПРАВЛЕНО: Удален with db.session.begin(), т.к. сессия уже управляется.
-        # Коммит делается внутри logic.delete_indicator
-        deleted = logic_delete_indicator(ind_id, db.session) 
+        with db.session.begin(): # Используем транзакцию для удаления
+            deleted = logic_delete_indicator(ind_id, db.session) 
 
         if deleted:
             return jsonify({"success": True, "message": "Индикатор успешно удалена"}), 200
@@ -332,7 +325,6 @@ def delete_indicator_route(ind_id):
             return jsonify({"success": False, "error": "Индикатор не найден"}), 404
     except Exception as e:
         logger.error(f"Error deleting indicator {ind_id}: {e}", exc_info=True)
-        # ИСПРАВЛЕНО: db.session.rollback() здесь не нужен, т.к. ошибка перехватывается в logic и там откатывается
         abort(500, description=f"Не удалось удалить индикатор: {e}")
 
 
@@ -405,9 +397,8 @@ def save_fgos():
         abort(400, description="Некорректные данные для сохранения (отсутствуют parsed_data, filename или metadata)")
 
     try:
-        # ИСПРАВЛЕНО: Удален with db.session.begin(), т.к. сессия уже управляется.
-        # Коммит делается внутри logic.save_fgos_data
-        saved_fgos = save_fgos_data(parsed_data, filename, db.session, force_update=options.get('force_update', False))
+        with db.session.begin(): # Используем транзакцию для сохранения
+            saved_fgos = save_fgos_data(parsed_data, filename, db.session, force_update=options.get('force_update', False))
         
         if saved_fgos is None:
              abort(500, description="Ошибка при сохранении данных ФГОС в базу данных.")
@@ -420,11 +411,9 @@ def save_fgos():
 
     except IntegrityError as e:
         logger.error(f"Integrity error saving FGOS: {e.orig}", exc_info=True)
-        # ИСПРАВЛЕНО: db.session.rollback() здесь не нужен, т.к. ошибка перехватывается в logic и там откатывается
         return jsonify({"error": "ФГОС с такими метаданными (направление, номер, дата) уже существует."}), 409
     except Exception as e:
         logger.error(f"Error saving FGOS data from file {filename}: {e}", exc_info=True)
-        # ИСПРАВЛЕНО: db.session.rollback() здесь не нужен, т.к. ошибка перехватывается в logic и там откатывается
         abort(500, description=f"Неожиданная ошибка сервера при сохранении: {e}")
 
 
@@ -435,9 +424,8 @@ def save_fgos():
 def delete_fgos_route(fgos_id):
     """Delete a FGOS VO by ID."""
     try:
-        # ИСПРАВЛЕНО: Удален with db.session.begin(), т.к. сессия уже управляется.
-        # Коммит делается внутри logic.delete_fgos
-        deleted = delete_fgos(fgos_id, db.session)
+        with db.session.begin(): # Используем транзакцию для удаления
+            deleted = delete_fgos(fgos_id, db.session)
 
         if deleted:
             return jsonify({"success": True, "message": "ФГОС успешно удален"}), 200
@@ -445,7 +433,6 @@ def delete_fgos_route(fgos_id):
             return jsonify({"success": False, "error": "ФГОС не найден"}), 404
     except Exception as e:
         logger.error(f"Error deleting FGOS {fgos_id}: {e}", exc_info=True)
-        # ИСПРАВЛЕНО: db.session.rollback() здесь не нужен, т.к. ошибка перехватывается в logic и там откатывается
         abort(500, description=f"Не удалось удалить ФГОС: {e}")
 
 
@@ -486,7 +473,6 @@ def parse_profstandard_for_preview():
             existing_ps = db.session.query(ProfStandard).filter_by(code=ps_code).first()
             if existing_ps:
                 existing_ps_record = existing_ps.to_dict(rules=['-generalized_labor_functions'])
-                # Включаем полную структуру для сравнения
                 existing_ps_record_full = get_prof_standard_details(existing_ps.id)
                 if existing_ps_record_full:
                     existing_ps_record = existing_ps_record_full # Используем полную структуру для фронтенда
@@ -519,9 +505,8 @@ def save_profstandard():
         abort(400, description="Некорректные данные для сохранения (отсутствуют parsed_data, filename или код ПС)")
 
     try:
-        # ИСПРАВЛЕНО: Удален with db.session.begin(), т.к. сессия уже управляется.
-        # Коммит делается внутри logic.save_prof_standard_data
-        saved_ps = save_prof_standard_data(parsed_data, filename, db.session, force_update=options.get('force_update', False))
+        with db.session.begin(): # Используем транзакцию для сохранения
+            saved_ps = save_prof_standard_data(parsed_data, filename, db.session, force_update=options.get('force_update', False))
         
         if saved_ps is None:
              abort(500, description="Ошибка при сохранении данных профессионального стандарта.")
@@ -539,11 +524,9 @@ def save_profstandard():
 
     except IntegrityError as e:
         logger.error(f"Integrity error saving PS: {e.orig}", exc_info=True)
-        # ИСПРАВЛЕНО: db.session.rollback() здесь не нужен, т.к. ошибка перехватывается в logic и там откатывается
         return jsonify({"error": "Профессиональный стандарт с таким кодом уже существует."}), 409
     except Exception as e:
         logger.error(f"Error saving PS data from file {filename}: {e}", exc_info=True)
-        # ИСПРАВЛЕНО: db.session.rollback() здесь не нужен, т.к. ошибка перехватывается в logic и там откатывается
         abort(500, description=f"Неожиданная ошибка сервера при сохранении: {e}")
 
 
@@ -583,9 +566,8 @@ def get_profstandard_details_route(ps_id):
 def delete_profstandard(ps_id):
     """Delete a Professional Standard by ID."""
     try:
-        # ИСПРАВЛЕНО: Удален with db.session.begin(), т.к. сессия уже управляется.
-        # Коммит делается внутри logic.delete_profstandard
-        deleted = logic_delete_profstandard(ps_id, db.session) # Предполагается наличие этой функции в logic.py
+        with db.session.begin(): # Используем транзакцию для удаления
+            deleted = logic_delete_profstandard(ps_id, db.session) 
 
         if deleted:
             return jsonify({"success": True, "message": "Профессиональный стандарт успешно удален"}), 200
@@ -593,7 +575,6 @@ def delete_profstandard(ps_id):
             return jsonify({"success": False, "error": "Профессиональный стандарт не найден"}), 404
     except Exception as e:
         logger.error(f"Error deleting professional standard {ps_id}: {e}", exc_info=True)
-        # ИСПРАВЛЕНО: db.session.rollback() здесь не нужен, т.к. ошибка перехватывается в logic и там откатывается
         abort(500, description=f"Не удалось удалить профессиональный стандарт: {e}")
 
 

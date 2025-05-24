@@ -1,4 +1,4 @@
-# competencies_matrix/models.py
+# filepath: competencies_matrix/models.py
 # При изменении моделей в этом файле, нужно обновлять Alembic миграции
 from maps.models import db, AupInfo, AupData, SprDiscipline
 try:
@@ -32,9 +32,7 @@ class BaseModel:
     def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None) -> Dict[str, Any]:
         result = {}
         exclude_columns = set()
-        # Используем "rules or []" чтобы гарантировать итерируемый объект, даже если rules == None
-        # Используем другое имя переменной для итерации, чтобы избежать конфликта
-        if rules: # Проверяем, что rules не None и не пустой список
+        if rules: 
             for exclusion_rule in rules:
                 if exclusion_rule.startswith('-'):
                     exclude_columns.add(exclusion_rule[1:])
@@ -67,6 +65,7 @@ class FgosVo(db.Model, BaseModel):
     file_path = db.Column(db.String(255), nullable=True, comment='Путь к PDF файлу')
 
     educational_programs = relationship('EducationalProgram', back_populates='fgos')
+    # ИСПРАВЛЕНО: back_populates='fgos' вместо 'prof_standard'
     recommended_ps_assoc = relationship('FgosRecommendedPs', back_populates='fgos', cascade="all, delete-orphan")
     competencies = relationship('Competency', back_populates='fgos', cascade="all, delete-orphan")
 
@@ -91,14 +90,15 @@ class EducationalProgram(db.Model, BaseModel):
     fgos = relationship('FgosVo', back_populates='educational_programs')
     aup_assoc = relationship('EducationalProgramAup', back_populates='educational_program', cascade="all, delete-orphan")
     selected_ps_assoc = relationship('EducationalProgramPs', back_populates='educational_program', cascade="all, delete-orphan")
+    competencies_assoc = relationship('CompetencyEducationalProgram', back_populates='educational_program', cascade="all, delete-orphan") # НОВОЕ: Связь с компетенциями
 
     def __repr__(self):
         return f"<EducationalProgram {self.code} {self.title}>"
 
     def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None,
                 include_fgos: bool = False, include_aup_list: bool = False, include_selected_ps_list: bool = False,
-                include_recommended_ps_list: bool = False) -> Dict[str, Any]:
-        data = super().to_dict(rules=rules, only=only) 
+                include_recommended_ps_list: bool = False, include_competencies_list: bool = False) -> Dict[str, Any]: # НОВОЕ: include_competencies_list
+        data = super().to_dict(rules=rules, only=only)
 
         def _should_include(field_name: str, current_rules: Optional[List[str]], current_only: Optional[List[str]]) -> bool:
             if current_rules:
@@ -114,14 +114,14 @@ class EducationalProgram(db.Model, BaseModel):
                 data['fgos_details'] = self.fgos.to_dict()
             else:
                 data['fgos_details'] = None
-        
+
         if include_aup_list and _should_include('aup_list', rules, only):
             data['aup_list'] = []
             if hasattr(self, 'aup_assoc') and self.aup_assoc:
                 for assoc in self.aup_assoc:
-                    assoc_data = assoc.to_dict() 
+                    assoc_data = assoc.to_dict()
                     data['aup_list'].append(assoc_data)
-        
+
         if include_selected_ps_list and _should_include('selected_ps_list', rules, only):
             data['selected_ps_list'] = []
             if hasattr(self, 'selected_ps_assoc') and self.selected_ps_assoc:
@@ -135,7 +135,7 @@ class EducationalProgram(db.Model, BaseModel):
             recommended_ps_list_data = []
             if self.fgos.recommended_ps_assoc:
                 sorted_ps_assoc = sorted(
-                    [psa for psa in self.fgos.recommended_ps_assoc if psa.prof_standard], 
+                    [psa for psa in self.fgos.recommended_ps_assoc if psa.prof_standard],
                     key=lambda ps_assoc_item: ps_assoc_item.prof_standard.code
                 )
                 for assoc_item in sorted_ps_assoc:
@@ -147,6 +147,16 @@ class EducationalProgram(db.Model, BaseModel):
                         'description': assoc_item.description,
                     })
             data['recommended_ps_list'] = recommended_ps_list_data
+
+        if include_competencies_list and _should_include('competencies_list', rules, only): # НОВОЕ: include_competencies_list
+            data['competencies_list'] = []
+            if hasattr(self, 'competencies_assoc') and self.competencies_assoc:
+                for assoc in self.competencies_assoc:
+                    if assoc.competency:
+                        # Используем to_dict для Компетенции и включаем тип
+                        comp_dict = assoc.competency.to_dict(rules=['-indicators'], include_type=True)
+                        data['competencies_list'].append(comp_dict)
+
 
         return data
 
@@ -206,7 +216,6 @@ class ProfStandard(db.Model, BaseModel):
     order_date = db.Column(db.Date, nullable=True, comment='Дата приказа')
     registration_number = db.Column(db.String(50), nullable=True, comment='Рег. номер Минюста')
     registration_date = db.Column(db.Date, nullable=True, comment='Дата регистрации в Минюсте')
-    # parsed_content = db.Column(db.Text, nullable=True, comment='Содержимое стандарта в Markdown') # УДАЛЕНО, теперь храним только структурированные данные.
 
     generalized_labor_functions = relationship('GeneralizedLaborFunction', back_populates='prof_standard', cascade="all, delete-orphan")
     fgos_assoc = relationship('FgosRecommendedPs', back_populates='prof_standard', cascade="all, delete-orphan")
@@ -363,6 +372,7 @@ class Competency(db.Model, BaseModel):
     description = db.Column(db.Text, nullable=True, comment='Дополнительное описание компетенции')
 
     indicators = relationship('Indicator', back_populates='competency', cascade="all, delete-orphan")
+    educational_programs_assoc = relationship('CompetencyEducationalProgram', back_populates='competency', cascade="all, delete-orphan") # НОВОЕ: Связь с ОПОП
 
     __table_args__ = (
         db.UniqueConstraint('code', 'fgos_vo_id', 'competency_type_id', name='uq_competency_code_fgos_type'),
@@ -371,13 +381,39 @@ class Competency(db.Model, BaseModel):
     def __repr__(self): return f"<{self.code} {self.name[:30]}...>"
 
     def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None,
-                include_indicators: bool = False, include_type: bool = False) -> Dict[str, Any]:
+                include_indicators: bool = False, include_type: bool = False,
+                include_educational_programs: bool = False) -> Dict[str, Any]: # НОВОЕ: include_educational_programs
         data = super().to_dict(rules=rules, only=only)
         if include_indicators and hasattr(self, 'indicators') and self.indicators is not None:
              data['indicators'] = [ind.to_dict() for ind in self.indicators]
         if include_type and hasattr(self, 'competency_type') and self.competency_type is not None:
              data['type_code'] = self.competency_type.code
+        
+        if include_educational_programs and hasattr(self, 'educational_programs_assoc') and self.educational_programs_assoc is not None: # НОВОЕ: include_educational_programs
+             data['educational_programs'] = [
+                 assoc.educational_program.to_dict(rules=['-aup_assoc', '-selected_ps_assoc', '-recommended_ps_list', '-competencies_assoc']) # Избегаем циклов
+                 for assoc in self.educational_programs_assoc if assoc.educational_program
+             ]
+
         return data
+
+class CompetencyEducationalProgram(db.Model, BaseModel): # НОВАЯ МОДЕЛЬ
+    """Связь между Компетенцией и Образовательной программой"""
+    __tablename__ = 'competencies_competency_educational_program'
+
+    competency_id = db.Column(db.Integer, db.ForeignKey('competencies_competency.id', ondelete="CASCADE"), nullable=False)
+    educational_program_id = db.Column(db.Integer, db.ForeignKey('competencies_educational_program.id', ondelete="CASCADE"), nullable=False)
+    
+    competency = relationship('Competency', back_populates='educational_programs_assoc')
+    educational_program = relationship('EducationalProgram', back_populates='competencies_assoc')
+
+    __table_args__ = (
+        db.UniqueConstraint('competency_id', 'educational_program_id', name='uq_comp_ep'),
+    )
+
+    def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None) -> Dict[str, Any]:
+        return super().to_dict(rules=rules, only=only)
+
 
 class Indicator(db.Model, BaseModel):
     """Индикатор достижения компетенции (ИДК)"""
