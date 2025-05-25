@@ -1,17 +1,16 @@
-# competencies_matrix/parsers.py
-"""
-Модуль для парсинга Профессиональных Стандартов (XML) и ФГОС ВО (PDF) в структурированные данные.
-"""
+# filepath: competencies_matrix/parsers.py
 import io
 import re
 import datetime
 from typing import Dict, List, Any, Optional, Tuple
-# PDF parsing libs
 from pdfminer.high_level import extract_text
-# XML parsing libs
 import xml.etree.ElementTree as ET
-# Generic libs
 import logging
+import pandas as pd # Для обработки HTML профстандартов
+# Импорт для работы с HTML (если потребуется снова)
+from bs4 import BeautifulSoup
+from markdownify import markdownify
+
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ def _parse_date_string(date_str: Optional[str]) -> Optional[datetime.date]:
         return parsed_date
     except ValueError:
         logger.debug(f"_parse_date_string: '{date_str}' did not match YYYY-MM-DD format. Trying other formats.")
-        pass # Try other formats
+        pass 
 
     # Try DD.MM.YYYY format
     try:
@@ -44,13 +43,14 @@ def _parse_date_string(date_str: Optional[str]) -> Optional[datetime.date]:
         return parsed_date
     except ValueError:
         logger.debug(f"_parse_date_string: '{date_str}' did not match DD.MM.YYYY format.")
-        pass # Try other formats
+        pass 
 
     # Try DD MonthName YYYY format (e.g., '7 августа 2020', '19 сентября 2017 г.')
     month_names = {
         'января': 1, 'февраля': 2, 'марта': 3, 'апреля': 4, 'мая': 5, 'июня': 6,
         'июля': 7, 'августа': 8, 'сентября': 9, 'октября': 10, 'ноября': 11, 'декабря': 12
     }
+    # Pattern: Day(1-2 digits) + spaces + MonthName + optional 'года' + spaces + Year(4 digits) + optional ' г.'
     match = re.match(r'(\d{1,2})\s+([а-яА-Я]+)(?:\s+года)?\s+(\d{4})\s*г?\.?', date_str, re.IGNORECASE)
     if match:
         day_str, month_name_str, year_str = match.groups()[:3] 
@@ -70,12 +70,19 @@ def _parse_date_string(date_str: Optional[str]) -> Optional[datetime.date]:
     logger.warning(f"_parse_date_string: Could not parse date string: '{date_str}' using any known format.")
     return None
 
+# --- FGOS PDF Parsing ---
+
 def _clean_text_fgos(text: str) -> str:
     """Базовая очистка текста ФГОС от лишних пробелов и переносов."""
+    # Нормализуем переносы строк
     text = text.replace('\r\n', '\n').replace('\r', '\n') 
+    # Объединяем слова, разделенные дефисом и переносом строки
     text = re.sub(r'(\w+)-\n(\w+)', r'\1\2', text) 
+    # Удаляем висячие дефисы в конце строк
     text = re.sub(r'-\n', '', text) 
+    # Заменяем множественные пробелы/табуляции на один пробел
     text = re.sub(r'[ \t]+', ' ', text) 
+    # Схлопываем пустые строки до одной пустой строки (\n\n)
     text = re.sub(r'\n[ \t]*\n', '\n\n', text) 
     text = text.strip() 
     return text
@@ -87,6 +94,7 @@ def _extract_fgos_metadata(text: str) -> Dict[str, Any]:
     search_area = text[:4000] 
     logger.debug(f"--- METADATA SEARCH AREA (first 500 chars) ---\n{search_area[:500]}\n--------------------------------------")
 
+    # Паттерн для номера приказа и даты
     order_match = re.search(
         r'от\s+(.+?)\s*г\.?\s*[N№#]\s*(\d+[а-яА-Я0-9-]*)', 
         search_area, re.IGNORECASE | re.DOTALL
@@ -102,7 +110,7 @@ def _extract_fgos_metadata(text: str) -> Dict[str, Any]:
         else:
              logger.warning(f"_extract_fgos_metadata: Found order number '{metadata['order_number']}', но дата '{date_str_raw}' не смогла быть распознана.")
     else:
-        logger.warning("_extract_fgos_metadata: Order number and date not found using pattern 'от DATE г. № NUMBER'.")
+        logger.warning("_extract_fgos_metadata: Order number and date not found using pattern 'от DATE г. № NUMBER'. Trying alternative.")
         alt_order_number_match = re.search(r'(?:приказом|утвержден)\s.*?от\s+.+?\s*[№N#]\s*(\d+[а-яА-Я0-9-]*)', search_area, re.IGNORECASE | re.DOTALL)
         if alt_order_number_match:
             metadata['order_number'] = alt_order_number_match.group(1).strip()
@@ -110,6 +118,7 @@ def _extract_fgos_metadata(text: str) -> Dict[str, Any]:
         else:
             logger.error("_extract_fgos_metadata: CRITICAL - Order number could not be found by any pattern.")
 
+    # Паттерн для кода и названия направления
     direction_match = re.search(
         r'(?:по\s+направлению\s+подготовки|по\s+специальности)\s+'
         r'\(?(\d{2}\.\d{2}\.\d{2})\)?\s+'
@@ -138,6 +147,7 @@ def _extract_fgos_metadata(text: str) -> Dict[str, Any]:
         else:
             logger.error("_extract_fgos_metadata: CRITICAL - Direction code and name not found by any pattern.")
 
+    # Паттерн для уровня образования
     level_match = re.search(r'(?:высшего образования\s*-\s*|уровень\s+)(бакалавриата|магистратуры|специалитета)', search_area, re.IGNORECASE)
     if level_match:
         logger.debug(f"Level_match found: group(1)='{level_match.group(1)}'")
@@ -146,6 +156,7 @@ def _extract_fgos_metadata(text: str) -> Dict[str, Any]:
     else:
         logger.error("_extract_fgos_metadata: CRITICAL - Education level not found.")
 
+    # Паттерн для поколения ФГОС (3+, 3++)
     generation_match_main = re.search(r'ФГОС\s+ВО(?:\s*\(?(3\+\+?)\)?)?', search_area, re.IGNORECASE)
     if generation_match_main and generation_match_main.group(1):
         gen_text = generation_match_main.group(1).lower().strip()
@@ -161,6 +172,7 @@ def _extract_fgos_metadata(text: str) -> Dict[str, Any]:
             logger.warning("_extract_fgos_metadata: FGOS generation explicitly not found. Setting to 'unknown'.")
             metadata['generation'] = 'unknown' 
 
+    # Проверка на наличие критически важных полей
     critical_fields = ['order_number', 'direction_code', 'education_level']
     missing_critical = [field for field in critical_fields if not metadata.get(field)]
     if not metadata.get('order_date'):
@@ -174,7 +186,6 @@ def _extract_fgos_metadata(text: str) -> Dict[str, Any]:
     logger.debug(f"   - Final extracted metadata before return: {metadata}")
     return metadata
 
-
 def _extract_uk_opk(text: str) -> Dict[str, List[Dict[str, Any]]]:
     """Извлекает УК и ОПК компетенции (код, название) из текста раздела III ФГОС."""
     competencies = {'uk_competencies': [], 'opk_competencies': []}
@@ -183,9 +194,8 @@ def _extract_uk_opk(text: str) -> Dict[str, List[Dict[str, Any]]]:
         r'III\.\s*Требования\s+к\s+результатам\s+освоения\s+программы',
         text, re.IGNORECASE | re.MULTILINE
     )
-
     if not section_iii_start_match:
-        logger.warning("_extract_uk_opk: Section III start marker ('III. Требования к результатам...') not found.")
+        logger.warning("_extract_uk_opk: Section III start marker not found ('III. Требования к результатам...').")
         return competencies
 
     text_after_section_iii = text[section_iii_start_match.end():]
@@ -203,60 +213,78 @@ def _extract_uk_opk(text: str) -> Dict[str, List[Dict[str, Any]]]:
 
     logger.debug(f"_extract_uk_opk: Successfully isolated Section III text (length: {len(section_iii_text)} chars). Preview: {section_iii_text[:500]}...")
 
-    uk_block_re = r'(?s)Универсальные\s+компетенци(?:и|я).*?:\s*(.*?)(?=\n[ \t]*(?:Общепрофессиональные|Профессиональные)\s+компетенци(?:и|я)|\n[ \t]*IV\.\s*Требования|\Z)'
-    opk_block_re = r'(?s)Общепрофессиональные\s+компетенци(?:и|я).*?:\s*(.*?)(?=\n[ \t]*Профессиональные\s+компетенци(?:и|я)|\n[ \t]*IV\.\s*Требования|\Z)'
+    # Define common patterns that mark the end of a competence description
+    # or the start of unwanted footer/info text.
+    # This pattern will be used to 'trim' the extracted name.
+    end_of_comp_patterns = [
+        r'\n\s*Информация об изменениях:.*', # General info block
+        r'\n\s*\d{1,2}\.\d{1,2}\.\d{4}\s+Система\s+ГАРАНТ\s+\d{1,2}/\d{1,2}', # Page footer (e.g., "16.06.2021 Система ГАРАНТ 5/13")
+        r'\n\s*УК-\d+', # Start of next UK
+        r'\n\s*ОПК-\d+', # Start of next OPK
+        r'\n\s*Профессиональные\s+компетенци(?:и|я)', # Start of PK block
+        r'\n\s*Общепрофессиональные\s+компетенци(?:и|я)', # Start of OPK block
+        r'\n\s*Таблица\s+\d+', # Start of a table
+        r'\n{2,}', # Two or more consecutive newlines (might indicate paragraph/block end)
+        r'\s*$', # End of string if nothing else
+    ]
+    # Compile a single regex to find any of these patterns from the end of a string
+    # We want to remove everything from the first match of these patterns
+    end_of_comp_regex = re.compile(
+        '|'.join(f'(?:{p})' for p in end_of_comp_patterns), 
+        re.IGNORECASE | re.MULTILINE | re.DOTALL 
+    )
 
-    uk_block_match = re.search(uk_block_re, section_iii_text, re.IGNORECASE)
+    # Regex for individual competencies: Capture code and then the name which can span multiple lines (non-greedy)
+    # The lookahead is simplified to just find the *next* competence code or major section start
+    # Note: the .+? ensures non-greedy match of the name.
+    uk_comp_re = r'^(УК-\d+)\s*[).:]?\s*(.+?)(?=\n[ \t]*(?:УК-\d+|ОПК-\d+|Общепрофессиональные\s+компетенци|Профессиональные\s+компетенци)|\Z)'
+    opk_comp_re = r'^(ОПК-\d+)\s*[).:]?\s*(.+?)(?=\n[ \t]*(?:ОПК-\d+|Профессиональные\s+компетенци|\Z))'
+
+    # --- Parse UK competencies ---
+    uk_block_match = re.search(r'(?s)Универсальные\s+компетенци(?:и|я).*?:\s*(.*?)(?=\n[ \t]*(?:Общепрофессиональные|Профессиональные)\s+компетенци(?:и|я)|\n[ \t]*IV\.\s*Требования|\Z)', section_iii_text, re.IGNORECASE)
     if uk_block_match:
         uk_block_text = uk_block_match.group(1)
-        logger.debug(f"_extract_uk_opk: Found UK block (length: {len(uk_block_text)} chars). Preview: {uk_block_text[:500]}...")
+        uk_matches = re.finditer(uk_comp_re, uk_block_text, re.IGNORECASE | re.MULTILINE | re.DOTALL)
         
-        uk_matches = re.finditer(
-            r'^(УК-\d+)\s*[).:]?\s*(.+?)(?=(?:\n[ \t]*|^)(?:УК-\d+\s*[).:]?|Общепрофессиональные\s+компетенци|Профессиональные\s+компетенци)|\Z)',
-            uk_block_text, re.IGNORECASE | re.MULTILINE | re.DOTALL
-        )
-        
-        parsed_uk_count = 0
         for match in uk_matches:
             code = match.group(1).strip().upper()
-            name = match.group(2).strip()
-            name = re.sub(r'\.$', '', name) 
-            name = re.sub(r'\s*\n\s*', ' ', name) 
-            name = re.sub(r'\s{2,}', ' ', name).strip() 
-            if name: 
-                competencies['uk_competencies'].append({'code': code, 'name': name, 'indicators': []})
-                parsed_uk_count += 1
-        logger.debug(f"_extract_uk_opk: Parsed {parsed_uk_count} УК competencies using main pattern.")
+            name_raw = match.group(2).strip()
+            
+            # Remove any trailing garbage/footers
+            name_cleaned = end_of_comp_regex.split(name_raw, 1)[0].strip() # Split at first match, take first part
+            name_cleaned = re.sub(r'\.$', '', name_cleaned) # Remove trailing dot
+            name_cleaned = re.sub(r'\s*\n\s*', ' ', name_cleaned) # Collapse newlines
+            name_cleaned = re.sub(r'\s{2,}', ' ', name_cleaned).strip() # Collapse multiple spaces
+            
+            if name_cleaned:
+                competencies['uk_competencies'].append({'code': code, 'name': name_cleaned, 'indicators': []})
+        logger.debug(f"Parsed {len(competencies['uk_competencies'])} УК competencies.")
         if not competencies['uk_competencies'] and uk_block_text.strip():
-             logger.warning("_extract_uk_opk: No UKs parsed despite UK block found.")
-
+             logger.warning("_extract_uk_opk: No UKs parsed despite UK block found and not empty.")
     else:
         logger.warning("_extract_uk_opk: UK competencies block not found in Section III.")
 
-    opk_block_match = re.search(opk_block_re, section_iii_text, re.IGNORECASE)
+    # --- Parse OPK competencies ---
+    opk_block_match = re.search(r'(?s)Общепрофессиональные\s+компетенци(?:и|я).*?:\s*(.*?)(?=\n[ \t]*Профессиональные\s+компетенци(?:и|я)|\n[ \t]*IV\.\s*Требования|\Z)', section_iii_text, re.IGNORECASE)
     if opk_block_match:
         opk_block_text = opk_block_match.group(1)
-        logger.debug(f"_extract_uk_opk: Found OPK block (length: {len(opk_block_text)} chars). Preview: {opk_block_text[:500]}...")
+        opk_matches = re.finditer(opk_comp_re, opk_block_text, re.IGNORECASE | re.MULTILINE | re.DOTALL)
         
-        opk_matches = re.finditer(
-            r'^(ОПК-\d+)\s*[).:]?\s*(.+?)(?=(?:\n[ \t]*|^)(?:ОПК-\d+\s*[).:]?|Профессиональные\s+компетенци)|\Z)',
-            opk_block_text, re.IGNORECASE | re.MULTILINE | re.DOTALL
-        )
-        
-        parsed_opk_count = 0
         for match in opk_matches:
             code = match.group(1).strip().upper()
-            name = match.group(2).strip()
-            name = re.sub(r'\.$', '', name)
-            name = re.sub(r'\s*\n\s*', ' ', name) 
-            name = re.sub(r'\s{2,}', ' ', name).strip()
-            if name:
-                competencies['opk_competencies'].append({'code': code, 'name': name, 'indicators': []})
-                parsed_opk_count += 1
-        logger.debug(f"_extract_uk_opk: Parsed {parsed_opk_count} ОПК competencies using main pattern.")
+            name_raw = match.group(2).strip()
+            
+            # Remove any trailing garbage/footers
+            name_cleaned = end_of_comp_regex.split(name_raw, 1)[0].strip() # Split at first match, take first part
+            name_cleaned = re.sub(r'\.$', '', name_cleaned) # Remove trailing dot
+            name_cleaned = re.sub(r'\s*\n\s*', ' ', name_cleaned) # Collapse newlines
+            name_cleaned = re.sub(r'\s{2,}', ' ', name_cleaned).strip() # Collapse multiple spaces
+            
+            if name_cleaned:
+                competencies['opk_competencies'].append({'code': code, 'name': name_cleaned, 'indicators': []})
+        logger.debug(f"Parsed {len(competencies['opk_competencies'])} ОПК competencies.")
         if not competencies['opk_competencies'] and opk_block_text.strip():
-             logger.warning("_extract_uk_opk: No OPKs parsed despite OPK block found.")
-
+             logger.warning("_extract_uk_opk: No OPKs parsed despite OPK block found and not empty.")
     else:
         logger.warning("_extract_uk_opk: OPK competencies block not found in Section III.")
 
@@ -266,9 +294,10 @@ def _extract_uk_opk(text: str) -> Dict[str, List[Dict[str, Any]]]:
 def _extract_recommended_ps_fgos(text: str) -> List[str]:
     """Извлекает коды рекомендованных ПС из текста ФГОС."""
     ps_codes = []
+    # Flexible search for the start of the PS list section
     ps_section_match = re.search(
         r'(?s)(Перечень(?:\s+и\s+)?(?:рекомендуемых\s+)?профессиональных\s+стандартов'
-        r'|Приложение.*?Перечень\s+профессиональных\s+стандартов)', 
+        r'|Приложение\s*(?:[N№]\s*\d+)?\s*к\s*ФГОС\s*ВО.*?Перечень\s+профессиональных\s+стандартов)', 
         text, re.IGNORECASE
     )
     
@@ -278,6 +307,7 @@ def _extract_recommended_ps_fgos(text: str) -> List[str]:
 
     search_text_for_ps_codes = text[ps_section_match.start():]
     
+    # Define end markers (next major section, information blocks, multiple newlines)
     end_of_ps_list_match = re.search(
         r'(?s)(\n\s*(?:IV|V|VI|VII|VIII|IX|X)\.\s*Требования|\n\s*Сведения\s+об\s+организациях\s*-\s*разработчиках|\n\s*Информация\s+об\s+изменениях:|\n{3,})', 
         search_text_for_ps_codes, re.IGNORECASE | re.MULTILINE
@@ -290,15 +320,21 @@ def _extract_recommended_ps_fgos(text: str) -> List[str]:
         ps_list_text = search_text_for_ps_codes 
         logger.warning(f"_extract_recommended_ps_fgos: Could not find clear end of PS list. Analyzing remaining text (length: {len(ps_list_text)} chars). Preview: {ps_list_text[:1000]}...")
 
-    code_matches = re.finditer(r'(?:Код\s+)?\b(\d{2}\.\d{3})\b', ps_list_text, re.IGNORECASE)
+    # Find PS codes (e.g., 06.001) in the extracted text
+    # Make regex more robust to spaces around the dot.
+    # Also, ensure it doesn't pick up other numbers that look like codes (e.g., page numbers or dates)
+    # The (?:[N№#]?\s*п/?п?\s*\d+\.\s+)? is to optionally capture leading list markers like "1. ", "N п/п 1."
+    code_matches = re.finditer(r'(?:[N№#]?\s*п/?п?\s*\d+\.\s+)?\b(\d{2}\s*\.\s*\d{3})\b', ps_list_text, re.IGNORECASE)
 
     for match in code_matches:
-        ps_codes.append(match.group(1))
+        # Clean the extracted code (remove spaces around dot)
+        clean_code = match.group(1).replace(' ', '').strip()
+        ps_codes.append(clean_code)
 
     ps_codes = sorted(list(set(ps_codes)))
     logger.debug(f"_extract_recommended_ps_fgos: Found {len(ps_codes)} recommended PS codes: {ps_codes}")
 
-    if not ps_codes and ps_list_text.strip(): logger.warning("_extract_recommended_ps_fgos: No PS codes extracted from the identified section text despite text existing. Check regex \b(\d{2}\.\d{3})\b or text content.")
+    if not ps_codes and ps_list_text.strip(): logger.warning("_extract_recommended_ps_fgos: No PS codes extracted from the identified section text despite text existing. Check regex or text content.")
     elif not ps_codes and not ps_list_text.strip(): logger.warning("_extract_recommended_ps_fgos: No PS codes extracted from section, because section text is empty.")
 
     return ps_codes

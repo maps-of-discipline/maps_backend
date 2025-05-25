@@ -17,7 +17,7 @@ from .models import (
     ProfStandard, FgosVo, FgosRecommendedPs, EducationalProgramAup, EducationalProgramPs,
     CompetencyType, IndicatorPsLink,
     GeneralizedLaborFunction, LaborFunction, LaborAction, RequiredSkill, RequiredKnowledge,
-    CompetencyEducationalProgram # НОВОЕ: Импорт новой модели
+    CompetencyEducationalProgram 
 )
 from .external_models import (
     ExternalAupInfo, ExternalNameOP, ExternalSprOKCO, ExternalSprFormEducation,
@@ -37,68 +37,42 @@ _external_db_engine = None
 
 def get_external_db_engine():
     """Initializes and returns the engine for the external KD DB."""
-    func = "get_external_db_engine: "
     global _external_db_engine
     if _external_db_engine is None:
         db_url = current_app.config.get('EXTERNAL_KD_DATABASE_URL')
-        if not db_url:
-            logger.error(f"{func} EXTERNAL_KD_DATABASE_URL is not configured.")
-            raise RuntimeError("EXTERNAL_KD_DATABASE_URL is not configured.")
-        try:
-            _external_db_engine = create_engine(db_url)
-            logger.info(f"{func} External DB Engine for KD initialized.")
-        except Exception as e:
-            logger.error(f"{func} Failed to create external DB engine: {e}", exc_info=True)
-            raise RuntimeError(f"Failed to create external DB engine: {e}")
+        if not db_url: raise RuntimeError("EXTERNAL_KD_DATABASE_URL is not configured.")
+        try: _external_db_engine = create_engine(db_url)
+        except Exception as e: logger.error(f"Failed to create external DB engine: {e}", exc_info=True); raise RuntimeError(f"Failed to create external DB engine: {e}")
     return _external_db_engine
 
 # --- Data Fetching Functions ---
 
 def get_educational_programs_list() -> List[EducationalProgram]:
     """Fetches list of all educational programs."""
-    func = "get_educational_programs_list: "
-    try:
-        programs = EducationalProgram.query.options(
-             selectinload(EducationalProgram.aup_assoc).selectinload(EducationalProgramAup.aup)
-        ).order_by(EducationalProgram.title).all()
-        return programs
-    except SQLAlchemyError as e:
-        logger.error(f"{func} Database error: {e}")
-        return []
+    try: return EducationalProgram.query.options(selectinload(EducationalProgram.aup_assoc).selectinload(EducationalProgramAup.aup)).order_by(EducationalProgram.title).all()
+    except SQLAlchemyError as e: logger.error(f"Database error fetching programs list: {e}"); return []
 
 def get_program_details(program_id: int) -> Optional[Dict[str, Any]]:
     """Fetches detailed information about an educational program."""
-    func = "get_program_details: "
     try:
         program = EducationalProgram.query.options(
             selectinload(EducationalProgram.fgos),
             selectinload(EducationalProgram.aup_assoc).selectinload(EducationalProgramAup.aup),
             selectinload(EducationalProgram.selected_ps_assoc).selectinload(EducationalProgramPs.prof_standard),
-            selectinload(EducationalProgram.competencies_assoc).selectinload(CompetencyEducationalProgram.competency).selectinload(Competency.competency_type) # НОВОЕ: Загружаем связанные компетенции
+            selectinload(EducationalProgram.competencies_assoc).selectinload(CompetencyEducationalProgram.competency).selectinload(Competency.competency_type) 
         ).get(program_id)
 
-        if not program:
-            logger.warning(f"{func} Program with id {program_id} not found.")
-            return None
+        if not program: logger.warning(f"Program with id {program_id} not found."); return None
         
         details = program.to_dict(
-            include_fgos=True,
-            include_aup_list=True,
-            include_selected_ps_list=True,
-            include_recommended_ps_list=True,
-            include_competencies_list=True # НОВОЕ: Включаем список компетенций
+            include_fgos=True, include_aup_list=True, include_selected_ps_list=True,
+            include_recommended_ps_list=True, include_competencies_list=True 
         )
         return details
 
-    except AttributeError as ae:
-        logger.error(f"{func} AttributeError for program_id {program_id}: {ae}", exc_info=True)
-        return None
-    except SQLAlchemyError as e:
-        logger.error(f"{func} Database error for program_id {program_id}: {e}", exc_info=True)
-        return None
-    except Exception as e:
-        logger.error(f"{func} Unexpected error for program_id {program_id}: {e}", exc_info=True)
-        return None
+    except AttributeError as ae: logger.error(f"AttributeError for program_id {program_id}: {ae}", exc_info=True); return None
+    except SQLAlchemyError as e: logger.error(f"Database error for program_id {program_id}: {e}", exc_info=True); return None
+    except Exception as e: logger.error(f"Unexpected error for program_id {program_id}: {e}", exc_info=True); return None
 
 
 def get_external_aups_list(
@@ -107,16 +81,13 @@ def get_external_aups_list(
     search_query: Optional[str] = None, offset: int = 0, limit: Optional[int] = 20
 ) -> Dict[str, Any]:
     """Fetches AUP list from external KD DB with filters and pagination."""
-    func = "get_external_aups_list: "
     engine = get_external_db_engine()
     with Session(engine) as session:
         try:
             query = session.query(ExternalAupInfo).options(
                 joinedload(ExternalAupInfo.spec).joinedload(ExternalNameOP.okco),
-                joinedload(ExternalAupInfo.form),
-                joinedload(ExternalAupInfo.degree),
-                joinedload(ExternalAupInfo.faculty),
-                joinedload(ExternalAupInfo.department)
+                joinedload(ExternalAupInfo.form), joinedload(ExternalAupInfo.degree),
+                joinedload(ExternalAupInfo.faculty), joinedload(ExternalAupInfo.department)
             )
 
             filters = []
@@ -143,10 +114,8 @@ def get_external_aups_list(
             if search_query:
                  search_pattern = f"%{search_query}%"
                  search_conditions = [
-                     ExternalAupInfo.num_aup.ilike(search_pattern),
-                     ExternalNameOP.name_spec.ilike(search_pattern), 
-                     ExternalSprOKCO.program_code.ilike(search_pattern), 
-                     ExternalSprFaculty.name_faculty.ilike(search_pattern), 
+                     ExternalAupInfo.num_aup.ilike(search_pattern), ExternalNameOP.name_spec.ilike(search_pattern), 
+                     ExternalSprOKCO.program_code.ilike(search_pattern), ExternalSprFaculty.name_faculty.ilike(search_pattern), 
                      ExternalDepartment.name_department.ilike(search_pattern), 
                  ]
                  query = query.filter(or_(*search_conditions))
@@ -157,17 +126,14 @@ def get_external_aups_list(
             external_aups = query.all()
             result_items = [aup.as_dict() for aup in external_aups]
 
-            logger.info(f"{func} Fetched {len(result_items)} of {total_count} AUPs from external KD DB.")
+            logger.info(f"Fetched {len(result_items)} of {total_count} AUPs from external KD DB.")
             return {"total": total_count, "items": result_items}
 
-        except Exception as e:
-            logger.error(f"{func} Error fetching external AUPs: {e}", exc_info=True)
-            raise
+        except Exception as e: logger.error(f"Error fetching external AUPs: {e}", exc_info=True); raise
 
 
 def get_external_aup_disciplines(aup_id: int) -> List[Dict[str, Any]]:
     """Fetches discipline entries (AupData) for a specific AUP from external KD DB."""
-    func = "get_external_aup_disciplines: "
     engine = get_external_db_engine()
     with Session(engine) as session:
         try:
@@ -177,24 +143,13 @@ def get_external_aup_disciplines(aup_id: int) -> List[Dict[str, Any]]:
             result = []
             for entry in aup_data_entries:
                  result.append({
-                     'aup_data_id': entry.id, 
-                     'id_aup': entry.id_aup, 
-                     'discipline_id': entry.id_discipline,
-                     'title': entry.discipline, 
-                     'semester': entry.id_period,
-                     'shifr': entry.shifr,
-                     'id_type_record': entry.id_type_record,
-                     'zet': (entry.zet / 100) if entry.zet is not None else 0, 
-                     'amount': entry.amount,
-                     'id_type_control': entry.id_type_control
+                     'aup_data_id': entry.id, 'id_aup': entry.id_aup, 'discipline_id': entry.id_discipline,
+                     'title': entry.discipline, 'semester': entry.id_period, 'shifr': entry.shifr,
+                     'id_type_record': entry.id_type_record, 'zet': (entry.zet / 100) if entry.zet is not None else 0, 
+                     'amount': entry.amount, 'id_type_control': entry.id_type_control
                  })
-
-            logger.info(f"{func} Fetched {len(result)} AupData entries for external AUP ID {aup_id} from external KD DB.")
             return result
-
-        except Exception as e:
-            logger.error(f"{func} Error fetching external AupData for external AUP ID {aup_id}: {e}", exc_info=True)
-            raise
+        except Exception as e: logger.error(f"Error fetching external AupData for external AUP ID {aup_id}: {e}", exc_info=True); raise
 
 
 def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
@@ -202,8 +157,7 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
     Collects all data needed for the competency matrix for a given AUP number.
     Fetches disciplines from external KD DB and competencies/links from local DB.
     """
-    func = "get_matrix_for_aup: "
-    logger.info(f"{func} Processing request for AUP num: {aup_num}")
+    logger.info(f"Processing request for AUP num: {aup_num}")
     session: Session = local_db.session
     matrix_response: Dict[str, Any] = {
         "aup_info": None, "disciplines": [], "competencies": [], "links": [],
@@ -223,15 +177,7 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
         ).filter_by(num_aup=aup_num).first()
 
         if local_aup_info_entry:
-            logger.info(f"{func} - Found LocalAupInfo (ID: {local_aup_info_entry.id_aup}) for num_aup: {aup_num}.")
-            if hasattr(local_aup_info_entry, 'as_dict') and callable(local_aup_info_entry.as_dict):
-                matrix_response["aup_info"] = local_aup_info_entry.as_dict()
-            else:
-                logger.warning(f"{func} LocalAupInfo (ID: {local_aup_info_entry.id_aup}) does not have as_dict method. Using basic info.")
-                matrix_response["aup_info"] = {
-                    'id_aup': local_aup_info_entry.id_aup,
-                    'num_aup': local_aup_info_entry.num_aup,
-                }
+            matrix_response["aup_info"] = local_aup_info_entry.as_dict() if hasattr(local_aup_info_entry, 'as_dict') and callable(local_aup_info_entry.as_dict) else {'id_aup': local_aup_info_entry.id_aup, 'num_aup': local_aup_info_entry.num_aup}
             
             if local_aup_info_entry.educational_program_links:
                 primary_assoc = next((assoc for assoc in local_aup_info_entry.educational_program_links if assoc.is_primary), None)
@@ -239,20 +185,17 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
                 if assoc_to_use and assoc_to_use.educational_program:
                     educational_program = assoc_to_use.educational_program
                     if educational_program.fgos: fgos = educational_program.fgos
-        else:
-            logger.warning(f"{func} - LocalAupInfo for num_aup '{aup_num}' not found.")
+        else: logger.warning(f"LocalAupInfo for num_aup '{aup_num}' not found.")
     except Exception as e_local_aup:
-        logger.error(f"{func} - Error finding LocalAupInfo for num_aup '{aup_num}': {e_local_aup}", exc_info=True)
+        logger.error(f"Error finding LocalAupInfo for num_aup '{aup_num}': {e_local_aup}", exc_info=True)
         current_error_details = matrix_response.get("error_details", "") or ""
-        matrix_response["error_details"] = (current_error_details +
-                                            f" Error finding local AUP record {aup_num}: {e_local_aup}.")
+        matrix_response["error_details"] = (current_error_details + f" Error finding local AUP record {aup_num}: {e_local_aup}.")
 
     external_disciplines: List[Dict[str, Any]] = []
     external_aup_id_for_disciplines: Optional[int] = None
     attempted_external_fetch = False
 
     try:
-        logger.debug(f"{func} - Searching external KD for AUP with num_aup '{aup_num}'...")
         external_aup_search_result = get_external_aups_list(search_query=aup_num, limit=1)
         attempted_external_fetch = True 
 
@@ -262,79 +205,56 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
                 external_aup_id_for_disciplines = exact_match_aup.get('id_aup')
                 matrix_response["external_aup_id"] = external_aup_id_for_disciplines
                 matrix_response["external_aup_num"] = exact_match_aup.get('num_aup', aup_num)
-                if not local_aup_info_entry: 
-                    matrix_response["aup_info"] = exact_match_aup 
-                    matrix_response["source"] = "external_header_only"
+                if not local_aup_info_entry: matrix_response["aup_info"] = exact_match_aup; matrix_response["source"] = "external_header_only"
                 
                 if external_aup_id_for_disciplines is not None:
                     external_disciplines = get_external_aup_disciplines(external_aup_id_for_disciplines)
                     matrix_response["disciplines"] = external_disciplines
-                    logger.info(f"{func}  - Fetched {len(external_disciplines)} discipline entries from external KD.")
-                    if local_aup_info_entry and matrix_response["source"] != "local_fallback_disciplines":
-                        matrix_response["source"] = "local_with_external_disciplines"
-                    elif not local_aup_info_entry: 
-                        matrix_response["source"] = "external_only"
+                    if local_aup_info_entry and matrix_response["source"] != "local_fallback_disciplines": matrix_response["source"] = "local_with_external_disciplines"
+                    elif not local_aup_info_entry: matrix_response["source"] = "external_only"
                 else:
                     error_msg = f" External AUP {aup_num} found, but its ID is missing. Disciplines not loaded."
                     current_error_details = matrix_response.get("error_details", "") or ""
                     matrix_response["error_details"] = (current_error_details + error_msg)
-                    logger.warning(f"{func}  - External AUP '{aup_num}' found, but its external ID is missing. Cannot fetch disciplines.")
             else:
                 error_msg = f" AUP {aup_num} not found (exact match) in external DB. Disciplines not loaded."
                 current_error_details = matrix_response.get("error_details", "") or ""
                 matrix_response["error_details"] = (current_error_details + error_msg)
-                logger.warning(f"{func} - AUP with num_aup '{aup_num}' not found as an exact match in external KD search results.")
         else:
             error_msg = f" AUP {aup_num} not found in external DB. Disciplines not loaded."
             current_error_details = matrix_response.get("error_details", "") or ""
             matrix_response["error_details"] = (current_error_details + error_msg)
-            logger.warning(f"{func} - AUP with num_aup '{aup_num}' not found in external KD by num_aup search.")
     except Exception as e_ext_disciplines:
         attempted_external_fetch = True
-        logger.error(f"{func} - Error during external KD lookup/discipline fetch for num_aup '{aup_num}': {e_ext_disciplines}", exc_info=True)
+        logger.error(f"Error during external KD lookup/discipline fetch for num_aup '{aup_num}': {e_ext_disciplines}", exc_info=True)
         current_error_details = matrix_response.get("error_details", "") or ""
-        matrix_response["error_details"] = (current_error_details +
-                                            f" Error loading disciplines for AUP {aup_num} from external DB: {e_ext_disciplines}.")
+        matrix_response["error_details"] = (current_error_details + f" Error loading disciplines for AUP {aup_num} from external DB: {e_ext_disciplines}.")
 
     if not external_disciplines and local_aup_info_entry:
-        logger.warning(f"{func} - External disciplines for AUP {aup_num} are empty. Attempting to load disciplines from local AupData for local AUP ID: {local_aup_info_entry.id_aup}.")
         try:
-            local_aup_data_entries = session.query(LocalAupData).options(
-                joinedload(LocalAupData.discipline) 
-            ).filter(LocalAupData.id_aup == local_aup_info_entry.id_aup).order_by(LocalAupData.id_period, LocalAupData.shifr, LocalAupData.id).all()
+            local_aup_data_entries = session.query(LocalAupData).options(joinedload(LocalAupData.discipline)).filter(LocalAupData.id_aup == local_aup_info_entry.id_aup).order_by(LocalAupData.id_period, LocalAupData.shifr, LocalAupData.id).all()
 
             if local_aup_data_entries:
                 local_disciplines_for_response = []
                 for entry in local_aup_data_entries:
                     local_disciplines_for_response.append({
-                        'aup_data_id': entry.id, 
-                        'id_aup': entry.id_aup,
-                        'discipline_id': entry.id_discipline,
+                        'aup_data_id': entry.id, 'id_aup': entry.id_aup, 'discipline_id': entry.id_discipline,
                         'title': entry.discipline.title if entry.discipline else entry._discipline, 
-                        'semester': entry.id_period,
-                        'shifr': entry.shifr,
-                        'id_type_record': entry.id_type_record,
-                        'zet': (entry.zet / 100) if entry.zet is not None else 0, 
-                        'amount': entry.amount,
-                        'id_type_control': entry.id_type_control
+                        'semester': entry.id_period, 'shifr': entry.shifr,
+                        'id_type_record': entry.id_type_record, 'zet': (entry.zet / 100) if entry.zet is not None else 0, 
+                        'amount': entry.amount, 'id_type_control': entry.id_type_control
                     })
                 matrix_response["disciplines"] = local_disciplines_for_response
                 matrix_response["source"] = "local_fallback_disciplines"
                 fallback_msg = " Using local discipline data."
                 current_error_details = matrix_response.get("error_details", "") or ""
-                if current_error_details and attempted_external_fetch: 
-                    matrix_response["error_details"] += fallback_msg
-                else:
-                    matrix_response["error_details"] = "Using local discipline data (external could not be loaded or was not requested)."
-                logger.info(f"{func}  - Fetched {len(local_disciplines_for_response)} discipline entries from LOCAL AupData for AUP ID {local_aup_info_entry.id_aup}.")
-            else:
-                logger.warning(f"{func}  - No disciplines found in LOCAL AupData for local AUP ID {local_aup_info_entry.id_aup} either.")
+                if current_error_details and attempted_external_fetch: matrix_response["error_details"] += fallback_msg
+                else: matrix_response["error_details"] = "Using local discipline data (external could not be loaded or was not requested)."
+            else: logger.warning(f"No disciplines found in LOCAL AupData for local AUP ID {local_aup_info_entry.id_aup} either.")
         except Exception as e_local_disc:
-            logger.error(f"{func} - Error fetching local disciplines for AUP {local_aup_info_entry.id_aup}: {e_local_disc}", exc_info=True)
+            logger.error(f"Error fetching local disciplines for AUP {local_aup_info_entry.id_aup}: {e_local_disc}", exc_info=True)
             current_error_details = matrix_response.get("error_details", "") or ""
-            matrix_response["error_details"] = (current_error_details +
-                                                f" Error loading local disciplines: {e_local_disc}.")
-
+            matrix_response["error_details"] = (current_error_details + f" Error loading local disciplines: {e_local_disc}.")
 
     if local_aup_info_entry: 
         if matrix_response["source"] not in ["local_fallback_disciplines", "external_header_only", "external_only"]: 
@@ -346,65 +266,49 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
 
         if educational_program and educational_program.fgos: 
             fgos_id_to_load = educational_program.fgos.id
-            uk_type = comp_types.get('УК')
-            opk_type = comp_types.get('ОПК')
+            uk_type = comp_types.get('УК'); opk_type = comp_types.get('ОПК')
             uk_opk_ids_to_load = [tid.id for tid in [uk_type, opk_type] if tid]
             if uk_opk_ids_to_load:
                 uk_opk_competencies = session.query(Competency).options(
                     selectinload(Competency.indicators), selectinload(Competency.competency_type)
                 ).filter(Competency.fgos_vo_id == fgos_id_to_load, Competency.competency_type_id.in_(uk_opk_ids_to_load)).all()
                 relevant_competencies.extend(uk_opk_competencies)
-                logger.debug(f"{func}  - Loaded {len(uk_opk_competencies)} УК/ОПК для FGOS ID {fgos_id_to_load}.")
-            else: logger.warning(f"{func}  - Competency types УК/ОПК not found in DB. Cannot load УК/ОПК for FGOS ID {fgos_id_to_load}.")
-
-        elif educational_program and not educational_program.fgos:
-             logger.warning(f"{func}  - Educational Program ID {educational_program.id} linked to AUP {aup_num} has no FGOS linked. Skipping УК/ОПК.")
-        else: 
-             logger.warning(f"{func}  - No Educational Program linked to local AUP {aup_num}. Skipping УК/ОПК loading.")
+            else: logger.warning(f"Competency types УК/ОПК not found in DB. Cannot load УК/ОПК for FGOS ID {fgos_id_to_load}.")
+        elif educational_program and not educational_program.fgos: logger.warning(f"Educational Program ID {educational_program.id} linked to AUP {aup_num} has no FGOS linked. Skipping УК/ОПК.")
+        else: logger.warning(f"No Educational Program linked to local AUP {aup_num}. Skipping УК/ОПК loading.")
 
         pk_type = comp_types.get('ПК')
         if pk_type:
             if educational_program and educational_program.selected_ps_assoc:
-                logger.warning(f"{func}  - MVP: Loading ALL PKs, not filtered by selected PS for the program.")
-                # НОВОЕ: Загружаем ПК, связанные с текущей ОП
+                logger.warning(f"MVP: Loading ALL PKs, not filtered by selected PS for the program.")
                 pk_competencies = session.query(Competency).options(
                     selectinload(Competency.indicators), selectinload(Competency.competency_type),
-                    selectinload(Competency.educational_programs_assoc) # Загружаем связи с ОП
+                    selectinload(Competency.educational_programs_assoc) 
                 ).filter(Competency.competency_type_id == pk_type.id).all() 
                 
-                # Фильтруем ПК, чтобы включать только те, которые связаны с данной ОП
                 filtered_pk_competencies = []
-                if educational_program: # Если есть привязанная ОП
+                if educational_program: 
                     for pk_comp in pk_competencies:
                         if any(assoc.educational_program_id == educational_program.id for assoc in pk_comp.educational_programs_assoc):
                             filtered_pk_competencies.append(pk_comp)
                     relevant_competencies.extend(filtered_pk_competencies)
-                    logger.debug(f"{func}  - Loaded {len(filtered_pk_competencies)} PKs (filtered by OPOP {educational_program.id}).")
-                else: # Если ОП не найдена, но ПК тип существует, загружаем все ПК (для дебага или если ПК не привязана жестко)
+                else: 
                     relevant_competencies.extend(pk_competencies)
-                    logger.debug(f"{func}  - No Educational Program, loaded all {len(pk_competencies)} PKs.")
             elif educational_program and not educational_program.selected_ps_assoc:
-                logger.warning(f"{func}  - Educational Program ID {educational_program.id} has no selected PS links. Skipping PK loading (or loading all PKs).")
-                # Здесь можно решить, загружать ли все ПК или нет. Для MVP пока загружаем все ПК, если нет фильтра по selected_ps.
+                logger.warning(f"Educational Program ID {educational_program.id} has no selected PS links. Skipping PK loading (or loading all PKs).")
                 all_pk_competencies = session.query(Competency).options(
                     selectinload(Competency.indicators), selectinload(Competency.competency_type),
                     selectinload(Competency.educational_programs_assoc)
                 ).filter(Competency.competency_type_id == pk_type.id).all()
                 relevant_competencies.extend(all_pk_competencies)
-                logger.debug(f"{func}  - Educational Program has no selected PS, loaded all {len(all_pk_competencies)} PKs.")
-
             else: 
-                logger.warning(f"{func}  - No Educational Program linked to local AUP {aup_num} or no selected PS for program. Skipping PK loading (or loading all PKs).")
-                # Загружаем все ПК, если нет привязанной ОП или выбранных ПС
+                logger.warning(f"No Educational Program linked to local AUP {aup_num} or no selected PS for program. Skipping PK loading (or loading all PKs).")
                 all_pk_competencies = session.query(Competency).options(
                     selectinload(Competency.indicators), selectinload(Competency.competency_type),
                     selectinload(Competency.educational_programs_assoc)
                 ).filter(Competency.competency_type_id == pk_type.id).all()
                 relevant_competencies.extend(all_pk_competencies)
-                logger.debug(f"{func}  - No Educational Program, loaded all {len(all_pk_competencies)} PKs.")
-
-        else: 
-            logger.warning(f"{func}  - Competency type ПК not found in DB. Skipping ПК loading.")
+        else: logger.warning(f"Competency type ПК not found in DB. Skipping ПК loading.")
 
         competencies_data = []; all_indicator_ids_for_matrix = set()
         comp_type_id_sort_order = {ct.id: i for i, ct_code in enumerate(['УК', 'ОПК', 'ПК']) for ct in comp_types_q if ct.code == ct_code}
@@ -412,10 +316,9 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
 
         for comp in relevant_competencies:
             type_code = comp.competency_type.code if comp.competency_type else "UNKNOWN"
-            comp_dict = comp.to_dict(rules=['-indicators', '-competency_type', '-fgos', '-based_on_labor_function', '-matrix_entries', '-educational_programs_assoc']) # ИСКЛЮЧАЕМ НОВУЮ СВЯЗЬ
+            comp_dict = comp.to_dict(rules=['-indicators', '-competency_type', '-fgos', '-based_on_labor_function', '-matrix_entries', '-educational_programs_assoc']) 
             comp_dict['type_code'] = type_code; comp_dict['indicators'] = []
             
-            # НОВОЕ: Включаем информацию о ТФ, на которой основана ПК
             if comp.based_on_labor_function:
                  comp_dict['based_on_labor_function_id'] = comp.based_on_labor_function.id
                  comp_dict['based_on_labor_function_code'] = comp.based_on_labor_function.code
@@ -430,7 +333,6 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
                     comp_dict['indicators'].append(ind_dict)
             competencies_data.append(comp_dict)
         matrix_response["competencies"] = competencies_data
-        logger.info(f"{func} - Prepared {len(competencies_data)} competency entries for response.")
 
         if matrix_response["disciplines"] and all_indicator_ids_for_matrix:
             discipline_source_aup_data_ids = [d['aup_data_id'] for d in matrix_response["disciplines"] if d.get('aup_data_id') is not None]
@@ -440,124 +342,91 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
                     CompetencyMatrix.indicator_id.in_(list(all_indicator_ids_for_matrix))
                 ).all()
                 matrix_response["links"] = [link.to_dict(only=('aup_data_id', 'indicator_id', 'is_manual')) for link in existing_links_db]
-                logger.debug(f"{func}  - Loaded {len(matrix_response['links'])} matrix links from local DB (based on current discipline source IDs).")
-            else:
-                logger.debug(f"{func}  - No valid aup_data_ids from disciplines to load links for.")
-        else:
-            logger.debug(f"{func}  - No disciplines loaded or no indicators for matrix, local links will be empty.")
+            else: logger.debug("No valid aup_data_ids from disciplines to load links for.")
+        else: logger.debug("No disciplines loaded or no indicators for matrix, local links will be empty.")
     
     if not local_aup_info_entry and not matrix_response["disciplines"] and matrix_response["source"] != "external_header_only": 
         matrix_response["source"] = "not_found"
-        logger.error(f"{func} - AUP with num_aup '{aup_num}' not found in local DB. External search also failed or yielded no disciplines.")
+        logger.error(f"AUP with num_aup '{aup_num}' not found in local DB. External search also failed or yielded no disciplines.")
         current_error_details = matrix_response.get("error_details", "") or ""
-        if not current_error_details: 
-            matrix_response["error_details"] = f"AUP {aup_num} not found in local or external DB, or disciplines could not be loaded."
-        if not matrix_response.get("aup_info") and not matrix_response.get("disciplines"):
-             return None
+        if not current_error_details: matrix_response["error_details"] = f"AUP {aup_num} not found in local or external DB, or disciplines could not be loaded."
+        if not matrix_response.get("aup_info") and not matrix_response.get("disciplines"): return None
 
     return matrix_response
 
 def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True) -> Dict[str, Any]:
     """Creates or deletes a Discipline(AUP)-Indicator link in the matrix."""
-    func = "update_matrix_link: "
     session: Session = local_db.session
     try:
         indicator_exists = session.query(exists().where(Indicator.id == indicator_id)).scalar()
         if not indicator_exists:
-            message = f"{func} Indicator with id {indicator_id} not found in local DB."
-            logger.warning(message)
-            return { 'success': False, 'status': 'error', 'message': message, 'error_type': 'indicator_not_found' }
+            message = f"Indicator with id {indicator_id} not found in local DB."
+            logger.warning(message); return { 'success': False, 'status': 'error', 'message': message, 'error_type': 'indicator_not_found' }
         
-        existing_link = session.query(CompetencyMatrix).filter_by(
-            aup_data_id=aup_data_id,
-            indicator_id=indicator_id
-        ).first()
+        existing_link = session.query(CompetencyMatrix).filter_by(aup_data_id=aup_data_id, indicator_id=indicator_id).first()
 
         if create:
             if not existing_link:
                 link = CompetencyMatrix(aup_data_id=aup_data_id, indicator_id=indicator_id, is_manual=True)
-                session.add(link)
-                message = f"Link created: External AupData ID {aup_data_id} <-> Indicator {indicator_id}"
-                logger.info(message)
-                return { 'success': True, 'status': 'created', 'message': message }
+                session.add(link); logger.info(f"Link created: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
+                return { 'success': True, 'status': 'created', 'message': "Link created." }
             else:
                 if not existing_link.is_manual:
                      existing_link.is_manual = True
-                     session.add(existing_link)
-                     logger.info(f"{func} Link updated to manual: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
-                message = f"Link already exists: External AupData ID {aup_data_id} <-> Indicator {indicator_id}"
-                logger.info(message)
-                return { 'success': True, 'status': 'already_exists', 'message': message }
+                     session.add(existing_link); logger.info(f"Link updated to manual: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
+                return { 'success': True, 'status': 'already_exists', 'message': "Link already exists." }
         else:  # delete
             if existing_link:
-                session.delete(existing_link)
-                message = f"Link deleted: External AupData ID {aup_data_id} <-> Indicator {indicator_id}"
-                logger.info(message)
-                return { 'success': True, 'status': 'deleted', 'message': message }
+                session.delete(existing_link); logger.info(f"Link deleted: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
+                return { 'success': True, 'status': 'deleted', 'message': "Link deleted." }
             else:
-                message = f"Link not found for deletion: External AupData ID {aup_data_id} <-> Indicator {indicator_id}"
-                logger.warning(message)
-                return { 'success': True, 'status': 'not_found', 'message': message } 
+                logger.warning(f"Link not found for deletion: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
+                return { 'success': True, 'status': 'not_found', 'message': "Link not found." } 
 
-    except SQLAlchemyError as e:
-        message = f"{func} Database error: {e}"
-        logger.error(message, exc_info=True)
-        raise 
-    except Exception as e:
-        message = f"{func} Unexpected error: {e}"
-        logger.error(message, exc_info=True)
-        raise 
+    except SQLAlchemyError as e: logger.error(f"Database error updating matrix link: {e}", exc_info=True); raise 
+    except Exception as e: logger.error(f"Unexpected error updating matrix link: {e}", exc_info=True); raise 
 
 def get_all_competencies() -> List[Dict[str, Any]]:
-    func = "get_all_competencies: "
     try:
         competencies = local_db.session.query(Competency).options(joinedload(Competency.competency_type)).all()
         result = []
         for comp in competencies:
-             comp_dict = comp.to_dict(rules=['-indicators', '-fgos', '-based_on_labor_function', '-educational_programs_assoc']) # ИСКЛЮЧАЕМ НОВУЮ СВЯЗЬ ИЗ ВЫВОДА ПО УМОЛЧАНИЮ
+             comp_dict = comp.to_dict(rules=['-indicators', '-fgos', '-based_on_labor_function', '-educational_programs_assoc']) 
              comp_dict['type_code'] = comp.competency_type.code if comp.competency_type else "UNKNOWN"
-             # НОВОЕ: Включаем информацию о ТФ, на которой основана ПК
              if comp.based_on_labor_function:
                  comp_dict['based_on_labor_function_id'] = comp.based_on_labor_function.id
                  comp_dict['based_on_labor_function_code'] = comp.based_on_labor_function.code
                  comp_dict['based_on_labor_function_name'] = comp.based_on_labor_function.name
              result.append(comp_dict)
         return result
-    except Exception as e: logger.error(f"{func} Error: {e}", exc_info=True); raise
+    except Exception as e: logger.error(f"Error fetching all competencies: {e}", exc_info=True); raise
 
 def get_competency_details(comp_id: int) -> Optional[Dict[str, Any]]:
-    func = "get_competency_details: "
     try:
         competency = local_db.session.query(Competency).options(
-            joinedload(Competency.competency_type),
-            joinedload(Competency.indicators),
-            joinedload(Competency.educational_programs_assoc).joinedload(CompetencyEducationalProgram.educational_program) # НОВОЕ: Загружаем ОПОП
+            joinedload(Competency.competency_type), joinedload(Competency.indicators),
+            joinedload(Competency.educational_programs_assoc).joinedload(CompetencyEducationalProgram.educational_program) 
         ).get(comp_id)
-        if not competency: logger.warning(f"{func} Competency with id {comp_id} not found."); return None
-        # НОВОЕ: Включаем educational_programs в to_dict
+        if not competency: logger.warning(f"Competency with id {comp_id} not found."); return None
         result = competency.to_dict(rules=['-fgos', '-based_on_labor_function'], include_indicators=True, include_type=True, include_educational_programs=True)
-        # НОВОЕ: Включаем информацию о ТФ, на которой основана ПК
         if competency.based_on_labor_function:
             result['based_on_labor_function_id'] = competency.based_on_labor_function.id
             result['based_on_labor_function_code'] = competency.based_on_labor_function.code
             result['based_on_labor_function_name'] = competency.based_on_labor_function.name
         return result
-    except Exception as e: logger.error(f"{func} Error for id {comp_id}: {e}", exc_info=True); raise
+    except Exception as e: logger.error(f"Error fetching competency {comp_id} details: {e}", exc_info=True); raise
 
-def create_competency(data: Dict[str, Any], session: Session) -> Optional[Competency]: # Add session parameter
-    func = "create_competency: "
+def create_competency(data: Dict[str, Any], session: Session) -> Optional[Competency]: 
     required_fields = ['type_code', 'code', 'name']
     if not all(field in data and data[field] is not None and str(data[field]).strip() for field in required_fields):
-        logger.warning(f"{func} Missing required fields."); raise ValueError("Отсутствуют обязательные поля: type_code, code, name.")
+        raise ValueError("Отсутствуют обязательные поля: type_code, code, name.")
     if data['type_code'] != 'ПК': raise ValueError(f"Данный эндпоинт предназначен только для создания ПК. Получен тип '{data['type_code']}'.")
 
-    # НОВОЕ: Получаем список ID образовательных программ
     educational_program_ids = data.get('educational_program_ids', [])
     if not isinstance(educational_program_ids, list):
-         logger.warning(f"{func} 'educational_program_ids' is not a list. Ignoring or handling as error.")
+         logger.warning(f"'educational_program_ids' is not a list. Ignoring or handling as error.")
          educational_program_ids = []
     
-    # НОВОЕ: Получаем ID трудовой функции, если ПК создается на ее основе
     based_on_labor_function_id = data.get('based_on_labor_function_id')
     
     try:
@@ -567,56 +436,41 @@ def create_competency(data: Dict[str, Any], session: Session) -> Optional[Compet
         existing_comp = session.query(Competency).filter_by(code=str(data['code']).strip(), competency_type_id=comp_type.id).first()
         if existing_comp: raise IntegrityError(f"Competency with code {data['code']} already exists for this type.", {}, None)
         
-        # НОВОЕ: Проверяем существование LaborFunction
         labor_function = None
         if based_on_labor_function_id:
              labor_function = session.query(LaborFunction).get(based_on_labor_function_id)
              if not labor_function:
-                 logger.warning(f"{func} Labor function with ID {based_on_labor_function_id} not found. Skipping link.")
-                 based_on_labor_function_id = None # Не привязываем, если не найдена
+                 logger.warning(f"Labor function with ID {based_on_labor_function_id} not found. Skipping link.")
+                 based_on_labor_function_id = None 
         
         competency = Competency(
-            competency_type_id=comp_type.id,
-            code=str(data['code']).strip(),
+            competency_type_id=comp_type.id, code=str(data['code']).strip(),
             name=str(data['name']).strip(),
             description=str(data['description']).strip() if data.get('description') is not None else None,
-            based_on_labor_function_id=based_on_labor_function_id # НОВОЕ: Привязка к ТФ
+            based_on_labor_function_id=based_on_labor_function_id 
         )
-        session.add(competency)
-        session.flush() 
+        session.add(competency); session.flush() 
 
-        # НОВОЕ: Создаем связи с Образовательными Программами
         for ep_id in educational_program_ids:
             educational_program = session.query(EducationalProgram).get(ep_id)
             if educational_program:
                  assoc = CompetencyEducationalProgram(competency_id=competency.id, educational_program_id=ep_id)
                  session.add(assoc)
-                 logger.debug(f"{func} Created link Competency {competency.id} <-> EducationalProgram {ep_id}.")
-            else:
-                 logger.warning(f"{func} Educational Program with ID {ep_id} not found. Skipping link for competency {competency.id}.")
+            else: logger.warning(f"Educational Program with ID {ep_id} not found. Skipping link for competency {competency.id}.")
 
-        session.flush()
-        logger.info(f"{func} Competency created: {competency.code} (ID: {competency.id})"); return competency
-    except IntegrityError as e: 
-        logger.error(f"{func} Database IntegrityError: {e}", exc_info=True); raise e 
-    except SQLAlchemyError as e: 
-        logger.error(f"{func} Database error: {e}", exc_info=True); raise e
-    except Exception as e: 
-        logger.error(f"{func} Unexpected error: {e}", exc_info=True); raise e
+        session.flush(); return competency
+    except IntegrityError as e: logger.error(f"Database IntegrityError creating competency: {e}", exc_info=True); raise e 
+    except SQLAlchemyError as e: logger.error(f"Database error creating competency: {e}", exc_info=True); raise e
+    except Exception as e: logger.error(f"Unexpected error creating competency: {e}", exc_info=True); raise e
 
 def update_competency(comp_id: int, data: Dict[str, Any], session: Session) -> Optional[Dict[str, Any]]: 
-    func = "update_competency: "
-    logger.info(f"{func} Received update request for competency ID: {comp_id}. Data: {data}")
     if not data: raise ValueError("Отсутствуют данные для обновления.")
-    
-    # НОВОЕ: Извлекаем educational_program_ids для обновления связей
     educational_program_ids = data.get('educational_program_ids')
-    
     try:
         competency = session.query(Competency).get(comp_id)
         if not competency: return None 
         
-        allowed_fields = {'name', 'description'} # 'code' и 'type_code' не меняем
+        allowed_fields = {'name', 'description'}
         updated = False
         
         for field in data:
@@ -627,74 +481,51 @@ def update_competency(comp_id: int, data: Dict[str, Any], session: Session) -> O
                  if getattr(competency, field) != processed_value:
                      setattr(competency, field, processed_value)
                      updated = True
-                     logger.debug(f"{func} Updated field '{field}' for comp {comp_id} to '{processed_value}'")
-            else: 
-                logger.warning(f"{func} Ignoring field '{field}' for update of comp {comp_id} as it is not allowed via this endpoint.")
+            else: logger.warning(f"Ignoring field '{field}' for update of comp {comp_id} as it is not allowed via this endpoint.")
         
-        # НОВОЕ: Обновление связей с образовательными программами
-        if educational_program_ids is not None: # Проверяем, что поле было передано в запросе
+        if educational_program_ids is not None: 
             current_ep_ids = {assoc.educational_program_id for assoc in competency.educational_programs_assoc}
             new_ep_ids = set(educational_program_ids)
 
-            # Удаляем старые связи, которых нет в новом списке
             to_delete_ids = current_ep_ids - new_ep_ids
             if to_delete_ids:
                 session.query(CompetencyEducationalProgram).filter(
                     CompetencyEducationalProgram.competency_id == competency.id,
                     CompetencyEducationalProgram.educational_program_id.in_(to_delete_ids)
-                ).delete(synchronize_session='fetch')
-                updated = True
-                logger.debug(f"{func} Deleted {len(to_delete_ids)} old EP links for comp {comp_id}.")
-
-            # Добавляем новые связи
+                ).delete(synchronize_session='fetch'); updated = True
+            
             to_add_ids = new_ep_ids - current_ep_ids
             if to_add_ids:
                 for ep_id in to_add_ids:
                     educational_program = session.query(EducationalProgram).get(ep_id)
                     if educational_program:
                         assoc = CompetencyEducationalProgram(competency_id=competency.id, educational_program_id=ep_id)
-                        session.add(assoc)
-                        updated = True
-                        logger.debug(f"{func} Added new EP link for comp {comp_id} to EP {ep_id}.")
-                    else:
-                        logger.warning(f"{func} Educational Program with ID {ep_id} not found when adding link for competency {comp_id}. Skipping.")
-            session.flush() # Применяем изменения связей
+                        session.add(assoc); updated = True
+                    else: logger.warning(f"Educational Program with ID {ep_id} not found when adding link for competency {comp_id}. Skipping.")
+            session.flush() 
         
         if updated: 
-            session.add(competency) # Ensure changes to competency object are tracked
+            session.add(competency) 
             session.flush() 
-            logger.info(f"{func} Competency {comp_id} updated successfully (including EP links if changed).")
-        else: 
-            logger.info(f"{func} No changes detected for competency {comp_id}. No commit needed.")
         
-        # Refresh to get updated relationships for to_dict
         session.refresh(competency) 
-        return competency.to_dict(rules=['-indicators'], include_type=True, include_educational_programs=True) # НОВОЕ: Включаем updated educational programs
+        return competency.to_dict(rules=['-indicators'], include_type=True, include_educational_programs=True) 
 
-    except IntegrityError as e: 
-        logger.error(f"{func} Database IntegrityError for {comp_id}: {e}", exc_info=True); raise e 
-    except SQLAlchemyError as e: 
-        logger.error(f"{func} Database error updating competency {comp_id}: {e}", exc_info=True); raise e 
-    except Exception as e: 
-        logger.error(f"{func} Unexpected error updating competency {comp_id}: {e}", exc_info=True); raise e 
+    except IntegrityError as e: logger.error(f"Database IntegrityError updating competency {comp_id}: {e}", exc_info=True); raise e 
+    except SQLAlchemyError as e: logger.error(f"Database error updating competency {comp_id}: {e}", exc_info=True); raise e 
+    except Exception as e: logger.error(f"Unexpected error updating competency {comp_id}: {e}", exc_info=True); raise e 
 
 def delete_competency(comp_id: int, session: Session) -> bool: 
-    func = "delete_competency: "
-    logger.info(f"{func} Attempting to delete competency ID: {comp_id}")
     try:
          comp_to_delete = session.query(Competency).get(comp_id)
-         if not comp_to_delete: logger.warning(f"{func} Competency {comp_id} not found for deletion."); return False 
+         if not comp_to_delete: logger.warning(f"Competency {comp_id} not found for deletion."); return False 
          
          session.delete(comp_to_delete)
-         logger.info(f"{func} Competency {comp_id} marked for deletion.")
          return True 
-    except SQLAlchemyError as e: 
-        logger.error(f"{func} Database error for {comp_id}: {e}", exc_info=True); raise e 
-    except Exception as e: 
-        logger.error(f"{func} Unexpected error for {comp_id}: {e}", exc_info=True); raise e 
+    except SQLAlchemyError as e: logger.error(f"Database error deleting competency {comp_id}: {e}", exc_info=True); raise e 
+    except Exception as e: logger.error(f"Unexpected error deleting competency {comp_id}: {e}", exc_info=True); raise e 
 
 def get_all_indicators() -> List[Dict[str, Any]]:
-    func = "get_all_indicators: "
     try:
         indicators = local_db.session.query(Indicator).options(joinedload(Indicator.competency)).all()
         result = []
@@ -703,23 +534,21 @@ def get_all_indicators() -> List[Dict[str, Any]]:
              if ind.competency: ind_dict['competency_code'] = ind.competency.code; ind_dict['competency_name'] = ind.competency.name
              result.append(ind_dict)
         return result
-    except Exception as e: logger.error(f"{func} Error: {e}", exc_info=True); raise
+    except Exception as e: logger.error(f"Error fetching all indicators: {e}", exc_info=True); raise
 
 def get_indicator_details(ind_id: int) -> Optional[Dict[str, Any]]:
-    func = "get_indicator_details: "
     try:
         indicator = local_db.session.query(Indicator).options(joinedload(Indicator.competency)).get(ind_id)
-        if not indicator: logger.warning(f"{func} Indicator with id {ind_id} not found."); return None
+        if not indicator: logger.warning(f"Indicator with id {ind_id} not found."); return None
         result = indicator.to_dict(rules=['-competency', '-labor_functions', '-matrix_entries'])
         if indicator.competency: result['competency_code'] = indicator.competency.code; result['competency_name'] = indicator.competency.name
         return result
-    except Exception as e: logger.error(f"{func} Error for id {ind_id}: {e}", exc_info=True); raise
+    except Exception as e: logger.error(f"Error fetching indicator {ind_id} details: {e}", exc_info=True); raise
 
 def create_indicator(data: Dict[str, Any], session: Session) -> Optional[Indicator]: 
-    func = "create_indicator: "
     required_fields = ['competency_id', 'code', 'formulation']
     if not all(field in data and data[field] is not None and str(data[field]).strip() for field in required_fields):
-        logger.warning(f"{func} Missing required fields."); raise ValueError("Отсутствуют обязательные поля: competency_id, code, formulation.")
+        raise ValueError("Отсутствуют обязательные поля: competency_id, code, formulation.")
     try:
         competency = session.query(Competency).get(data['competency_id'])
         if not competency: raise ValueError(f"Родительская компетенция с ID '{data['competency_id']}' не найдена.")
@@ -731,19 +560,12 @@ def create_indicator(data: Dict[str, Any], session: Session) -> Optional[Indicat
             competency_id=data['competency_id'], code=str(data['code']).strip(), formulation=str(data['formulation']).strip(),
             source=str(data['source']).strip() if data.get('source') is not None else None,
         )
-        session.add(indicator)
-        session.flush() 
-        logger.info(f"{func} Indicator created: {indicator.code} (ID: {indicator.id}) for competency {indicator.competency_id}"); return indicator
-    except IntegrityError as e: 
-        logger.error(f"{func} Database IntegrityError: {e}", exc_info=True); raise e
-    except SQLAlchemyError as e: 
-        logger.error(f"{func} Database error: {e}", exc_info=True); raise e
-    except Exception as e: 
-        logger.error(f"{func} Unexpected error: {e}", exc_info=True); raise e
+        session.add(indicator); session.flush(); return indicator
+    except IntegrityError as e: logger.error(f"Database IntegrityError creating indicator: {e}", exc_info=True); raise e
+    except SQLAlchemyError as e: logger.error(f"Database error creating indicator: {e}", exc_info=True); raise e
+    except Exception as e: logger.error(f"Unexpected error creating indicator: {e}", exc_info=True); raise e
 
 def update_indicator(ind_id: int, data: Dict[str, Any], session: Session) -> Optional[Indicator]: 
-    func = "update_indicator: "
-    logger.info(f"{func} Received update request for indicator ID: {ind_id}. Data: {data}")
     if not data: raise ValueError("Отсутствуют данные для обновления.")
     try:
         indicator = session.query(Indicator).get(ind_id)
@@ -755,7 +577,6 @@ def update_indicator(ind_id: int, data: Dict[str, Any], session: Session) -> Opt
         for field in data:
             if field in allowed_fields:
                  processed_value = str(data[field]).strip() if data[field] is not None else None
-                 
                  if field == 'source' and processed_value == '': processed_value = None
                  
                  if field == 'code' and processed_value != indicator.code:
@@ -768,88 +589,70 @@ def update_indicator(ind_id: int, data: Dict[str, Any], session: Session) -> Opt
                  if getattr(indicator, field) != processed_value:
                      setattr(indicator, field, processed_value)
                      updated = True
-                     logger.debug(f"{func} Updated field '{field}' for ind {ind_id} to '{processed_value}'")
-            else: 
-                logger.warning(f"{func} Ignoring field '{field}' for update of ind {ind_id} as it is not allowed via this endpoint.")
+            else: logger.warning(f"Ignoring field '{field}' for update of ind {ind_id} as it is not allowed via this endpoint.")
         
         if updated: 
-            session.add(indicator)
-            session.flush() 
-            logger.info(f"{func} Indicator {ind_id} updated successfully.")
-        else: 
-            logger.info(f"{func} No changes detected for indicator {ind_id}. No commit needed.")
+            session.add(indicator); session.flush() 
         
-        session.refresh(indicator) 
-        return indicator 
+        session.refresh(indicator); return indicator 
 
-    except IntegrityError as e: 
-        logger.error(f"{func} Database IntegrityError for {ind_id}: {e}", exc_info=True); raise e 
-    except SQLAlchemyError as e: 
-        logger.error(f"{func} Database error for {ind_id}: {e}", exc_info=True); raise e 
-    except Exception as e: 
-        logger.error(f"{func} Unexpected error for {ind_id}: {e}", exc_info=True); raise e 
+    except IntegrityError as e: logger.error(f"Database IntegrityError updating indicator {ind_id}: {e}", exc_info=True); raise e 
+    except SQLAlchemyError as e: logger.error(f"Database error updating indicator {ind_id}: {e}", exc_info=True); raise e 
+    except Exception as e: logger.error(f"Unexpected error updating indicator {ind_id}: {e}", exc_info=True); raise e 
 
 def delete_indicator(ind_id: int, session: Session) -> bool: 
-    func = "delete_indicator: "
-    logger.info(f"{func} Attempting to delete indicator ID: {ind_id}")
     try:
          ind_to_delete = session.query(Indicator).get(ind_id)
-         if not ind_to_delete: logger.warning(f"{func} Indicator {ind_id} not found for deletion."); return False 
+         if not ind_to_delete: logger.warning(f"Indicator {ind_id} not found for deletion."); return False 
          
          session.delete(ind_to_delete)
-         logger.info(f"{func} Indicator {ind_id} marked for deletion.")
          return True 
-    except SQLAlchemyError as e: 
-        logger.error(f"{func} Database error for {ind_id}: {e}", exc_info=True); raise e 
-    except Exception as e: 
-        logger.error(f"{func} Unexpected error for {ind_id}: {e}", exc_info=True); raise e 
+    except SQLAlchemyError as e: logger.error(f"Database error deleting indicator {ind_id}: {e}", exc_info=True); raise e 
+    except Exception as e: logger.error(f"Unexpected error deleting indicator {ind_id}: {e}", exc_info=True); raise e 
 
 def parse_fgos_file(file_bytes: bytes, filename: str) -> Dict[str, Any]:
-    func = "parse_fgos_file: "
     try:
         parsed_data = parse_fgos_pdf(file_bytes, filename)
         if not parsed_data or not parsed_data.get('metadata'):
-             logger.warning(f"{func} Parsing failed or returned insufficient metadata for {filename}")
+             logger.warning(f"Parsing failed or returned insufficient metadata for {filename}")
              if not parsed_data: raise ValueError("Parser returned empty data.")
              if not parsed_data.get('metadata'): raise ValueError("Failed to extract metadata from FGOS file.")
         return parsed_data
-    except ValueError as e: logger.error(f"{func} Parser ValueError for {filename}: {e}"); raise e
-    except Exception as e: logger.error(f"{func} Unexpected error parsing {filename}: {e}", exc_info=True); raise Exception(f"Unexpected error parsing FGOS file '{filename}': {e}")
+    except ValueError as e: logger.error(f"Parser ValueError for {filename}: {e}"); raise e
+    except Exception as e: logger.error(f"Unexpected error parsing {filename}: {e}", exc_info=True); raise Exception(f"Unexpected error parsing FGOS file '{filename}': {e}")
 
 def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session, force_update: bool = False) -> Optional[FgosVo]:
-    func = "save_fgos_data: "
-    logger.info(f"{func} Attempting to save data for FGOS from '{filename}'. force_update: {force_update}")
-    if not parsed_data or not parsed_data.get('metadata'): logger.warning(f"{func} No parsed data or metadata provided for saving."); return None
+    if not parsed_data or not parsed_data.get('metadata'): logger.warning("No parsed data or metadata provided for saving."); return None
     metadata = parsed_data.get('metadata', {}); fgos_number = metadata.get('order_number'); fgos_date_obj = metadata.get('order_date'); fgos_direction_code = metadata.get('direction_code'); fgos_education_level = metadata.get('education_level'); fgos_generation = metadata.get('generation'); fgos_direction_name = metadata.get('direction_name')
-    if not all((fgos_number, fgos_date_obj, fgos_direction_code, fgos_education_level)): logger.error(f"{func} Missing core metadata from parsed data for saving."); raise ValueError("Missing core FGOS metadata from parsed data for saving.")
+    if not all((fgos_number, fgos_date_obj, fgos_direction_code, fgos_education_level)): logger.error("Missing core metadata from parsed data for saving."); raise ValueError("Missing core FGOS metadata from parsed data for saving.")
     try:
         existing_fgos = session.query(FgosVo).filter_by(direction_code=fgos_direction_code, education_level=fgos_education_level, number=fgos_number, date=fgos_date_obj).first()
         fgos_vo = None 
         if existing_fgos:
             if force_update:
-                logger.info(f"{func} Existing FGOS found ({existing_fgos.id}). Force update. Deleting old comps/links...")
+                logger.info(f"Existing FGOS found ({existing_fgos.id}). Force update. Deleting old comps/links...")
                 session.query(Competency).filter_by(fgos_vo_id=existing_fgos.id).delete(synchronize_session='fetch')
                 session.query(FgosRecommendedPs).filter_by(fgos_vo_id=existing_fgos.id).delete(synchronize_session='fetch'); session.flush()
                 fgos_vo = existing_fgos; fgos_vo.direction_name = fgos_direction_name or 'Not specified'; fgos_vo.generation = fgos_generation; fgos_vo.file_path = filename
-                session.add(fgos_vo); session.flush(); logger.info(f"{func} Existing FGOS ({fgos_vo.id}) updated.")
-            else: logger.warning(f"{func} FGOS with same key data already exists ({existing_fgos.id}). Skipping save."); raise IntegrityError("FGOS with this direction, number, and date already exists.", {}, None)
+                session.add(fgos_vo); session.flush()
+            else: logger.warning(f"FGOS with same key data already exists ({existing_fgos.id}). Skipping save."); raise IntegrityError("ФГОС с этим направлением, номером и датой уже существует.", {}, None)
         else: 
             fgos_vo = FgosVo(number=fgos_number, date=fgos_date_obj, direction_code=fgos_direction_code, direction_name=fgos_direction_name or 'Not specified', education_level=fgos_education_level, generation=fgos_generation, file_path=filename)
-            session.add(fgos_vo); session.flush(); logger.info(f"{func} New FgosVo created with ID {fgos_vo.id} for {fgos_vo.direction_code}.")
+            session.add(fgos_vo); session.flush()
         comp_types_map = {ct.code: ct for ct in session.query(CompetencyType).filter(CompetencyType.code.in_(['УК', 'ОПК'])).all()}
-        if not comp_types_map: logger.error(f"{func} CompetencyType (УК, ОПК) not found. Cannot save competencies."); raise ValueError("CompetencyType (УК, ОПК) not found.")
+        if not comp_types_map: logger.error("CompetencyType (УК, ОПК) not found. Cannot save competencies."); raise ValueError("CompetencyType (УК, ОПК) not found.")
         saved_competencies_count = 0; all_parsed_competencies = parsed_data.get('uk_competencies', []) + parsed_data.get('opk_competencies', [])
         for parsed_comp in all_parsed_competencies:
-            comp_code = parsed_comp.get('code'); comp_name = parsed_comp.get('name')
-            if not comp_code or not comp_name: logger.warning(f"{func} Skipping competency due to missing code/name: {parsed_comp}"); continue
+            comp_code = parsed_comp.get('code'); comp_name = parsed_comp.get('name'); comp_category_name = parsed_comp.get('category_name') 
+            if not comp_code or not comp_name: logger.warning(f"Skipping competency due to missing code/name: {parsed_comp}"); continue
             comp_prefix = comp_code.split('-')[0].upper(); comp_type = comp_types_map.get(comp_prefix)
-            if not comp_type: logger.warning(f"{func} Skipping competency {comp_code}: Competency type {comp_prefix} not found."); continue
+            if not comp_type: logger.warning(f"Skipping competency {comp_code}: Competency type {comp_prefix} not found."); continue
             existing_comp_for_fgos = session.query(Competency).filter_by(code=comp_code, competency_type_id=comp_type.id, fgos_vo_id=fgos_vo.id).first()
-            if existing_comp_for_fgos: logger.warning(f"{func} Competency {comp_code} already exists for FGOS {fgos_vo.id}. Skipping."); continue 
-            competency = Competency(competency_type_id=comp_type.id, fgos_vo_id=fgos_vo.id, code=comp_code, name=comp_name)
-            session.add(competency); session.flush(); saved_competencies_count += 1; logger.debug(f"{func} Created Competency {competency.code} (ID: {competency.id}) for FGOS {fgos_vo.id}.")
-        logger.info(f"{func} Saved {saved_competencies_count} competencies for FGOS {fgos_vo.id}.")
-        recommended_ps_codes = parsed_data.get('recommended_ps_codes', []); logger.info(f"{func} Found {len(recommended_ps_codes)} potential recommended PS codes.")
+            if existing_comp_for_fgos: logger.warning(f"Competency {comp_code} already exists for FGOS {fgos_vo.id}. Skipping."); continue 
+            competency = Competency(competency_type_id=comp_type.id, fgos_vo_id=fgos_vo.id, code=comp_code, name=comp_name, category_name=comp_category_name)
+            session.add(competency); session.flush(); saved_competencies_count += 1; 
+        logger.info(f"Saved {saved_competencies_count} competencies for FGOS {fgos_vo.id}.")
+        recommended_ps_codes = parsed_data.get('recommended_ps_codes', []); 
         if len(recommended_ps_codes) > 0:
              existing_prof_standards = session.query(ProfStandard).filter(ProfStandard.code.in_(recommended_ps_codes)).all(); ps_by_code = {ps.code: ps for ps in existing_prof_standards}
              linked_ps_count = 0
@@ -857,28 +660,21 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
                 prof_standard = ps_by_code.get(ps_code)
                 if prof_standard:
                     existing_link = session.query(FgosRecommendedPs).filter_by(fgos_vo_id=fgos_vo.id, prof_standard_id=prof_standard.id).first()
-                    if not existing_link: link = FgosRecommendedPs(fgos_vo_id=fgos_vo.id, prof_standard_id=prof_standard.id, is_mandatory=False); session.add(link); linked_ps_count += 1; logger.debug(f"{func} Created link FGOS {fgos_vo.id} <-> PS {prof_standard.code}.")
-                    else: logger.debug(f"{func} Link between FGOS {fgos_vo.id} and PS {prof_standard.code} already exists.")
-                else: logger.warning(f"{func} Recommended PS with code {ps_code} not found in DB. Skipping link.")
-             logger.info(f"{func} Queued {linked_ps_count} new recommended PS links.")
-        logger.info(f"{func} Changes for FGOS ID {fgos_vo.id} prepared. Outer commit required."); return fgos_vo
-    except IntegrityError as e: 
-        logger.error(f"{func} Integrity error for FGOS from '{filename}': {e}", exc_info=True); raise e 
-    except SQLAlchemyError as e: 
-        logger.error(f"{func} Database error for FGOS from '{filename}': {e}", exc_info=True); raise e
-    except Exception as e: 
-        logger.error(f"{func} Неожиданная ошибка при сохранении ФГОС: {e}", exc_info=True); raise e
+                    if not existing_link: link = FgosRecommendedPs(fgos_vo_id=fgos_vo.id, prof_standard_id=prof_standard.id, is_mandatory=False); session.add(link); linked_ps_count += 1; 
+                    else: pass # link already exists
+                else: logger.warning(f"Recommended PS with code {ps_code} not found in DB. Skipping link.")
+             logger.info(f"Queued {linked_ps_count} new recommended PS links.")
+        return fgos_vo
+    except IntegrityError as e: logger.error(f"Integrity error for FGOS from '{filename}': {e}", exc_info=True); raise e 
+    except SQLAlchemyError as e: logger.error(f"Database error for FGOS from '{filename}': {e}", exc_info=True); raise e
+    except Exception as e: logger.error(f"Unexpected error saving FGOS: {e}", exc_info=True); raise e
 
 def get_fgos_list() -> List[FgosVo]:
-    func = "get_fgos_list: "
-    try:
-        fgos_list = local_db.session.query(FgosVo).order_by(FgosVo.direction_code, FgosVo.date.desc()).all()
-        return fgos_list
-    except SQLAlchemyError as e: logger.error(f"{func} Database error: {e}", exc_info=True); return []
-    except Exception as e: logger.error(f"{func} Unexpected error: {e}", exc_info=True); return []
+    try: return local_db.session.query(FgosVo).order_by(FgosVo.direction_code, FgosVo.date.desc()).all()
+    except SQLAlchemyError as e: logger.error(f"Database error fetching FGOS list: {e}", exc_info=True); return []
+    except Exception as e: logger.error(f"Unexpected error fetching FGOS list: {e}", exc_info=True); return []
 
 def get_fgos_details(fgos_id: int) -> Optional[Dict[str, Any]]:
-    func = "get_fgos_details: "
     try:
         session: Session = local_db.session 
         fgos = session.query(FgosVo).options(
@@ -886,7 +682,7 @@ def get_fgos_details(fgos_id: int) -> Optional[Dict[str, Any]]:
             selectinload(FgosVo.competencies).selectinload(Competency.competency_type), 
             selectinload(FgosVo.recommended_ps_assoc).selectinload(FgosRecommendedPs.prof_standard) 
         ).get(fgos_id)
-        if not fgos: logger.warning(f"{func} FGOS with id {fgos_id} not found."); return None
+        if not fgos: logger.warning(f"FGOS with id {fgos_id} not found."); return None
         details = fgos.to_dict(rules=['-competencies', '-recommended_ps_assoc', '-educational_programs'])
         uk_competencies_data = []; opk_competencies_data = []
         comp_types_map_by_id = {ct.id: ct.code for ct in session.query(CompetencyType).filter(CompetencyType.code.in_(['УК', 'ОПК'])).all()}
@@ -907,66 +703,36 @@ def get_fgos_details(fgos_id: int) -> Optional[Dict[str, Any]]:
             for assoc_item in sorted_ps_assoc:
                 if assoc_item.prof_standard: recommended_ps_list.append({'id': assoc_item.prof_standard.id, 'code': assoc_item.prof_standard.code, 'name': assoc_item.prof_standard.name, 'is_mandatory': assoc_item.is_mandatory, 'description': assoc_item.description,})
         details['recommended_ps_list'] = recommended_ps_list
-        logger.info(f"{func} Fetched details for FGOS {fgos_id}."); return details
-    except SQLAlchemyError as e: logger.error(f"{func} Database error for fgos_id {fgos_id}: {e}", exc_info=True); return None
-    except Exception as e: logger.error(f"{func} Unexpected error for fgos_id {fgos_id}: {e}", exc_info=True); return None
+        return details
+    except SQLAlchemyError as e: logger.error(f"Database error fetching FGOS {fgos_id} details: {e}", exc_info=True); return None
+    except Exception as e: logger.error(f"Unexpected error fetching FGOS {fgos_id} details: {e}", exc_info=True); return None
 
 def delete_fgos(fgos_id: int, session: Session) -> bool:
-    func = "delete_fgos: "
-    logger.info(f"{func} Attempting to delete FGOS with id: {fgos_id}")
     try:
          fgos_to_delete = session.query(FgosVo).get(fgos_id)
-         if not fgos_to_delete: logger.warning(f"{func} FGOS with id {fgos_id} not found for deletion."); return False 
+         if not fgos_to_delete: logger.warning(f"FGOS with id {fgos_id} not found for deletion."); return False 
          
          session.delete(fgos_to_delete)
-         logger.info(f"{func} FGOS with id {fgos_id} and related entities marked for deletion.")
          return True 
-    except SQLAlchemyError as e: logger.error(f"{func} Database error deleting FGOS {fgos_id}: {e}", exc_info=True); raise e 
-    except Exception as e: logger.error(f"{func} Unexpected error deleting FGOS {fgos_id}: {e}", exc_info=True); raise e 
+    except SQLAlchemyError as e: logger.error(f"Database error deleting FGOS {fgos_id}: {e}", exc_info=True); raise e 
+    except Exception as e: logger.error(f"Unexpected error deleting FGOS {fgos_id}: {e}", exc_info=True); raise e 
 
 def handle_prof_standard_upload_parsing(file_bytes: bytes, filename: str) -> Dict[str, Any]:
-    """
-    Handles the parsing of a PS file after upload. Calls the appropriate parser orchestrator.
-    Returns the parsed data dictionary or an error result.
-    This function is called by the /profstandards/parse-preview route.
-    """
-    func = "handle_prof_standard_upload_parsing: "
-    logger.info(f"{func} Processing upload for file: {filename}")
+    """Handles the parsing of a PS file after upload. Calls the appropriate parser orchestrator."""
     return parse_prof_standard(file_bytes, filename)
 
 
 def save_prof_standard_data(parsed_data: Dict[str, Any], filename: str, session: Session, force_update: bool = False) -> Optional[ProfStandard]:
-    """
-    Saves the parsed professional standard data (including structure) to the database.
-    Handles finding/creating ProfStandard and its nested elements.
-    This function is called by the /profstandards/save route and the CLI command.
-    """
-    func = "save_prof_standard_data: "
-    logger.info(f"{func} Saving PS data from '{filename}'. force_update: {force_update}")
+    """Saves the parsed professional standard data (including structure) to the database."""
+    ps_code = parsed_data.get('code'); ps_name = parsed_data.get('name'); generalized_labor_functions_data = parsed_data.get('generalized_labor_functions', [])
+    if not ps_code or not ps_name: raise ValueError("Неполные данные ПС для сохранения: отсутствует код или название.")
+    if not isinstance(generalized_labor_functions_data, list): raise ValueError("Неверный формат данных структуры ПС.")
 
-    ps_code = parsed_data.get('code')
-    ps_name = parsed_data.get('name')
-    generalized_labor_functions_data = parsed_data.get('generalized_labor_functions', [])
+    order_date_obj = _parse_date_string(parsed_data.get('order_date')) if isinstance(parsed_data.get('order_date'), str) else parsed_data.get('order_date')
+    if order_date_obj is None and parsed_data.get('order_date') is not None: logger.warning(f"Could not parse order_date '{parsed_data.get('order_date')}' to datetime.date object.")
 
-    if not ps_code or not ps_name:
-        logger.error(f"{func} Missing essential PS metadata (code or name) in parsed_data.")
-        raise ValueError("Неполные данные ПС для сохранения: отсутствует код или название.")
-
-    if not isinstance(generalized_labor_functions_data, list):
-         logger.error(f"{func} 'generalized_labor_functions' in parsed_data is not a list.")
-         raise ValueError("Неверный формат данных структуры ПС.")
-
-    order_date_obj = parsed_data.get('order_date')
-    if isinstance(order_date_obj, str): 
-        order_date_obj = _parse_date_string(order_date_obj) 
-        if order_date_obj is None and parsed_data.get('order_date') is not None:
-             logger.warning(f"{func} Could not parse order_date '{parsed_data.get('order_date')}' to datetime.date object.")
-
-    registration_date_obj = parsed_data.get('registration_date')
-    if isinstance(registration_date_obj, str): 
-        registration_date_obj = _parse_date_string(registration_date_obj)
-        if registration_date_obj is None and parsed_data.get('registration_date') is not None:
-             logger.warning(f"{func} Could not parse registration_date '{parsed_data.get('registration_date')}' to datetime.date object.")
+    registration_date_obj = _parse_date_string(parsed_data.get('registration_date')) if isinstance(parsed_data.get('registration_date'), str) else parsed_data.get('registration_date')
+    if registration_date_obj is None and parsed_data.get('registration_date') is not None: logger.warning(f"Could not parse registration_date '{parsed_data.get('registration_date')}' to datetime.date object.")
 
     try:
         existing_ps = session.query(ProfStandard).filter_by(code=ps_code).first()
@@ -974,128 +740,64 @@ def save_prof_standard_data(parsed_data: Dict[str, Any], filename: str, session:
 
         if existing_ps:
             if force_update:
-                logger.info(f"{func} Найден существующий ПС (ID: {existing_ps.id}) для кода {ps_code}. force_update=True. Удаление старой структуры...")
-                
                 session.query(GeneralizedLaborFunction).filter_by(prof_standard_id=existing_ps.id).delete(synchronize_session='fetch')
                 session.flush() 
 
-                existing_ps.name = ps_name
-                existing_ps.order_number = parsed_data.get('order_number')
-                existing_ps.order_date = order_date_obj 
-                existing_ps.registration_number = parsed_data.get('registration_number')
+                existing_ps.name = ps_name; existing_ps.order_number = parsed_data.get('order_number')
+                existing_ps.order_date = order_date_obj; existing_ps.registration_number = parsed_data.get('registration_number')
                 existing_ps.registration_date = registration_date_obj 
                 
-                session.add(existing_ps) 
-                current_ps = existing_ps
-                logger.info(f"{func} Существующий ПС ({current_ps.id}) обновлен.")
-
-            else:
-                logger.warning(f"{func} ПС с кодом {ps_code} уже существует (ID: {existing_ps.id}). force_update=False. Пропуск сохранения.")
-                raise IntegrityError(f"Профессиональный стандарт с кодом {ps_code} уже существует.", {}, None)
+                session.add(existing_ps); current_ps = existing_ps
+            else: raise IntegrityError(f"Профессиональный стандарт с кодом {ps_code} уже существует.", {}, None)
         else:
-            logger.info(f"{func} Создание нового ПС с кодом {ps_code}.")
             current_ps = ProfStandard(
-                code=ps_code,
-                name=ps_name,
-                order_number=parsed_data.get('order_number'),
-                order_date=order_date_obj, 
-                registration_number=parsed_data.get('registration_number'),
-                registration_date=registration_date_obj, 
+                code=ps_code, name=ps_name, order_number=parsed_data.get('order_number'), order_date=order_date_obj, 
+                registration_number=parsed_data.get('registration_number'), registration_date=registration_date_obj, 
             )
-            session.add(current_ps)
-            session.flush() 
-            logger.info(f"{func} Новый ProfStandard создан с ID {current_ps.id} для кода {current_ps.code}.")
+            session.add(current_ps); session.flush() 
 
-        saved_glf_count = 0
         for otf_data in generalized_labor_functions_data:
-            otf_code = otf_data.get('code')
-            otf_name = otf_data.get('name')
-            otf_level = otf_data.get('qualification_level')
-            tf_list_data = otf_data.get('labor_functions', [])
+            otf_code = otf_data.get('code'); otf_name = otf_data.get('name'); otf_level = otf_data.get('qualification_level'); tf_list_data = otf_data.get('labor_functions', [])
 
-            if not otf_code or not otf_name or not isinstance(tf_list_data, list):
-                 logger.warning(f"{func} Пропуск ОТФ из-за неполных данных или неверного формата ТФ списка: {otf_data}")
-                 continue 
+            if not otf_code or not otf_name or not isinstance(tf_list_data, list): continue 
 
-            new_otf = GeneralizedLaborFunction(
-                prof_standard_id=current_ps.id, 
-                code=otf_code,
-                name=otf_name,
-                qualification_level=otf_level
-            )
-            session.add(new_otf)
-            session.flush() 
-            saved_glf_count += 1
-            logger.debug(f"{func} Создана ОТФ {new_otf.code} (ID: {new_otf.id})")
+            new_otf = GeneralizedLaborFunction(prof_standard_id=current_ps.id, code=otf_code, name=otf_name, qualification_level=otf_level)
+            session.add(new_otf); session.flush() 
 
-            saved_tf_count = 0
             for tf_data in tf_list_data:
-                tf_code = tf_data.get('code')
-                tf_name = tf_data.get('name')
-                tf_level = tf_data.get('qualification_level')
-                la_list_data = tf_data.get('labor_actions', [])
-                rs_list_data = tf_data.get('required_skills', [])
-                rk_list_data = tf_data.get('required_knowledge', [])
+                tf_code = tf_data.get('code'); tf_name = tf_data.get('name'); tf_level = tf_data.get('qualification_level')
+                la_list_data = tf_data.get('labor_actions', []); rs_list_data = tf_data.get('required_skills', []); rk_list_data = tf_data.get('required_knowledge', [])
 
                 if not tf_code or not tf_name or not isinstance(la_list_data, list) or \
-                   not isinstance(rs_list_data, list) or not isinstance(rk_list_data, list):
-                     logger.warning(f"{func} Пропуск ТФ из-за неполных данных или неверного формата списков: {tf_data}")
-                     continue 
+                   not isinstance(rs_list_data, list) or not isinstance(rk_list_data, list): continue 
 
-                new_tf = LaborFunction(
-                    generalized_labor_function_id=new_otf.id, 
-                    code=tf_code,
-                    name=tf_name,
-                    qualification_level=tf_level
-                )
-                session.add(new_tf)
-                session.flush() 
-                saved_tf_count += 1
-                logger.debug(f"{func}  Создана ТФ {new_tf.code} (ID: {new_tf.id})")
+                new_tf = LaborFunction(generalized_labor_function_id=new_otf.id, code=tf_code, name=tf_name, qualification_level=tf_level)
+                session.add(new_tf); session.flush() 
 
                 for i, la_data in enumerate(la_list_data):
                      la_description = la_data.get('description')
-                     if la_description: 
-                         session.add(LaborAction(labor_function_id=new_tf.id, description=la_description.strip(), order=la_data.get('order', i)))
+                     if la_description: session.add(LaborAction(labor_function_id=new_tf.id, description=la_description.strip(), order=la_data.get('order', i)))
 
                 for i, rs_data in enumerate(rs_list_data):
                      rs_description = rs_data.get('description')
-                     if rs_description: 
-                         session.add(RequiredSkill(labor_function_id=new_tf.id, description=rs_description.strip(), order=rs_data.get('order', i)))
+                     if rs_description: session.add(RequiredSkill(labor_function_id=new_tf.id, description=rs_description.strip(), order=rs_data.get('order', i)))
                                 
                 for i, rk_data in enumerate(rk_list_data):
                      rk_description = rk_data.get('description')
-                     if rk_description: 
-                         session.add(RequiredKnowledge(labor_function_id=new_tf.id, description=rk_description.strip(), order=rk_data.get('order', i)))
+                     if rk_description: session.add(RequiredKnowledge(labor_function_id=new_tf.id, description=rk_description.strip(), order=rk_data.get('order', i)))
 
-            logger.debug(f"{func} Сохранено {saved_tf_count} ТФ для ОТФ {new_otf.code}.")
+        return current_ps
 
-        logger.info(f"{func} Сохранено {saved_glf_count} ОТФ для ПС {current_ps.code}.")
-
-        logger.info(f"{func} Changes for PS ID {current_ps.id} prepared for commit by caller."); return current_ps
-
-    except IntegrityError as e:
-        logger.error(f"{func} Ошибка целостности БД при сохранении ПС '{ps_code}': {e}", exc_info=True)
-        raise  
-    except SQLAlchemyError as e:
-        logger.error(f"{func} Ошибка SQLAlchemy при сохранении ПС '{ps_code}': {e}", exc_info=True)
-        raise
-    except Exception as e:
-        logger.error(f"{func} Неожиданная ошибка при сохранении ПС '{ps_code}': {e}", exc_info=True)
-        raise
+    except IntegrityError as e: logger.error(f"Integrity error saving PS '{ps_code}': {e}", exc_info=True); raise  
+    except SQLAlchemyError as e: logger.error(f"Database error saving PS '{ps_code}': {e}", exc_info=True); raise
+    except Exception as e: logger.error(f"Unexpected error saving PS '{ps_code}': {e}", exc_info=True); raise
 
 def get_prof_standards_list() -> List[ProfStandard]:
-    func = "get_prof_standards_list: "
-    logger.debug(f"{func} Fetching all ProfStandards.")
-    try:
-        prof_standards = local_db.session.query(ProfStandard).order_by(ProfStandard.code).all()
-        logger.debug(f"{func} Found {len(prof_standards)} ProfStandards."); return prof_standards
-    except SQLAlchemyError as e: logger.error(f"{func} Database error: {e}", exc_info=True); return []
-    except Exception as e: logger.error(f"{func} Unexpected error: {e}", exc_info=True); return []
+    try: return local_db.session.query(ProfStandard).order_by(ProfStandard.code).all()
+    except SQLAlchemyError as e: logger.error(f"Database error fetching ProfStandards list: {e}", exc_info=True); return []
+    except Exception as e: logger.error(f"Unexpected error fetching ProfStandards list: {e}", exc_info=True); return []
 
 def get_prof_standard_details(ps_id: int) -> Optional[Dict[str, Any]]:
-    func = "get_prof_standard_details: "
-    logger.debug(f"{func} Fetching details for PS ID: {ps_id}")
     try:
         session: Session = local_db.session 
         ps = session.query(ProfStandard).options(
@@ -1103,7 +805,7 @@ def get_prof_standard_details(ps_id: int) -> Optional[Dict[str, Any]]:
             selectinload(ProfStandard.generalized_labor_functions).selectinload(GeneralizedLaborFunction.labor_functions).selectinload(LaborFunction.required_skills), 
             selectinload(ProfStandard.generalized_labor_functions).selectinload(GeneralizedLaborFunction.labor_functions).selectinload(LaborFunction.required_knowledge) 
         ).get(ps_id)
-        if not ps: logger.warning(f"{func} PS with ID {ps_id} not found."); return None
+        if not ps: logger.warning(f"PS with ID {ps_id} not found."); return None
         
         details = ps.to_dict(rules=['-generalized_labor_functions', '-fgos_assoc', '-educational_program_assoc'])
         
@@ -1124,19 +826,16 @@ def get_prof_standard_details(ps_id: int) -> Optional[Dict[str, Any]]:
                 otf_list.append(otf_dict)
         details['generalized_labor_functions'] = otf_list
         
-        logger.debug(f"{func} Fetched details for PS {ps_id}."); return details
-    except SQLAlchemyError as e: logger.error(f"{func} Database error for PS ID {ps_id}: {e}", exc_info=True); return None
-    except Exception as e: logger.error(f"{func} Unexpected error for PS ID {ps_id}: {e}", exc_info=True); return None
+        return details
+    except SQLAlchemyError as e: logger.error(f"Database error fetching PS {ps_id} details: {e}", exc_info=True); return None
+    except Exception as e: logger.error(f"Unexpected error fetching PS {ps_id} details: {e}", exc_info=True); return None
 
 def delete_prof_standard(ps_id: int, session: Session) -> bool:
-    func = "delete_prof_standard: "
-    logger.info(f"{func} Attempting to delete ProfStandard ID: {ps_id}")
     try:
          ps_to_delete = session.query(ProfStandard).get(ps_id)
-         if not ps_to_delete: logger.warning(f"{func} ProfStandard {ps_id} not found for deletion."); return False 
+         if not ps_to_delete: logger.warning(f"ProfStandard {ps_id} not found for deletion."); return False 
          
          session.delete(ps_to_delete)
-         logger.info(f"{func} ProfStandard {ps_id} marked for deletion.")
          return True 
-    except SQLAlchemyError as e: logger.error(f"{func} Database error for {ps_id}: {e}", exc_info=True); raise e 
-    except Exception as e: logger.error(f"{func} Unexpected error for {ps_id}: {e}", exc_info=True); raise e
+    except SQLAlchemyError as e: logger.error(f"Database error deleting PS {ps_id}: {e}", exc_info=True); raise e 
+    except Exception as e: logger.error(f"Unexpected error deleting PS {ps_id}: {e}", exc_info=True); raise e
