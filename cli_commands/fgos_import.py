@@ -6,14 +6,10 @@ import traceback
 import datetime
 import logging
 
-# --- Импортируем необходимые компоненты ---
 from maps.models import db
-# Импортируем функции из логики модуля компетенций
-# ИСПРАВЛЕНО: parse_fgos_file теперь импортируется из logic, как и save_fgos_data
 from competencies_matrix.logic import save_fgos_data, delete_fgos, parse_fgos_file
-from competencies_matrix.models import FgosVo # Нужно для поиска
+from competencies_matrix.models import FgosVo 
 
-# Настройка логирования
 logger = logging.getLogger(__name__)
 
 @click.command(name='import-fgos')
@@ -25,7 +21,7 @@ logger = logging.getLogger(__name__)
 @click.option('--dry-run', is_flag=True, default=False,
               help='Perform read and validation without saving or deleting.')
 @click.option('--debug-parser', is_flag=True, default=False,
-              help='Enable DEBUG logging for the FGOS parser (in competencies_matrix.parsers).')
+              help='Enable DEBUG logging for the FGOS parser.')
 @with_appcontext
 def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
     """
@@ -34,8 +30,6 @@ def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
 
     FILEPATH: Путь к PDF файлу ФГОС для импорта.
     """
-    # Временно повышаем уровень логирования для парсера, если включен флаг отладки
-    # ИСПРАВЛЕНО: Путь к логгеру парсера
     parser_logger = logging.getLogger('competencies_matrix.parsers')
     original_parser_level = parser_logger.level
     if debug_parser:
@@ -47,7 +41,6 @@ def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
     filename = os.path.basename(filepath)
 
     try:
-        # 1. Чтение и парсинг PDF файла
         logger.info(f"Reading and parsing FGOS file: {filename}...")
         with open(filepath, 'rb') as f:
             file_bytes = f.read()
@@ -61,7 +54,6 @@ def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
 
         logger.info("   - File parsed successfully.")
         
-        # Выводим извлеченные метаданные для информации
         metadata = parsed_data.get('metadata', {})
         print("   - Extracted Metadata:")
         for key, value in metadata.items():
@@ -75,8 +67,6 @@ def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
              logger.info("\n---> DELETE ONLY mode enabled.")
              fgos_to_delete = None
              
-             # ИСПРАВЛЕНО: Использование metadata.get() для безопасного доступа
-             # ИСПРАВЛЕНО: Передача datetime.date объекта напрямую, если он есть
              fgos_number = metadata.get('order_number')
              fgos_date = metadata.get('order_date')
              fgos_direction_code = metadata.get('direction_code')
@@ -100,9 +90,8 @@ def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
              if fgos_to_delete:
                   if not dry_run:
                        logger.info(f"   - Found existing FGOS (id: {fgos_to_delete.id}, code: {fgos_to_delete.direction_code}). Deleting...")
-                       # ИСПРАВЛЕНО: Используем db.session.begin() для CLI-транзакции
-                       with db.session.begin(): # Начинаем явную транзакцию
-                            deleted = delete_fgos(fgos_to_delete.id, db.session) # delete_fgos теперь не делает commit
+                       with db.session.begin(): 
+                            deleted = delete_fgos(fgos_to_delete.id, db.session) 
                        if deleted: logger.info("   - FGOS deleted successfully.")
                        else: logger.error("   - Failed to delete FGOS (check logs).")
                   else:
@@ -115,13 +104,11 @@ def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
 
         if not dry_run:
             logger.info("Saving data to database...")
-            # ИСПРАВЛЕНО: Используем db.session.begin() для CLI-транзакции
-            with db.session.begin(): # Начинаем явную транзакцию
+            with db.session.begin(): 
                  saved_fgos = save_fgos_data(parsed_data, filename, db.session, force_update=force)
             
             if saved_fgos is None:
                  logger.error("\n!!! SAVE FAILED !!!")
-                 # Specific error logged in save_fgos_data
             else:
                  logger.info(f"\n---> FGOS from '{filename}' imported successfully with ID {saved_fgos.id}!\n")
 
@@ -137,14 +124,10 @@ def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
     except ValueError as e:
         logger.error(f"\n!!! PARSING ERROR: {e} !!!")
         logger.error(f"   - Error occurred during parsing file '{filename}'.")
-        # ИСПРАВЛЕНО: db.session.rollback() здесь не нужен, если транзакция управляется `with db.session.begin()`
-        # если произошла ошибка до `with` блока, то сессия и так чистая.
-    except IntegrityError as e: # ИСПРАВЛЕНО: Отлавливаем IntegrityError отдельно
-        # db.session.rollback() # Управляется with db.session.begin()
+    except IntegrityError as e: 
         logger.error(f"\n!!! DATABASE INTEGRITY ERROR during import: {e.orig} !!!", exc_info=True)
         logger.error(f"   - An FGOS with the same identifying data (number, date, direction code, education level) already exists.")
     except Exception as e:
-        # ИСПРАВЛЕНО: db.session.rollback() здесь не нужен, если транзакция управляется `with db.session.begin()`
         logger.error(f"\n!!! UNEXPECTED ERROR during import: {e} !!!", exc_info=True)
     finally:
          parser_logger.setLevel(original_parser_level)

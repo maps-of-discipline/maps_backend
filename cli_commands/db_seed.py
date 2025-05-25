@@ -1,4 +1,4 @@
-# filepath: cli_commands/db_seed.py (Версия 2 - Фокус на UI + КД)
+# filepath: cli_commands/db_seed.py
 import click
 from flask.cli import with_appcontext
 import datetime
@@ -10,38 +10,27 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# --- Импорты Моделей ---
-# Основные модели и справочники
 from maps.models import (
     db, SprFaculty, Department, SprBranch, SprDegreeEducation, SprFormEducation,
     SprRop, SprOKCO, NameOP
 )
-# Модели для работы с компетенциями
 from competencies_matrix.models import (
     CompetencyType, FgosVo, EducationalProgram, Competency, Indicator,
-    EducationalProgramAup # Убрали CompetencyMatrix и модели ПС/ТФ для сидера MVP
-    # Убрали импорты ПС, ТФ и т.д., т.к. детальный парсинг и связь - вне MVP
+    EducationalProgramAup
 )
-# Модели аутентификации
 from auth.models import Roles, Users, user_roles_table
 
-# === Вспомогательные функции (без изменений) ===
 def find_or_create(session: Session, model, defaults=None, **kwargs):
     """Находит объект по kwargs или создает новый с defaults."""
     instance = session.query(model).filter_by(**kwargs).first()
     if instance:
         logger.debug(f"Found existing {model.__name__}: {kwargs}")
         if defaults:
-             updated = False
              for key, value in defaults.items():
-                  # Проверяем наличие атрибута перед сравнением/установкой
                   if hasattr(instance, key) and getattr(instance, key) != value:
                        setattr(instance, key, value)
-                       updated = True
-             # if updated: logger.debug(f"Updated existing {model.__name__}")
         return instance, False
     else:
-        # Проверяем, что все ключи в kwargs и defaults существуют как атрибуты модели
         valid_keys = {key for key in model.__table__.columns.keys()}
         valid_kwargs = {k: v for k, v in kwargs.items() if k in valid_keys}
         valid_defaults = {k: v for k, v in (defaults or {}).items() if k in valid_keys}
@@ -56,7 +45,6 @@ def find_or_create(session: Session, model, defaults=None, **kwargs):
         except (IntegrityError, SQLAlchemyError) as e:
             session.rollback()
             logger.error(f"Error creating {model.__name__} with {valid_kwargs}: {e}. Trying to find again...")
-            # Поиск по первичному ключу или уникальным полям
             pk_keys = {c.key for c in model.__table__.primary_key.columns}
             unique_keys = {k for u in model.__table__.unique_constraints for k in u.columns.keys()}
             find_criteria = {k: v for k, v in valid_kwargs.items() if k in pk_keys or k in unique_keys}
@@ -82,7 +70,6 @@ def link_if_not_exists(session: Session, association_model, defaults=None, **kwa
         logger.debug(f"Link already exists in {association_model.__tablename__}: {kwargs}")
         return False
 
-# === Основная команда сидера ===
 @click.command(name='seed_db')
 @with_appcontext
 def seed_command():
@@ -90,35 +77,26 @@ def seed_command():
     logger.info("Starting database seeding (MVP: UI Focus + KD Integration)...")
     session: Session = db.session
     try:
-        # --- БЛОК 1: Основные Справочники ---
         logger.info("Seeding Core Lookups...")
-        # Типы Компетенций
         comp_type_uk, _ = find_or_create(session, CompetencyType, id=1, defaults={'code':'УК', 'name':'Универсальная'})
         comp_type_opk, _ = find_or_create(session, CompetencyType, id=2, defaults={'code':'ОПК', 'name':'Общепрофессиональная'})
         comp_type_pk, _ = find_or_create(session, CompetencyType, id=3, defaults={'code':'ПК', 'name':'Профессиональная'})
-        # Роли
         role_admin, _ = find_or_create(session, Roles, id_role=1, defaults={'name_role':'admin'})
         role_methodologist, _ = find_or_create(session, Roles, id_role=2, defaults={'name_role':'methodologist'})
-        # Добавим остальные роли, если они нужны для Users
         role_teacher, _ = find_or_create(session, Roles, id_role=3, defaults={'name_role':'teacher'})
         role_tutor, _ = find_or_create(session, Roles, id_role=4, defaults={'name_role':'tutor'})
         role_student, _ = find_or_create(session, Roles, id_role=5, defaults={'name_role':'student'})
 
-        # Справочники для AUP/ОП (минимум)
         branch_main, _ = find_or_create(session, SprBranch, id_branch=1, defaults={'city':'Москва', 'location':'Основное подразделение'})
         degree_bach, _ = find_or_create(session, SprDegreeEducation, id_degree=1, defaults={'name_deg':"Высшее образование - бакалавриат"})
         form_och, _ = find_or_create(session, SprFormEducation, id_form=1, defaults={'form':"Очная"})
         faculty_inf, _ = find_or_create(session, SprFaculty, id_faculty=1, defaults={'name_faculty':'Факультет информатики', 'id_branch': branch_main.id_branch})
         dept_web, _ = find_or_create(session, Department, id_department=1, defaults={'name_department':'Кафедра веб-технологий'})
-        # Для AupInfo и NameOP - могут понадобиться при импорте, но для MVP матрицы не критичны
-        # okso_090301, _ = find_or_create(session, SprOKCO, program_code='09.03.01', defaults={'name_okco':'Информатика и ВТ'})
         nameop_web, _ = find_or_create(session, NameOP, program_code='09.03.01', num_profile='01', defaults={'id_spec': 1, 'name_spec':'Веб-технологии'})
-        # rop_ivanov, _ = find_or_create(session, SprRop, id_rop=1, defaults={'last_name':'Иванов', 'first_name':'Иван', 'middle_name':'Иванович', 'email':'rop@example.com'})
 
         session.commit()
         logger.info("Core lookups seeded.")
 
-        # --- БЛОК 2: Пример ФГОС и ОП ---
         logger.info("Seeding Example FGOS...")
         fgos_090301, _ = find_or_create(session, FgosVo,
             number='929', date=datetime.date(2017, 9, 19), direction_code='09.03.01', education_level='бакалавриат',
@@ -132,71 +110,52 @@ def seed_command():
         session.commit()
         logger.info("Example FGOS & Educational Program seeded.")
 
-        # --- БЛОК 3: Пример AupInfo (Только для связи ОП с номером АУП) ---
         logger.info("Seeding Example AupInfo (for linking EP to AUP number)...")
-        # ВАЖНО: Убедитесь, что 'B093011451' - это РЕАЛЬНЫЙ num_aup из БД КД, который будет использоваться для демо
         aup101_example, _ = find_or_create(session, AupInfo,
             num_aup='B093011451',
-            # Заполняем только необходимые поля для создания записи, остальные можно убрать
             defaults={'id_aup': 101, 'id_faculty': faculty_inf.id_faculty, 'id_degree': degree_bach.id_degree,
                       'id_form': form_och.id_form, 'id_spec': nameop_web.id_spec, 'year_beg':2024, 'is_actual':1}
         )
         logger.info("Seeding AUP-Program Link...")
-        # Связываем нашу тестовую ОП с этим номером АУП
         link_if_not_exists(session, EducationalProgramAup,
                            educational_program_id=program_web.id,
                            aup_id=aup101_example.id_aup,
                            defaults={'is_primary':True})
         session.commit()
         logger.info("Example AupInfo and Link seeded.")
-        # AupData НЕ сидируется!
 
-        # --- БЛОК 4: Компетенции и Индикаторы (Локальные данные) ---
         logger.info("Seeding Competencies & Indicators (Local Data)...")
-        # УК/ОПК (связаны с ФГОС)
         comp_uk1, _ = find_or_create(session, Competency, code='УК-1', fgos_vo_id=fgos_090301.id,
             defaults={'id': 1, 'competency_type_id':comp_type_uk.id, 'name':'Способен осуществлять поиск, критический анализ и синтез информации...'})
         comp_uk5, _ = find_or_create(session, Competency, code='УК-5', fgos_vo_id=fgos_090301.id,
             defaults={'id': 5, 'competency_type_id':comp_type_uk.id, 'name':'Способен воспринимать межкультурное разнообразие общества...'})
         comp_opk7, _ = find_or_create(session, Competency, code='ОПК-7', fgos_vo_id=fgos_090301.id,
             defaults={'id': 107, 'competency_type_id':comp_type_opk.id, 'name':'Способен участвовать в настройке и наладке программно-аппаратных комплексов'})
-        # ПК (не связаны с ФГОС)
         comp_pk1, _ = find_or_create(session, Competency, code='ПК-1', competency_type_id=comp_type_pk.id,
             defaults={'id': 201, 'fgos_vo_id':None, 'name':'Способен выполнять работы по созданию (модификации) и сопровождению ИС...'})
         comp_pk2, _ = find_or_create(session, Competency, code='ПК-2', competency_type_id=comp_type_pk.id,
             defaults={'id': 202, 'fgos_vo_id':None, 'name':'Способен осуществлять управление проектами в области ИТ...'})
 
-        # Индикаторы (связаны с компетенциями)
-        # Для УК-1
         ind_1_1, _ = find_or_create(session, Indicator, code='ИУК-1.1', competency_id=comp_uk1.id, defaults={'id': 10, 'formulation':'Анализирует задачу, выделяя ее базовые составляющие', 'source':'Распоряжение 505-Р'})
         ind_1_2, _ = find_or_create(session, Indicator, code='ИУК-1.2', competency_id=comp_uk1.id, defaults={'id': 11, 'formulation':'Осуществляет поиск, критически оценивает...', 'source':'Распоряжение 505-Р'})
         ind_1_3, _ = find_or_create(session, Indicator, code='ИУК-1.3', competency_id=comp_uk1.id, defaults={'id': 12, 'formulation':'Рассматривает и предлагает рациональные варианты...', 'source':'Распоряжение 505-Р'})
-        # Для УК-5
         ind_5_1, _ = find_or_create(session, Indicator, code='ИУК-5.1', competency_id=comp_uk5.id, defaults={'id': 50, 'formulation':'Анализирует и интерпретирует события...', 'source':'Распоряжение 505-Р'})
-        # Для ОПК-7
         ind_7_1, _ = find_or_create(session, Indicator, code='ИОПК-7.1', competency_id=comp_opk7.id, defaults={'id': 170, 'formulation':'Знает основные языки программирования...', 'source':'ОП Веб-технологии'})
-        # Для ПК-1
         ind_pk1_1, _ = find_or_create(session, Indicator, code='ИПК-1.1', competency_id=comp_pk1.id, defaults={'id': 210, 'formulation':'Знает: методологию и технологии проектирования...', 'source':'ОП Веб-технологии / ПС 06.015'})
         ind_pk1_2, _ = find_or_create(session, Indicator, code='ИПК-1.2', competency_id=comp_pk1.id, defaults={'id': 211, 'formulation':'Умеет: создавать, модифицировать и сопровождать ИС...', 'source':'ОП Веб-технологии / ПС 06.015'})
-        # Для ПК-2
         ind_pk2_1, _ = find_or_create(session, Indicator, code='ИПК-2.1', competency_id=comp_pk2.id, defaults={'id': 220, 'formulation':'Знает: принципы и методологии управления проектами...', 'source':'ОП Веб-технологии / ПС 06.016'})
 
         session.commit()
         logger.info("Competencies & Indicators seeded.")
 
-        # --- БЛОК 5: Связи Матрицы Компетенций ---
         logger.info("Skipping Competency Matrix links seeding (will be created manually via UI for MVP).")
-        # Связи НЕ сидируются, т.к. aup_data_id придут из внешней БД
 
-        # --- БЛОК 6: Тестовые Пользователи ---
         logger.info("Seeding Test Users...")
-        # Используем find_or_create
         test_user, _ = find_or_create(session, Users, login='testuser',
             defaults={'password_hash': generate_password_hash('password', method='pbkdf2:sha256'),
                       'name': 'Тестовый Методист', 'email': 'testuser@example.com',
-                      'approved_lk': True, 'id_department': dept_web.id_department} # Добавили id_department
+                      'approved_lk': True, 'id_department': dept_web.id_department}
         )
-        # Привязываем роль через secondary таблицу
         if role_methodologist and test_user and role_methodologist not in test_user.roles:
             test_user.roles.append(role_methodologist)
             logger.debug(f"Linking testuser ({test_user.id_user}) with role {role_methodologist.name_role}")
@@ -204,7 +163,7 @@ def seed_command():
         admin_user, _ = find_or_create(session, Users, login='admin',
             defaults={'password_hash': generate_password_hash('admin', method='pbkdf2:sha256'),
                       'name': 'Admin User', 'email': 'admin@example.com',
-                      'approved_lk': True, 'id_department': dept_web.id_department} # Добавили id_department
+                      'approved_lk': True, 'id_department': dept_web.id_department}
         )
         if role_admin and admin_user and role_admin not in admin_user.roles:
             admin_user.roles.append(role_admin)
@@ -213,7 +172,6 @@ def seed_command():
         session.commit()
         logger.info("Test users seeded.")
 
-        # --- БЛОК 7: Модели Кабинета ---
         logger.info("Skipping seeding for 'cabinet' models (not required for competencies MVP).")
 
         logger.info("Database seeding finished successfully.")

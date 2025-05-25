@@ -1,6 +1,4 @@
 # filepath: competencies_matrix/routes.py
-# Маршруты (API endpoints) для модуля матрицы компетенций.
-#
 from flask import request, jsonify, abort
 from . import competencies_matrix_bp
 from typing import Optional
@@ -20,13 +18,14 @@ from .logic import (
     update_indicator as logic_update_indicator,
     delete_indicator as logic_delete_indicator,
     get_external_aups_list, get_external_aup_disciplines,
+    delete_prof_standard as logic_delete_profstandard, # <-- ИСПРАВЛЕНО ЗДЕСЬ
 )
 
 from auth.logic import login_required, approved_required, admin_only
 import logging
-from .models import db, Competency, Indicator, CompetencyType, ProfStandard # НОВОЕ: Импорт ProfStandard для получения по ID при сравнении
-from sqlalchemy.orm import joinedload # Добавим для использования в to_dict
-from sqlalchemy.exc import IntegrityError # Добавим для использования в to_dict
+from .models import db, Competency, Indicator, CompetencyType, ProfStandard 
+from sqlalchemy.orm import joinedload 
+from sqlalchemy.exc import IntegrityError 
 
 logger = logging.getLogger(__name__)
 
@@ -155,14 +154,12 @@ def create_new_competency():
     """Create a new competency (typically ПК)."""
     data = request.get_json()
     try:
-        with db.session.begin(): # Используем транзакцию для создания компетенции и связей
-            # НОВОЕ: Передаем data в create_competency (включая based_on_labor_function_id и educational_program_ids)
+        with db.session.begin(): 
             competency = create_competency(data, db.session) 
         
         if not competency:
             return jsonify({"error": "Не удалось создать компетенцию. Проверьте данные или возможно, она уже существует."}), 400
         
-        # НОВОЕ: Включаем образовательные программы в to_dict
         return jsonify(competency.to_dict(rules=['-indicators'], include_type=True, include_educational_programs=True)), 201
     except ValueError as e:
         logger.error(f"Validation error creating competency: {e}")
@@ -186,8 +183,7 @@ def update_competency_route(comp_id):
         abort(400, description="Отсутствуют данные для обновления")
 
     try:
-        with db.session.begin(): # Используем транзакцию для обновления компетенции и связей
-            # НОВОЕ: Передаем data в update_competency (включая educational_program_ids)
+        with db.session.begin(): 
             updated_comp_dict = logic_update_competency(comp_id, data, db.session)
 
         if updated_comp_dict is not None:
@@ -212,7 +208,7 @@ def update_competency_route(comp_id):
 def delete_competency_route(comp_id):
     """Delete a competency by ID."""
     try:
-        with db.session.begin(): # Используем транзакцию для удаления
+        with db.session.begin(): 
             deleted = logic_delete_competency(comp_id, db.session) 
 
         if deleted:
@@ -264,7 +260,7 @@ def create_new_indicator():
     """Create a new indicator for an existing competency."""
     data = request.get_json()
     try:
-        with db.session.begin(): # Используем транзакцию для создания индикатора
+        with db.session.begin(): 
             indicator = create_indicator(data, db.session)
         if not indicator:
             return jsonify({"error": "Не удалось создать индикатор. Проверьте данные или возможно, он уже существует/родительская компетенция не найдена."}), 400
@@ -291,7 +287,7 @@ def update_indicator_route(ind_id):
         abort(400, description="Отсутствуют данные для обновления")
 
     try:
-        with db.session.begin(): # Используем транзакцию для обновления
+        with db.session.begin(): 
             updated_ind = logic_update_indicator(ind_id, data, db.session) 
 
         if updated_ind:
@@ -316,7 +312,7 @@ def update_indicator_route(ind_id):
 def delete_indicator_route(ind_id):
     """Delete an indicator by ID."""
     try:
-        with db.session.begin(): # Используем транзакцию для удаления
+        with db.session.begin(): 
             deleted = logic_delete_indicator(ind_id, db.session) 
 
         if deleted:
@@ -397,7 +393,7 @@ def save_fgos():
         abort(400, description="Некорректные данные для сохранения (отсутствуют parsed_data, filename или metadata)")
 
     try:
-        with db.session.begin(): # Используем транзакцию для сохранения
+        with db.session.begin(): 
             saved_fgos = save_fgos_data(parsed_data, filename, db.session, force_update=options.get('force_update', False))
         
         if saved_fgos is None:
@@ -424,8 +420,8 @@ def save_fgos():
 def delete_fgos_route(fgos_id):
     """Delete a FGOS VO by ID."""
     try:
-        with db.session.begin(): # Используем транзакцию для удаления
-            deleted = delete_fgos(fgos_id, db.session)
+        with db.session.begin(): 
+            deleted = delete_fgos(fgos_id, db.session) 
 
         if deleted:
             return jsonify({"success": True, "message": "ФГОС успешно удален"}), 200
@@ -446,8 +442,8 @@ def parse_profstandard_for_preview():
     if 'file' not in request.files:
         abort(400, description="Файл не найден в запросе")
     file = request.files['file']
-    if file.filename == '':
-        abort(400, description="Файл не выбран")
+    if file.filename == '' or not file.filename.lower().endswith('.xml'):
+        abort(400, description="Файл не выбран или неверный формат (требуется XML)")
 
     try:
         file_bytes = file.read()
@@ -475,7 +471,7 @@ def parse_profstandard_for_preview():
                 existing_ps_record = existing_ps.to_dict(rules=['-generalized_labor_functions'])
                 existing_ps_record_full = get_prof_standard_details(existing_ps.id)
                 if existing_ps_record_full:
-                    existing_ps_record = existing_ps_record_full # Используем полную структуру для фронтенда
+                    existing_ps_record = existing_ps_record_full 
 
         response_data = {
             "status": "success",
@@ -505,7 +501,7 @@ def save_profstandard():
         abort(400, description="Некорректные данные для сохранения (отсутствуют parsed_data, filename или код ПС)")
 
     try:
-        with db.session.begin(): # Используем транзакцию для сохранения
+        with db.session.begin(): 
             saved_ps = save_prof_standard_data(parsed_data, filename, db.session, force_update=options.get('force_update', False))
         
         if saved_ps is None:
@@ -566,7 +562,7 @@ def get_profstandard_details_route(ps_id):
 def delete_profstandard(ps_id):
     """Delete a Professional Standard by ID."""
     try:
-        with db.session.begin(): # Используем транзакцию для удаления
+        with db.session.begin(): 
             deleted = logic_delete_profstandard(ps_id, db.session) 
 
         if deleted:

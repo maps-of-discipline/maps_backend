@@ -6,17 +6,15 @@ import os
 import traceback
 import logging
 
-# Импорты из вашего приложения
-from maps.models import db # db используется для доступа к сессии
+from maps.models import db 
 from competencies_matrix.logic import (
     save_prof_standard_data,
-    handle_prof_standard_upload_parsing, # ИСПРАВЛЕНО: Используем оркестратор для парсинга
-    get_prof_standard_details, # Для delete-only, чтобы получить объект перед удалением
-    delete_prof_standard # Для delete-only
+    handle_prof_standard_upload_parsing, 
+    get_prof_standard_details, 
+    delete_prof_standard 
 )
-from competencies_matrix.models import ProfStandard # Для поиска в delete-only
+from competencies_matrix.models import ProfStandard 
 
-# Настройка логирования
 logger = logging.getLogger(__name__)
 
 @click.command(name='parse-ps')
@@ -25,7 +23,7 @@ logger = logging.getLogger(__name__)
               help='Force save/overwrite if Professional Standard with the same code exists.')
 @click.option('--dry-run', is_flag=True, default=False,
               help='Perform parsing without saving to the database.')
-@click.option('--delete-only', is_flag=True, default=False, # Добавлен флаг delete-only
+@click.option('--delete-only', is_flag=True, default=False, 
               help='Only delete Professional Standard if it exists, do not import.')
 @with_appcontext
 def parse_ps_command(filepath, force, dry_run, delete_only):
@@ -39,19 +37,16 @@ def parse_ps_command(filepath, force, dry_run, delete_only):
     if dry_run:
         print("   >>> DRY RUN MODE ENABLED: No changes will be saved to the database. <<<")
     if delete_only:
-        print("   >>> DELETE ONLY MODE ENABLED: Only deletion will be attempted. <<<")
+        print("   >>> DELETE ONLY MODE ENABLEED: Only deletion will be attempted. <<<")
     
     filename = os.path.basename(filepath)
 
     try:
-        # 1. Парсинг файла (используем оркестратор из logic.py)
         print(f"Parsing file: {filename}...")
-        # handle_prof_standard_upload_parsing ожидает байты и имя файла
         parse_result = handle_prof_standard_upload_parsing(open(filepath, 'rb').read(), filename)
 
         if not parse_result['success']:
              print(f"\n!!! PARSING FAILED: {parse_result['error']} !!!")
-             # logger.error(f"Parsing failed for {filename}: {parse_result['error']}")
              return 
 
         parsed_data = parse_result.get('parsed_data')
@@ -60,17 +55,14 @@ def parse_ps_command(filepath, force, dry_run, delete_only):
              logger.error(f"Parsing successful for {filename}, but essential metadata (code/name) missing.")
              return
 
-
         print("   - File parsed successfully.")
         print(f"   - Found PS Code: {parsed_data.get('code')}")
         print(f"   - Found PS Name: {parsed_data.get('name')}")
         
-        # Выводим количество найденных ОТФ/ТФ для информации
         otf_count = len(parsed_data.get('generalized_labor_functions', []))
         tf_count = sum(len(otf.get('labor_functions', [])) for otf in parsed_data.get('generalized_labor_functions', [])) if otf_count > 0 else 0
         print(f"   - Found {otf_count} ОТФ and {tf_count} ТФ.")
 
-        # 2. Логика удаления (если --delete-only)
         if delete_only:
             logger.info("Delete only mode enabled. Attempting to delete PS...")
             ps_code_to_delete = parsed_data.get('code')
@@ -79,13 +71,11 @@ def parse_ps_command(filepath, force, dry_run, delete_only):
                 return
 
             try:
-                # Начинаем транзакцию для операции удаления
                 with db.session.begin():
-                    # Находим ID существующего ПС по коду
                     existing_ps = db.session.query(ProfStandard).filter_by(code=ps_code_to_delete).first()
                     if existing_ps:
                         logger.info(f"Found existing PS (ID: {existing_ps.id}, Code: {existing_ps.code}). Deleting...")
-                        deleted_success = delete_prof_standard(existing_ps.id, db.session) # delete_prof_standard теперь не делает commit
+                        deleted_success = delete_prof_standard(existing_ps.id, db.session) 
                         if deleted_success:
                             print(f"   - Professional Standard '{ps_code_to_delete}' deleted successfully.")
                         else:
@@ -95,24 +85,20 @@ def parse_ps_command(filepath, force, dry_run, delete_only):
                         print(f"   - Professional Standard '{ps_code_to_delete}' not found in DB. Nothing to delete.")
                         logger.warning(f"PS {ps_code_to_delete} not found for deletion.")
             except Exception as e:
-                # Транзакция откатится автоматически при выходе из with db.session.begin()
                 print(f"\n!!! ERROR during delete operation: {e} !!!")
                 logger.error(f"Error during PS delete operation: {e}", exc_info=True)
             finally:
                 logger.info("---> Professional Standard import finished (delete only mode).\n")
             return
 
-
-        # 3. Сохранение структуры в БД (если не dry-run)
         if not dry_run:
             print("Saving parsed structure to database...")
             try:
-                # Начинаем транзакцию для операции сохранения
-                with db.session.begin(): # Начинаем явную транзакцию
-                    saved_ps = save_prof_standard_data( # <-- ИСПРАВЛЕНО
+                with db.session.begin(): 
+                    saved_ps = save_prof_standard_data( 
                         parsed_data=parsed_data,
                         filename=filename,
-                        session=db.session, # Передаем текущую сессию
+                        session=db.session, 
                         force_update=force
                     )
 
@@ -122,13 +108,11 @@ def parse_ps_command(filepath, force, dry_run, delete_only):
                 else:
                     print("\n!!! SAVE FAILED: Error occurred while saving parsed structure. Check logs. !!!")
 
-            except IntegrityError as e: # Отлавливаем IntegrityError отдельно
-                # Транзакция откатится автоматически при выходе из with db.session.begin()
+            except IntegrityError as e: 
                 print(f"\n!!! DATABASE INTEGRITY ERROR during save: {e.orig} !!!")
                 print(f"   - Professional Standard with code '{parsed_data.get('code')}' already exists and --force was not used.")
                 logger.error(f"IntegrityError during PS save for {filename}: {e.orig}", exc_info=True)
-            except Exception as e: # Ловим другие ошибки при сохранении
-                # Транзакция откатится автоматически при выходе из with db.session.begin()
+            except Exception as e: 
                 print(f"\n!!! SAVE FAILED during transaction: {e} !!!")
                 print("   - Database transaction rolled back.")
                 logger.error(f"Error during PS save operation for {filename}: {e}", exc_info=True)
@@ -145,11 +129,10 @@ def parse_ps_command(filepath, force, dry_run, delete_only):
         print(f"\n!!! ERROR: Missing dependency for parsing: {e} !!!")
         print("   - Please ensure 'beautifulsoup4', 'lxml', 'python-docx', 'markdownify', 'chardet', 'pdfminer.six' are installed.")
         logger.error(f"Missing import for parsing: {e}")
-    except Exception as e: # Ловим другие ошибки (кроме парсинга)
+    except Exception as e: 
         print(f"\n!!! UNEXPECTED ERROR during processing: {e} !!!")
         logger.error(f"Unexpected error during PS parsing/processing for {filepath}: {e}", exc_info=True)
         traceback.print_exc()
 
     finally:
-         # Не нужно закрывать сессию здесь, т.к. она управляется flask.cli.with_appcontext
          pass

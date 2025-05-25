@@ -25,11 +25,10 @@ from .external_models import (
     ExternalDepartment
 )
 
-from .parsers import (
-    parse_fgos_pdf, 
-    parse_prof_standard, 
-    _parse_date_string 
-)
+from .fgos_parser import parse_fgos_pdf # <-- ИСПРАВЛЕННЫЙ ИМПОРТ (название файла изменилось)
+from .parsers import parse_prof_standard 
+from .parsing_utils import parse_date_string 
+
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +43,6 @@ def get_external_db_engine():
         try: _external_db_engine = create_engine(db_url)
         except Exception as e: logger.error(f"Failed to create external DB engine: {e}", exc_info=True); raise RuntimeError(f"Failed to create external DB engine: {e}")
     return _external_db_engine
-
-# --- Data Fetching Functions ---
 
 def get_educational_programs_list() -> List[EducationalProgram]:
     """Fetches list of all educational programs."""
@@ -431,7 +428,7 @@ def create_competency(data: Dict[str, Any], session: Session) -> Optional[Compet
     
     try:
         comp_type = session.query(CompetencyType).filter_by(code=data['type_code']).first()
-        if not comp_type: raise ValueError(f"Тип компетенции с кодом '{data['type_code']}' не найден.")
+        if not comp_type: raise ValueError(f"Тип компетенции с кодом '{data['type_type']}' не найден.")
         
         existing_comp = session.query(Competency).filter_by(code=str(data['code']).strip(), competency_type_id=comp_type.id).first()
         if existing_comp: raise IntegrityError(f"Competency with code {data['code']} already exists for this type.", {}, None)
@@ -622,6 +619,7 @@ def parse_fgos_file(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     except Exception as e: logger.error(f"Unexpected error parsing {filename}: {e}", exc_info=True); raise Exception(f"Unexpected error parsing FGOS file '{filename}': {e}")
 
 def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session, force_update: bool = False) -> Optional[FgosVo]:
+    # ИСПРАВЛЕНО: Теперь ожидаем 'recommended_ps' (список словарей) вместо 'recommended_ps_codes'
     if not parsed_data or not parsed_data.get('metadata'): logger.warning("No parsed data or metadata provided for saving."); return None
     metadata = parsed_data.get('metadata', {}); fgos_number = metadata.get('order_number'); fgos_date_obj = metadata.get('order_date'); fgos_direction_code = metadata.get('direction_code'); fgos_education_level = metadata.get('education_level'); fgos_generation = metadata.get('generation'); fgos_direction_name = metadata.get('direction_name')
     if not all((fgos_number, fgos_date_obj, fgos_direction_code, fgos_education_level)): logger.error("Missing core metadata from parsed data for saving."); raise ValueError("Missing core FGOS metadata from parsed data for saving.")
@@ -652,17 +650,32 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
             competency = Competency(competency_type_id=comp_type.id, fgos_vo_id=fgos_vo.id, code=comp_code, name=comp_name, category_name=comp_category_name)
             session.add(competency); session.flush(); saved_competencies_count += 1; 
         logger.info(f"Saved {saved_competencies_count} competencies for FGOS {fgos_vo.id}.")
-        recommended_ps_codes = parsed_data.get('recommended_ps_codes', []); 
-        if len(recommended_ps_codes) > 0:
-             existing_prof_standards = session.query(ProfStandard).filter(ProfStandard.code.in_(recommended_ps_codes)).all(); ps_by_code = {ps.code: ps for ps in existing_prof_standards}
+        
+        # ИСПРАВЛЕНО: 'recommended_ps' теперь список словарей {code, name}
+        recommended_ps_list = parsed_data.get('recommended_ps', []); 
+        if len(recommended_ps_list) > 0:
+             # Извлекаем только коды для запроса в БД
+             ps_codes_to_find = [ps_data['code'] for ps_data in recommended_ps_list if ps_data.get('code')]
+             existing_prof_standards = session.query(ProfStandard).filter(ProfStandard.code.in_(ps_codes_to_find)).all(); ps_by_code = {ps.code: ps for ps in existing_prof_standards}
              linked_ps_count = 0
-             for ps_code in recommended_ps_codes:
+             for ps_data in recommended_ps_list: # Итерируемся по словарям из парсинга
+                ps_code = ps_data.get('code'); ps_name = ps_data.get('name') # Получаем и код, и имя
+                if not ps_code: continue # Пропускаем, если кода нет
+                
                 prof_standard = ps_by_code.get(ps_code)
                 if prof_standard:
                     existing_link = session.query(FgosRecommendedPs).filter_by(fgos_vo_id=fgos_vo.id, prof_standard_id=prof_standard.id).first()
-                    if not existing_link: link = FgosRecommendedPs(fgos_vo_id=fgos_vo.id, prof_standard_id=prof_standard.id, is_mandatory=False); session.add(link); linked_ps_count += 1; 
-                    else: pass # link already exists
-                else: logger.warning(f"Recommended PS with code {ps_code} not found in DB. Skipping link.")
+                    if not existing_link: 
+                        # Используем название ПС из парсинга в поле description связи, если это актуально
+                        link = FgosRecommendedPs(fgos_vo_id=fgos_vo.id, prof_standard_id=prof_standard.id, is_mandatory=False, description=f"Рекомендован: {ps_name}" if ps_name else None)
+                        session.add(link); linked_ps_count += 1; 
+                    else: 
+                        # Если связь уже существует, можно обновить описание или is_mandatory, если нужно
+                        if existing_link.description != (f"Рекомендован: {ps_name}" if ps_name else None):
+                            existing_link.description = (f"Рекомендован: {ps_name}" if ps_name else None)
+                            session.add(existing_link) # Mark as dirty for update
+                        pass # Связь уже существует, ничего не делаем
+                else: logger.warning(f"Recommended PS with code {ps_code} (name: {ps_name}) not found in DB. Skipping link.")
              logger.info(f"Queued {linked_ps_count} new recommended PS links.")
         return fgos_vo
     except IntegrityError as e: logger.error(f"Integrity error for FGOS from '{filename}': {e}", exc_info=True); raise e 
@@ -697,11 +710,23 @@ def get_fgos_details(fgos_id: int) -> Optional[Dict[str, Any]]:
                  if comp.competency_type.code == 'УК': uk_competencies_data.append(comp_dict)
                  elif comp.competency_type.code == 'ОПК': opk_competencies_data.append(comp_dict)
         details['uk_competencies'] = uk_competencies_data; details['opk_competencies'] = opk_competencies_data
+        
+        # ИСПРАВЛЕНО: Теперь возвращаем список словарей {id, code, name, is_mandatory, description}
         recommended_ps_list = []
         if fgos.recommended_ps_assoc:
-            sorted_ps_assoc = sorted(fgos.recommended_ps_assoc, key=lambda a: a.prof_standard.code if a.prof_standard else '')
+            # Сортируем по коду профстандарта
+            sorted_ps_assoc = sorted(
+                [assoc_item for assoc_item in fgos.recommended_ps_assoc if assoc_item.prof_standard],
+                key=lambda assoc_item: assoc_item.prof_standard.code
+            )
             for assoc_item in sorted_ps_assoc:
-                if assoc_item.prof_standard: recommended_ps_list.append({'id': assoc_item.prof_standard.id, 'code': assoc_item.prof_standard.code, 'name': assoc_item.prof_standard.name, 'is_mandatory': assoc_item.is_mandatory, 'description': assoc_item.description,})
+                recommended_ps_list.append({
+                    'id': assoc_item.prof_standard.id,
+                    'code': assoc_item.prof_standard.code,
+                    'name': assoc_item.prof_standard.name,
+                    'is_mandatory': assoc_item.is_mandatory,
+                    'description': assoc_item.description, # Добавляем описание из связи, если есть
+                })
         details['recommended_ps_list'] = recommended_ps_list
         return details
     except SQLAlchemyError as e: logger.error(f"Database error fetching FGOS {fgos_id} details: {e}", exc_info=True); return None
@@ -728,10 +753,10 @@ def save_prof_standard_data(parsed_data: Dict[str, Any], filename: str, session:
     if not ps_code or not ps_name: raise ValueError("Неполные данные ПС для сохранения: отсутствует код или название.")
     if not isinstance(generalized_labor_functions_data, list): raise ValueError("Неверный формат данных структуры ПС.")
 
-    order_date_obj = _parse_date_string(parsed_data.get('order_date')) if isinstance(parsed_data.get('order_date'), str) else parsed_data.get('order_date')
+    order_date_obj = parse_date_string(parsed_data.get('order_date')) if isinstance(parsed_data.get('order_date'), str) else parsed_data.get('order_date')
     if order_date_obj is None and parsed_data.get('order_date') is not None: logger.warning(f"Could not parse order_date '{parsed_data.get('order_date')}' to datetime.date object.")
 
-    registration_date_obj = _parse_date_string(parsed_data.get('registration_date')) if isinstance(parsed_data.get('registration_date'), str) else parsed_data.get('registration_date')
+    registration_date_obj = parse_date_string(parsed_data.get('registration_date')) if isinstance(parsed_data.get('registration_date'), str) else parsed_data.get('registration_date')
     if registration_date_obj is None and parsed_data.get('registration_date') is not None: logger.warning(f"Could not parse registration_date '{parsed_data.get('registration_date')}' to datetime.date object.")
 
     try:

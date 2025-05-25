@@ -34,9 +34,8 @@ import click
 from flask.cli import with_appcontext
 import os
 import traceback
-import pandas # Added import
+import pandas 
 
-# --- Импортируем необходимые компоненты ---
 from maps.logic.read_excel import read_excel
 from maps.logic.excel_check import ExcelValidator
 from maps.logic.save_excel_data import save_excel_data, delete_aup_by_num
@@ -70,26 +69,21 @@ def import_aup_command(filepath, force, fill_null_modules, skip_integrity_check,
         print("   >>> DRY RUN MODE ENABLED: No changes will be saved to the database. <<<")
     filename = os.path.basename(filepath)
 
-    # Формируем словарь опций для валидатора и сохранения
     options = {
-        "forced_upload": force, # Принудительная загрузка
+        "forced_upload": force, 
         "checkboxIntegralityModel": not skip_integrity_check,
         "checkboxSumModel": not skip_sum_check,
         "checkboxFillNullModulesModel": fill_null_modules
     }
 
-    # Используем локальную сессию для импорта
-    session = db.session # Получаем сессию по умолчанию
+    session = db.session 
 
     try:
-        # 1. Чтение Excel файла
         print(f"Reading Excel file: {filename}...")
-        # Используем with для автоматического закрытия файла
         with open(filepath, 'rb') as f:
             header_df, data_df = read_excel(f)
         print("   - Excel file read successfully.")
 
-        # 2. Валидация данных
         print("Validating data...")
         errors = ExcelValidator.validate(options, header_df, data_df)
 
@@ -102,16 +96,12 @@ def import_aup_command(filepath, force, fill_null_modules, skip_integrity_check,
                 if 'aup' in error and error['message'].startswith("Учебный план №"):
                     print(f"    Tip: Use the --force flag to overwrite existing AUP '{error['aup']}'.")
             print("\nImport aborted due to validation errors.")
-            # В случае ошибки валидации, если dry-run выключен, нужно откатить текущую сессию,
-            # если она была изменена до этого места (хотя по логике read/validate не меняют БД).
-            if not dry_run and session.dirty: # Проверяем, есть ли изменения в сессии
+            if not dry_run and session.dirty: 
                  session.rollback()
             return
 
         print("   - Validation successful.")
 
-        # 3. Проверка на существование и удаление (если --force)
-        # Получаем номер АУП из заголовка для проверки существования и удаления
         aup_num = None
         if 'Наименование' in header_df.columns and 'Содержание' in header_df.columns:
             header_dict_for_aup_num = header_df.set_index("Наименование")["Содержание"].to_dict()
@@ -120,35 +110,27 @@ def import_aup_command(filepath, force, fill_null_modules, skip_integrity_check,
         if force and not dry_run:
             if aup_num:
                 logger.info(f"Force flag enabled. Attempting to delete existing AUP with number: {aup_num}")
-                # delete_aup_by_num управляет своей транзакцией в рамках переданной сессии
                 deleted = delete_aup_by_num(aup_num, session)
                 if deleted:
                     logger.info(f"   - Existing AUP deleted successfully.")
                 else:
-                    # Если AUP не найден при удалении, это не ошибка, просто он не существовал
                     logger.warning(f"   - AUP '{aup_num}' not found for deletion (it might not have existed).")
             else:
                  logger.warning("Cannot determine AUP number from header for forced deletion. Skipping delete.")
 
-
-        # 4. Сохранение данных в БД (только если не dry-run)
         if not dry_run:
             print("Saving data to database...")
-            # --- Вызов save_excel_data в рамках текущей сессии ---
-            # save_excel_data управляет своей транзакцией в рамках переданной сессии
             saved_aup = save_excel_data(
                 filename=filename,
                 header=header_df,
                 data=data_df,
                 use_other_modules=fill_null_modules,
-                session=session # Передаем текущую сессию
+                session=session 
             )
 
-            # save_excel_data уже закоммитил или откатил переданную сессию
             if saved_aup is None:
                  logger.error("\n!!! SAVE FAILED !!!")
                  logger.error("   - Error occurred while saving AUP data (check logs from save_excel_data).")
-                 # Сессия уже откачена внутри save_excel_data при ошибке БД
             else:
                  print("   - Data saved successfully.")
                  print(f"---> AUP from '{filename}' imported successfully with ID {saved_aup.id_aup}!\n")
@@ -169,11 +151,9 @@ def import_aup_command(filepath, force, fill_null_modules, skip_integrity_check,
         if not dry_run and session.dirty: session.rollback()
     except Exception as e:
         if not dry_run and session.dirty: session.rollback()
-        # print("   - Database transaction might have been rolled back.") # This line is duplicated in the new code, removing one
         print(f"\n!!! UNEXPECTED ERROR during import: {e} !!!")
         print("   - Database transaction might have been rolled back.")
         traceback.print_exc()
 
     finally:
-         # Не нужно закрывать сессию здесь, т.к. она управляется flask.cli.with_appcontext
          pass

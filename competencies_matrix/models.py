@@ -1,12 +1,11 @@
 # filepath: competencies_matrix/models.py
-# При изменении моделей в этом файле, нужно обновлять Alembic миграции
 from maps.models import db, AupInfo, AupData, SprDiscipline
 try:
     from auth.models import Users
     USERS_MODEL_AVAILABLE = True
 except ImportError:
     USERS_MODEL_AVAILABLE = False
-    class Users: # Dummy class if Users model is not available
+    class Users: 
         id_user = None
         pass
 
@@ -54,8 +53,6 @@ class BaseModel:
                  result[c.key] = value
 
         return result
-
-# === Models for educational programs and FGOS ===
 
 class FgosVo(db.Model, BaseModel):
     """ФГОС ВО (Федеральный государственный образовательный стандарт высшего образования)"""
@@ -206,8 +203,6 @@ class EducationalProgramAup(db.Model, BaseModel):
 
         return data
 
-# === Models for professional standards ===
-
 class ProfStandard(db.Model, BaseModel):
     """Профессиональный стандарт"""
     __tablename__ = 'competencies_prof_standard'
@@ -342,8 +337,6 @@ class RequiredKnowledge(db.Model, BaseModel):
     order = db.Column(db.Integer, default=0, comment='Порядок в списке')
 
     def __repr__(self): return f"<Знание {self.description[:50]}...>"
-
-# === Models for competencies and indicators ===
 
 class CompetencyType(db.Model, BaseModel):
     """Тип компетенции (УК, ОПК, ПК)"""
