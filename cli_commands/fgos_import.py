@@ -9,6 +9,7 @@ import logging
 from maps.models import db
 from competencies_matrix.logic import save_fgos_data, delete_fgos, parse_fgos_file
 from competencies_matrix.models import FgosVo 
+from sqlalchemy.exc import IntegrityError # ИСПРАВЛЕНО: Импортируем IntegrityError
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +31,25 @@ def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
 
     FILEPATH: Путь к PDF файлу ФГОС для импорта.
     """
-    parser_logger = logging.getLogger('competencies_matrix.parsers')
+    parser_logger = logging.getLogger('competencies_matrix.fgos_parser')
+    nlp_logger = logging.getLogger('competencies_matrix.nlp') # Логгер для nlp.py
+    pdfminer_logger = logging.getLogger('pdfminer') # Логгер для pdfminer
+
     original_parser_level = parser_logger.level
+    original_nlp_level = nlp_logger.level
+    original_pdfminer_level = pdfminer_logger.level
+
     if debug_parser:
         parser_logger.setLevel(logging.DEBUG)
+        nlp_logger.setLevel(logging.DEBUG)
+        # ИСПРАВЛЕНО: Если нужен debug_parser, включаем его для pdfminer тоже, но по умолчанию он будет INFO/WARNING
+        # pdfminer_logger.setLevel(logging.DEBUG)
+    else:
+        # ИСПРАВЛЕНО: Устанавливаем pdfminer в WARNING, чтобы не забивать консоль
+        pdfminer_logger.setLevel(logging.WARNING) 
+        # Устанавливаем nlp logger на INFO, если не в режиме debug_parser
+        nlp_logger.setLevel(logging.INFO)
+
 
     print(f"\n---> Starting FGOS import from: {filepath}")
     if dry_run:
@@ -61,7 +77,8 @@ def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
              
         print(f"   - Found {len(parsed_data.get('uk_competencies', []))} УК competencies.")
         print(f"   - Found {len(parsed_data.get('opk_competencies', []))} ОПК competencies.")
-        print(f"   - Found {len(parsed_data.get('recommended_ps_codes', []))} recommended PS codes.")
+        # ИСПРАВЛЕНО: используем 'recommended_ps' вместо 'recommended_ps_codes'
+        print(f"   - Found {len(parsed_data.get('recommended_ps', []))} recommended PS.")
 
         if delete_only:
              logger.info("\n---> DELETE ONLY mode enabled.")
@@ -131,3 +148,5 @@ def import_fgos_command(filepath, force, delete_only, dry_run, debug_parser):
         logger.error(f"\n!!! UNEXPECTED ERROR during import: {e} !!!", exc_info=True)
     finally:
          parser_logger.setLevel(original_parser_level)
+         nlp_logger.setLevel(original_nlp_level)
+         pdfminer_logger.setLevel(original_pdfminer_level) # Восстанавливаем уровень pdfminer

@@ -30,11 +30,19 @@ load_dotenv()
 app = Flask(__name__)
 application = app
 
+# ИСПРАВЛЕНО: Настройка уровня логирования в самом начале
+logging.basicConfig(level=logging.INFO) # Общий уровень логирования INFO
+# ИСПРАВЛЕНО: Устанавливаем уровень WARNING для pdfminer.six, чтобы подавить его DEBUG-вывод
+logging.getLogger('pdfminer').setLevel(logging.WARNING)
+# ИСПРАВЛЕНО: Устанавливаем уровень INFO для google_genai, чтобы видеть только важные HTTP-запросы
+logging.getLogger('google_genai').setLevel(logging.INFO)
+
+
 app.config.from_pyfile('config.py')
 app.json.sort_keys = False
 
 config_cache = { 
-    "DEBUG": True,
+    "DEBUG": True, # Оставим True для отладки Flask-приложения, но логирование настроено выше
     "CACHE_TYPE": "SimpleCache",
     "CACHE_DEFAULT_TIMEOUT": 300,
 }
