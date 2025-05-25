@@ -6,8 +6,6 @@ import re
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
-# ИСПРАВЛЕНО: Добавлен импорт os для получения переменной окружения
-# Импортируем genai только если API_KEY доступен, чтобы избежать ошибок при инициализации
 try:
     from google import genai
     from google.genai import types
@@ -19,14 +17,14 @@ except ImportError:
     GOOGLE_GENAI_SDK_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG) 
 
 # --- Конфигурация Gemini API ---
-# ИСПРАВЛЕНО: Получаем API ключ из переменной окружения
+# Получаем API ключ из переменной окружения
 # GOOGLE_AI_API_KEY = os.getenv("GOOGLE_AI_API_KEY") 
 GOOGLE_AI_API_KEY = "AIzaSyDA0NoIT1yhuJwUzmAPqXl_lUOJ4chnaQA" 
 GEMINI_MODEL_NAME = "gemini-2.0-flash"
 
-# Инициализируем клиент один раз при загрузке модуля, если ключ доступен
 gemini_client = None
 if GOOGLE_AI_API_KEY and GOOGLE_GENAI_SDK_AVAILABLE and genai:
     try:
