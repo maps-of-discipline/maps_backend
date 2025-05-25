@@ -25,8 +25,9 @@ from .external_models import (
     ExternalDepartment
 )
 
-from .fgos_parser import parse_fgos_pdf # <-- ИСПРАВЛЕННЫЙ ИМПОРТ (название файла изменилось)
-from .parsers import parse_prof_standard 
+from . import fgos_parser
+from . import parsers
+
 from .parsing_utils import parse_date_string 
 
 
@@ -609,7 +610,9 @@ def delete_indicator(ind_id: int, session: Session) -> bool:
 
 def parse_fgos_file(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     try:
-        parsed_data = parse_fgos_pdf(file_bytes, filename)
+        # ИСПРАВЛЕНО: Вызываем функцию parse_fgos_pdf из fgos_parser,
+        # которая уже содержит логику вызова NLP-модуля.
+        parsed_data = fgos_parser.parse_fgos_pdf(file_bytes, filename)
         if not parsed_data or not parsed_data.get('metadata'):
              logger.warning(f"Parsing failed or returned insufficient metadata for {filename}")
              if not parsed_data: raise ValueError("Parser returned empty data.")
@@ -619,68 +622,159 @@ def parse_fgos_file(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     except Exception as e: logger.error(f"Unexpected error parsing {filename}: {e}", exc_info=True); raise Exception(f"Unexpected error parsing FGOS file '{filename}': {e}")
 
 def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session, force_update: bool = False) -> Optional[FgosVo]:
-    # ИСПРАВЛЕНО: Теперь ожидаем 'recommended_ps' (список словарей) вместо 'recommended_ps_codes'
-    if not parsed_data or not parsed_data.get('metadata'): logger.warning("No parsed data or metadata provided for saving."); return None
-    metadata = parsed_data.get('metadata', {}); fgos_number = metadata.get('order_number'); fgos_date_obj = metadata.get('order_date'); fgos_direction_code = metadata.get('direction_code'); fgos_education_level = metadata.get('education_level'); fgos_generation = metadata.get('generation'); fgos_direction_name = metadata.get('direction_name')
-    if not all((fgos_number, fgos_date_obj, fgos_direction_code, fgos_education_level)): logger.error("Missing core metadata from parsed data for saving."); raise ValueError("Missing core FGOS metadata from parsed data for saving.")
+    if not parsed_data or not parsed_data.get('metadata'):
+        logger.warning("No parsed data or metadata provided for saving."); return None
+    
+    metadata = parsed_data.get('metadata', {})
+    fgos_number = metadata.get('order_number')
+    fgos_date_str = metadata.get('order_date') # Получаем как есть - это может быть строка или объект date
+
+    # --- ИСПРАВЛЕНО ЗДЕСЬ: Обеспечиваем, что fgos_date_obj всегда datetime.date ---
+    fgos_date_obj = None
+    if isinstance(fgos_date_str, str): # Если это строка (как из JSON от фронтенда или LLM)
+        fgos_date_obj = parse_date_string(fgos_date_str)
+    elif isinstance(fgos_date_str, datetime.datetime): # Если это datetime.datetime (например, из CLI)
+        fgos_date_obj = fgos_date_str.date()
+    elif isinstance(fgos_date_str, datetime.date): # Если это уже datetime.date (идеальный случай)
+        fgos_date_obj = fgos_date_str
+    # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+
+    fgos_direction_code = metadata.get('direction_code')
+    fgos_education_level = metadata.get('education_level')
+    fgos_generation_raw = metadata.get('generation')
+    fgos_generation = str(fgos_generation_raw).strip() if fgos_generation_raw is not None else ''
+    if not fgos_generation:
+        fgos_generation = '3++'
+        logger.warning(f"FGOS generation was missing or empty for '{filename}'. Defaulting to '{fgos_generation}'.")
+    fgos_direction_name = metadata.get('direction_name')
+
+    # Проверка, что дата успешно спарсена. Если нет, то это ошибка.
+    if not fgos_date_obj:
+        logger.error(f"FGOS date '{fgos_date_str}' from parsed data could not be converted to a datetime.date object. Cannot save.")
+        raise ValueError(f"FGOS date '{fgos_date_str}' is not in expected date format (YYYY-MM-DD) or invalid after re-parsing.")
+
+    if not all((fgos_number, fgos_direction_code, fgos_education_level)): # fgos_date_obj уже проверен на тип
+        logger.error("Missing core metadata from parsed data for saving (number, direction_code, or education_level).")
+        raise ValueError("Missing core FGOS metadata from parsed data for saving.")
+
     try:
-        existing_fgos = session.query(FgosVo).filter_by(direction_code=fgos_direction_code, education_level=fgos_education_level, number=fgos_number, date=fgos_date_obj).first()
+        # ИСПРАВЛЕНО: Запрос фильтрации по дате с использованием объекта datetime.date
+        existing_fgos = session.query(FgosVo).filter(
+            FgosVo.direction_code == fgos_direction_code,
+            FgosVo.education_level == fgos_education_level,
+            FgosVo.number == fgos_number,
+            FgosVo.date == fgos_date_obj # Используем datetime.date объект напрямую
+        ).first()
+        
         fgos_vo = None 
         if existing_fgos:
             if force_update:
                 logger.info(f"Existing FGOS found ({existing_fgos.id}). Force update. Deleting old comps/links...")
                 session.query(Competency).filter_by(fgos_vo_id=existing_fgos.id).delete(synchronize_session='fetch')
-                session.query(FgosRecommendedPs).filter_by(fgos_vo_id=existing_fgos.id).delete(synchronize_session='fetch'); session.flush()
-                fgos_vo = existing_fgos; fgos_vo.direction_name = fgos_direction_name or 'Not specified'; fgos_vo.generation = fgos_generation; fgos_vo.file_path = filename
-                session.add(fgos_vo); session.flush()
-            else: logger.warning(f"FGOS with same key data already exists ({existing_fgos.id}). Skipping save."); raise IntegrityError("ФГОС с этим направлением, номером и датой уже существует.", {}, None)
+                session.query(FgosRecommendedPs).filter_by(fgos_vo_id=existing_fgos.id).delete(synchronize_session='fetch')
+                session.flush() # Flush to ensure deletions are processed before potential re-add
+
+                fgos_vo = existing_fgos
+                fgos_vo.direction_name = fgos_direction_name or 'Not specified'
+                fgos_vo.generation = fgos_generation
+                fgos_vo.file_path = filename
+                session.add(fgos_vo) # Mark existing object as dirty for update
+                session.flush()
+            else:
+                logger.warning(f"FGOS with same key data already exists ({existing_fgos.id}). Skipping save.")
+                raise IntegrityError("ФГОС с этим направлением, номером и датой уже существует.", {}, None)
         else: 
-            fgos_vo = FgosVo(number=fgos_number, date=fgos_date_obj, direction_code=fgos_direction_code, direction_name=fgos_direction_name or 'Not specified', education_level=fgos_education_level, generation=fgos_generation, file_path=filename)
-            session.add(fgos_vo); session.flush()
+            fgos_vo = FgosVo(
+                number=fgos_number, date=fgos_date_obj, direction_code=fgos_direction_code,
+                direction_name=fgos_direction_name or 'Not specified', education_level=fgos_education_level,
+                generation=fgos_generation, file_path=filename
+            )
+            session.add(fgos_vo)
+            session.flush()
+
         comp_types_map = {ct.code: ct for ct in session.query(CompetencyType).filter(CompetencyType.code.in_(['УК', 'ОПК'])).all()}
-        if not comp_types_map: logger.error("CompetencyType (УК, ОПК) not found. Cannot save competencies."); raise ValueError("CompetencyType (УК, ОПК) not found.")
-        saved_competencies_count = 0; all_parsed_competencies = parsed_data.get('uk_competencies', []) + parsed_data.get('opk_competencies', [])
+        if not comp_types_map:
+            logger.error("CompetencyType (УК, ОПК) not found. Cannot save competencies.")
+            raise ValueError("CompetencyType (УК, ОПК) not found. Please seed initial competency types.")
+        
+        saved_competencies_count = 0
+        all_parsed_competencies = parsed_data.get('uk_competencies', []) + parsed_data.get('opk_competencies', [])
+        
         for parsed_comp in all_parsed_competencies:
-            comp_code = parsed_comp.get('code'); comp_name = parsed_comp.get('name'); comp_category_name = parsed_comp.get('category_name') 
-            if not comp_code or not comp_name: logger.warning(f"Skipping competency due to missing code/name: {parsed_comp}"); continue
-            comp_prefix = comp_code.split('-')[0].upper(); comp_type = comp_types_map.get(comp_prefix)
-            if not comp_type: logger.warning(f"Skipping competency {comp_code}: Competency type {comp_prefix} not found."); continue
-            existing_comp_for_fgos = session.query(Competency).filter_by(code=comp_code, competency_type_id=comp_type.id, fgos_vo_id=fgos_vo.id).first()
-            if existing_comp_for_fgos: logger.warning(f"Competency {comp_code} already exists for FGOS {fgos_vo.id}. Skipping."); continue 
-            competency = Competency(competency_type_id=comp_type.id, fgos_vo_id=fgos_vo.id, code=comp_code, name=comp_name, category_name=comp_category_name)
-            session.add(competency); session.flush(); saved_competencies_count += 1; 
+            comp_code = parsed_comp.get('code')
+            comp_name = parsed_comp.get('name')
+            comp_category_name = parsed_comp.get('category_name')
+            
+            if not comp_code or not comp_name:
+                logger.warning(f"Skipping competency due to missing code/name: {parsed_comp}"); continue
+            
+            comp_prefix = comp_code.split('-')[0].upper()
+            comp_type = comp_types_map.get(comp_prefix)
+            
+            if not comp_type:
+                logger.warning(f"Skipping competency {comp_code}: Competency type {comp_prefix} not found (must be УК or ОПК)."); continue
+            
+            # Проверяем уникальность по коду, типу и FGOS (если указан)
+            existing_comp_for_fgos = session.query(Competency).filter_by(
+                code=comp_code, competency_type_id=comp_type.id, fgos_vo_id=fgos_vo.id
+            ).first()
+            if existing_comp_for_fgos:
+                logger.warning(f"Competency {comp_code} already exists for FGOS {fgos_vo.id}. Skipping."); continue
+            
+            competency = Competency(
+                competency_type_id=comp_type.id,
+                fgos_vo_id=fgos_vo.id,
+                code=comp_code,
+                name=comp_name,
+                category_name=comp_category_name
+            )
+            session.add(competency)
+            session.flush() # Flush to assign ID
+            saved_competencies_count += 1
+        
         logger.info(f"Saved {saved_competencies_count} competencies for FGOS {fgos_vo.id}.")
         
-        # ИСПРАВЛЕНО: 'recommended_ps' теперь список словарей {code, name}
-        recommended_ps_list = parsed_data.get('recommended_ps', []); 
+        recommended_ps_list = parsed_data.get('recommended_ps', [])
         if len(recommended_ps_list) > 0:
-             # Извлекаем только коды для запроса в БД
              ps_codes_to_find = [ps_data['code'] for ps_data in recommended_ps_list if ps_data.get('code')]
-             existing_prof_standards = session.query(ProfStandard).filter(ProfStandard.code.in_(ps_codes_to_find)).all(); ps_by_code = {ps.code: ps for ps in existing_prof_standards}
+             existing_prof_standards = session.query(ProfStandard).filter(ProfStandard.code.in_(ps_codes_to_find)).all()
+             ps_by_code = {ps.code: ps for ps in existing_prof_standards}
+             
              linked_ps_count = 0
-             for ps_data in recommended_ps_list: # Итерируемся по словарям из парсинга
-                ps_code = ps_data.get('code'); ps_name = ps_data.get('name') # Получаем и код, и имя
-                if not ps_code: continue # Пропускаем, если кода нет
+             for ps_data in recommended_ps_list:
+                ps_code = ps_data.get('code')
+                ps_name = ps_data.get('name')
+                if not ps_code: continue
                 
                 prof_standard = ps_by_code.get(ps_code)
                 if prof_standard:
                     existing_link = session.query(FgosRecommendedPs).filter_by(fgos_vo_id=fgos_vo.id, prof_standard_id=prof_standard.id).first()
                     if not existing_link: 
-                        # Используем название ПС из парсинга в поле description связи, если это актуально
                         link = FgosRecommendedPs(fgos_vo_id=fgos_vo.id, prof_standard_id=prof_standard.id, is_mandatory=False, description=f"Рекомендован: {ps_name}" if ps_name else None)
-                        session.add(link); linked_ps_count += 1; 
+                        session.add(link)
+                        linked_ps_count += 1
                     else: 
-                        # Если связь уже существует, можно обновить описание или is_mandatory, если нужно
                         if existing_link.description != (f"Рекомендован: {ps_name}" if ps_name else None):
                             existing_link.description = (f"Рекомендован: {ps_name}" if ps_name else None)
                             session.add(existing_link) # Mark as dirty for update
-                        pass # Связь уже существует, ничего не делаем
-                else: logger.warning(f"Recommended PS with code {ps_code} (name: {ps_name}) not found in DB. Skipping link.")
+                        pass 
+                else:
+                    logger.warning(f"Recommended PS with code {ps_code} (name: {ps_name}) not found in DB. Skipping link.")
              logger.info(f"Queued {linked_ps_count} new recommended PS links.")
+        
         return fgos_vo
-    except IntegrityError as e: logger.error(f"Integrity error for FGOS from '{filename}': {e}", exc_info=True); raise e 
-    except SQLAlchemyError as e: logger.error(f"Database error for FGOS from '{filename}': {e}", exc_info=True); raise e
-    except Exception as e: logger.error(f"Unexpected error saving FGOS: {e}", exc_info=True); raise e
+    except IntegrityError as e:
+        logger.error(f"Integrity error for FGOS from '{filename}': {e}", exc_info=True)
+        session.rollback() # Ensure rollback on integrity error
+        raise e 
+    except SQLAlchemyError as e:
+        logger.error(f"Database error for FGOS from '{filename}': {e}", exc_info=True)
+        session.rollback() # Ensure rollback on database error
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error saving FGOS: {e}", exc_info=True)
+        session.rollback() # Ensure rollback on any unexpected error
+        raise e
 
 def get_fgos_list() -> List[FgosVo]:
     try: return local_db.session.query(FgosVo).order_by(FgosVo.direction_code, FgosVo.date.desc()).all()
@@ -744,7 +838,8 @@ def delete_fgos(fgos_id: int, session: Session) -> bool:
 
 def handle_prof_standard_upload_parsing(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     """Handles the parsing of a PS file after upload. Calls the appropriate parser orchestrator."""
-    return parse_prof_standard(file_bytes, filename)
+    # ИСПРАВЛЕНО: Вызываем функцию parse_prof_standard из parsers.py
+    return parsers.parse_prof_standard(file_bytes, filename)
 
 
 def save_prof_standard_data(parsed_data: Dict[str, Any], filename: str, session: Session, force_update: bool = False) -> Optional[ProfStandard]:
@@ -766,6 +861,24 @@ def save_prof_standard_data(parsed_data: Dict[str, Any], filename: str, session:
         if existing_ps:
             if force_update:
                 session.query(GeneralizedLaborFunction).filter_by(prof_standard_id=existing_ps.id).delete(synchronize_session='fetch')
+                session.query(LaborFunction).filter(LaborFunction.generalized_labor_function_id.in_(
+                    session.query(GeneralizedLaborFunction.id).filter_by(prof_standard_id=existing_ps.id)
+                )).delete(synchronize_session='fetch')
+                session.query(LaborAction).filter(LaborAction.labor_function_id.in_(
+                    session.query(LaborFunction.id).filter(LaborFunction.generalized_labor_function_id.in_(
+                        session.query(GeneralizedLaborFunction.id).filter_by(prof_standard_id=existing_ps.id)
+                    ))
+                )).delete(synchronize_session='fetch')
+                session.query(RequiredSkill).filter(RequiredSkill.labor_function_id.in_(
+                    session.query(LaborFunction.id).filter(LaborFunction.generalized_labor_function_id.in_(
+                        session.query(GeneralizedLaborFunction.id).filter_by(prof_standard_id=existing_ps.id)
+                    ))
+                )).delete(synchronize_session='fetch')
+                session.query(RequiredKnowledge).filter(RequiredKnowledge.labor_function_id.in_(
+                    session.query(LaborFunction.id).filter(LaborFunction.generalized_labor_function_id.in_(
+                        session.query(GeneralizedLaborFunction.id).filter_by(prof_standard_id=existing_ps.id)
+                    ))
+                )).delete(synchronize_session='fetch')
                 session.flush() 
 
                 existing_ps.name = ps_name; existing_ps.order_number = parsed_data.get('order_number')

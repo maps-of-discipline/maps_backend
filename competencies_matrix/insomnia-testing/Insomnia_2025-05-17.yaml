@@ -1,19 +1,20 @@
+# filepath: competencies_matrix/insomnia-testing/Insomnia_2025-05-17.yaml
 type: collection.insomnia.rest/5.0
-name: Scratch Pad
+name: Competencies Matrix API Tests (Updated)
 meta:
   id: wrk_scratchpad
   created: 1744366275666
-  modified: 1744366275666
+  modified: 1748208505419 # Updated modified timestamp
 collection:
   - url: "{{ base_url }}/api/auth/login"
-    name: 1. Login Test User
+    name: 1. Login Test User (testuser/password)
     meta:
       id: req_81f9765d7a2c4d3086935e373cc6dbb1
       created: 1744399150000
       modified: 1744399250000
       isPrivate: false
       description: Получает access и refresh токены для пользователя testuser/password
-      sortKey: -1000
+      sortKey: 10
     method: POST
     body:
       mimeType: application/json
@@ -34,154 +35,24 @@ collection:
         send: true
         store: true
       rebuildPath: true
-  - url: "{{ base_url }}/api/competencies/matrix/{{ test_aup_id }}"
-    name: 2. Get Matrix Data (Test AUP)
+
+  - name: --- Core Competency/Indicator Management ---
     meta:
-      id: req_556bfd3161334a1b8156bbe2e0b3cac1
-      created: 1744399200000
-      modified: 1747079864269
-      isPrivate: false
-      description: "Получает данные для матрицы тестового АУП (ID: {{ test_aup_id }})"
-      sortKey: -900
-    method: GET
-    authentication:
-      type: bearer
-      token: "{{ auth_token }}"
-      disabled: false
-      prefix: Bearer
-    settings:
-      renderRequestBody: true
-      encodeUrl: true
-      followRedirects: global
-      cookies:
-        send: true
-        store: true
-      rebuildPath: true
-  - url: "{{ base_url }}/api/competencies/matrix/link"
-    name: 3. Add Matrix Link (Test)
-    meta:
-      id: req_e749bf205b7641a08443dd000fddb829
-      created: 1744399250000
-      modified: 1746815613727
-      isPrivate: false
-      description: "Добавляет связь: Дисциплина (AupData ID={{ test_aup_data_id_2 }})
-        <-> Индикатор (ID={{ test_indicator_id_1 }})"
-      sortKey: -800
-    method: POST
-    body:
-      mimeType: application/json
-      text: |-
-        {
-        	"aup_data_id": {{ test_aup_data_id_2 }},
-        	"indicator_id": {{ test_indicator_id_1 }}
-        }
-    headers:
-      - name: Content-Type
-        value: application/json
-        id: pair_h2
-    authentication:
-      type: bearer
-      token: "{{ auth_token }}"
-      disabled: false
-      prefix: Bearer
-    settings:
-      renderRequestBody: true
-      encodeUrl: true
-      followRedirects: global
-      cookies:
-        send: true
-        store: true
-      rebuildPath: true
-  - url: "{{ base_url }}/api/competencies/matrix/link"
-    name: 4. Delete Matrix Link (Test)
-    meta:
-      id: req_ea220ce4372f499fb390f55fbb652b10
-      created: 1744399300000
-      modified: 1744386110027
-      isPrivate: false
-      description: "Удаляет связь: Дисциплина (AupData ID={{ test_aup_data_id_1 }})
-        <-> Индикатор (ID={{ test_indicator_id_1 }})"
-      sortKey: -700
-    method: DELETE
-    body:
-      mimeType: application/json
-      text: |-
-        {
-        	"aup_data_id": {{ test_aup_data_id_2 }},
-        	"indicator_id": {{ test_indicator_id_1 }}
-        }
-    headers:
-      - name: Content-Type
-        value: application/json
-        id: pair_h3
-    authentication:
-      type: bearer
-      token: "{{ auth_token }}"
-      disabled: false
-      prefix: Bearer
-    settings:
-      renderRequestBody: true
-      encodeUrl: true
-      followRedirects: global
-      cookies:
-        send: true
-        store: true
-      rebuildPath: true
-  - url: "{{ base_url }}/api/competencies/programs"
-    name: 5. Get All Programs
-    meta:
-      id: req_da05c85bf564400d8962dc3b992bde4d
-      created: 1744399500000
-      modified: 1747079151357
-      isPrivate: false
-      description: Получает список всех образовательных программ
-      sortKey: -600
-    method: GET
-    authentication:
-      type: bearer
-      token: "{{ auth_token }}"
-      disabled: false
-      prefix: Bearer
-    settings:
-      renderRequestBody: true
-      encodeUrl: true
-      followRedirects: global
-      cookies:
-        send: true
-        store: true
-      rebuildPath: true
-  - url: "{{ base_url }}/api/competencies/programs/{{ test_program_id }}"
-    name: 6. Get Program Details (Test)
-    meta:
-      id: req_5b730e47196e4abc950e495477317c00
-      created: 1744399600000
-      modified: 1747080885656
-      isPrivate: false
-      description: "Получает детали тестовой ОП (ID: {{ test_program_id }})"
-      sortKey: -500
-    method: GET
-    authentication:
-      type: bearer
-      token: "{{ auth_token }}"
-      disabled: false
-      prefix: Bearer
-    settings:
-      renderRequestBody: true
-      encodeUrl: true
-      followRedirects: global
-      cookies:
-        send: true
-        store: true
-      rebuildPath: true
+      id: folder_competency_core
+      created: 1747950000000
+      modified: 1747950000000
+      sortKey: 100
+    _type: request_group
+    
   - url: "{{ base_url }}/api/competencies/competencies"
-    name: 7. Create Competency (Test PC)
+    name: 1.1. Create Competency (Test PC)
     meta:
       id: req_1fd70e5706494c4f8f1ae30eddaae7ce
       created: 1744399700000
       modified: 1744400200000
       isPrivate: false
-      description: Создает новую тестовую ПК
-      sortKey: -400
+      description: Создает новую тестовую ПК (убедитесь, что code уникален, например, ПК-Тест99)
+      sortKey: 110
     method: POST
     body:
       mimeType: application/json
@@ -209,16 +80,103 @@ collection:
         send: true
         store: true
       rebuildPath: true
+    parentId: folder_competency_core 
+
+  - url: "{{ base_url }}/api/competencies/competencies"
+    name: 1.2. Get All Competencies
+    meta:
+      id: req_get_all_competencies
+      created: 1747950050000
+      modified: 1747950050000
+      isPrivate: false
+      description: Получает список всех компетенций (УК, ОПК, ПК)
+      sortKey: 120
+    method: GET
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+    parentId: folder_competency_core 
+
+  - url: "{{ base_url }}/api/competencies/competencies/{{ test_competency_id }}"
+    name: 1.3. Get Competency Details (Test PC)
+    meta:
+      id: req_get_competency_details
+      created: 1747950100000
+      modified: 1747950100000
+      isPrivate: false
+      description: "Получает детали конкретной компетенции (ПК-1, ID: {{ test_competency_id }})"
+      sortKey: 130
+    method: GET
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+    parentId: folder_competency_core 
+
+  - url: "{{ base_url }}/api/competencies/competencies/{{ test_competency_id }}"
+    name: 1.4. Update Competency (Test PC)
+    meta:
+      id: req_update_competency
+      created: 1747950150000
+      modified: 1747950150000
+      isPrivate: false
+      description: "Обновляет тестовую ПК (ID: {{ test_competency_id }}). Измените name или description."
+      sortKey: 140
+    method: PATCH
+    body:
+      mimeType: application/json
+      text: |-
+        {
+          "name": "Обновленная тестовая компетенция Insomnia",
+          "description": "Описание обновлено через API тест"
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
+        id: pair_h_update_comp
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+    parentId: folder_competency_core 
+
   - url: "{{ base_url }}/api/competencies/indicators"
-    name: 8. Create Indicator (Test)
+    name: 1.5. Create Indicator (Test IPK)
     meta:
       id: req_0c6642746928445aaf3571dd0005dcd0
       created: 1744399800000
       modified: 1744400300000
       isPrivate: false
-      description: "Создает новый тестовый индикатор для компетенции ПК-1 (ID: {{
-        test_competency_id }})"
-      sortKey: -300
+      description: "Создает новый тестовый индикатор для компетенции ПК-1 (ID: {{ test_competency_id }}). Убедитесь, что code уникален, например, ИПК-Тест99.1)"
+      sortKey: 150
     method: POST
     body:
       mimeType: application/json
@@ -246,24 +204,18 @@ collection:
         send: true
         store: true
       rebuildPath: true
-  - url: "{{ base_url }}/api/competencies/profstandards/upload"
-    name: 9. Upload ProfStandard (Test)
+    parentId: folder_competency_core 
+
+  - url: "{{ base_url }}/api/competencies/indicators"
+    name: 1.6. Get All Indicators
     meta:
-      id: req_b7d91a0a93d647a7966a7e80d7ecaf4b
-      created: 1744399900000
-      modified: 1744400400000
+      id: req_get_all_indicators
+      created: 1747950200000
+      modified: 1747950200000
       isPrivate: false
-      description: Загружает файл профстандарта (выберите файл вручную)
-      sortKey: -200
-    method: POST
-    body:
-      mimeType: multipart/form-data
-      params:
-        - id: file_ps_1
-          name: file
-          type: file
-          disabled: false
-          multiline: false
+      description: Получает список всех индикаторов
+      sortKey: 160
+    method: GET
     authentication:
       type: bearer
       token: "{{ auth_token }}"
@@ -277,16 +229,1584 @@ collection:
         send: true
         store: true
       rebuildPath: true
-  - url: "{{ base_url }}/api/competencies/external/aups"
-    name: 10. Get External Disciplines
+    parentId: folder_competency_core 
+
+  - url: "{{ base_url }}/api/competencies/indicators/{{ test_indicator_id_1 }}"
+    name: 1.7. Get Indicator Details (Test IPK)
     meta:
-      id: req_98e9153a4b1d49b6814efe07ce043f2b
-      created: 1746815899896
-      modified: 1746891816376
+      id: req_get_indicator_details
+      created: 1747950250000
+      modified: 1747950250000
       isPrivate: false
-      description: Получает список всех образовательных программ
-      sortKey: -550
+      description: "Получает детали конкретного индикатора (ИУК-1.1, ID: {{ test_indicator_id_1 }})"
+      sortKey: 170
     method: GET
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+    parentId: folder_competency_core 
+    
+  - url: "{{ base_url }}/api/competencies/indicators/{{ test_indicator_id_2 }}"
+    name: 1.8. Update Indicator (Test IPK)
+    meta:
+      id: req_update_indicator
+      created: 1747950300000
+      modified: 1747950300000
+      isPrivate: false
+      description: "Обновляет тестовый индикатор (ID: {{ test_indicator_id_2 }}). Измените formulation или source."
+      sortKey: 180
+    method: PATCH
+    body:
+      mimeType: application/json
+      text: |-
+        {
+          "formulation": "Обновленная формулировка тестового индикатора",
+          "source": "Updated via Insomnia"
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
+        id: pair_h_update_ind
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+    parentId: folder_competency_core 
+
+  - url: "{{ base_url }}/api/competencies/indicators/{{ test_indicator_id_1 }}"
+    name: 1.9. Delete Indicator (Test IPK)
+    meta:
+      id: req_delete_indicator
+      created: 1747950350000
+      modified: 1747950350000
+      isPrivate: false
+      description: "Удаляет тестовый индикатор (ID: {{ test_indicator_id_1 }})"
+      sortKey: 190
+    method: DELETE
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+    parentId: folder_competency_core 
+
+  - url: "{{ base_url }}/api/competencies/competencies/{{ test_competency_id }}"
+    name: 1.10. Delete Competency (Test PC)
+    meta:
+      id: req_delete_competency
+      created: 1747950400000
+      modified: 1747950400000
+      isPrivate: false
+      description: "Удаляет тестовую ПК (ID: {{ test_competency_id }}). Удалит и связанные с ней индикаторы."
+      sortKey: 200
+    method: DELETE
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+    parentId: folder_competency_core 
+
+
+  - name: --- FGOS Management ---
+    meta:
+      id: folder_fgos_management
+      created: 1747950500000
+      modified: 1747950500000
+      sortKey: 300
+    _type: request_group
+
+  - url: "{{ base_url }}/api/competencies/fgos/upload"
+    name: 2.1. Upload FGOS VO (PDF)
+    meta:
+      id: req_upload_fgos
+      created: 1744399900000
+      modified: 1747950550000
+      isPrivate: false
+      description: Загружает и парсит PDF ФГОС ВО (выберите файл вручную, например ФГОС ВО 180301_B_3_23082020.pdf)
+      sortKey: 310
+    method: POST
+    body:
+      mimeType: multipart/form-data
+      params:
+        - id: file_fgos_1
+          name: file
+          type: file
+          disabled: false
+          multiline: false
+          fileName: /home/me/ВКР/maps_backend/ФГОС ВО 180301_B_3_23082020.pdf
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+    parentId: folder_fgos_management 
+
+  - url: "{{ base_url }}/api/competencies/fgos/save"
+    name: 2.2. Save FGOS VO (from Preview)
+    meta:
+      id: req_save_fgos
+      created: 1747946780716
+      modified: 1747947100390
+      isPrivate: false
+      description: "Сохраняет спарсенные данные ФГОС ВО в БД (передайте parsed_data из ответа 2.1)"
+      sortKey: 320
+    method: POST
+    body:
+      mimeType: application/json
+      text: >-
+        {
+            "parsed_data":  {
+        		"metadata": {
+        			"order_number": "922",
+        			"order_date": "2020-08-07",
+        			"direction_code": "18.03.01",
+        			"direction_name": "Химическая технология",
+        			"education_level": "бакалавриат",
+        			"generation": "unknown"
+        		},
+        		"uk_competencies": [
+        			{
+        				"code": "УК-1",
+        				"name": "Способен осуществлять поиск, критический анализ и синтез информации, применять системный подход для решения поставленных задач",
+        				"category_name": "Системное и критическое мышление"
+        			},
+        			{
+        				"code": "УК-2",
+        				"name": "Способен определять круг задач в рамках поставленной цели и выбирать оптимальные способы их решения, исходя из действующих правовых норм, имеющихся ресурсов и ограничений",
+        				"category_name": "Разработка и реализация проектов"
+        			},
+        			{
+        				"code": "УК-3",
+        				"name": "Способен осуществлять социальное взаимодействие и реализовывать свою роль в команде",
+        				"category_name": "Командная работа и лидерство"
+        			},
+        			{
+        				"code": "УК-4",
+        				"name": "Способен осуществлять деловую коммуникацию в устной и письменной формах на государственном языке Российской Федерации и иностранном(ых) языке(ах)",
+        				"category_name": "Коммуникация"
+        			},
+        			{
+        				"code": "УК-5",
+        				"name": "Способен воспринимать межкультурное разнообразие общества в социально-историческом, этическом и философском контекстах",
+        				"category_name": "Межкультурное взаимодействие"
+        			},
+        			{
+        				"code": "УК-6",
+        				"name": "Способен управлять своим временем, выстраивать и реализовывать траекторию саморазвития на основе принципов образования в течение всей жизни",
+        				"category_name": "Самоорганизация и саморазвитие"
+        			},
+        			{
+        				"code": "УК-7",
+        				"name": "Способен поддерживать должный уровень физической подготовленности для обеспечения полноценной социальной и профессиональной деятельности",
+        				"category_name": "Самоорганизация и саморазвитие"
+        			},
+        			{
+        				"code": "УК-8",
+        				"name": "Способен создавать и поддерживать в повседневной жизни и в профессиональной деятельности безопасные условия жизнедеятельности для сохранения природной среды, обеспечения устойчивого развития общества, в том числе при угрозе и возникновении чрезвычайных ситуаций и военных конфликтов",
+        				"category_name": "Безопасность жизнедеятельности"
+        			},
+        			{
+        				"code": "УК-9",
+        				"name": "Способен использовать базовые дефектологические знания в социальной и профессиональной сферах",
+        				"category_name": "Инклюзивная компетентность"
+        			},
+        			{
+        				"code": "УК-10",
+        				"name": "Способен принимать обоснованные экономические решения в различных областях жизнедеятельности",
+        				"category_name": "Экономическая культура, в том числе финансовая грамотность"
+        			},
+        			{
+        				"code": "УК-11",
+        				"name": "Способен формировать нетерпимое отношение к коррупционному поведению",
+        				"category_name": "Гражданская позиция"
+        			}
+        		],
+        		"opk_competencies": [
+        			{
+        				"code": "ОПК-1",
+        				"name": "Способен изучать, анализировать, использовать механизмы различных химических реакций, происходящих в технологических процессах и окружающем мире, основываясь на знаниях о строении вещества, природе химической связи и свойствах элементов, классов соединений, веществ и материалов",
+        				"category_name": "Естественно-научная подготовка"
+        			},
+        			{
+        				"code": "ОПК-2",
+        				"name": "Способен использовать математические, физические, физико-химические, химические методы для решения задач профессиональной деятельности",
+        				"category_name": "Профессиональная методология"
+        			},
+        			{
+        				"code": "ОПК-3",
+        				"name": "Способен осуществлять профессиональную деятельность с учетом законодательства Российской Федерации, в том числе в области экономики и экологии",
+        				"category_name": "Адаптация к производственным условиям"
+        			},
+        			{
+        				"code": "ОПК-4",
+        				"name": "Способен обеспечивать проведение технологического процесса, использовать технические средства для контроля параметров технологического процесса, свойств сырья и готовой продукции, осуществлять изменение параметров технологического процесса при изменении свойств сырья",
+        				"category_name": "Инженерная и технологическая подготовка"
+        			},
+        			{
+        				"code": "ОПК-5",
+        				"name": "Способен осуществлять экспериментальные исследования и испытания по заданной методике, проводить наблюдения и измерения с учетом требований техники безопасности, обрабатывать и интерпретировать экспериментальные данные",
+        				"category_name": "Научные исследования и разработки"
+        			},
+        			{
+        				"code": "ОПК-6",
+        				"name": "Способен понимать принципы работы современных информационных технологий и использовать их для решения задач профессиональной деятельности",
+        				"category_name": "Информационно-коммуникационные технологии для профессиональной деятельности"
+        			}
+        		],
+        		"recommended_ps": [
+        			{
+        				"code": "26.001",
+        				"name": "Специалист по обеспечению комплексного контроля производства наноструктурированных композиционных материалов"
+        			},
+        			{
+        				"code": "26.002",
+        				"name": "Специалист по подготовке и эксплуатации оборудования по производству полимерных наноструктурированных материалов"
+        			},
+        			{
+        				"code": "26.003",
+        				"name": "Специалист по проектированию изделий из композиционных наноструктурированных материалов"
+        			},
+        			{
+        				"code": "26.004",
+        				"name": "Специалист по производству волокнистых композиционных материалов"
+        			},
+        			{
+        				"code": "26.005",
+        				"name": "Специалист по производству наноструктурированных материалов"
+        			},
+        			{
+        				"code": "26.006",
+        				"name": "Специалист по разработке наноструктурированных материалов"
+        			},
+        			{
+        				"code": "40.017",
+        				"name": "Специалист в области материаловедческого обеспечения технологического цикла производства объемных нанокерамик, соединений, композитов на их основе и изделий из них"
+        			},
+        			{
+        				"code": "40.018",
+        				"name": "Специалист в области технологического обеспечения полного цикла производства изделий с керамическими наноструктурированными покрытиями"
+        			},
+        			{
+        				"code": "40.042",
+        				"name": "Специалист технического обеспечения производства полимерных наноструктурированных пленок"
+        			},
+        			{
+        				"code": "40.043",
+        				"name": "Специалист по внедрению и управлению производством полимерных наноструктурированных пленок"
+        			},
+        			{
+        				"code": "40.044",
+        				"name": "Специалист по научно-техническим разработкам и испытаниям полимерных наноструктурированных пленок"
+        			},
+        			{
+        				"code": "40.046",
+        				"name": "Специалист производства сырьевых керамических масс"
+        			}
+        		]
+        	},
+            "filename": "ФГОС ВО 180301_B_3_23082020.pdf",
+            "options": {
+                "force_update": false
+            }
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+    parentId: folder_fgos_management 
+
+  - url: "{{ base_url }}/api/competencies/fgos"
+    name: 2.3. Get All FGOS VO
+    meta:
+      id: req_get_all_fgos
+      created: 1747950600000
+      modified: 1747950600000
+      isPrivate: false
+      description: Получает список всех сохраненных ФГОС ВО
+      sortKey: 330
+    method: GET
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+    parentId: folder_fgos_management 
+
+  - url: "{{ base_url }}/api/competencies/fgos/{{ test_fgos_id }}"
+    name: 2.4. Get FGOS VO Details
+    meta:
+      id: req_get_fgos_details
+      created: 1747950650000
+      modified: 1747950650000
+      isPrivate: false
+      description: "Получает детали конкретного ФГОС ВО (ID: {{ test_fgos_id }})"
+      sortKey: 340
+    method: GET
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+    parentId: folder_fgos_management 
+
+  - url: "{{ base_url }}/api/competencies/fgos/{{ test_fgos_id }}"
+    name: 2.5. Delete FGOS VO
+    meta:
+      id: req_delete_fgos
+      created: 1747950700000
+      modified: 1747950700000
+      isPrivate: false
+      description: "Удаляет ФГОС ВО (ID: {{ test_fgos_id }}) и все связанные с ним УК/ОПК"
+      sortKey: 350
+    method: DELETE
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+    parentId: folder_fgos_management 
+
+
+  - name: --- Professional Standard Management ---
+    meta:
+      id: folder_ps_management
+      created: 1747950800000
+      modified: 1747950800000
+      sortKey: 400
+    _type: request_group
+
+  - url: "{{ base_url }}/api/competencies/profstandards/parse-preview"
+    name: 3.1. Upload ProfStandard (XML)
+    meta:
+      id: req_upload_ps
+      created: 1744400400000
+      modified: 1747950850000
+      isPrivate: false
+      description: Загружает и парсит XML Профстандарт (выберите файл вручную, например ProfessionalStandarts_4.xml)
+      sortKey: 410
+    method: POST
+    body:
+      mimeType: multipart/form-data
+      params:
+        - id: file_ps_1
+          name: file
+          type: file
+          disabled: false
+          multiline: false
+          fileName: /home/me/Downloads/ProfessionalStandarts_4.xml
+    authentication:
+      type: bearer
+      token: "{{ auth_token }}"
+      disabled: false
+      prefix: Bearer
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+    parentId: folder_ps_management 
+
+  - url: "{{ base_url }}/api/competencies/profstandards/save"
+    name: 3.2. Save ProfStandard (from Preview)
+    meta:
+      id: req_save_ps
+      created: 1747946780716
+      modified: 1747947100390
+      isPrivate: false
+      description: "Сохраняет спарсенные данные ПС в БД (передайте parsed_data из ответа 3.1)"
+      sortKey: 420
+    method: POST
+    body:
+      mimeType: application/json
+      text: >-
+        {
+            "parsed_data":  {
+        		"code": "06.001",
+        		"name": "Программист",
+        		"order_number": "424н",
+        		"order_date": "2022-07-20",
+        		"registration_number": "4",
+        		"registration_date": null,
+        		"activity_area_name": "Разработка компьютерного программного обеспечения",
+        		"activity_purpose": "Разработка, отладка, проверка работоспособности, модификация компьютерного программного обеспечения",
+        		"generalized_labor_functions": [
+        			{
+        				"code": "A",
+        				"name": "Разработка и отладка программного кода",
+        				"qualification_level": "3",
+        				"labor_functions": [
+        					{
+        						"code": "А/01.3",
+        						"name": "Формализация и алгоритмизация поставленных задач для разработки программного кода",
+        						"qualification_level": "3",
+        						"labor_actions": [
+        							{
+        								"description": "Составление формализованных описаний решений поставленных задач в соответствии с требованиями технического задания или внутренних документов организации",
+        								"order": 0
+        							},
+        							{
+        								"description": "Разработка алгоритмов решения поставленных задач в соответствии с требованиями технического задания или внутренних документов организации",
+        								"order": 1
+        							},
+        							{
+        								"description": "Проверка корректности алгоритмов решения поставленных задач",
+        								"order": 2
+        							},
+        							{
+        								"description": "Оценка и согласование сроков выполнения поставленных задач",
+        								"order": 3
+        							}
+        						],
+        						"required_skills": [
+        							{
+        								"description": "Использовать методы и приемы формализации поставленных задач",
+        								"order": 0
+        							},
+        							{
+        								"description": "Использовать методы и приемы алгоритмизации поставленных задач",
+        								"order": 1
+        							},
+        							{
+        								"description": "Использовать программное обеспечение для графического отображения алгоритмов",
+        								"order": 2
+        							},
+        							{
+        								"description": "Применять алгоритмы решения типовых задач в соответствующих областях",
+        								"order": 3
+        							},
+        							{
+        								"description": "Осуществлять коммуникации с заинтересованными сторонами",
+        								"order": 4
+        							}
+        						],
+        						"required_knowledge": [
+        							{
+        								"description": "Методы и приемы формализации поставленных задач",
+        								"order": 0
+        							},
+        							{
+        								"description": "Языки формализации функциональных спецификаций",
+        								"order": 1
+        							},
+        							{
+        								"description": "Методы и приемы алгоритмизации поставленных задач",
+        								"order": 2
+        							},
+        							{
+        								"description": "Нотации и программное обеспечение для графического отображения алгоритмов",
+        								"order": 3
+        							},
+        							{
+        								"description": "Алгоритмы решения типичных задач, области и способы их применения",
+        								"order": 4
+        							}
+        						]
+        					},
+        					{
+        						"code": "А/02.3",
+        						"name": "Написание программного кода с использованием языков программирования, определения и манипулирования данными в базах данных",
+        						"qualification_level": "3",
+        						"labor_actions": [
+        							{
+        								"description": "Создание программного кода в соответствии с техническим заданием (готовыми спецификациями)",
+        								"order": 0
+        							},
+        							{
+        								"description": "Оптимизация программного кода с использованием специализированных программных средств",
+        								"order": 1
+        							},
+        							{
+        								"description": "Оценка и согласование сроков выполнения поставленных задач",
+        								"order": 2
+        							}
+        						],
+        						"required_skills": [
+        							{
+        								"description": "Применять выбранные языки программирования для написания программного кода",
+        								"order": 0
+        							},
+        							{
+        								"description": "Использовать выбранную среду программирования и средства системы управления базами данных",
+        								"order": 1
+        							},
+        							{
+        								"description": "Использовать возможности имеющейся технической и/или программной архитектуры для написания программного кода",
+        								"order": 2
+        							},
+        							{
+        								"description": "Осуществлять коммуникации с заинтересованными сторонами",
+        								"order": 3
+        							}
+        						],
+        						"required_knowledge": [
+        							{
+        								"description": "Синтаксис выбранного языка программирования, особенности программирования на этом языке, стандартные библиотеки языка программирования",
+        								"order": 0
+        							},
+        							{
+        								"description": "Методологии разработки компьютерного программного обеспечения",
+        								"order": 1
+        							},
+        							{
+        								"description": "Методологии и технологии проектирования и использования баз данных",
+        								"order": 2
+        							},
+        							{
+        								"description": "Технологии программирования",
+        								"order": 3
+        							},
+        							{
+        								"description": "Особенности выбранной среды программирования и системы управления базами данных",
+        								"order": 4
+        							},
+        							{
+        								"description": "Компоненты программно-технических архитектур, существующие приложения и интерфейсы взаимодействия с ними",
+        								"order": 5
+        							}
+        						]
+        					},
+        					{
+        						"code": "А/03.3",
+        						"name": "Оформление программного кода в соответствии с установленными требованиями",
+        						"qualification_level": "3",
+        						"labor_actions": [
+        							{
+        								"description": "Приведение наименований переменных, функций, классов, структур данных и файлов в соответствие с нормативно-техническими документами (стандартами и регламентами), определяющими требования к оформлению программного кода",
+        								"order": 0
+        							},
+        							{
+        								"description": "Структурирование исходного программного кода в соответствии с нормативно-техническими документами (стандартами и регламентами), определяющими требования к оформлению программного кода",
+        								"order": 1
+        							},
+        							{
+        								"description": "Комментирование и разметка программного кода в соответствии с нормативно-техническими документами (стандартами и регламентами), определяющими требования к оформлению программного кода",
+        								"order": 2
+        							},
+        							{
+        								"description": "Форматирование исходного программного кода в соответствии с нормативно-техническими документами (стандартами и регламентами), определяющими требования к оформлению программного кода",
+        								"order": 3
+        							},
+        							{
+        								"description": "Оформление технической документации на компьютерное программное обеспечение по заданному стандарту или шаблону",
+        								"order": 4
+        							}
+        						],
+        						"required_skills": [
+        							{
+        								"description": "Применять нормативно-технические документы (стандарты и регламенты), определяющие требования к оформлению программного кода",
+        								"order": 0
+        							},
+        							{
+        								"description": "Применять инструментарий для создания и актуализации исходных текстов программ",
+        								"order": 1
+        							},
+        							{
+        								"description": "Применять заданные стандарты и шаблоны для составления и оформления технической документации",
+        								"order": 2
+        							},
+        							{
+        								"description": "Осуществлять коммуникации с заинтересованными сторонами",
+        								"order": 3
+        							}
+        						],
+        						"required_knowledge": [
+        							{
+        								"description": "Инструментарий для создания и актуализации исходных текстов программ",
+        								"order": 0
+        							},
+        							{
+        								"description": "Методы повышения читаемости программного кода",
+        								"order": 1
+        							},
+        							{
+        								"description": "Системы кодировки символов, форматы хранения исходных текстов программ",
+        								"order": 2
+        							},
+        							{
+        								"description": "Нормативно-технические документы (стандарты и регламенты), определяющие требования к оформлению программного кода",
+        								"order": 3
+        							},
+        							{
+        								"description": "Основные стандарты оформления технической документации на компьютерное программное обеспечение",
+        								"order": 4
+        							}
+        						]
+        					},
+        					{
+        						"code": "А/04.3",
+        						"name": "Работа с системой управления версиями программного кода",
+        						"qualification_level": "3",
+        						"labor_actions": [
+        							{
+        								"description": "Регистрация изменений исходного текста программного кода в системе управления версиями",
+        								"order": 0
+        							},
+        							{
+        								"description": "Слияние, разделение и сравнение исходных текстов программного кода",
+        								"order": 1
+        							},
+        							{
+        								"description": "Сохранение сделанных изменений программного кода в соответствии с регламентом управления версиями",
+        								"order": 2
+        							}
+        						],
+        						"required_skills": [
+        							{
+        								"description": "Использовать выбранную систему управления версиями",
+        								"order": 0
+        							},
+        							{
+        								"description": "Использовать вспомогательные инструментальные программные средства для обработки исходного текста программного кода",
+        								"order": 1
+        							},
+        							{
+        								"description": "Выполнять действия, соответствующие установленному регламенту используемой системы управления версиями",
+        								"order": 2
+        							},
+        							{
+        								"description": "Осуществлять коммуникации с заинтересованными сторонами",
+        								"order": 3
+        							}
+        						],
+        						"required_knowledge": [
+        							{
+        								"description": "Возможности используемой системы управления версиями и вспомогательных инструментальных программных средств",
+        								"order": 0
+        							},
+        							{
+        								"description": "Установленный регламент использования системы управления версиями",
+        								"order": 1
+        							}
+        						]
+        					},
+        					{
+        						"code": "А/05.3",
+        						"name": "Проверка и отладка программного кода",
+        						"qualification_level": "3",
+        						"labor_actions": [
+        							{
+        								"description": "Анализ и проверка исходного программного кода",
+        								"order": 0
+        							},
+        							{
+        								"description": "Отладка программного кода на уровне программных модулей",
+        								"order": 1
+        							},
+        							{
+        								"description": "Отладка программного кода на уровне межмодульных взаимодействий и взаимодействий с окружением",
+        								"order": 2
+        							},
+        							{
+        								"description": "Оценка и согласование сроков выполнения поставленных задач",
+        								"order": 3
+        							}
+        						],
+        						"required_skills": [
+        							{
+        								"description": "Выявлять ошибки в программном коде",
+        								"order": 0
+        							},
+        							{
+        								"description": "Применять методы и приемы отладки программного кода",
+        								"order": 1
+        							},
+        							{
+        								"description": "Интерпретировать сообщения об ошибках, предупреждения, записи технологических журналов",
+        								"order": 2
+        							},
+        							{
+        								"description": "Применять современные компиляторы, отладчики и оптимизаторы программного кода",
+        								"order": 3
+        							},
+        							{
+        								"description": "Осуществлять коммуникации с заинтересованными сторонами",
+        								"order": 4
+        							}
+        						],
+        						"required_knowledge": [
+        							{
+        								"description": "Методы и приемы отладки программного кода",
+        								"order": 0
+        							},
+        							{
+        								"description": "Типы и форматы сообщений об ошибках, предупреждений",
+        								"order": 1
+        							},
+        							{
+        								"description": "Способы использования технологических журналов, форматы и типы записей журналов",
+        								"order": 2
+        							},
+        							{
+        								"description": "Современные компиляторы, отладчики и оптимизаторы программного кода",
+        								"order": 3
+        							},
+        							{
+        								"description": "Сообщения о состоянии аппаратных средств",
+        								"order": 4
+        							}
+        						]
+        					}
+        				]
+        			},
+        			{
+        				"code": "B",
+        				"name": "Проверка работоспособности и рефакторинг кода программного обеспечения",
+        				"qualification_level": "4",
+        				"labor_functions": [
+        					{
+        						"code": "B/01.4",
+        						"name": "Разработка процедур проверки работоспособности и измерения характеристик компьютерного программного обеспечения",
+        						"qualification_level": "4",
+        						"labor_actions": [
+        							{
+        								"description": "Разработка процедуры проверки работоспособности компьютерного программного обеспечения",
+        								"order": 0
+        							},
+        							{
+        								"description": "Разработка процедуры сбора диагностических данных проверки работоспособности компьютерного программного обеспечения",
+        								"order": 1
+        							},
+        							{
+        								"description": "Разработка процедуры измерения требуемых характеристик компьютерного программного обеспечения",
+        								"order": 2
+        							},
+        							{
+        								"description": "Оформление технической документации на компьютерное программное обеспечение по заданному стандарту или шаблону",
+        								"order": 3
+        							},
+        							{
+        								"description": "Оценка и согласование сроков выполнения поставленных задач",
+        								"order": 4
+        							}
+        						],
+        						"required_skills": [
+        							{
+        								"description": "Писать программный код процедур проверки работоспособности компьютерного программного обеспечения на выбранном языке программирования",
+        								"order": 0
+        							},
+        							{
+        								"description": "Использовать выбранную среду программирования для разработки процедур проверки работоспособности компьютерного программного обеспечения",
+        								"order": 1
+        							},
+        							{
+        								"description": "Применять заданные стандарты и шаблоны для составления и оформления технической документации",
+        								"order": 2
+        							},
+        							{
+        								"description": "Осуществлять коммуникации с заинтересованными сторонами",
+        								"order": 3
+        							}
+        						],
+        						"required_knowledge": [
+        							{
+        								"description": "Методы автоматической и автоматизированной проверки работоспособности компьютерного программного обеспечения",
+        								"order": 0
+        							},
+        							{
+        								"description": "Основные виды диагностических данных проверки работоспособности компьютерного программного обеспечения и способы их представления",
+        								"order": 1
+        							},
+        							{
+        								"description": "Языки, утилиты и среды программирования и средства пакетного выполнения процедур",
+        								"order": 2
+        							},
+        							{
+        								"description": "Типовые метрики компьютерного программного обеспечения",
+        								"order": 3
+        							},
+        							{
+        								"description": "Основные методы измерения и оценки характеристик компьютерного программного обеспечения",
+        								"order": 4
+        							},
+        							{
+        								"description": "Основные стандарты оформления технической документации на компьютерное программное обеспечение",
+        								"order": 5
+        							}
+        						]
+        					},
+        					{
+        						"code": "B/02.4",
+        						"name": "Разработка тестовых наборов данных для проверки работоспособности компьютерного программного обеспечения",
+        						"qualification_level": "4",
+        						"labor_actions": [
+        							{
+        								"description": "Подготовка тестовых наборов данных в соответствии с выбранной методикой тестирования компьютерного программного обеспечения",
+        								"order": 0
+        							},
+        							{
+        								"description": "Оценка и согласование сроков выполнения поставленных задач",
+        								"order": 1
+        							}
+        						],
+        						"required_skills": [
+        							{
+        								"description": "Разрабатывать и оформлять контрольные примеры для проверки работоспособности компьютерного программного обеспечения",
+        								"order": 0
+        							},
+        							{
+        								"description": "Разрабатывать процедуры генерации тестовых наборов данных с заданными характеристиками",
+        								"order": 1
+        							},
+        							{
+        								"description": "Подготавливать наборы данных, используемых в процессе проверки работоспособности компьютерного программного обеспечения",
+        								"order": 2
+        							},
+        							{
+        								"description": "Использовать командные средства разработки компьютерного программного обеспечения",
+        								"order": 3
+        							},
+        							{
+        								"description": "Осуществлять коммуникации с заинтересованными сторонами",
+        								"order": 4
+        							}
+        						],
+        						"required_knowledge": [
+        							{
+        								"description": "Методы создания и документирования контрольных примеров и тестовых наборов данных",
+        								"order": 0
+        							},
+        							{
+        								"description": "Правила, алгоритмы и технологии создания тестовых наборов данных",
+        								"order": 1
+        							},
+        							{
+        								"description": "Требования к структуре и форматам хранения тестовых наборов данных",
+        								"order": 2
+        							}
+        						]
+        					},
+        					{
+        						"code": "B/03.4",
+        						"name": "Проверка работоспособности компьютерного программного обеспечения",
+        						"qualification_level": "4",
+        						"labor_actions": [
+        							{
+        								"description": "Проверка работоспособности компьютерного программного обеспечения на основе разработанных тестовых наборов данных",
+        								"order": 0
+        							},
+        							{
+        								"description": "Оценка соответствия компьютерного программного обеспечения требуемым характеристикам",
+        								"order": 1
+        							},
+        							{
+        								"description": "Сбор и анализ полученных результатов проверки работоспособности компьютерного программного обеспечения",
+        								"order": 2
+        							},
+        							{
+        								"description": "Оценка и согласование сроков выполнения поставленных задач",
+        								"order": 3
+        							}
+        						],
+        						"required_skills": [
+        							{
+        								"description": "Применять методы и средства проверки работоспособности компьютерного программного обеспечения",
+        								"order": 0
+        							},
+        							{
+        								"description": "Интерпретировать диагностические данные проверки работоспособности компьютерного программного обеспечения",
+        								"order": 1
+        							},
+        							{
+        								"description": "Анализировать значения полученных характеристик компьютерного программного обеспечения",
+        								"order": 2
+        							},
+        							{
+        								"description": "Документировать результаты проверки работоспособности компьютерного программного обеспечения",
+        								"order": 3
+        							},
+        							{
+        								"description": "Осуществлять коммуникации с заинтересованными сторонами",
+        								"order": 4
+        							}
+        						],
+        						"required_knowledge": [
+        							{
+        								"description": "Методы и средства проверки работоспособности компьютерного программного обеспечения",
+        								"order": 0
+        							},
+        							{
+        								"description": "Среды проверки работоспособности и отладки компьютерного программного обеспечения",
+        								"order": 1
+        							},
+        							{
+        								"description": "Государственные стандарты испытания автоматизированных систем",
+        								"order": 2
+        							},
+        							{
+        								"description": "Руководящие документы по стандартизации требований к документам автоматизированных систем",
+        								"order": 3
+        							}
+        						]
+        					},
+        					{
+        						"code": "B/04.4",
+        						"name": "Рефакторинг, оптимизация и инспекция программного кода",
+        						"qualification_level": "4",
+        						"labor_actions": [
+        							{
+        								"description": "Анализ программного кода на соответствие требованиям по читаемости и производительности",
+        								"order": 0
+        							},
+        							{
+        								"description": "Инспекция программного кода для поиска не обнаруженных на ранних стадиях разработки компьютерного программного обеспечения ошибок и критических мест",
+        								"order": 1
+        							},
+        							{
+        								"description": "Внесение изменений в программный код и проверка его работоспособности",
+        								"order": 2
+        							},
+        							{
+        								"description": "Оценка и согласование сроков выполнения поставленных задач",
+        								"order": 3
+        							}
+        						],
+        						"required_skills": [
+        							{
+        								"description": "Применять методы, средства рефакторинга, оптимизации и инспекции программного кода",
+        								"order": 0
+        							},
+        							{
+        								"description": "Применять инструментальные средства коллективной работы над программным кодом",
+        								"order": 1
+        							},
+        							{
+        								"description": "Публиковать результаты рефакторинга, оптимизации и инспекции в коллективной базе знаний",
+        								"order": 2
+        							},
+        							{
+        								"description": "Использовать систему управления версиями для регистрации произведенных изменений",
+        								"order": 3
+        							},
+        							{
+        								"description": "Осуществлять коммуникации с заинтересованными сторонами",
+        								"order": 4
+        							}
+        						],
+        						"required_knowledge": [
+        							{
+        								"description": "Методы и средства рефакторинга, оптимизации и инспекции программного кода",
+        								"order": 0
+        							},
+        							{
+        								"description": "Языки программирования и среды разработки",
+        								"order": 1
+        							},
+        							{
+        								"description": "Нормативно-технические документы (стандарты и регламенты), регламентирующие требования к программному коду, порядок отражения изменений в системе управления версиями, порядок отражения результатов рефакторинга, оптимизации и инспекции в коллективной базе знаний",
+        								"order": 2
+        							}
+        						]
+        					},
+        					{
+        						"code": "B/05.4",
+        						"name": "Исправление дефектов программного кода, зафиксированных в базе данных дефектов",
+        						"qualification_level": "4",
+        						"labor_actions": [
+        							{
+        								"description": "Воспроизведение дефектов программного кода, зафиксированных в базе данных дефектов",
+        								"order": 0
+        							},
+        							{
+        								"description": "Установление причин возникновения дефектов программного кода",
+        								"order": 1
+        							},
+        							{
+        								"description": "Внесение изменений в программный код для устранения выявленных дефектов",
+        								"order": 2
+        							},
+        							{
+        								"description": "Оценка и согласование сроков выполнения поставленных задач",
+        								"order": 3
+        							}
+        						],
+        						"required_skills": [
+        							{
+        								"description": "Применять методы и приемы отладки дефектного программного кода",
+        								"order": 0
+        							},
+        							{
+        								"description": "Интерпретировать сообщения, предупреждения, записи технологических журналов об ошибках, возникающих при выполнении дефектного кода",
+        								"order": 1
+        							},
+        							{
+        								"description": "Осуществлять коммуникации с заинтересованными сторонами",
+        								"order": 2
+        							}
+        						],
+        						"required_knowledge": [
+        							{
+        								"description": "Методы и приемы отладки программного кода",
+        								"order": 0
+        							},
+        							{
+        								"description": "Типичные ошибки, возникающие при разработке компьютерного программного обеспечения, методы их диагностики и исправления",
+        								"order": 1
+        							}
+        						]
+        					},
+        					{
+        						"code": "B/06.4",
+        						"name": "Осуществление сборки однородных программных модулей в программный проект",
+        						"qualification_level": "4",
+        						"labor_actions": [
+        							{
+        								"description": "Сборка однородных (одноязыковых) программных модулей в программный проект в средах разработки компьютерного программного обеспечения",
+        								"order": 0
+        							},
+        							{
+        								"description": "Проверка работоспособности собранного программного проекта",
+        								"order": 1
+        							},
+        							{
+        								"description": "Внесение изменений в процедуру сборки однородных (одноязыковых) программных модулей в программный проект",
+        								"order": 2
+        							},
+        							{
+        								"description": "Оценка и согласование сроков выполнения поставленных задач",
+        								"order": 3
+        							}
+        						],
+        						"required_skills": [
+        							{
+        								"description": "Выполнять процедуры сборки однородных (одноязыковых) программных модулей в программный проект в средах разработки компьютерного программного обеспечения",
+        								"order": 0
+        							},
+        							{
+        								"description": "Производить настройки параметров программного проекта и осуществлять запуск процедур сборки",
+        								"order": 1
+        							},
+        							{
+        								"description": "Проводить проверку работоспособности программного проекта",
+        								"order": 2
+        							},
+        							{
+        								"description": "Документировать произведенные действия, выявленные проблемы и способы их устранения",
+        								"order": 3
+        							},
+        							{
+        								"description": "Создавать резервные копии программного проекта и данных, выполнять восстановление, обеспечивать целостность программного проекта и данных",
+        								"order": 4
+        							},
+        							{
+        								"description": "Осуществлять коммуникации с заинтересованными сторонами",
+        								"order": 5
+        							}
+        						],
+        						"required_knowledge": [
+        							{
+        								"description": "Методы и средства сборки модулей в программный проект в средах разработки компьютерного программного обеспечения",
+        								"order": 0
+        							},
+        							{
+        								"description": "Возможности настройки программного проекта в средах разработки компьютерного программного обеспечения",
+        								"order": 1
+        							},
+        							{
+        								"description": "Интерфейсы взаимодействия внутренних модулей программного проекта",
+        								"order": 2
+        							},
+        							{
+        								"description": "Методы и средства проверки работоспособности программных проектов",
+        								"order": 3
+        							},
+        							{
+        								"description": "Языки, утилиты и среды программирования, средства пакетного выполнения процедур",
+        								"order": 4
+        							}
+        						]
+        					}
+        				]
+        			},
+        			{
+        				"code": "C",
+        				"name": "Интеграция программных модулей и компонентов и проверка работоспособности выпусков программного продукта",
+        				"qualification_level": "5",
+        				"labor_functions": [
+        					{
+        						"code": "С/01.5",
+        						"name": "Разработка процедур интеграции программных модулей",
+        						"qualification_level": "5",
+        						"labor_actions": [
+        							{
+        								"description": "Анализ и выявление проблем сопряжения неоднородных модулей и компонентов компьютерного программного обеспечения",
+        								"order": 0
+        							},
+        							{
+        								"description": "Разработка и документирование программных интерфейсов",
+        								"order": 1
+        							},
+        							{
+        								"description": "Разработка процедур сборки модулей и компонентов компьютерного программного обеспечения",
+        								"order": 2
+        							},
+        							{
+        								"description": "Разработка процедур развертывания и обновления компьютерного программного обеспечения",
+        								"order": 3
+        							},
+        							{
+        								"description": "Разработка процедур миграции и преобразования (конвертации) данных",
+        								"order": 4
+        							},
+        							{
+        								"description": "Оформление технической документации на компьютерное программное обеспечение по заданному стандарту или шаблону",
+        								"order": 5
+        							},
+        							{
+        								"description": "Оценка и согласование сроков выполнения поставленных задач",
+        								"order": 6
+        							}
+        						],
+        						"required_skills": [
+        							{
+        								"description": "Писать программный код процедур интеграции программных модулей",
+        								"order": 0
+        							},
+        							{
+        								"description": "Использовать выбранную среду программирования для разработки процедур интеграции программных модулей",
+        								"order": 1
+        							},
+        							{
+        								"description": "Применять методы и средства сборки модулей и компонентов компьютерного программного обеспечения, разработки процедур для развертывания компьютерного программного обеспечения, миграции и преобразования данных, создания программных интерфейсов",
+        								"order": 2
+        							},
+        							{
+        								"description": "Применять заданные стандарты и шаблоны для составления и оформления технической документации",
+        								"order": 3
+        							},
+        							{
+        								"description": "Осуществлять коммуникации с заинтересованными сторонами",
+        								"order": 4
+        							}
+        						],
+        						"required_knowledge": [
+        							{
+        								"description": "Методы и средства сборки модулей и компонентов компьютерного программного обеспечения",
+        								"order": 0
+        							},
+        							{
+        								"description": "Интерфейсы взаимодействия с внешней средой",
+        								"order": 1
+        							},
+        							{
+        								"description": "Интерфейсы взаимодействия внутренних модулей системы",
+        								"order": 2
+        							},
+        							{
+        								"description": "Методы и средства разработки процедур для развертывания компьютерного программного обеспечения",
+        								"order": 3
+        							},
+        							{
+        								"description": "Методы и средства миграции и преобразования данных",
+        								"order": 4
+        							},
+        							{
+        								"description": "Языки, утилиты и среды программирования, средства пакетного выполнения процедур",
+        								"order": 5
+        							},
+        							{
+        								"description": "Основные стандарты оформления технической документации на компьютерное программное обеспечение",
+        								"order": 6
+        							}
+        						]
+        					},
+        					{
+        						"code": "С/02.5",
+        						"name": "Осуществление интеграции программных модулей и компонентов и проверка работоспособности выпусков программного продукта",
+        						"qualification_level": "5",
+        						"labor_actions": [
+        							{
+        								"description": "Сборка программных модулей и компонентов в программный продукт",
+        								"order": 0
+        							},
+        							{
+        								"description": "Подключение программного продукта к компонентам внешней среды",
+        								"order": 1
+        							},
+        							{
+        								"description": "Проверка работоспособности выпусков программного продукта",
+        								"order": 2
+        							},
+        							{
+        								"description": "Внесение изменений в процедуры сборки модулей и компонентов компьютерного программного обеспечения, развертывания компьютерного программного обеспечения, миграции и преобразования данных",
+        								"order": 3
+        							},
+        							{
+        								"description": "Оценка и согласование сроков выполнения поставленных задач",
+        								"order": 4
+        							}
+        						],
+        						"required_skills": [
+        							{
+        								"description": "Выполнять процедуры сборки программных модулей и компонентов в программный продукт",
+        								"order": 0
+        							},
+        							{
+        								"description": "Производить настройки параметров программного продукта и осуществлять запуск процедур сборки",
+        								"order": 1
+        							},
+        							{
+        								"description": "Проводить проверку работоспособности программного продукта",
+        								"order": 2
+        							},
+        							{
+        								"description": "Документировать произведенные действия, выявленные проблемы и способы их устранения",
+        								"order": 3
+        							},
+        							{
+        								"description": "Использовать командные средства разработки компьютерного программного обеспечения",
+        								"order": 4
+        							},
+        							{
+        								"description": "Создавать резервные копии программ и данных, выполнять восстановление, обеспечивать целостность программного продукта и данных",
+        								"order": 5
+        							},
+        							{
+        								"description": "Осуществлять коммуникации с заинтересованными сторонами",
+        								"order": 6
+        							}
+        						],
+        						"required_knowledge": [
+        							{
+        								"description": "Методы и средства сборки и интеграции программных модулей и компонентов",
+        								"order": 0
+        							},
+        							{
+        								"description": "Интерфейсы взаимодействия программного продукта с внешней средой",
+        								"order": 1
+        							},
+        							{
+        								"description": "Интерфейсы взаимодействия внутренних модулей программного продукта",
+        								"order": 2
+        							},
+        							{
+        								"description": "Методы и средства проверки работоспособности выпусков программных продуктов",
+        								"order": 3
+        							},
+        							{
+        								"description": "Языки, утилиты и среды программирования, средства пакетного выполнения процедур",
+        								"order": 4
+        							}
+        						]
+        					}
+        				]
+        			},
+        			{
+        				"code": "D",
+        				"name": "Разработка требований и проектирование программного обеспечения",
+        				"qualification_level": "6",
+        				"labor_functions": [
+        					{
+        						"code": "D/01.6",
+        						"name": "Анализ возможностей реализации требований к компьютерному программному обеспечению",
+        						"qualification_level": "6",
+        						"labor_actions": [
+        							{
+        								"description": "Сбор, систематизация, выявление взаимосвязей и документирование требований к компьютерному программному обеспечению",
+        								"order": 0
+        							},
+        							{
+        								"description": "Оценка времени и трудоемкости реализации требований к компьютерному программному обеспечению",
+        								"order": 1
+        							},
+        							{
+        								"description": "Согласование требований к компьютерному программному обеспечению с заинтересованными сторонами",
+        								"order": 2
+        							},
+        							{
+        								"description": "Оценка и согласование сроков выполнения поставленных задач",
+        								"order": 3
+        							}
+        						],
+        						"required_skills": [
+        							{
+        								"description": "Проводить сбор и систематизацию требований к компьютерному программному обеспечению",
+        								"order": 0
+        							},
+        							{
+        								"description": "Выявлять взаимосвязи и документировать требования к компьютерному программному обеспечению",
+        								"order": 1
+        							},
+        							{
+        								"description": "Проводить анализ исполнения требований к компьютерному программному обеспечению",
+        								"order": 2
+        							},
+        							{
+        								"description": "Вырабатывать варианты реализации требований к компьютерному программному обеспечению",
+        								"order": 3
+        							},
+        							{
+        								"description": "Проводить оценку и обоснование рекомендуемых решений",
+        								"order": 4
+        							},
+        							{
+        								"description": "Осуществлять коммуникации с заинтересованными сторонами",
+        								"order": 5
+        							}
+        						],
+        						"required_knowledge": [
+        							{
+        								"description": "Возможности существующей программно-технической архитектуры",
+        								"order": 0
+        							},
+        							{
+        								"description": "Возможности современных и перспективных средств разработки программных продуктов, технических средств",
+        								"order": 1
+        							},
+        							{
+        								"description": "Методологии разработки компьютерного программного обеспечения и технологии программирования",
+        								"order": 2
+        							},
+        							{
+        								"description": "Методологии и технологии проектирования и использования баз данных",
+        								"order": 3
+        							}
+        						]
+        					},
+        					{
+        						"code": "D/02.6",
+        						"name": "Разработка технических спецификаций на программные компоненты и их взаимодействие",
+        						"qualification_level": "6",
+        						"labor_actions": [
+        							{
+        								"description": "Разработка и согласование с архитектором программного обеспечения технических спецификаций на программные компоненты и на их взаимодействие",
+        								"order": 0
+        							},
+        							{
+        								"description": "Распределение заданий между программистами в соответствии с техническими спецификациями",
+        								"order": 1
+        							},
+        							{
+        								"description": "Осуществление контроля выполнения заданий",
+        								"order": 2
+        							},
+        							{
+        								"description": "Осуществление обучения и наставничества",
+        								"order": 3
+        							},
+        							{
+        								"description": "Формирование и предоставление отчетности в соответствии с установленными регламентами",
+        								"order": 4
+        							},
+        							{
+        								"description": "Оценка и согласование сроков выполнения поставленных задач",
+        								"order": 5
+        							}
+        						],
+        						"required_skills": [
+        							{
+        								"description": "Выбирать средства реализации требований к компьютерному программному обеспечению",
+        								"order": 0
+        							},
+        							{
+        								"description": "Вырабатывать варианты реализации компьютерного программного обеспечения",
+        								"order": 1
+        							},
+        							{
+        								"description": "Проводить оценку и обоснование рекомендуемых решений",
+        								"order": 2
+        							},
+        							{
+        								"description": "Осуществлять коммуникации с заинтересованными сторонами",
+        								"order": 3
+        							}
+        						],
+        						"required_knowledge": [
+        							{
+        								"description": "Языки формализации функциональных спецификаций",
+        								"order": 0
+        							},
+        							{
+        								"description": "Методы и приемы формализации задач",
+        								"order": 1
+        							},
+        							{
+        								"description": "Методы и средства проектирования компьютерного программного обеспечения",
+        								"order": 2
+        							},
+        							{
+        								"description": "Методы и средства проектирования программных интерфейсов",
+        								"order": 3
+        							},
+        							{
+        								"description": "Методы и средства проектирования баз данных",
+        								"order": 4
+        							}
+        						]
+        					},
+        					{
+        						"code": "D/03.6",
+        						"name": "Проектирование компьютерного программного обеспечения",
+        						"qualification_level": "6",
+        						"labor_actions": [
+        							{
+        								"description": "Разработка, изменение архитектуры компьютерного программного обеспечения и ее согласование с системным аналитиком и архитектором программного обеспечения",
+        								"order": 0
+        							},
+        							{
+        								"description": "Проектирование структур данных",
+        								"order": 1
+        							},
+        							{
+        								"description": "Проектирование баз данных",
+        								"order": 2
+        							},
+        							{
+        								"description": "Проектирование программных интерфейсов",
+        								"order": 3
+        							},
+        							{
+        								"description": "Разработка технической документации на компьютерное программное обеспечение с использованием существующих стандартов",
+        								"order": 4
+        							},
+        							{
+        								"description": "Оценка и согласование сроков выполнения поставленных задач",
+        								"order": 5
+        							}
+        						],
+        						"required_skills": [
+        							{
+        								"description": "Использовать существующие типовые решения и шаблоны проектирования компьютерного программного обеспечения",
+        								"order": 0
+        							},
+        							{
+        								"description": "Применять методы и средства проектирования компьютерного программного обеспечения, структур данных, баз данных, программных интерфейсов",
+        								"order": 1
+        							},
+        							{
+        								"description": "Использовать командные средства разработки компьютерного программного обеспечения",
+        								"order": 2
+        							},
+        							{
+        								"description": "Применять существующие стандарты для разработки технической документации на компьютерное программное обеспечение",
+        								"order": 3
+        							},
+        							{
+        								"description": "Осуществлять коммуникации с заинтересованными сторонами",
+        								"order": 4
+        							}
+        						],
+        						"required_knowledge": [
+        							{
+        								"description": "Принципы построения и виды архитектуры компьютерного программного обеспечения",
+        								"order": 0
+        							},
+        							{
+        								"description": "Типовые решения, библиотеки программных модулей, шаблоны, классы объектов, используемые при разработке компьютерного программного обеспечения",
+        								"order": 1
+        							},
+        							{
+        								"description": "Нормативно-технические документы (стандарты), определяющие требования к технической документации на компьютерное программное обеспечение",
+        								"order": 2
+        							},
+        							{
+        								"description": "Методы и средства проектирования компьютерного программного обеспечения",
+        								"order": 3
+        							},
+        							{
+        								"description": "Методы и средства проектирования баз данных",
+        								"order": 4
+        							},
+        							{
+        								"description": "Методы и средства проектирования программных интерфейсов",
+        								"order": 5
+        							}
+        						]
+        					}
+        				]
+        			}
+        		]
+        	},
+            "filename": "ProfessionalStandarts_4.xml",
+            "options": {
+                "force_update": false
+            }
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
     authentication:
       type: bearer
       token: "{{ auth_token }}"
@@ -311,11 +1831,11 @@ environments:
   meta:
     id: env_99d30891da4bdcebc63947a8fc17f076de878684
     created: 1744366290179
-    modified: 1747078987573
+    modified: 1748208505419
     isPrivate: false
   data:
     base_url: http://127.0.0.1:5000
-    auth_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxMywibmFtZSI6Ilx1MDQyMlx1MDQzNVx1MDQ0MVx1MDQ0Mlx1MDQzZVx1MDQzMlx1MDQ0Ylx1MDQzOSBcdTA0MWNcdTA0MzVcdTA0NDJcdTA0M2VcdTA0MzRcdTA0MzhcdTA0NDFcdTA0NDIiLCJsb2dpbiI6InRlc3R1c2VyIiwicm9sZXMiOlt7ImlkIjoyLCJuYW1lIjoibWV0aG9kb2xvZ2lzdCJ9XSwiZGVwYXJ0bWVudF9pZCI6bnVsbCwiZmFjdWx0aWVzIjpbXSwiZXhwIjoxNzQ3MDgyNTc5LCJjYW5fZWRpdCI6W10sImFwcHJvdmVkX2xrIjp0cnVlfQ.DLo3_bCCdS6YuuubApGKZXQuP-m-XfzNzCq5eTD3H-Q
+    auth_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxMywibmFtZSI6Ilx1MDQyMlx1MDQzNVx1MDQ0MVx1MDQ0Mlx1MDQzZVx1MDQzMlx1MDQ0Ylx1MDQzOSBcdTA0MWNcdTA0MzVcdTA0NDJcdTA0M2VcdTA0MzRcdTA0MzhcdTA0NDFcdTA0NDIiLCJsb2dpbiI6InRlc3R1c2VyIiwicm9sZXMiOlt7ImlkIjoyLCJuYW1lIjoibWV0aG9kb2xvZ2lzdCJ9XSwiZGVwYXJ0bWVudF9pZCI6bnVsbCwiZmFjdWx0aWVzIjpbXSwiZXhwIjoxNzQ4MjEyMDk3LCJjYW5fZWRpdCI6W10sImFwcHJvdmVkX2xrIjp0cnVlfQ.Mm0zltr2ubjYVGQjvLwPnkh7bCpj9DTeDxSxW41S8ek
     test_program_id: "1"
     test_aup_id: B093011451
     test_competency_id: "201"

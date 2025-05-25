@@ -18,7 +18,7 @@ from .logic import (
     update_indicator as logic_update_indicator,
     delete_indicator as logic_delete_indicator,
     get_external_aups_list, get_external_aup_disciplines,
-    delete_prof_standard as logic_delete_profstandard, # <-- ИСПРАВЛЕНО ЗДЕСЬ
+    delete_prof_standard as logic_delete_profstandard, 
 )
 
 from auth.logic import login_required, approved_required, admin_only
@@ -91,9 +91,15 @@ def manage_matrix_link():
     indicator_id = data['indicator_id']
     is_creating = (request.method == 'POST')
 
-    result = update_matrix_link(
-        aup_data_id, indicator_id, create=is_creating
-    )
+    # ИСПРАВЛЕНО: update_matrix_link теперь управляет транзакцией внутри себя,
+    # если она не вызвана в контексте session.begin().
+    # Если db.session.begin() используется в вызывающей функции,
+    # то передавать db.session в update_matrix_link не нужно.
+    # Для единообразия и избежания NestedTransaction,
+    # лучше убрать with db.session.begin() из роутов, если logic уже справляется.
+    # Или, если logic НЕ справляется, то добавить with db.session.begin() вокруг вызова update_matrix_link
+    # Если db.session - это ScopedSession (как в Flask-SQLAlchemy), то begin() не нужен.
+    result = update_matrix_link(aup_data_id, indicator_id, create=is_creating)
 
     if result['success']:
         if is_creating:
@@ -154,8 +160,9 @@ def create_new_competency():
     """Create a new competency (typically ПК)."""
     data = request.get_json()
     try:
-        with db.session.begin(): 
-            competency = create_competency(data, db.session) 
+        # ИСПРАВЛЕНО: Убираем with db.session.begin() из роута, если логика уже использует session.
+        # Если db.session - это Flask-SQLAlchemy ScopedSession, она автоматически управляет транзакцией в контексте запроса.
+        competency = create_competency(data, db.session) # Передаем db.session
         
         if not competency:
             return jsonify({"error": "Не удалось создать компетенцию. Проверьте данные или возможно, она уже существует."}), 400
@@ -183,8 +190,8 @@ def update_competency_route(comp_id):
         abort(400, description="Отсутствуют данные для обновления")
 
     try:
-        with db.session.begin(): 
-            updated_comp_dict = logic_update_competency(comp_id, data, db.session)
+        # ИСПРАВЛЕНО: Убираем with db.session.begin() из роута
+        updated_comp_dict = logic_update_competency(comp_id, data, db.session)
 
         if updated_comp_dict is not None:
             return jsonify(updated_comp_dict), 200
@@ -208,8 +215,8 @@ def update_competency_route(comp_id):
 def delete_competency_route(comp_id):
     """Delete a competency by ID."""
     try:
-        with db.session.begin(): 
-            deleted = logic_delete_competency(comp_id, db.session) 
+        # ИСПРАВЛЕНО: Убираем with db.session.begin() из роута
+        deleted = logic_delete_competency(comp_id, db.session) 
 
         if deleted:
             return jsonify({"success": True, "message": "Компетенция успешно удалена"}), 200
@@ -260,8 +267,8 @@ def create_new_indicator():
     """Create a new indicator for an existing competency."""
     data = request.get_json()
     try:
-        with db.session.begin(): 
-            indicator = create_indicator(data, db.session)
+        # ИСПРАВЛЕНО: Убираем with db.session.begin() из роута
+        indicator = create_indicator(data, db.session)
         if not indicator:
             return jsonify({"error": "Не удалось создать индикатор. Проверьте данные или возможно, он уже существует/родительская компетенция не найдена."}), 400
         return jsonify(indicator.to_dict(rules=['-matrix_entries'], include_competency=True)), 201
@@ -287,8 +294,8 @@ def update_indicator_route(ind_id):
         abort(400, description="Отсутствуют данные для обновления")
 
     try:
-        with db.session.begin(): 
-            updated_ind = logic_update_indicator(ind_id, data, db.session) 
+        # ИСПРАВЛЕНО: Убираем with db.session.begin() из роута
+        updated_ind = logic_update_indicator(ind_id, data, db.session) 
 
         if updated_ind:
             return jsonify(updated_ind.to_dict(rules=['-matrix_entries'], include_competency=True)), 200
@@ -312,8 +319,8 @@ def update_indicator_route(ind_id):
 def delete_indicator_route(ind_id):
     """Delete an indicator by ID."""
     try:
-        with db.session.begin(): 
-            deleted = logic_delete_indicator(ind_id, db.session) 
+        # ИСПРАВЛЕНО: Убираем with db.session.begin() из роута
+        deleted = logic_delete_indicator(ind_id, db.session) 
 
         if deleted:
             return jsonify({"success": True, "message": "Индикатор успешно удалена"}), 200
@@ -393,8 +400,12 @@ def save_fgos():
         abort(400, description="Некорректные данные для сохранения (отсутствуют parsed_data, filename или metadata)")
 
     try:
-        with db.session.begin(): 
-            saved_fgos = save_fgos_data(parsed_data, filename, db.session, force_update=options.get('force_update', False))
+        # ИСПРАВЛЕНО: Убираем with db.session.begin() из роута
+        # Flask-SQLAlchemy (db.session) уже управляет транзакцией для запроса.
+        # Если здесь вызвать begin(), это создаст вложенную транзакцию,
+        # которая не будет коммититься корректно, т.к. внешняя сессия
+        # все еще "владеет" состоянием.
+        saved_fgos = save_fgos_data(parsed_data, filename, db.session, force_update=options.get('force_update', False))
         
         if saved_fgos is None:
              abort(500, description="Ошибка при сохранении данных ФГОС в базу данных.")
@@ -420,8 +431,8 @@ def save_fgos():
 def delete_fgos_route(fgos_id):
     """Delete a FGOS VO by ID."""
     try:
-        with db.session.begin(): 
-            deleted = delete_fgos(fgos_id, db.session) 
+        # ИСПРАВЛЕНО: Убираем with db.session.begin() из роута
+        deleted = delete_fgos(fgos_id, db.session) 
 
         if deleted:
             return jsonify({"success": True, "message": "ФГОС успешно удален"}), 200
@@ -501,8 +512,8 @@ def save_profstandard():
         abort(400, description="Некорректные данные для сохранения (отсутствуют parsed_data, filename или код ПС)")
 
     try:
-        with db.session.begin(): 
-            saved_ps = save_prof_standard_data(parsed_data, filename, db.session, force_update=options.get('force_update', False))
+        # ИСПРАВЛЕНО: Убираем with db.session.begin() из роута
+        saved_ps = save_prof_standard_data(parsed_data, filename, db.session, force_update=options.get('force_update', False))
         
         if saved_ps is None:
              abort(500, description="Ошибка при сохранении данных профессионального стандарта.")
@@ -562,8 +573,8 @@ def get_profstandard_details_route(ps_id):
 def delete_profstandard(ps_id):
     """Delete a Professional Standard by ID."""
     try:
-        with db.session.begin(): 
-            deleted = logic_delete_profstandard(ps_id, db.session) 
+        # ИСПРАВЛЕНО: Убираем with db.session.begin() из роута
+        deleted = logic_delete_profstandard(ps_id, db.session) 
 
         if deleted:
             return jsonify({"success": True, "message": "Профессиональный стандарт успешно удален"}), 200
