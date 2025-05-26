@@ -21,6 +21,7 @@ from .parsing_utils import parse_date_string
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 # Уровень DEBUG будет установлен в app.py или fgos_import.py при необходимости
 
 # --- Конфигурация Gemini API ---
@@ -28,7 +29,7 @@ GOOGLE_AI_API_KEY = os.getenv("GOOGLE_AI_API_KEY")
 if not GOOGLE_AI_API_KEY: # Для локальной отладки без .env
     GOOGLE_AI_API_KEY = "AIzaSyDA0NoIT1yhuJwUzmAPqXl_lUOJ4chnaQA" # ИСПРАВЛЕНО: Используем актуальный ключ для тестов, если не из .env
     
-GEMINI_MODEL_NAME = "gemini-1.5-flash-latest" # ИСПРАВЛЕНО: Использование актуальной модели
+GEMINI_MODEL_NAME = "gemini-2.0-flash-lite" # Не меняем модель, это актуальная и production-ready модель
 
 gemini_client = None
 if GOOGLE_AI_API_KEY and GOOGLE_GENAI_SDK_AVAILABLE and genai:
@@ -90,11 +91,16 @@ The JSON should be formatted as follows:
     "recommended_ps": [
         {{
             "code": "STRING",
-            "name": "STRING"
+            "name": "STRING",
+            "approval_date": "YYYY-MM-DD"
         }}
     ]
 }}
 ```
+
+- `code`: Extract the exact code (e.g., "26.001", "40.042").
+- `title`: Extract only the *short, clean name* of the Professional Standard, without legal citations, registration numbers, or dates. Just the core title, like "Специалист по производству".
+- `approval_date`: Extract the approval date of the *Professional Standard itself* if it is explicitly mentioned in the recommendation text for that specific PS. If not found, set to `null`. Format as "YYYY-MM-DD".
 
 Here is the FGOS VO document text to parse:
 
@@ -146,9 +152,8 @@ def parse_fgos_with_gemini(fgos_text: str) -> Dict[str, Any]:
         else:
             response_text = response.text.strip()
             
-        logger.debug(f"Received response from Gemini (first 500 chars):\n{response_text[:500]}...")
-        # Уменьшим объем полного лога, если он слишком большой
-        # logger.debug(f"Full Gemini response for debugging (potentially large):\n{response_text}")
+        # logger.debug(f"Received response from Gemini (first 500 chars):\n{response_text[:500]}...")
+        logger.debug(f"Full Gemini response for debugging (potentially large):\n{response_text}")
 
         json_match = re.search(r'```\s*json\s*(.*?)\s*```', response_text, re.DOTALL | re.IGNORECASE)
         if not json_match:
@@ -169,35 +174,40 @@ def parse_fgos_with_gemini(fgos_text: str) -> Dict[str, Any]:
                 logger.debug(f"Extracted JSON string that failed to parse: {json_str}") # Полный текст для отладки
                 raise ValueError(f"Extracted JSON string from markdown block was not valid JSON. Error: {json_err}")
 
-        # --- ИСПРАВЛЕНИЕ и ГАРАНТИЯ ПРЕОБРАЗОВАНИЯ ДАТЫ ---
-        if 'metadata' in parsed_data and isinstance(parsed_data['metadata'], dict) and \
-           'order_date' in parsed_data['metadata']:
-            order_date_value = parsed_data['metadata']['order_date']
+        # --- ГАРАНТИЯ ПРЕОБРАЗОВАНИЯ ДАТЫ для FGOS metadata.order_date ---
+        if 'metadata' in parsed_data and isinstance(parsed_data['metadata'], dict):
+            order_date_value = parsed_data['metadata'].get('order_date')
             if isinstance(order_date_value, str):
-                parsed_date_obj = parse_date_string(order_date_value) # Используем нашу утилиту
+                parsed_date_obj = parse_date_string(order_date_value)
                 if parsed_date_obj:
                     parsed_data['metadata']['order_date'] = parsed_date_obj
                     logger.info(f"Successfully parsed 'order_date' from string '{order_date_value}' to date object: {parsed_date_obj}")
                 else:
                     logger.error(f"Could not parse 'order_date' string '{order_date_value}' from Gemini output. Setting to None.")
                     parsed_data['metadata']['order_date'] = None
-            elif isinstance(order_date_value, datetime): # На случай если LLM вернет datetime
+            elif isinstance(order_date_value, datetime):
                 parsed_data['metadata']['order_date'] = order_date_value.date()
                 logger.info(f"Converted 'order_date' from datetime '{order_date_value}' to date object: {parsed_data['metadata']['order_date']}")
-            elif isinstance(order_date_value, datetime.date): # Уже в нужном формате
-                 logger.info(f"'order_date' is already a date object: {order_date_value}")
-                 pass # Уже datetime.date
-            elif order_date_value is None:
-                 logger.warning("FGOS metadata 'order_date' is null from Gemini output.")
-            else:
+            elif not isinstance(order_date_value, datetime.date) and order_date_value is not None:
                 logger.error(f"FGOS metadata 'order_date' has unexpected type: {type(order_date_value)}. Value: {order_date_value}. Setting to None.")
                 parsed_data['metadata']['order_date'] = None
-        elif 'metadata' in parsed_data and isinstance(parsed_data['metadata'], dict):
-             logger.warning("FGOS metadata 'order_date' key is missing. Setting to None.")
-             parsed_data['metadata']['order_date'] = None
-        else:
-             logger.error("FGOS 'metadata' key is missing or not a dict. Cannot process 'order_date'.")
-             if 'metadata' not in parsed_data: parsed_data['metadata'] = {} # Ensure metadata dict exists
+            
+            if 'recommended_ps' in parsed_data and isinstance(parsed_data['recommended_ps'], list):
+                for ps_item in parsed_data['recommended_ps']:
+                    if 'approval_date' in ps_item and isinstance(ps_item['approval_date'], str):
+                        approval_date_value = ps_item['approval_date']
+                        parsed_approval_date_obj = parse_date_string(approval_date_value)
+                        if parsed_approval_date_obj:
+                            ps_item['approval_date'] = parsed_approval_date_obj
+                            logger.info(f"Successfully parsed PS 'approval_date' from string '{approval_date_value}' to date object: {parsed_approval_date_obj}")
+                        else:
+                            logger.warning(f"Could not parse PS 'approval_date' string '{approval_date_value}'. Setting to None.")
+                            ps_item['approval_date'] = None
+                    elif 'approval_date' in ps_item and not isinstance(ps_item['approval_date'], (datetime.date, type(None))):
+                        logger.warning(f"PS 'approval_date' has unexpected type: {type(ps_item['approval_date'])}. Value: {ps_item['approval_date']}. Setting to None.")
+                        ps_item['approval_date'] = None
+        else: # If metadata is missing or not a dict
+             if 'metadata' not in parsed_data: parsed_data['metadata'] = {}
              parsed_data['metadata']['order_date'] = None
 
 

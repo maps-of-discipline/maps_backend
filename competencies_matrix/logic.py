@@ -610,8 +610,6 @@ def delete_indicator(ind_id: int, session: Session) -> bool:
 
 def parse_fgos_file(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     try:
-        # ИСПРАВЛЕНО: Вызываем функцию parse_fgos_pdf из fgos_parser,
-        # которая уже содержит логику вызова NLP-модуля.
         parsed_data = fgos_parser.parse_fgos_pdf(file_bytes, filename)
         if not parsed_data or not parsed_data.get('metadata'):
              logger.warning(f"Parsing failed or returned insufficient metadata for {filename}")
@@ -627,17 +625,15 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
     
     metadata = parsed_data.get('metadata', {})
     fgos_number = metadata.get('order_number')
-    fgos_date_str = metadata.get('order_date') # Получаем как есть - это может быть строка или объект date
+    fgos_date_str = metadata.get('order_date')
 
-    # --- ИСПРАВЛЕНО ЗДЕСЬ: Обеспечиваем, что fgos_date_obj всегда datetime.date ---
     fgos_date_obj = None
-    if isinstance(fgos_date_str, str): # Если это строка (как из JSON от фронтенда или LLM)
+    if isinstance(fgos_date_str, str):
         fgos_date_obj = parse_date_string(fgos_date_str)
-    elif isinstance(fgos_date_str, datetime.datetime): # Если это datetime.datetime (например, из CLI)
+    elif isinstance(fgos_date_str, datetime.datetime):
         fgos_date_obj = fgos_date_str.date()
-    elif isinstance(fgos_date_str, datetime.date): # Если это уже datetime.date (идеальный случай)
+    elif isinstance(fgos_date_str, datetime.date):
         fgos_date_obj = fgos_date_str
-    # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
 
     fgos_direction_code = metadata.get('direction_code')
     fgos_education_level = metadata.get('education_level')
@@ -648,22 +644,20 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
         logger.warning(f"FGOS generation was missing or empty for '{filename}'. Defaulting to '{fgos_generation}'.")
     fgos_direction_name = metadata.get('direction_name')
 
-    # Проверка, что дата успешно спарсена. Если нет, то это ошибка.
     if not fgos_date_obj:
         logger.error(f"FGOS date '{fgos_date_str}' from parsed data could not be converted to a datetime.date object. Cannot save.")
         raise ValueError(f"FGOS date '{fgos_date_str}' is not in expected date format (YYYY-MM-DD) or invalid after re-parsing.")
 
-    if not all((fgos_number, fgos_direction_code, fgos_education_level)): # fgos_date_obj уже проверен на тип
+    if not all((fgos_number, fgos_direction_code, fgos_education_level)):
         logger.error("Missing core metadata from parsed data for saving (number, direction_code, or education_level).")
         raise ValueError("Missing core FGOS metadata from parsed data for saving.")
 
     try:
-        # ИСПРАВЛЕНО: Запрос фильтрации по дате с использованием объекта datetime.date
         existing_fgos = session.query(FgosVo).filter(
             FgosVo.direction_code == fgos_direction_code,
             FgosVo.education_level == fgos_education_level,
             FgosVo.number == fgos_number,
-            FgosVo.date == fgos_date_obj # Используем datetime.date объект напрямую
+            FgosVo.date == fgos_date_obj
         ).first()
         
         fgos_vo = None 
@@ -672,13 +666,13 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
                 logger.info(f"Existing FGOS found ({existing_fgos.id}). Force update. Deleting old comps/links...")
                 session.query(Competency).filter_by(fgos_vo_id=existing_fgos.id).delete(synchronize_session='fetch')
                 session.query(FgosRecommendedPs).filter_by(fgos_vo_id=existing_fgos.id).delete(synchronize_session='fetch')
-                session.flush() # Flush to ensure deletions are processed before potential re-add
+                session.flush()
 
                 fgos_vo = existing_fgos
                 fgos_vo.direction_name = fgos_direction_name or 'Not specified'
                 fgos_vo.generation = fgos_generation
                 fgos_vo.file_path = filename
-                session.add(fgos_vo) # Mark existing object as dirty for update
+                session.add(fgos_vo)
                 session.flush()
             else:
                 logger.warning(f"FGOS with same key data already exists ({existing_fgos.id}). Skipping save.")
@@ -714,7 +708,6 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
             if not comp_type:
                 logger.warning(f"Skipping competency {comp_code}: Competency type {comp_prefix} not found (must be УК or ОПК)."); continue
             
-            # Проверяем уникальность по коду, типу и FGOS (если указан)
             existing_comp_for_fgos = session.query(Competency).filter_by(
                 code=comp_code, competency_type_id=comp_type.id, fgos_vo_id=fgos_vo.id
             ).first()
@@ -729,7 +722,7 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
                 category_name=comp_category_name
             )
             session.add(competency)
-            session.flush() # Flush to assign ID
+            session.flush()
             saved_competencies_count += 1
         
         logger.info(f"Saved {saved_competencies_count} competencies for FGOS {fgos_vo.id}.")
@@ -743,37 +736,57 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
              linked_ps_count = 0
              for ps_data in recommended_ps_list:
                 ps_code = ps_data.get('code')
-                ps_name = ps_data.get('name')
+                ps_title = ps_data.get('title') # ИСПРАВЛЕНО: Используем 'title' из NLP-ответа
+                ps_approval_date = ps_data.get('approval_date') # ИСПРАВЛЕНО: Используем 'approval_date' из NLP-ответа
+                
                 if not ps_code: continue
                 
                 prof_standard = ps_by_code.get(ps_code)
                 if prof_standard:
                     existing_link = session.query(FgosRecommendedPs).filter_by(fgos_vo_id=fgos_vo.id, prof_standard_id=prof_standard.id).first()
                     if not existing_link: 
-                        link = FgosRecommendedPs(fgos_vo_id=fgos_vo.id, prof_standard_id=prof_standard.id, is_mandatory=False, description=f"Рекомендован: {ps_name}" if ps_name else None)
+                        # ИСПРАВЛЕНО: Сохраняем чистое название и дату утверждения в description
+                        description_text = ""
+                        if ps_title: description_text += ps_title
+                        if ps_approval_date:
+                            if description_text: description_text += f" (от {ps_approval_date.strftime('%d.%m.%Y')})"
+                            else: description_text += f"От {ps_approval_date.strftime('%d.%m.%Y')}"
+
+                        link = FgosRecommendedPs(
+                            fgos_vo_id=fgos_vo.id,
+                            prof_standard_id=prof_standard.id,
+                            is_mandatory=False,
+                            description=description_text if description_text else None # Сохраняем сгенерированное описание
+                        )
                         session.add(link)
                         linked_ps_count += 1
                     else: 
-                        if existing_link.description != (f"Рекомендован: {ps_name}" if ps_name else None):
-                            existing_link.description = (f"Рекомендован: {ps_name}" if ps_name else None)
-                            session.add(existing_link) # Mark as dirty for update
-                        pass 
+                        # ИСПРАВЛЕНО: Обновляем description, если оно изменилось
+                        description_text = ""
+                        if ps_title: description_text += ps_title
+                        if ps_approval_date:
+                            if description_text: description_text += f" (от {ps_approval_date.strftime('%d.%m.%Y')})"
+                            else: description_text += f"От {ps_approval_date.strftime('%d.%m.%Y')}"
+                        
+                        if existing_link.description != (description_text if description_text else None):
+                            existing_link.description = (description_text if description_text else None)
+                            session.add(existing_link)
                 else:
-                    logger.warning(f"Recommended PS with code {ps_code} (name: {ps_name}) not found in DB. Skipping link.")
+                    logger.warning(f"Recommended PS with code {ps_code} (title: {ps_title}) not found in DB. Skipping link.")
              logger.info(f"Queued {linked_ps_count} new recommended PS links.")
         
         return fgos_vo
     except IntegrityError as e:
         logger.error(f"Integrity error for FGOS from '{filename}': {e}", exc_info=True)
-        session.rollback() # Ensure rollback on integrity error
+        session.rollback()
         raise e 
     except SQLAlchemyError as e:
         logger.error(f"Database error for FGOS from '{filename}': {e}", exc_info=True)
-        session.rollback() # Ensure rollback on database error
+        session.rollback()
         raise e
     except Exception as e:
         logger.error(f"Unexpected error saving FGOS: {e}", exc_info=True)
-        session.rollback() # Ensure rollback on any unexpected error
+        session.rollback()
         raise e
 
 def get_fgos_list() -> List[FgosVo]:
@@ -805,21 +818,20 @@ def get_fgos_details(fgos_id: int) -> Optional[Dict[str, Any]]:
                  elif comp.competency_type.code == 'ОПК': opk_competencies_data.append(comp_dict)
         details['uk_competencies'] = uk_competencies_data; details['opk_competencies'] = opk_competencies_data
         
-        # ИСПРАВЛЕНО: Теперь возвращаем список словарей {id, code, name, is_mandatory, description}
         recommended_ps_list = []
         if fgos.recommended_ps_assoc:
-            # Сортируем по коду профстандарта
             sorted_ps_assoc = sorted(
                 [assoc_item for assoc_item in fgos.recommended_ps_assoc if assoc_item.prof_standard],
                 key=lambda assoc_item: assoc_item.prof_standard.code
             )
             for assoc_item in sorted_ps_assoc:
+                # ИСПРАВЛЕНО: Возвращаем description, которое теперь содержит чистое название + дату
                 recommended_ps_list.append({
                     'id': assoc_item.prof_standard.id,
                     'code': assoc_item.prof_standard.code,
-                    'name': assoc_item.prof_standard.name,
+                    'name': assoc_item.prof_standard.name, # Это название из ProfStandard.name, которое может быть полным
+                    'short_description': assoc_item.description, # ИСПРАВЛЕНО: Добавляем новое поле для чистого названия + даты
                     'is_mandatory': assoc_item.is_mandatory,
-                    'description': assoc_item.description, # Добавляем описание из связи, если есть
                 })
         details['recommended_ps_list'] = recommended_ps_list
         return details
@@ -838,7 +850,6 @@ def delete_fgos(fgos_id: int, session: Session) -> bool:
 
 def handle_prof_standard_upload_parsing(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     """Handles the parsing of a PS file after upload. Calls the appropriate parser orchestrator."""
-    # ИСПРАВЛЕНО: Вызываем функцию parse_prof_standard из parsers.py
     return parsers.parse_prof_standard(file_bytes, filename)
 
 
