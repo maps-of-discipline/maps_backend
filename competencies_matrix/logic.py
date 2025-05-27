@@ -3,7 +3,7 @@ from typing import Dict, List, Any, Optional
 import datetime
 import traceback
 import logging
-import json # ИЗМЕНЕНИЕ: Добавляем импорт json
+import json
 
 from flask import current_app
 from sqlalchemy import create_engine, select, exists, and_, or_
@@ -654,15 +654,12 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
         logger.error("Missing core metadata from parsed data for saving (number, direction_code, or education_level).")
         raise ValueError("Missing core FGOS metadata from parsed data for saving.")
 
-    # ИЗМЕНЕНИЕ: Получаем сырые данные рекомендованных ПС для сохранения
     recommended_ps_raw_data = parsed_data.get('recommended_ps', [])
-    # Убедимся, что это список и все элементы - dict, иначе очистим
     if not isinstance(recommended_ps_raw_data, list) or \
        not all(isinstance(item, dict) for item in recommended_ps_raw_data):
         logger.warning("Parsed recommended_ps data is not a list of dictionaries. Skipping raw data storage.")
-        recommended_ps_raw_data = [] # Очищаем, чтобы не сохранять некорректные данные
+        recommended_ps_raw_data = []
     
-    # ИЗМЕНЕНИЕ: Преобразуем объекты date в строковый формат для сохранения в JSON
     clean_recommended_ps_for_json = []
     for ps_item in recommended_ps_raw_data:
         clean_item = ps_item.copy()
@@ -690,7 +687,6 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
                 fgos_vo.direction_name = fgos_direction_name or 'Not specified'
                 fgos_vo.generation = fgos_generation
                 fgos_vo.file_path = filename
-                # ИЗМЕНЕНИЕ: Обновляем поле recommended_ps_parsed_data
                 fgos_vo.recommended_ps_parsed_data = clean_recommended_ps_for_json
                 session.add(fgos_vo)
                 session.flush()
@@ -702,7 +698,6 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
                 number=fgos_number, date=fgos_date_obj, direction_code=fgos_direction_code,
                 direction_name=fgos_direction_name or 'Not specified', education_level=fgos_education_level,
                 generation=fgos_generation, file_path=filename,
-                # ИЗМЕНЕНИЕ: Сохраняем поле recommended_ps_parsed_data при создании
                 recommended_ps_parsed_data=clean_recommended_ps_for_json
             )
             session.add(fgos_vo)
@@ -749,34 +744,31 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
         
         logger.info(f"Saved {saved_competencies_count} competencies for FGOS {fgos_vo.id}.")
         
-        # ИЗМЕНЕНИЕ: Логика связывания с ProfStandard_id для FgosRecommendedPs
-        if len(recommended_ps_raw_data) > 0: # Используем raw_data
+        if len(recommended_ps_raw_data) > 0:
              ps_codes_to_find = [ps_data['code'] for ps_data in recommended_ps_raw_data if ps_data.get('code')]
              existing_prof_standards = session.query(ProfStandard).filter(ProfStandard.code.in_(ps_codes_to_find)).all()
              ps_by_code = {ps.code: ps for ps in existing_prof_standards}
              
              linked_ps_count = 0
-             for ps_data in recommended_ps_raw_data: # Итерируем по сырым данным
+             for ps_data in recommended_ps_raw_data:
                 ps_code = ps_data.get('code')
-                ps_name_from_doc = ps_data.get('name') # Название из документа
-                # ps_approval_date_from_doc = ps_data.get('approval_date') # Дата из документа (для информации, не для description)
+                ps_name_from_doc = ps_data.get('name')
                 
                 if not ps_code: continue
                 
                 prof_standard = ps_by_code.get(ps_code)
                 if prof_standard:
                     existing_link = session.query(FgosRecommendedPs).filter_by(fgos_vo_id=fgos_vo.id, prof_standard_id=prof_standard.id).first()
-                    if not existing_link: 
+                    if not existing_link:
                         link = FgosRecommendedPs(
                             fgos_vo_id=fgos_vo.id,
                             prof_standard_id=prof_standard.id,
-                            is_mandatory=False, # По умолчанию
-                            description=ps_name_from_doc # Сохраняем имя из документа
+                            is_mandatory=False,
+                            description=ps_name_from_doc
                         )
                         session.add(link)
                         linked_ps_count += 1
-                    else: 
-                        # Обновляем description, если оно изменилось
+                    else:
                         if existing_link.description != ps_name_from_doc:
                             existing_link.description = ps_name_from_doc
                             session.add(existing_link)
@@ -813,7 +805,6 @@ def get_fgos_details(fgos_id: int) -> Optional[Dict[str, Any]]:
         ).get(fgos_id)
         if not fgos: logger.warning(f"FGOS with id {fgos_id} not found."); return None
         
-        # Start with basic FgosVo data including recommended_ps_parsed_data
         details = fgos.to_dict(rules=['-competencies', '-recommended_ps_assoc', '-educational_programs'])
         
         # Process competencies (UK/OPK) - this part is correct
@@ -831,36 +822,31 @@ def get_fgos_details(fgos_id: int) -> Optional[Dict[str, Any]]:
                  elif comp.competency_type.code == 'ОПК': opk_competencies_data.append(comp_dict)
         details['uk_competencies'] = uk_competencies_data; details['opk_competencies'] = opk_competencies_data
         
-        # ИЗМЕНЕНИЕ: Формирование списка рекомендованных ПС для отображения, используем 'recommended_ps' как ключ
         recommended_ps_info_for_display = []
-        # This is the JSON data directly from the DB, already deserialized by SQLAlchemy
-        parsed_recommended_ps_from_doc = fgos.recommended_ps_parsed_data 
+        parsed_recommended_ps_from_doc = fgos.recommended_ps_parsed_data
         
         if parsed_recommended_ps_from_doc and isinstance(parsed_recommended_ps_from_doc, list):
-            # Map of loaded PS codes from `FgosRecommendedPs` association
-            loaded_ps_map = {assoc.prof_standard.code: assoc.prof_standard 
+            loaded_ps_map = {assoc.prof_standard.code: assoc.prof_standard
                              for assoc in fgos.recommended_ps_assoc if assoc.prof_standard}
-
+ 
             for ps_data_from_doc in parsed_recommended_ps_from_doc:
                 ps_code = ps_data_from_doc.get('code')
                 if not ps_code: continue
-
+ 
                 loaded_ps = loaded_ps_map.get(ps_code)
                 
                 item_to_add = {
-                    'id': loaded_ps.id if loaded_ps else None, # ID from our DB if loaded
+                    'id': loaded_ps.id if loaded_ps else None,
                     'code': ps_code,
-                    'name': ps_data_from_doc.get('name'), # Name directly from the parsed data (from document)
+                    'name': ps_data_from_doc.get('name'),
                     'is_loaded': bool(loaded_ps),
-                    'approval_date': ps_data_from_doc.get('approval_date') # Keep as ISO string (already converted in save_fgos_data)
+                    'approval_date': ps_data_from_doc.get('approval_date')
                 }
                 recommended_ps_info_for_display.append(item_to_add)
             
-            # Sort for consistent display
             recommended_ps_info_for_display.sort(key=lambda x: x['code'])
         
-        # ИЗМЕНЕНИЕ: Меняем ключ на 'recommended_ps' для консистентности с парсером
-        details['recommended_ps'] = recommended_ps_info_for_display 
+        details['recommended_ps'] = recommended_ps_info_for_display
         return details
     except SQLAlchemyError as e: logger.error(f"Database error fetching FGOS {fgos_id} details: {e}", exc_info=True); return None
     except Exception as e: logger.error(f"Unexpected error fetching FGOS {fgos_id} details: {e}", exc_info=True); return None
@@ -870,16 +856,12 @@ def delete_fgos(fgos_id: int, session: Session, delete_related_competencies: boo
          fgos_to_delete = session.query(FgosVo).get(fgos_id)
          if not fgos_to_delete: logger.warning(f"FGOS with id {fgos_id} not found for deletion."); return False 
          
-         # ИЗМЕНЕНИЕ: Условное удаление связанных компетенций (УК/ОПК) и их индикаторов
          if delete_related_competencies:
              logger.info(f"Attempting to delete related competencies for FGOS {fgos_id}.")
-             # SQLAlchemy's cascade="all, delete-orphan" on FgosVo.competencies 
-             # should handle deletion of related Competency and their Indicators (if Indicator.competency relationship also cascades).
-             # No explicit deletion loop needed here if model relationships are set up correctly.
              pass
 
          session.delete(fgos_to_delete)
-         return True 
+         return True
     except SQLAlchemyError as e: logger.error(f"Database error deleting FGOS {fgos_id}: {e}", exc_info=True); raise e 
     except Exception as e: logger.error(f"Unexpected error deleting FGOS {fgos_id}: {e}", exc_info=True); raise e 
 
@@ -907,16 +889,6 @@ def save_prof_standard_data(parsed_data: Dict[str, Any], filename: str, session:
         if existing_ps:
             if force_update:
                 session.query(GeneralizedLaborFunction).filter_by(prof_standard_id=existing_ps.id).delete(synchronize_session='fetch')
-                # Cascading deletes should handle LaborFunction, LaborAction, RequiredSkill, RequiredKnowledge
-                # if relationships are set with cascade="all, delete-orphan" from GLF to LF, and LF to its children.
-                # Explicit deletes below are more robust if cascades are not perfectly set or for clarity.
-                # lf_ids_to_delete = session.query(LaborFunction.id).filter(LaborFunction.generalized_labor_function_id.in_(
-                #     session.query(GeneralizedLaborFunction.id).filter_by(prof_standard_id=existing_ps.id)
-                # )).scalar_subquery()
-                # session.query(LaborAction).filter(LaborAction.labor_function_id.in_(lf_ids_to_delete)).delete(synchronize_session='fetch')
-                # session.query(RequiredSkill).filter(RequiredSkill.labor_function_id.in_(lf_ids_to_delete)).delete(synchronize_session='fetch')
-                # session.query(RequiredKnowledge).filter(RequiredKnowledge.labor_function_id.in_(lf_ids_to_delete)).delete(synchronize_session='fetch')
-                # session.query(LaborFunction).filter(LaborFunction.id.in_(lf_ids_to_delete)).delete(synchronize_session='fetch')
                 session.flush() 
 
                 existing_ps.name = ps_name; existing_ps.order_number = parsed_data.get('order_number')
@@ -975,39 +947,35 @@ def get_prof_standards_list() -> List[Dict[str, Any]]:
     Returns a list of dictionaries for direct JSON serialization.
     """
     try:
-        # ИЗМЕНЕНИЕ: Загружаем обратную связь с FgosRecommendedPs и FgosVo
         prof_standards = local_db.session.query(ProfStandard).options(
             selectinload(ProfStandard.fgos_assoc).selectinload(FgosRecommendedPs.fgos)
         ).order_by(ProfStandard.code).all()
-
+ 
         result = []
         for ps in prof_standards:
-            # Преобразуем объект ORM в словарь, исключая связи, которые будем формировать вручную
-            ps_dict = ps.to_dict(rules=['-fgos_assoc', '-generalized_labor_functions', '-educational_program_assoc']) 
+            ps_dict = ps.to_dict(rules=['-fgos_assoc', '-generalized_labor_functions', '-educational_program_assoc'])
             
-            # ИЗМЕНЕНИЕ: Добавляем список ФГОС, которые рекомендуют этот ПС
             recommended_by_fgos_list = []
-            if ps.fgos_assoc: # Проверяем, что связь загружена
+            if ps.fgos_assoc:
                 for assoc in ps.fgos_assoc:
-                    if assoc.fgos: # Проверяем, что связанный ФГОС существует
+                    if assoc.fgos:
                         recommended_by_fgos_list.append({
                             'id': assoc.fgos.id,
-                            'code': assoc.fgos.direction_code, # Код направления ФГОС
-                            'name': assoc.fgos.direction_name, # Название направления ФГОС
+                            'code': assoc.fgos.direction_code,
+                            'name': assoc.fgos.direction_name,
                             'generation': assoc.fgos.generation,
-                            'number': assoc.fgos.number, # Номер приказа ФГОС
-                            'date': assoc.fgos.date.isoformat() if assoc.fgos.date else None, # Дата приказа ФГОС (ISO-формат)
+                            'number': assoc.fgos.number,
+                            'date': assoc.fgos.date.isoformat() if assoc.fgos.date else None,
                         })
-            # Сортируем список рекомендующих ФГОС для консистентного вывода
             ps_dict['recommended_by_fgos'] = sorted(recommended_by_fgos_list, key=lambda x: (x['code'], x.get('date', '')))
             result.append(ps_dict)
-        return result # Возвращаем список словарей
-    except SQLAlchemyError as e: 
+        return result
+    except SQLAlchemyError as e:
         logger.error(f"Database error fetching ProfStandards list: {e}", exc_info=True)
-        return [] # Возвращаем пустой список при ошибке
-    except Exception as e: 
+        return []
+    except Exception as e:
         logger.error(f"Unexpected error fetching ProfStandards list: {e}", exc_info=True)
-        return [] # Возвращаем пустой список при ошибке
+        return []
 
 def get_prof_standard_details(ps_id: int) -> Optional[Dict[str, Any]]:
     try:

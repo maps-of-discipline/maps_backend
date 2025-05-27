@@ -90,12 +90,11 @@ def manage_matrix_link():
     aup_data_id = data['aup_data_id']
     indicator_id = data['indicator_id']
     is_creating = (request.method == 'POST')
-
-    # ИСПРАВЛЕНО: УБРАНО with db.session.begin()
+ 
     result = update_matrix_link(aup_data_id, indicator_id, create=is_creating)
-
+ 
     if result['success']:
-        db.session.commit() # ЯВНЫЙ КОММИТ, если логика не делает его сама
+        db.session.commit()
         if is_creating:
             status_code = 201 if result['status'] == 'created' else 200
             return jsonify({"status": result['status'], "message": result.get('message', "Операция выполнена")}), status_code
@@ -103,7 +102,7 @@ def manage_matrix_link():
             status_code = 200 if result['status'] == 'deleted' else 404
             return jsonify({"status": result['status'], "message": result.get('message', "Операция выполнена")}), status_code
     else:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ при ошибке
+        db.session.rollback()
         error_msg = result.get('message', "Не удалось выполнить операцию")
         status_code = 500
         if result.get('error_type') == 'indicator_not_found': status_code = 404
@@ -155,25 +154,24 @@ def create_new_competency():
     """Create a new competency (typically ПК)."""
     data = request.get_json()
     try:
-        # ИСПРАВЛЕНО: УБРАНО with db.session.begin()
-        competency = create_competency(data, db.session) # Передаем db.session
+        competency = create_competency(data, db.session)
         
         if not competency:
-            db.session.rollback() # ЯВНЫЙ ОТКАТ при неудаче в логике
+            db.session.rollback()
             return jsonify({"error": "Не удалось создать компетенцию. Проверьте данные или возможно, она уже существует."}), 400
         
-        db.session.commit() # ЯВНЫЙ КОММИТ
+        db.session.commit()
         return jsonify(competency.to_dict(rules=['-indicators'], include_type=True, include_educational_programs=True)), 201
     except ValueError as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ при ошибке валидации
+        db.session.rollback()
         logger.error(f"Validation error creating competency: {e}")
         return jsonify({"error": str(e)}), 400
     except IntegrityError as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ при ошибке целостности
+        db.session.rollback()
         logger.error(f"Integrity error creating competency: {e.orig}", exc_info=True)
         return jsonify({"error": "Компетенция с таким кодом уже существует для этого типа и ФГОС (если применимо)."}), 409
     except Exception as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ при неожиданной ошибке
+        db.session.rollback()
         logger.error(f"Unexpected error creating competency: {e}", exc_info=True)
         return jsonify({"error": f"Неожиданная ошибка сервера при создании компетенции: {e}"}), 500
 
@@ -189,25 +187,24 @@ def update_competency_route(comp_id):
         abort(400, description="Отсутствуют данные для обновления")
 
     try:
-        # ИСПРАВЛЕНО: УБРАНО with db.session.begin()
         updated_comp_dict = logic_update_competency(comp_id, data, db.session)
-
+ 
         if updated_comp_dict is not None:
-            db.session.commit() # ЯВНЫЙ КОММИТ
+            db.session.commit()
             return jsonify(updated_comp_dict), 200
         else:
-            db.session.rollback() # ЯВНЫЙ ОТКАТ
+            db.session.rollback()
             return jsonify({"error": "Компетенция не найдена"}), 404
     except ValueError as ve:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+        db.session.rollback()
         logger.warning(f"Update competency route: Validation error for competency {comp_id}: {ve}")
         return jsonify({"error": str(ve)}), 400
     except IntegrityError as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+        db.session.rollback()
         logger.error(f"Integrity error updating competency {comp_id}: {e.orig}", exc_info=True)
         return jsonify({"error": "Компетенция с таким кодом уже существует."}), 409
     except Exception as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+        db.session.rollback()
         logger.error(f"Error updating competency {comp_id} in route: {e}", exc_info=True)
         return jsonify({"error": f"Не удалось обновить компетенцию: {e}"}), 500
 
@@ -219,17 +216,16 @@ def update_competency_route(comp_id):
 def delete_competency_route(comp_id):
     """Delete a competency by ID."""
     try:
-        # ИСПРАВЛЕНО: УБРАНО with db.session.begin()
-        deleted = logic_delete_competency(comp_id, db.session) 
-
+        deleted = logic_delete_competency(comp_id, db.session)
+ 
         if deleted:
-            db.session.commit() # ЯВНЫЙ КОММИТ
+            db.session.commit()
             return jsonify({"success": True, "message": "Компетенция успешно удалена"}), 200
         else:
-            db.session.rollback() # ЯВНЫЙ ОТКАТ
+            db.session.rollback()
             return jsonify({"success": False, "error": "Компетенция не найдена"}), 404
     except Exception as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+        db.session.rollback()
         logger.error(f"Error deleting competency {comp_id}: {e}", exc_info=True)
         abort(500, description=f"Не удалось удалить компетенцию: {e}")
 
@@ -274,23 +270,22 @@ def create_new_indicator():
     """Create a new indicator for an existing competency."""
     data = request.get_json()
     try:
-        # ИСПРАВЛЕНО: УБРАНО with db.session.begin()
         indicator = create_indicator(data, db.session)
         if not indicator:
-            db.session.rollback() # ЯВНЫЙ ОТКАТ
+            db.session.rollback()
             return jsonify({"error": "Не удалось создать индикатор. Проверьте данные или возможно, он уже существует/родительская компетенция не найдена."}), 400
-        db.session.commit() # ЯВНЫЙ КОММИТ
+        db.session.commit()
         return jsonify(indicator.to_dict(rules=['-matrix_entries'], include_competency=True)), 201
     except ValueError as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+        db.session.rollback()
         logger.error(f"Validation error creating indicator: {e}")
         return jsonify({"error": str(e)}), 400
     except IntegrityError as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+        db.session.rollback()
         logger.error(f"Integrity error creating indicator: {e.orig}", exc_info=True)
         return jsonify({"error": "Индикатор с таким кодом уже существует для этой компетенции."}), 409
     except Exception as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+        db.session.rollback()
         logger.error(f"Unexpected error creating indicator: {e}", exc_info=True)
         return jsonify({"error": f"Неожиданная ошибка сервера при создании индикатора: {e}"}), 500
 
@@ -306,25 +301,24 @@ def update_indicator_route(ind_id):
         abort(400, description="Отсутствуют данные для обновления")
 
     try:
-        # ИСПРАВЛЕНО: УБРАНО with db.session.begin()
-        updated_ind = logic_update_indicator(ind_id, data, db.session) 
-
+        updated_ind = logic_update_indicator(ind_id, data, db.session)
+ 
         if updated_ind:
-            db.session.commit() # ЯВНЫЙ КОММИТ
+            db.session.commit()
             return jsonify(updated_ind.to_dict(rules=['-matrix_entries'], include_competency=True)), 200
         else:
-            db.session.rollback() # ЯВНЫЙ ОТКАТ
+            db.session.rollback()
             return jsonify({"error": "Индикатор не найден"}), 404
-    except ValueError as ve: 
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+    except ValueError as ve:
+        db.session.rollback()
         logger.warning(f"Update indicator route: Validation error for indicator {ind_id}: {ve}")
         return jsonify({"error": str(ve)}), 400
     except IntegrityError as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+        db.session.rollback()
         logger.error(f"Integrity error updating indicator {ind_id}: {e.orig}", exc_info=True)
         return jsonify({"error": "Индикатор с таким кодом уже существует для этой компетенции."}), 409
     except Exception as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+        db.session.rollback()
         logger.error(f"Error updating indicator {ind_id}: {e}", exc_info=True)
         return jsonify({"error": f"Не удалось обновить индикатор: {e}"}), 500
 
@@ -336,17 +330,16 @@ def update_indicator_route(ind_id):
 def delete_indicator_route(ind_id):
     """Delete an indicator by ID."""
     try:
-        # ИСПРАВЛЕНО: УБРАНО with db.session.begin()
-        deleted = logic_delete_indicator(ind_id, db.session) 
-
+        deleted = logic_delete_indicator(ind_id, db.session)
+ 
         if deleted:
-            db.session.commit() # ЯВНЫЙ КОММИТ
+            db.session.commit()
             return jsonify({"success": True, "message": "Индикатор успешно удалена"}), 200
         else:
-            db.session.rollback() # ЯВНЫЙ ОТКАТ
+            db.session.rollback()
             return jsonify({"success": False, "error": "Индикатор не найден"}), 404
     except Exception as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+        db.session.rollback()
         logger.error(f"Error deleting indicator {ind_id}: {e}", exc_info=True)
         abort(500, description=f"Не удалось удалить индикатор: {e}")
 
@@ -420,26 +413,25 @@ def save_fgos():
         abort(400, description="Некорректные данные для сохранения (отсутствуют parsed_data, filename или metadata)")
 
     try:
-        # ИСПРАВЛЕНО: УБРАНО with db.session.begin()
         saved_fgos = save_fgos_data(parsed_data, filename, db.session, force_update=options.get('force_update', False))
         
         if saved_fgos is None:
-             db.session.rollback() # ЯВНЫЙ ОТКАТ
+             db.session.rollback()
              abort(500, description="Ошибка при сохранении данных ФГОС в базу данных.")
         
-        db.session.commit() # ЯВНЫЙ КОММИТ
+        db.session.commit()
         return jsonify({
             "success": True,
             "fgos_id": saved_fgos.id,
             "message": "Данные ФГОС успешно сохранены."
         }), 201
-
+ 
     except IntegrityError as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+        db.session.rollback()
         logger.error(f"Integrity error saving FGOS: {e.orig}", exc_info=True)
         return jsonify({"error": "ФГОС с такими метаданными (направление, номер, дата) уже существует."}), 409
     except Exception as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+        db.session.rollback()
         logger.error(f"Error saving FGOS data from file {filename}: {e}", exc_info=True)
         abort(500, description=f"Неожиданная ошибка сервера при сохранении: {e}")
 
@@ -450,22 +442,19 @@ def save_fgos():
 @admin_only
 def delete_fgos_route(fgos_id):
     """Delete a FGOS VO by ID."""
-    # ИЗМЕНЕНИЕ: Получаем параметр delete_related_competencies из запроса
     delete_related_competencies = request.args.get('delete_related_competencies', 'false').lower() == 'true'
-
+ 
     try:
-        # ИСПРАВЛЕНО: УБРАНО with db.session.begin()
-        # ИЗМЕНЕНИЕ: Передаем флаг в логику
-        deleted = delete_fgos(fgos_id, db.session, delete_related_competencies=delete_related_competencies) 
-
+        deleted = delete_fgos(fgos_id, db.session, delete_related_competencies=delete_related_competencies)
+ 
         if deleted:
-            db.session.commit() # ЯВНЫЙ КОММИТ
+            db.session.commit()
             return jsonify({"success": True, "message": "ФГОС успешно удален"}), 200
         else:
-            db.session.rollback() # ЯВНЫЙ ОТКАТ
+            db.session.rollback()
             return jsonify({"success": False, "error": "ФГОС не найден"}), 404
     except Exception as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+        db.session.rollback()
         logger.error(f"Error deleting FGOS {fgos_id}: {e}", exc_info=True)
         abort(500, description=f"Не удалось удалить ФГОС: {e}")
 
@@ -506,17 +495,14 @@ def parse_profstandard_for_preview():
         if ps_code:
             existing_ps = db.session.query(ProfStandard).filter_by(code=ps_code).first()
             if existing_ps:
-                # ИСПРАВЛЕНО: Вызываем get_prof_standard_details, который возвращает полную структуру
                 existing_ps_record = get_prof_standard_details(existing_ps.id)
-                # Если get_prof_standard_details возвращает None (например, если ID невалиден),
-                # то existing_ps_record останется None.
         
         response_data = {
             "status": "success",
             "message": "Файл успешно распознан. Проверьте данные перед сохранением.",
             "parsed_data": parsed_data,
             "filename": file.filename,
-            "existing_ps_record": existing_ps_record # Теперь это полная структура, если найдено
+            "existing_ps_record": existing_ps_record
         }
         return jsonify(response_data), 200
 
@@ -539,14 +525,13 @@ def save_profstandard():
         abort(400, description="Некорректные данные для сохранения (отсутствуют parsed_data, filename или код ПС)")
 
     try:
-        # ИСПРАВЛЕНО: УБРАНО with db.session.begin()
         saved_ps = save_prof_standard_data(parsed_data, filename, db.session, force_update=options.get('force_update', False))
         
         if saved_ps is None:
-             db.session.rollback() # ЯВНЫЙ ОТКАТ
+             db.session.rollback()
              abort(500, description="Ошибка при сохранении данных профессионального стандарта.")
         
-        db.session.commit() # ЯВНЫЙ КОММИТ
+        db.session.commit()
         status_code = 201
         message = "Профессиональный стандарт успешно сохранен."
         
@@ -574,11 +559,8 @@ def save_profstandard():
 def get_all_profstandards():
     """Get list of all saved Professional Standards."""
     try:
-        # ИЗМЕНЕНИЕ: logic.get_prof_standards_list() теперь возвращает список словарей.
-        # Поэтому не нужно вызывать .to_dict() повторно.
         prof_standards = get_prof_standards_list()
-        # result = [ps.to_dict() for ps in prof_standards] # УДАЛИТЬ эту строку
-        return jsonify(prof_standards), 200 # Использовать напрямую prof_standards
+        return jsonify(prof_standards), 200
     except Exception as e:
         logger.error(f"Error in GET /profstandards: {e}", exc_info=True)
         return jsonify({"error": f"Не удалось получить список профстандартов: {e}"}), 500
@@ -606,17 +588,16 @@ def get_profstandard_details_route(ps_id):
 def delete_profstandard(ps_id):
     """Delete a Professional Standard by ID."""
     try:
-        # ИСПРАВЛЕНО: УБРАНО with db.session.begin()
-        deleted = logic_delete_profstandard(ps_id, db.session) 
-
+        deleted = logic_delete_profstandard(ps_id, db.session)
+ 
         if deleted:
-            db.session.commit() # ЯВНЫЙ КОММИТ
+            db.session.commit()
             return jsonify({"success": True, "message": "Профессиональный стандарт успешно удален"}), 200
         else:
-            db.session.rollback() # ЯВНЫЙ ОТКАТ
+            db.session.rollback()
             return jsonify({"success": False, "error": "Профессиональный стандарт не найден"}), 404
     except Exception as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+        db.session.rollback()
         logger.error(f"Error deleting professional standard {ps_id}: {e}", exc_info=True)
         abort(500, description=f"Не удалось удалить профессиональный стандарт: {e}")
 
