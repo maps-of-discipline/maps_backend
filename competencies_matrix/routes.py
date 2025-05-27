@@ -450,9 +450,13 @@ def save_fgos():
 @admin_only
 def delete_fgos_route(fgos_id):
     """Delete a FGOS VO by ID."""
+    # ИЗМЕНЕНИЕ: Получаем параметр delete_related_competencies из запроса
+    delete_related_competencies = request.args.get('delete_related_competencies', 'false').lower() == 'true'
+
     try:
         # ИСПРАВЛЕНО: УБРАНО with db.session.begin()
-        deleted = delete_fgos(fgos_id, db.session) 
+        # ИЗМЕНЕНИЕ: Передаем флаг в логику
+        deleted = delete_fgos(fgos_id, db.session, delete_related_competencies=delete_related_competencies) 
 
         if deleted:
             db.session.commit() # ЯВНЫЙ КОММИТ
@@ -570,9 +574,11 @@ def save_profstandard():
 def get_all_profstandards():
     """Get list of all saved Professional Standards."""
     try:
+        # ИЗМЕНЕНИЕ: logic.get_prof_standards_list() теперь возвращает список словарей.
+        # Поэтому не нужно вызывать .to_dict() повторно.
         prof_standards = get_prof_standards_list()
-        result = [ps.to_dict() for ps in prof_standards]
-        return jsonify(result), 200
+        # result = [ps.to_dict() for ps in prof_standards] # УДАЛИТЬ эту строку
+        return jsonify(prof_standards), 200 # Использовать напрямую prof_standards
     except Exception as e:
         logger.error(f"Error in GET /profstandards: {e}", exc_info=True)
         return jsonify({"error": f"Не удалось получить список профстандартов: {e}"}), 500

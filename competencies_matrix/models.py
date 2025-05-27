@@ -5,7 +5,7 @@ try:
     USERS_MODEL_AVAILABLE = True
 except ImportError:
     USERS_MODEL_AVAILABLE = False
-    class Users: 
+    class Users:
         id_user = None
         pass
 
@@ -14,6 +14,12 @@ from sqlalchemy.orm import relationship, backref
 from sqlalchemy import inspect
 from typing import List, Dict, Any, Optional
 import datetime
+
+from sqlalchemy.types import TypeEngine 
+try:
+    _ = db.JSON
+except AttributeError:
+    db.JSON = db.Column(TypeEngine) # Заглушка, если db.JSON не существует. В реальной БД использовать db.JSON из sqlalchemy.dialects.mysql или postgresql
 
 class BaseModel:
     """Base class for models with common functionality like ID, timestamps, and to_dict method."""
@@ -36,7 +42,7 @@ class BaseModel:
         """
         result = {}
         exclude_columns = set()
-        if rules: 
+        if rules:
             for exclusion_rule in rules:
                 if exclusion_rule.startswith('-'):
                     exclude_columns.add(exclusion_rule[1:])
@@ -49,6 +55,9 @@ class BaseModel:
             value = getattr(self, c.key)
             if isinstance(value, (datetime.date, datetime.datetime)):
                  result[c.key] = value.isoformat()
+            # ИЗМЕНЕНИЕ: Обработка db.JSON поля
+            elif isinstance(value, dict) or isinstance(value, list): # Если поле JSON
+                result[c.key] = value # Просто копируем как есть
             else:
                  result[c.key] = value
 
@@ -65,6 +74,9 @@ class FgosVo(db.Model, BaseModel):
     education_level = db.Column(db.String(50), nullable=False, comment='Уровень образования (бакалавриат/магистратура/аспирантура)')
     generation = db.Column(db.String(10), nullable=False, comment='Поколение ФГОС (3+, 3++)')
     file_path = db.Column(db.String(255), nullable=True, comment='Путь к PDF файлу')
+    # ИЗМЕНЕНИЕ: Новое поле для хранения сырых данных рекомендованных ПС из PDF
+    recommended_ps_parsed_data = db.Column(db.JSON, nullable=True, comment='JSON массив рекомендованных ПС из PDF ФГОС')
+
 
     educational_programs = relationship('EducationalProgram', back_populates='fgos')
     recommended_ps_assoc = relationship('FgosRecommendedPs', back_populates='fgos', cascade="all, delete-orphan")
@@ -74,7 +86,10 @@ class FgosVo(db.Model, BaseModel):
         return f"<ФГОС {self.direction_code} ({self.generation})>"
 
     def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None) -> Dict[str, Any]:
-        return super().to_dict(rules=rules, only=only)
+        data = super().to_dict(rules=rules, only=only)
+        # ИЗМЕНЕНИЕ: В to_dict для FGOS, если поле recommended_ps_parsed_data существует, 
+        # но не включено в rules, оно будет включено автоматически.
+        return data
 
 class EducationalProgram(db.Model, BaseModel):
     """Образовательная программа (направление подготовки)"""
@@ -488,5 +503,5 @@ def add_aupdata_relationships(mapper, class_):
             cascade="all, delete-orphan",
             lazy='dynamic'
         )
-    if hasattr(class_, 'indicators'):
-        delattr(class_, 'indicators')
+    if hasattr(class_, 'indicators'): # Это заглушка из предыдущих итераций, если она есть
+        delattr(class_, 'indicators') # Удаляем, чтобы избежать конфликтов
