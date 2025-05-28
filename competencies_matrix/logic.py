@@ -387,18 +387,54 @@ def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True)
 
 def get_all_competencies() -> List[Dict[str, Any]]:
     try:
-        competencies = local_db.session.query(Competency).options(joinedload(Competency.competency_type)).all()
+        # Eagerly load related models to avoid N+1 queries
+        competencies = local_db.session.query(Competency).options(
+            joinedload(Competency.competency_type),
+            joinedload(Competency.fgos), # For УК/ОПК source
+            joinedload(Competency.based_on_labor_function) # For ПК source
+                .joinedload(LaborFunction.generalized_labor_function)
+                .joinedload(GeneralizedLaborFunction.prof_standard)
+        ).all()
         result = []
         for comp in competencies:
-             comp_dict = comp.to_dict(rules=['-indicators', '-fgos', '-based_on_labor_function', '-matrix_entries', '-educational_programs_assoc']) 
-             comp_dict['type_code'] = comp.competency_type.code if comp.competency_type else "UNKNOWN"
-             if comp.based_on_labor_function:
-                 comp_dict['based_on_labor_function_id'] = comp.based_on_labor_function.id
-                 comp_dict['based_on_labor_function_code'] = comp.based_on_labor_function.code
-                 comp_dict['based_on_labor_function_name'] = comp.based_on_labor_function.name
-             result.append(comp_dict)
+            comp_dict = comp.to_dict(rules=['-indicators', '-fgos', '-based_on_labor_function', '-matrix_entries', '-educational_programs_assoc']) 
+            comp_dict['type_code'] = comp.competency_type.code if comp.competency_type else "UNKNOWN"
+            
+            # Add source document info based on type
+            comp_dict['source_document_id'] = None
+            comp_dict['source_document_code'] = None
+            comp_dict['source_document_name'] = None
+            comp_dict['source_document_type'] = None
+
+            if comp.competency_type and comp.competency_type.code in ['УК', 'ОПК']:
+                if comp.fgos:
+                    comp_dict['source_document_id'] = comp.fgos.id
+                    comp_dict['source_document_code'] = comp.fgos.direction_code
+                    comp_dict['source_document_name'] = comp.fgos.direction_name
+                    comp_dict['source_document_type'] = "ФГОС ВО"
+            elif comp.competency_type and comp.competency_type.code == 'ПК':
+                if comp.based_on_labor_function and \
+                   comp.based_on_labor_function.generalized_labor_function and \
+                   comp.based_on_labor_function.generalized_labor_function.prof_standard:
+                    ps = comp.based_on_labor_function.generalized_labor_function.prof_standard
+                    comp_dict['source_document_id'] = ps.id
+                    comp_dict['source_document_code'] = ps.code
+                    comp_dict['source_document_name'] = ps.name
+                    comp_dict['source_document_type'] = "Профстандарт"
+                else:
+                    # Manually created PK without direct PS link or link not found
+                    comp_dict['source_document_type'] = "Ручной ввод"
+                    comp_dict['source_document_code'] = "N/A" 
+                    comp_dict['source_document_name'] = "Введено вручную"
+
+            if comp.based_on_labor_function: # Still include this for form pre-fill
+                comp_dict['based_on_labor_function_id'] = comp.based_on_labor_function.id
+                comp_dict['based_on_labor_function_code'] = comp.based_on_labor_function.code
+                comp_dict['based_on_labor_function_name'] = comp.based_on_labor_function.name
+
+            result.append(comp_dict)
         return result
-    except Exception as e: logger.error(f"Error fetching all competencies: {e}", exc_info=True); raise
+    except Exception as e: logger.error(f"Error fetching all competencies with source info: {e}", exc_info=True); raise
 
 def get_competency_details(comp_id: int) -> Optional[Dict[str, Any]]:
     try:
@@ -838,7 +874,7 @@ def get_fgos_details(fgos_id: int) -> Optional[Dict[str, Any]]:
                 item_to_add = {
                     'id': loaded_ps.id if loaded_ps else None,
                     'code': ps_code,
-                    'name': ps_data_from_doc.get('name'),
+                    'name': loaded_ps.name if loaded_ps else ps_data_from_doc.get('name'), # Use loaded name if available, else parsed
                     'is_loaded': bool(loaded_ps),
                     'approval_date': ps_data_from_doc.get('approval_date')
                 }
@@ -943,32 +979,94 @@ def save_prof_standard_data(parsed_data: Dict[str, Any], filename: str, session:
 def get_prof_standards_list() -> List[Dict[str, Any]]:
     """
     Fetches list of all professional standards, including information about
-    which FGOS recommends them.
+    which FGOS recommends them. Merges actual loaded PS with placeholders from FGOS recommendations.
     Returns a list of dictionaries for direct JSON serialization.
     """
     try:
-        prof_standards = local_db.session.query(ProfStandard).options(
+        session = local_db.session
+        
+        # 1. Fetch all actually saved ProfStandards
+        saved_prof_standards_db = session.query(ProfStandard).options(
             selectinload(ProfStandard.fgos_assoc).selectinload(FgosRecommendedPs.fgos)
-        ).order_by(ProfStandard.code).all()
- 
-        result = []
-        for ps in prof_standards:
+        ).all()
+        
+        # Map saved PS by code for quick lookup
+        saved_ps_map = {ps.code: ps for ps in saved_prof_standards_db}
+        
+        # 2. Fetch all FGOS to get their recommended_ps_parsed_data
+        all_fgos = session.query(FgosVo).all()
+        
+        # Use a dictionary to combine all unique PS (actual + placeholders)
+        # Key: PS code
+        # Value: A dict representing the combined PS, similar to ProfStandardListItem
+        combined_ps_data: Dict[str, Dict[str, Any]] = {}
+
+        # Populate with saved PS first
+        for ps in saved_prof_standards_db:
             ps_dict = ps.to_dict(rules=['-fgos_assoc', '-generalized_labor_functions', '-educational_program_assoc'])
-            
-            recommended_by_fgos_list = []
+            ps_dict['is_loaded'] = True
+            ps_dict['recommended_by_fgos'] = [] # Will be populated next
+            combined_ps_data[ps.code] = ps_dict
+
+        # Populate `recommended_by_fgos` for loaded PS from `fgos_assoc`
+        for ps in saved_prof_standards_db:
             if ps.fgos_assoc:
                 for assoc in ps.fgos_assoc:
                     if assoc.fgos:
-                        recommended_by_fgos_list.append({
+                        fgos_info = {
                             'id': assoc.fgos.id,
                             'code': assoc.fgos.direction_code,
                             'name': assoc.fgos.direction_name,
                             'generation': assoc.fgos.generation,
                             'number': assoc.fgos.number,
                             'date': assoc.fgos.date.isoformat() if assoc.fgos.date else None,
-                        })
-            ps_dict['recommended_by_fgos'] = sorted(recommended_by_fgos_list, key=lambda x: (x['code'], x.get('date', '')))
-            result.append(ps_dict)
+                        }
+                        combined_ps_data[ps.code]['recommended_by_fgos'].append(fgos_info)
+            # Sort FGOS recommendations for consistent display
+            combined_ps_data[ps.code]['recommended_by_fgos'].sort(key=lambda x: (x['code'], x.get('date', '')))
+
+        # Add placeholders from FGOS recommended lists
+        for fgos in all_fgos:
+            parsed_recommended_ps = fgos.recommended_ps_parsed_data
+            if parsed_recommended_ps and isinstance(parsed_recommended_ps, list):
+                for ps_item_from_fgos in parsed_recommended_ps:
+                    ps_code = ps_item_from_fgos.get('code')
+                    if not ps_code: continue
+
+                    if ps_code not in combined_ps_data:
+                        # This is a placeholder PS
+                        combined_ps_data[ps_code] = {
+                            'id': None, # No ID if not loaded
+                            'code': ps_code,
+                            'name': ps_item_from_fgos.get('name'),
+                            'order_number': None, # Placeholders don't have this
+                            'order_date': ps_item_from_fgos.get('approval_date').isoformat() if isinstance(ps_item_from_fgos.get('approval_date'), datetime.date) else ps_item_from_fgos.get('approval_date'),
+                            'registration_number': None,
+                            'registration_date': None,
+                            'is_loaded': False, # Explicitly mark as placeholder
+                            'recommended_by_fgos': [] # Will populate below
+                        }
+                    # Add FGOS to recommended_by_fgos list for current PS (loaded or placeholder)
+                    fgos_info_for_ps = {
+                        'id': fgos.id,
+                        'code': fgos.direction_code,
+                        'name': fgos.direction_name,
+                        'generation': fgos.generation,
+                        'number': fgos.number,
+                        'date': fgos.date.isoformat() if fgos.date else None,
+                    }
+                    # Avoid duplicate entries if the same FGOS recommends the same PS multiple times
+                    # Check if fgos_info_for_ps (identified by id) is already in the recommended_by_fgos list for this PS code
+                    if not any(entry['id'] == fgos_info_for_ps['id'] for entry in combined_ps_data[ps_code]['recommended_by_fgos']):
+                        combined_ps_data[ps_code]['recommended_by_fgos'].append(fgos_info_for_ps)
+
+
+        # Final sorting of recommended_by_fgos within each PS
+        for ps_code in combined_ps_data:
+            combined_ps_data[ps_code]['recommended_by_fgos'].sort(key=lambda x: (x['code'], x.get('date', '')))
+
+        # Convert to list and sort by code
+        result = sorted(list(combined_ps_data.values()), key=lambda x: x['code'])
         return result
     except SQLAlchemyError as e:
         logger.error(f"Database error fetching ProfStandards list: {e}", exc_info=True)
