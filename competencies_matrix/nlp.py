@@ -6,43 +6,88 @@ import re
 from typing import Dict, List, Any, Optional
 from datetime import datetime # Убедимся, что datetime импортирован
 
+# --- ИМПОРТЫ КЛИЕНТОВ LLM ---
 try:
     from google import genai
-    from google.genai import types
+    from google.genai import types as gemini_types
     GOOGLE_GENAI_SDK_AVAILABLE = True
 except ImportError:
     logging.error("google-genai package not found. Please install it using 'pip install google-genai'.")
     genai = None
-    types = None
+    gemini_types = None
     GOOGLE_GENAI_SDK_AVAILABLE = False
 
-# Импортируем утилиту парсинга дат
-from .parsing_utils import parse_date_string
+try:
+    from openai import OpenAI, APIConnectionError, RateLimitError, APIStatusError
+    OPENAI_SDK_AVAILABLE = True
+except ImportError:
+    logging.warning("openai package not found. Please install it using 'pip install openai'. This is needed for local or Kluster.ai providers.")
+    OpenAI = None
+    APIConnectionError = None
+    RateLimitError = None
+    APIStatusError = None
+    OPENAI_SDK_AVAILABLE = False
 
+# Импортируем утилиту парсинга дат и конфигурацию
+from .parsing_utils import parse_date_string
+from config import (
+    LLM_PROVIDER,
+    GOOGLE_AI_API_KEY, GEMINI_MODEL_NAME, # Gemini
+    LOCAL_LLM_BASE_URL, LOCAL_LLM_API_KEY, LOCAL_LLM_MODEL_NAME, # Local OpenAI-like
+    KLUDESTER_AI_API_KEY, KLUDESTER_AI_BASE_URL, KLUDESTER_AI_MODEL_NAME # Kluster.ai
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-# Уровень DEBUG будет установлен в app.py или fgos_import.py при необходимости
 
-# --- Конфигурация Gemini API ---
-GOOGLE_AI_API_KEY = os.getenv("GOOGLE_AI_API_KEY")
-if not GOOGLE_AI_API_KEY: # Для локальной отладки без .env
-    GOOGLE_AI_API_KEY = "AIzaSyDA0NoIT1yhuJwUzmAPqXl_lUOJ4chnaQA" # ИСПРАВЛЕНО: Используем актуальный ключ для тестов, если не из .env
-    
-GEMINI_MODEL_NAME = "gemini-2.0-flash-lite" # Не меняем модель, это актуальная и production-ready модель
-
+# --- КЛИЕНТЫ LLM --- 
 gemini_client = None
-if GOOGLE_AI_API_KEY and GOOGLE_GENAI_SDK_AVAILABLE and genai:
-    try:
-        gemini_client = genai.Client(api_key=GOOGLE_AI_API_KEY)
-        logger.info(f"Google Gemini API client configured successfully.")
-    except Exception as e:
-        logger.error(f"Failed to configure Google Gemini API client: {e}")
-        gemini_client = None
-elif GOOGLE_GENAI_SDK_AVAILABLE and genai: 
-    logger.warning("GOOGLE_AI_API_KEY environment variable is not set. Gemini API will not be used for parsing.")
+openai_compatible_client = None # For local or Kluster.ai
+
+if LLM_PROVIDER == 'gemini':
+    if GOOGLE_AI_API_KEY and GOOGLE_GENAI_SDK_AVAILABLE and genai:
+        try:
+            gemini_client = genai.Client(api_key=GOOGLE_AI_API_KEY)
+            logger.info(f"Google Gemini API client configured successfully for model {GEMINI_MODEL_NAME}.")
+        except Exception as e:
+            logger.error(f"Failed to configure Google Gemini API client: {e}")
+            gemini_client = None
+    elif not GOOGLE_GENAI_SDK_AVAILABLE:
+        logger.error("Google GenAI SDK is not available, but LLM_PROVIDER is 'gemini'. Parsing will fail.")
+    elif not GOOGLE_AI_API_KEY:
+        logger.error("GOOGLE_AI_API_KEY is not set, but LLM_PROVIDER is 'gemini'. Parsing will fail.")
+
+elif LLM_PROVIDER == 'local':
+    if OPENAI_SDK_AVAILABLE and OpenAI:
+        try:
+            openai_compatible_client = OpenAI(
+                base_url=LOCAL_LLM_BASE_URL,
+                api_key=LOCAL_LLM_API_KEY if LOCAL_LLM_API_KEY else 'no-api-key' # Some local LLMs don't require a key
+            )
+            logger.info(f"Local OpenAI-compatible LLM client configured for model {LOCAL_LLM_MODEL_NAME} at {LOCAL_LLM_BASE_URL}.")
+        except Exception as e:
+            logger.error(f"Failed to configure Local LLM client: {e}")
+            openai_compatible_client = None
+    elif not OPENAI_SDK_AVAILABLE:
+        logger.error("OpenAI SDK is not available, but LLM_PROVIDER is 'local'. Parsing will fail.")
+
+elif LLM_PROVIDER == 'klusterai':
+    if OPENAI_SDK_AVAILABLE and OpenAI and KLUDESTER_AI_API_KEY:
+        try:
+            openai_compatible_client = OpenAI(
+                api_key=KLUDESTER_AI_API_KEY,
+                base_url=KLUDESTER_AI_BASE_URL
+            )
+            logger.info(f"Kluster.ai client configured successfully for model {KLUDESTER_AI_MODEL_NAME}.")
+        except Exception as e:
+            logger.error(f"Failed to configure Kluster.ai client: {e}")
+            openai_compatible_client = None
+    elif not OPENAI_SDK_AVAILABLE:
+        logger.error("OpenAI SDK is not available, but LLM_PROVIDER is 'klusterai'. Parsing will fail.")
+    elif not KLUDESTER_AI_API_KEY:
+        logger.error("KLUDESTER_AI_API_KEY is not set, but LLM_PROVIDER is 'klusterai'. Parsing will fail.")
 else:
-    logger.warning("Google GenAI SDK is not available. Gemini API will not be used for parsing.")
+    logger.error(f"Invalid LLM_PROVIDER: {LLM_PROVIDER}. Supported: 'gemini', 'local', 'klusterai'. No LLM client will be initialized.")
 
 
 def _create_fgos_prompt(fgos_text: str) -> str:
@@ -108,112 +153,145 @@ Here is the FGOS VO document text to parse:
 """
     return prompt
 
-def parse_fgos_with_gemini(fgos_text: str) -> Dict[str, Any]:
+def parse_fgos_with_llm(fgos_text: str) -> Dict[str, Any]:
     """
-    Использует Gemini API для парсинга текста ФГОС ВО и извлечения структурированных данных.
+    Использует выбранный LLM API для парсинга текста ФГОС ВО и извлечения структурированных данных.
     """
-    if not gemini_client:
-        if not GOOGLE_GENAI_SDK_AVAILABLE:
-            logger.error("Gemini SDK (google-genai) is not available.")
-            raise RuntimeError("Gemini SDK (google-genai) is not available. Cannot parse FGOS with NLP.")
-        elif not GOOGLE_AI_API_KEY:
-            logger.error("GOOGLE_AI_API_KEY environment variable is not set.")
-            raise RuntimeError("GOOGLE_AI_API_KEY environment variable is not set. Cannot parse FGOS with NLP.")
-        else:
-            logger.error("Gemini API client model was not initialized (likely due to configuration error).")
-            raise RuntimeError("Gemini API client model was not initialized. Cannot parse FGOS with NLP.")
+    prompt_content = _create_fgos_prompt(fgos_text)
+    response_text = None
+    parsed_data = {}
 
-    try:
-        prompt_content = _create_fgos_prompt(fgos_text)
-        
-        logger.debug(f"Sending prompt to Gemini (first 500 chars of prompt):\n{prompt_content[:500]}...")
-        
-        response = gemini_client.models.generate_content(
-            model=GEMINI_MODEL_NAME,
-            contents=[prompt_content],
-            config=types.GenerateContentConfig(
-                temperature=0.0,
-                max_output_tokens=8192 
-            )
-        )
-        
-        # ИСПРАВЛЕНО: Доступ к тексту ответа через response.text
-        if not hasattr(response, 'text') or not response.text:
-            logger.error("Gemini response is empty or does not contain any text.")
-            # Попытка извлечь из parts, если text пустой, но есть parts
-            if hasattr(response, 'parts') and response.parts:
-                logger.info("Trying to extract text from response.parts as response.text was empty.")
-                response_text = "".join(part.text for part in response.parts if hasattr(part, 'text'))
-                if not response_text:
-                    logger.error("response.parts also did not yield any text.")
-                    raise ValueError("Gemini response is empty (checked text and parts).")
+    logger.info(f"Attempting to parse FGOS using LLM provider: {LLM_PROVIDER}")
+
+    if LLM_PROVIDER == 'gemini':
+        if not gemini_client:
+            if not GOOGLE_GENAI_SDK_AVAILABLE:
+                raise RuntimeError("Gemini SDK (google-genai) is not available. Cannot parse FGOS with Gemini.")
+            elif not GOOGLE_AI_API_KEY:
+                raise RuntimeError("GOOGLE_AI_API_KEY environment variable is not set. Cannot parse FGOS with Gemini.")
             else:
-                raise ValueError("Gemini response is empty (no text attribute and no parts).")
-        else:
-            response_text = response.text.strip()
-            
-        # logger.debug(f"Received response from Gemini (first 500 chars):\n{response_text[:500]}...")
-        logger.debug(f"Full Gemini response for debugging (potentially large):\n{response_text}")
-
-        json_match = re.search(r'```\s*json\s*(.*?)\s*```', response_text, re.DOTALL | re.IGNORECASE)
-        if not json_match:
-            logger.warning("Gemini response did not contain a JSON markdown block. Attempting to parse response as raw JSON.")
-            try:
-                parsed_data = json.loads(response_text)
-                logger.info("Successfully parsed response_text as raw JSON.")
-            except json.JSONDecodeError as json_err:
-                logger.error(f"Failed to parse response_text as raw JSON: {json_err}")
-                logger.debug(f"Content that failed to parse: {response_text}") # Полный текст для отладки
-                raise ValueError(f"Gemini response was not valid JSON and did not contain a JSON markdown block. Error: {json_err}")
-        else:
-            json_str = json_match.group(1).strip()
-            try:
-                parsed_data = json.loads(json_str)
-            except json.JSONDecodeError as json_err:
-                logger.error(f"Failed to parse extracted JSON string from markdown block: {json_err}")
-                logger.debug(f"Extracted JSON string that failed to parse: {json_str}") # Полный текст для отладки
-                raise ValueError(f"Extracted JSON string from markdown block was not valid JSON. Error: {json_err}")
-
-        # --- ГАРАНТИЯ ПРЕОБРАЗОВАНИЯ ДАТЫ для FGOS metadata.order_date ---
-        if 'metadata' in parsed_data and isinstance(parsed_data['metadata'], dict):
-            order_date_value = parsed_data['metadata'].get('order_date')
-            if isinstance(order_date_value, str):
-                parsed_date_obj = parse_date_string(order_date_value)
-                if parsed_date_obj:
-                    parsed_data['metadata']['order_date'] = parsed_date_obj
-                    logger.info(f"Successfully parsed 'order_date' from string '{order_date_value}' to date object: {parsed_date_obj}")
+                raise RuntimeError("Gemini API client model was not initialized. Cannot parse FGOS with Gemini.")
+        try:
+            logger.debug(f"Sending prompt to Gemini (model: {GEMINI_MODEL_NAME}, first 500 chars of prompt):\n{prompt_content[:500]}...")
+            response = gemini_client.generate_content( # ИСПРАВЛЕНО: Прямой вызов generate_content
+                model=GEMINI_MODEL_NAME,
+                contents=[prompt_content],
+                generation_config=gemini_types.GenerationConfig( # ИСПРАВЛЕНО: Использование GenerationConfig
+                    temperature=0.0,
+                    max_output_tokens=8192
+                )
+            )
+            if not hasattr(response, 'text') or not response.text:
+                logger.error("Gemini response is empty or does not contain any text.")
+                if hasattr(response, 'parts') and response.parts:
+                    logger.info("Trying to extract text from response.parts as response.text was empty.")
+                    response_text = "".join(part.text for part in response.parts if hasattr(part, 'text'))
+                    if not response_text:
+                        logger.error("Failed to extract text from response.parts.")
+                        raise RuntimeError("Gemini response was empty and no text found in parts.")
                 else:
-                    logger.error(f"Could not parse 'order_date' string '{order_date_value}' from Gemini output. Setting to None.")
-                    parsed_data['metadata']['order_date'] = None
-            elif isinstance(order_date_value, datetime):
-                parsed_data['metadata']['order_date'] = order_date_value.date()
-                logger.info(f"Converted 'order_date' from datetime '{order_date_value}' to date object: {parsed_data['metadata']['order_date']}")
-            elif not isinstance(order_date_value, datetime.date) and order_date_value is not None:
-                logger.error(f"FGOS metadata 'order_date' has unexpected type: {type(order_date_value)}. Value: {order_date_value}. Setting to None.")
-                parsed_data['metadata']['order_date'] = None
-            
-            if 'recommended_ps' in parsed_data and isinstance(parsed_data['recommended_ps'], list):
-                for ps_item in parsed_data['recommended_ps']:
-                    if 'approval_date' in ps_item and isinstance(ps_item['approval_date'], str):
-                        approval_date_value = ps_item['approval_date']
-                        parsed_approval_date_obj = parse_date_string(approval_date_value)
-                        if parsed_approval_date_obj:
-                            ps_item['approval_date'] = parsed_approval_date_obj
-                            logger.info(f"Successfully parsed PS 'approval_date' from string '{approval_date_value}' to date object: {parsed_approval_date_obj}")
-                        else:
-                            logger.warning(f"Could not parse PS 'approval_date' string '{approval_date_value}'. Setting to None.")
-                            ps_item['approval_date'] = None
-                    elif 'approval_date' in ps_item and not isinstance(ps_item['approval_date'], (datetime.date, type(None))):
-                        logger.warning(f"PS 'approval_date' has unexpected type: {type(ps_item['approval_date'])}. Value: {ps_item['approval_date']}. Setting to None.")
+                    raise RuntimeError("Gemini response was empty.")
+            else:
+                response_text = response.text.strip()
+        except Exception as e:
+            logger.error(f"Error calling Gemini API: {e}", exc_info=True)
+            raise RuntimeError(f"Ошибка при вызове Gemini API: {e}")
+
+    elif LLM_PROVIDER in ['local', 'klusterai']:
+        if not openai_compatible_client:
+            if not OPENAI_SDK_AVAILABLE:
+                raise RuntimeError(f"OpenAI SDK is not available. Cannot parse FGOS with {LLM_PROVIDER}.")
+            else:
+                raise RuntimeError(f"{LLM_PROVIDER} client was not initialized. Cannot parse FGOS.")
+        
+        current_model_name = LOCAL_LLM_MODEL_NAME if LLM_PROVIDER == 'local' else KLUDESTER_AI_MODEL_NAME
+        logger.debug(f"Sending prompt to {LLM_PROVIDER} (model: {current_model_name}, first 500 chars of prompt):\n{prompt_content[:500]}...")
+        
+        try:
+            completion = openai_compatible_client.chat.completions.create(
+                model=current_model_name,
+                messages=[
+                    {"role": "system", "content": "You are an expert academic assistant. Your task is to parse the provided text of a FGOS VO PDF document and extract specific, structured data in JSON format. Strictly adhere to the specified JSON schema. DO NOT include any other text, explanations, or markdown outside of the JSON block. DO NOT include any conversational phrases. DO NOT omit any fields. If a field's value cannot be found, set it to null (for numbers/strings/dates) or [] (for lists), or false (for booleans). ENSURE all date formats are \"YYYY-MM-DD\". ENSURE all string values are properly escaped for JSON. ENSURE that the output is ONLY the JSON block wrapped in ```json ... ```."},
+                    {"role": "user", "content": prompt_content} # The prompt from _create_fgos_prompt already contains the document text
+                ],
+                temperature=0.0,
+                max_tokens=8000 # Adjust as needed, ensure it's high enough for full JSON
+            )
+            if completion.choices and completion.choices[0].message and completion.choices[0].message.content:
+                response_text = completion.choices[0].message.content.strip()
+            else:
+                logger.error(f"{LLM_PROVIDER} response is empty or malformed.")
+                raise RuntimeError(f"{LLM_PROVIDER} response was empty or malformed.")
+        except APIConnectionError as e:
+            logger.error(f"Connection error with {LLM_PROVIDER} API: {e}", exc_info=True)
+            raise RuntimeError(f"Ошибка подключения к {LLM_PROVIDER} API: {e}")
+        except RateLimitError as e:
+            logger.error(f"Rate limit exceeded for {LLM_PROVIDER} API: {e}", exc_info=True)
+            raise RuntimeError(f"Превышен лимит запросов к {LLM_PROVIDER} API: {e}")
+        except APIStatusError as e:
+            logger.error(f"Error from {LLM_PROVIDER} API (status {e.status_code}): {e.response}", exc_info=True)
+            raise RuntimeError(f"Ошибка от {LLM_PROVIDER} API (статус {e.status_code}): {e.message}")
+        except Exception as e:
+            logger.error(f"Error calling {LLM_PROVIDER} API: {e}", exc_info=True)
+            raise RuntimeError(f"Ошибка при вызове {LLM_PROVIDER} API: {e}")
+    else:
+        logger.error(f"LLM_PROVIDER '{LLM_PROVIDER}' is not supported or client not initialized.")
+        raise RuntimeError(f"LLM_PROVIDER '{LLM_PROVIDER}' is not supported or client not initialized.")
+
+    # --- ОБЩАЯ ОБРАБОТКА ОТВЕТА --- 
+    if not response_text:
+        logger.error("LLM response text is empty after API call.")
+        raise RuntimeError("Ответ от LLM API пуст.")
+
+    logger.debug(f"Full LLM response for debugging (provider: {LLM_PROVIDER}, potentially large):\n{response_text}")
+
+    json_match = re.search(r'```\s*json\s*(.*?)\s*```', response_text, re.DOTALL | re.IGNORECASE)
+    if not json_match:
+        logger.warning(f"LLM response (provider: {LLM_PROVIDER}) did not contain a JSON markdown block. Attempting to parse response as raw JSON.")
+        try:
+            parsed_data = json.loads(response_text)
+        except json.JSONDecodeError as json_err:
+            logger.error(f"Failed to parse raw JSON response from {LLM_PROVIDER}: {json_err}. Response text:\n{response_text}")
+            raise RuntimeError(f"Не удалось распознать JSON из ответа {LLM_PROVIDER} (даже без markdown блока): {json_err}")
+    else:
+        json_str = json_match.group(1).strip()
+        try:
+            parsed_data = json.loads(json_str)
+        except json.JSONDecodeError as json_err:
+            logger.error(f"Failed to parse JSON from markdown block (provider: {LLM_PROVIDER}): {json_err}. JSON string:\n{json_str}")
+            raise RuntimeError(f"Не удалось распознать JSON из markdown блока от {LLM_PROVIDER}: {json_err}")
+
+    # --- ГАРАНТИЯ ПРЕОБРАЗОВАНИЯ ДАТЫ для FGOS metadata.order_date ---
+    if 'metadata' in parsed_data and isinstance(parsed_data['metadata'], dict):
+        order_date_value = parsed_data['metadata'].get('order_date')
+        if isinstance(order_date_value, str):
+            parsed_data['metadata']['order_date'] = parse_date_string(order_date_value)
+        elif isinstance(order_date_value, datetime):
+            parsed_data['metadata']['order_date'] = order_date_value.date()
+        elif not isinstance(order_date_value, datetime.date) and order_date_value is not None:
+            logger.warning(f"metadata.order_date has an unexpected type: {type(order_date_value)}. Attempting to clear.")
+            parsed_data['metadata']['order_date'] = None
+        
+        # Гарантия преобразования дат для recommended_ps.approval_date
+        if 'recommended_ps' in parsed_data and isinstance(parsed_data['recommended_ps'], list):
+            for ps_item in parsed_data['recommended_ps']:
+                if isinstance(ps_item, dict) and 'approval_date' in ps_item:
+                    approval_date_value = ps_item.get('approval_date')
+                    if isinstance(approval_date_value, str):
+                        ps_item['approval_date'] = parse_date_string(approval_date_value)
+                    elif isinstance(approval_date_value, datetime):
+                        ps_item['approval_date'] = approval_date_value.date()
+                    elif not isinstance(approval_date_value, datetime.date) and approval_date_value is not None:
+                        logger.warning(f"recommended_ps.approval_date has an unexpected type: {type(approval_date_value)}. Setting to None.")
                         ps_item['approval_date'] = None
-        else: # If metadata is missing or not a dict
-             if 'metadata' not in parsed_data: parsed_data['metadata'] = {}
-             parsed_data['metadata']['order_date'] = None
+    else: # If metadata is missing or not a dict
+         if 'metadata' not in parsed_data:
+             logger.warning("'metadata' key missing in parsed_data. Initializing with None for order_date.")
+             parsed_data['metadata'] = {} # Initialize if completely missing
+         parsed_data['metadata']['order_date'] = None # Ensure order_date exists, even if None
 
+    logger.info(f"Successfully parsed FGOS text using {LLM_PROVIDER} API.")
+    return parsed_data
 
-        logger.info("Successfully parsed FGOS text using Gemini API.")
-        return parsed_data
-
-    except Exception as e:
-        logger.error(f"Error parsing FGOS with Gemini API: {e}", exc_info=True)
-        raise RuntimeError(f"Ошибка при парсинге ФГОС с помощью Gemini API: {e}")
+# Для обратной совместимости, если где-то еще используется старое имя функции
+parse_fgos_with_gemini = parse_fgos_with_llm

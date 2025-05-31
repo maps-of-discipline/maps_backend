@@ -43,6 +43,22 @@ URL_PREFIX_COMPETENCIES_MATRIX = '/api/competencies_matrix'
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
 
+# Настройки LLM Провайдеров
+LLM_PROVIDER = os.getenv('LLM_PROVIDER', 'gemini').lower() # 'gemini', 'local', 'klusterai'
+
+# Gemini Configuration (ensure GOOGLE_AI_API_KEY is in .env)
+GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL_NAME", "gemini-1.5-flash") # Or your preferred Gemini model
+
+# Local OpenAI-compatible LLM (e.g., LM Studio)
+LOCAL_LLM_BASE_URL = os.getenv("LOCAL_LLM_BASE_URL", "http://localhost:1234/v1")
+LOCAL_LLM_API_KEY = os.getenv("LOCAL_LLM_API_KEY") # Often not required for local, can be 'None' or any string
+LOCAL_LLM_MODEL_NAME = os.getenv("LOCAL_LLM_MODEL_NAME", "local-model") # Specify your local model identifier
+
+# Kluster.ai Configuration
+KLUDESTER_AI_API_KEY = os.getenv("KLUDESTER_AI_API_KEY")
+KLUDESTER_AI_BASE_URL = os.getenv("KLUDESTER_AI_BASE_URL", "https://api.kluster.ai/v1")
+KLUDESTER_AI_MODEL_NAME = os.getenv("KLUDESTER_AI_MODEL_NAME", "klusterai/Meta-Llama-3.1-8B-Instruct-Turbo")
+
 # Прочие настройки
 ACCESS_TOKEN_LIFETIME = 3600  # 1 hour in seconds
 REFRESH_TOKEN_LIFETIME = 7 * 24 * 3600  # 7 days in seconds
