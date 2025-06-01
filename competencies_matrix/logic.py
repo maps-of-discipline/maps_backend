@@ -4,6 +4,7 @@ import datetime
 import traceback
 import logging
 import json
+import re # Добавляем импорт для регулярных выражений
 
 from flask import current_app
 from sqlalchemy import create_engine, select, exists, and_, or_
@@ -45,6 +46,170 @@ def get_external_db_engine():
         try: _external_db_engine = create_engine(db_url)
         except Exception as e: logger.error(f"Failed to create external DB engine: {e}", exc_info=True); raise RuntimeError(f"Failed to create external DB engine: {e}")
     return _external_db_engine
+
+# --- НОВАЯ ФУНКЦИЯ: Подсветка текста ---
+def _highlight_text(text: str, query: str) -> str:
+    """
+    Highlights the search query in the text using <b> tags.
+    Case-insensitive. Handles multiple occurrences.
+    """
+    if not query or not text:
+        return text
+    
+    # Экранируем специальные символы для регекса, кроме пробелов
+    escaped_query = re.escape(query)
+    # Используем word boundaries (\b) для поиска целых слов, если это необходимо
+    # Или просто re.compile(query, re.IGNORECASE) для поиска подстроки
+    # Для нашей задачи (поиск "код", "база данных") лучше искать подстроку.
+    # Pattern to find the query, case-insensitive
+    pattern = re.compile(re.escape(query), re.IGNORECASE)
+    
+    # Replace all occurrences with <b> tags
+    highlighted_text = pattern.sub(lambda match: f"<b>{match.group(0)}</b>", text)
+    return highlighted_text
+
+# --- НОВАЯ ФУНКЦИЯ: Поиск по профстандартам с подсветкой ---
+def search_prof_standards(
+    search_query: str,
+    ps_ids: Optional[List[int]] = None,
+    offset: int = 0,
+    limit: int = 5
+) -> Dict[str, Any]:
+    """
+    Searches within professional standards (names, ОТФ, ТФ, ТД, НУ, НЗ) for the given query.
+    Returns a paginated list of PS details with matching elements highlighted.
+    Also includes flags to indicate if a section contains a match.
+    """
+    if not search_query or len(search_query) < 2:
+        raise ValueError("Поисковый запрос должен содержать минимум 2 символа.")
+
+    session: Session = local_db.session
+    query_lower = search_query.lower()
+
+    # Base query for ProfStandards, eagerly loading all nested structures
+    base_query = session.query(ProfStandard).options(
+        joinedload(ProfStandard.generalized_labor_functions)
+        .joinedload(GeneralizedLaborFunction.labor_functions)
+        .joinedload(LaborFunction.labor_actions),
+        joinedload(ProfStandard.generalized_labor_functions)
+        .joinedload(LaborFunction.required_skills),
+        joinedload(ProfStandard.generalized_labor_functions)
+        .joinedload(LaborFunction.required_knowledge)
+    )
+
+    # Filter by specific PS IDs if provided
+    if ps_ids:
+        base_query = base_query.filter(ProfStandard.id.in_(ps_ids))
+
+    all_matching_ps_details: List[Dict[str, Any]] = []
+
+    # Iterate through all relevant PS to find matches and apply highlighting
+    # This might be inefficient for very large number of PS. Consider full-text search engine (future task).
+    for ps in base_query.all():
+        ps_has_match = False
+        ps_details = ps.to_dict() # Start with a basic dict representation
+        ps_details['has_match'] = False # Overall PS match flag
+        ps_details['generalized_labor_functions'] = [] # Rebuild the structure
+
+        # Check PS metadata for match
+        if (ps.name and query_lower in ps.name.lower()) or \
+           (ps.code and query_lower in ps.code.lower()):
+            ps_has_match = True
+
+        highlighted_name = _highlight_text(ps.name, search_query)
+        ps_details['name'] = highlighted_name
+        ps_details['code'] = _highlight_text(ps.code, search_query)
+
+
+        # Process ОТФs
+        for otf in ps.generalized_labor_functions:
+            otf_has_match = False
+            otf_details = otf.to_dict()
+            otf_details['has_match'] = False # ОТФ match flag
+            otf_details['labor_functions'] = [] # Rebuild TF list
+
+            # Check ОТФ name for match
+            if otf.name and query_lower in otf.name.lower():
+                otf_has_match = True
+            
+            otf_details['name'] = _highlight_text(otf.name, search_query)
+            otf_details['code'] = _highlight_text(otf.code, search_query)
+
+
+            # Process ТФs
+            for tf in otf.labor_functions:
+                tf_has_match = False
+                tf_details = tf.to_dict()
+                tf_details['has_match'] = False # ТФ match flag
+                tf_details['labor_actions'] = []
+                tf_details['required_skills'] = []
+                tf_details['required_knowledge'] = []
+
+                # Check ТФ name for match
+                if tf.name and query_lower in tf.name.lower():
+                    tf_has_match = True
+                
+                tf_details['name'] = _highlight_text(tf.name, search_query)
+                tf_details['code'] = _highlight_text(tf.code, search_query)
+
+
+                # Process Трудовые Действия
+                for la in tf.labor_actions:
+                    la_details = la.to_dict()
+                    if la.description and query_lower in la.description.lower():
+                        la_details['description'] = _highlight_text(la.description, search_query)
+                        tf_has_match = True # Match in LA
+                        otf_has_match = True # Match in LA -> TF -> OTF
+                        ps_has_match = True # Match in LA -> TF -> OTF -> PS
+                    tf_details['labor_actions'].append(la_details)
+
+                # Process Необходимые Умения
+                for rs in tf.required_skills:
+                    rs_details = rs.to_dict()
+                    if rs.description and query_lower in rs.description.lower():
+                        rs_details['description'] = _highlight_text(rs.description, search_query)
+                        tf_has_match = True
+                        otf_has_match = True
+                        ps_has_match = True
+                    tf_details['required_skills'].append(rs_details)
+
+                # Process Необходимые Знания
+                for rk in tf.required_knowledge:
+                    rk_details = rk.to_dict()
+                    if rk.description and query_lower in rk.description.lower():
+                        rk_details['description'] = _highlight_text(rk.description, search_query)
+                        tf_has_match = True
+                        otf_has_match = True
+                        ps_has_match = True
+                    tf_details['required_knowledge'].append(rk_details)
+                
+                # Only add TF if it or its children match
+                if tf_has_match:
+                    tf_details['has_match'] = True
+                    otf_details['has_match'] = True # If any child TF matches, OTF has match
+                    ps_has_match = True # If any child TF matches, PS has match
+                    otf_details['labor_functions'].append(tf_details)
+
+            # Only add OTF if it or its children match
+            if otf_has_match:
+                otf_details['has_match'] = True
+                ps_details['has_match'] = True # If any child OTF matches, PS has match
+                ps_details['generalized_labor_functions'].append(otf_details)
+        
+        # Add PS to results if it or any of its children matched
+        if ps_has_match:
+            ps_details['has_match'] = True
+            all_matching_ps_details.append(ps_details)
+
+    # Apply pagination to the filtered and highlighted list
+    total_results = len(all_matching_ps_details)
+    paginated_results = all_matching_ps_details[offset : offset + limit]
+
+    logger.info(f"Found {total_results} matching PS for query '{search_query}'. Returning {len(paginated_results)} (offset {offset}, limit {limit}).")
+    return {
+        "total": total_results,
+        "items": paginated_results
+    }
 
 def get_educational_programs_list() -> List[EducationalProgram]:
     """Fetches list of all educational programs."""

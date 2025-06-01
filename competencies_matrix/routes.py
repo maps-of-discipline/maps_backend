@@ -18,7 +18,8 @@ from .logic import (
     update_indicator as logic_update_indicator,
     delete_indicator as logic_delete_indicator,
     get_external_aups_list, get_external_aup_disciplines,
-    delete_prof_standard as logic_delete_profstandard, 
+    delete_prof_standard as logic_delete_profstandard,
+    search_prof_standards as logic_search_prof_standards, # ИЗМЕНЕНИЕ: Добавлен импорт
 )
 
 from auth.logic import login_required, approved_required, admin_only
@@ -600,6 +601,47 @@ def delete_profstandard(ps_id):
         db.session.rollback()
         logger.error(f"Error deleting professional standard {ps_id}: {e}", exc_info=True)
         abort(500, description=f"Не удалось удалить профессиональный стандарт: {e}")
+
+# --- НОВЫЙ ЭНДПОИНТ: Поиск по Профстандартам ---
+@competencies_matrix_bp.route('/profstandards/search', methods=['GET'])
+@login_required
+@approved_required
+def search_profstandards_route():
+    """
+    Searches within professional standards for the given query.
+    Filters by specific PS IDs if provided.
+    Returns a paginated list of PS details with matching elements highlighted.
+    """
+    search_query = request.args.get('query', '').strip()
+    ps_ids_str = request.args.get('ps_ids') # comma-separated string of IDs
+    offset_str = request.args.get('offset', '0')
+    limit_str = request.args.get('limit', '5') # Default limit to 5 as per requirement
+
+    ps_ids = []
+    if ps_ids_str:
+        try:
+            ps_ids = [int(id_val) for id_val in ps_ids_str.split(',') if id_val.isdigit()]
+        except ValueError:
+            return jsonify({"error": "Неверный формат ps_ids. Ожидается список целых чисел через запятую."}), 400
+
+    try:
+        offset = int(offset_str)
+        limit = int(limit_str)
+    except ValueError:
+        return jsonify({"error": "Неверный формат offset или limit. Ожидаются целые числа."}), 400
+    
+    if len(search_query) < 2:
+        return jsonify({"error": "Поисковый запрос должен содержать минимум 2 символа."}), 400
+
+    try:
+        search_results = logic_search_prof_standards(search_query, ps_ids, offset, limit)
+        return jsonify(search_results), 200
+    except ValueError as e:
+        logger.warning(f"Search PS route: Validation error: {e}")
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error in GET /profstandards/search: {e}", exc_info=True)
+        return jsonify({"error": f"Не удалось выполнить поиск по профстандартам: {e}"}), 500
 
 
 # External KD DB Endpoints
