@@ -48,21 +48,21 @@ def get_external_db_engine():
     return _external_db_engine
 
 # --- НОВАЯ ФУНКЦИЯ: Подсветка текста ---
-def _highlight_text(text: str, query: str) -> str:
+def _highlight_text(text: Optional[str], query: str) -> str:
     """
     Highlights the search query in the text using <b> tags.
     Case-insensitive. Handles multiple occurrences.
     """
-    if not query or not text:
-        return text
+    if not text or not query or len(query) < 2:
+        return text if text is not None else ""
     
-    # Экранируем специальные символы для регекса, кроме пробелов
+    # Экранируем специальные символы для регекса
     escaped_query = re.escape(query)
-    # Используем word boundaries (\b) для поиска целых слов, если это необходимо
-    # Или просто re.compile(query, re.IGNORECASE) для поиска подстроки
-    # Для нашей задачи (поиск "код", "база данных") лучше искать подстроку.
+    
     # Pattern to find the query, case-insensitive
-    pattern = re.compile(re.escape(query), re.IGNORECASE)
+    # Use \b to match whole words if desired, but for CONTAINS/LIKE, sub-string matching is usually better.
+    # For "программный код" or "база данных", simple substring works.
+    pattern = re.compile(escaped_query, re.IGNORECASE)
     
     # Replace all occurrences with <b> tags
     highlighted_text = pattern.sub(lambda match: f"<b>{match.group(0)}</b>", text)
@@ -87,14 +87,18 @@ def search_prof_standards(
     query_lower = search_query.lower()
 
     # Base query for ProfStandards, eagerly loading all nested structures
+    # We must load all to perform in-memory search and highlighting.
+    # For very large datasets, a proper full-text search index (e.g., Lucene/Elasticsearch or DB's FTS) is needed.
     base_query = session.query(ProfStandard).options(
         joinedload(ProfStandard.generalized_labor_functions)
-        .joinedload(GeneralizedLaborFunction.labor_functions)
-        .joinedload(LaborFunction.labor_actions),
+            .joinedload(GeneralizedLaborFunction.labor_functions)
+            .joinedload(LaborFunction.labor_actions),
         joinedload(ProfStandard.generalized_labor_functions)
-        .joinedload(LaborFunction.required_skills),
+            .joinedload(GeneralizedLaborFunction.labor_functions)
+            .joinedload(LaborFunction.required_skills),
         joinedload(ProfStandard.generalized_labor_functions)
-        .joinedload(LaborFunction.required_knowledge)
+            .joinedload(GeneralizedLaborFunction.labor_functions)
+            .joinedload(LaborFunction.required_knowledge)
     )
 
     # Filter by specific PS IDs if provided
@@ -104,21 +108,29 @@ def search_prof_standards(
     all_matching_ps_details: List[Dict[str, Any]] = []
 
     # Iterate through all relevant PS to find matches and apply highlighting
-    # This might be inefficient for very large number of PS. Consider full-text search engine (future task).
     for ps in base_query.all():
         ps_has_match = False
         ps_details = ps.to_dict() # Start with a basic dict representation
         ps_details['has_match'] = False # Overall PS match flag
-        ps_details['generalized_labor_functions'] = [] # Rebuild the structure
+        ps_details['generalized_labor_functions'] = [] # Rebuild the structure with matched children
 
-        # Check PS metadata for match
-        if (ps.name and query_lower in ps.name.lower()) or \
-           (ps.code and query_lower in ps.code.lower()):
+        # Check PS metadata for match and apply highlighting
+        if (ps.name and query_lower in ps.name.lower()):
             ps_has_match = True
+        if (ps.code and query_lower in ps.code.lower()): # Check code as well
+             ps_has_match = True
 
-        highlighted_name = _highlight_text(ps.name, search_query)
-        ps_details['name'] = highlighted_name
+        ps_details['name'] = _highlight_text(ps.name, search_query)
         ps_details['code'] = _highlight_text(ps.code, search_query)
+        # Add other relevant metadata fields that might contain matches (if applicable, e.g., activity_area_name)
+        if ps_details.get('activity_area_name'):
+            if query_lower in ps_details['activity_area_name'].lower():
+                ps_has_match = True
+            ps_details['activity_area_name'] = _highlight_text(ps_details['activity_area_name'], search_query)
+        if ps_details.get('activity_purpose'):
+            if query_lower in ps_details['activity_purpose'].lower():
+                ps_has_match = True
+            ps_details['activity_purpose'] = _highlight_text(ps_details['activity_purpose'], search_query)
 
 
         # Process ОТФs
@@ -128,8 +140,9 @@ def search_prof_standards(
             otf_details['has_match'] = False # ОТФ match flag
             otf_details['labor_functions'] = [] # Rebuild TF list
 
-            # Check ОТФ name for match
-            if otf.name and query_lower in otf.name.lower():
+            # Check ОТФ name/code for match
+            if (otf.name and query_lower in otf.name.lower()) or \
+               (otf.code and query_lower in otf.code.lower()):
                 otf_has_match = True
             
             otf_details['name'] = _highlight_text(otf.name, search_query)
@@ -145,8 +158,9 @@ def search_prof_standards(
                 tf_details['required_skills'] = []
                 tf_details['required_knowledge'] = []
 
-                # Check ТФ name for match
-                if tf.name and query_lower in tf.name.lower():
+                # Check ТФ name/code for match
+                if (tf.name and query_lower in tf.name.lower()) or \
+                   (tf.code and query_lower in tf.code.lower()):
                     tf_has_match = True
                 
                 tf_details['name'] = _highlight_text(tf.name, search_query)
@@ -159,8 +173,6 @@ def search_prof_standards(
                     if la.description and query_lower in la.description.lower():
                         la_details['description'] = _highlight_text(la.description, search_query)
                         tf_has_match = True # Match in LA
-                        otf_has_match = True # Match in LA -> TF -> OTF
-                        ps_has_match = True # Match in LA -> TF -> OTF -> PS
                     tf_details['labor_actions'].append(la_details)
 
                 # Process Необходимые Умения
@@ -169,8 +181,6 @@ def search_prof_standards(
                     if rs.description and query_lower in rs.description.lower():
                         rs_details['description'] = _highlight_text(rs.description, search_query)
                         tf_has_match = True
-                        otf_has_match = True
-                        ps_has_match = True
                     tf_details['required_skills'].append(rs_details)
 
                 # Process Необходимые Знания
@@ -179,27 +189,29 @@ def search_prof_standards(
                     if rk.description and query_lower in rk.description.lower():
                         rk_details['description'] = _highlight_text(rk.description, search_query)
                         tf_has_match = True
-                        otf_has_match = True
-                        ps_has_match = True
                     tf_details['required_knowledge'].append(rk_details)
                 
-                # Only add TF if it or its children match
+                # Only add TF to OTF's list if it or its children match (for filtered display)
                 if tf_has_match:
                     tf_details['has_match'] = True
-                    otf_details['has_match'] = True # If any child TF matches, OTF has match
-                    ps_has_match = True # If any child TF matches, PS has match
+                    # Propagate match up the hierarchy
+                    otf_has_match = True
                     otf_details['labor_functions'].append(tf_details)
 
-            # Only add OTF if it or its children match
+            # Only add OTF to PS's list if it or its children match (for filtered display)
             if otf_has_match:
                 otf_details['has_match'] = True
-                ps_details['has_match'] = True # If any child OTF matches, PS has match
+                # Propagate match up the hierarchy
+                ps_has_match = True
                 ps_details['generalized_labor_functions'].append(otf_details)
         
         # Add PS to results if it or any of its children matched
         if ps_has_match:
             ps_details['has_match'] = True
             all_matching_ps_details.append(ps_details)
+
+    # Sort results by PS code (or any other relevant field)
+    all_matching_ps_details.sort(key=lambda x: x.get('code', ''))
 
     # Apply pagination to the filtered and highlighted list
     total_results = len(all_matching_ps_details)
@@ -434,7 +446,9 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
             uk_opk_ids_to_load = [tid.id for tid in [uk_type, opk_type] if tid]
             if uk_opk_ids_to_load:
                 uk_opk_competencies = session.query(Competency).options(
-                    selectinload(Competency.indicators), selectinload(Competency.competency_type)
+                    selectinload(Competency.indicators), 
+                    selectinload(Competency.competency_type),
+                    selectinload(Competency.fgos) # Загружаем FGOS для source_document_type
                 ).filter(Competency.fgos_vo_id == fgos_id_to_load, Competency.competency_type_id.in_(uk_opk_ids_to_load)).all()
                 relevant_competencies.extend(uk_opk_competencies)
             else: logger.warning(f"Competency types УК/ОПК not found in DB. Cannot load УК/ОПК for FGOS ID {fgos_id_to_load}.")
@@ -443,35 +457,25 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
 
         pk_type = comp_types.get('ПК')
         if pk_type:
-            if educational_program and educational_program.selected_ps_assoc:
-                logger.warning(f"MVP: Loading ALL PKs, not filtered by selected PS for the program.")
-                pk_competencies = session.query(Competency).options(
-                    selectinload(Competency.indicators), selectinload(Competency.competency_type),
-                    selectinload(Competency.educational_programs_assoc) 
-                ).filter(Competency.competency_type_id == pk_type.id).all() 
-                
-                filtered_pk_competencies = []
-                if educational_program: 
-                    for pk_comp in pk_competencies:
-                        if any(assoc.educational_program_id == educational_program.id for assoc in pk_comp.educational_programs_assoc):
-                            filtered_pk_competencies.append(pk_comp)
-                    relevant_competencies.extend(filtered_pk_competencies)
-                else: 
-                    relevant_competencies.extend(pk_competencies)
-            elif educational_program and not educational_program.selected_ps_assoc:
-                logger.warning(f"Educational Program ID {educational_program.id} has no selected PS links. Skipping PK loading (or loading all PKs).")
-                all_pk_competencies = session.query(Competency).options(
-                    selectinload(Competency.indicators), selectinload(Competency.competency_type),
-                    selectinload(Competency.educational_programs_assoc)
-                ).filter(Competency.competency_type_id == pk_type.id).all()
-                relevant_competencies.extend(all_pk_competencies)
+            # ИСПРАВЛЕНО: Загрузка ПК с их связями для определения source_document_type
+            pk_competencies = session.query(Competency).options(
+                selectinload(Competency.indicators), 
+                selectinload(Competency.competency_type),
+                selectinload(Competency.educational_programs_assoc), # Для фильтрации по ОП
+                selectinload(Competency.based_on_labor_function) # Для source_document_type
+                    .selectinload(LaborFunction.generalized_labor_function)
+                    .selectinload(GeneralizedLaborFunction.prof_standard) # Для source_document_type
+            ).filter(Competency.competency_type_id == pk_type.id).all() 
+            
+            filtered_pk_competencies = []
+            if educational_program: 
+                for pk_comp in pk_competencies:
+                    if any(assoc.educational_program_id == educational_program.id for assoc in pk_comp.educational_programs_assoc):
+                        filtered_pk_competencies.append(pk_comp)
+                relevant_competencies.extend(filtered_pk_competencies)
             else: 
-                logger.warning(f"No Educational Program linked to local AUP {aup_num} or no selected PS for program. Skipping PK loading (or loading all PKs).")
-                all_pk_competencies = session.query(Competency).options(
-                    selectinload(Competency.indicators), selectinload(Competency.competency_type),
-                    selectinload(Competency.educational_programs_assoc)
-                ).filter(Competency.competency_type_id == pk_type.id).all()
-                relevant_competencies.extend(all_pk_competencies)
+                # Если ОП не найдена или не привязана, но ПК есть, то все равно отображаем все ПК (как это было в MVP)
+                relevant_competencies.extend(pk_competencies)
         else: logger.warning(f"Competency type ПК not found in DB. Skipping ПК loading.")
 
         competencies_data = []; all_indicator_ids_for_matrix = set()
@@ -481,9 +485,37 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
         for comp in relevant_competencies:
             type_code = comp.competency_type.code if comp.competency_type else "UNKNOWN"
             comp_dict = comp.to_dict(rules=['-indicators', '-competency_type', '-fgos', '-based_on_labor_function', '-matrix_entries', '-educational_programs_assoc']) 
-            comp_dict['type_code'] = type_code; comp_dict['indicators'] = []
-            
-            if comp.based_on_labor_function:
+            comp_dict['type_code'] = type_code; 
+            comp_dict['indicators'] = [] # Инициализируем список индикаторов
+
+            # ИСПРАВЛЕНО: Добавление source_document_type, code, name для компетенции
+            comp_dict['source_document_id'] = None
+            comp_dict['source_document_code'] = None
+            comp_dict['source_document_name'] = None
+            comp_dict['source_document_type'] = None
+
+            if comp.competency_type and comp.competency_type.code in ['УК', 'ОПК']:
+                if comp.fgos:
+                    comp_dict['source_document_id'] = comp.fgos.id
+                    comp_dict['source_document_code'] = comp.fgos.direction_code
+                    comp_dict['source_document_name'] = comp.fgos.direction_name
+                    comp_dict['source_document_type'] = "ФГОС ВО"
+            elif comp.competency_type and comp.competency_type.code == 'ПК':
+                if comp.based_on_labor_function and \
+                   comp.based_on_labor_function.generalized_labor_function and \
+                   comp.based_on_labor_function.generalized_labor_function.prof_standard:
+                    ps = comp.based_on_labor_function.generalized_labor_function.prof_standard
+                    comp_dict['source_document_id'] = ps.id
+                    comp_dict['source_document_code'] = ps.code
+                    comp_dict['source_document_name'] = ps.name
+                    comp_dict['source_document_type'] = "Профстандарт"
+                else:
+                    comp_dict['source_document_type'] = "Ручной ввод" # ПК создана вручную, без привязки к ТФ/ПС
+                    comp_dict['source_document_code'] = "N/A"
+                    comp_dict['source_document_name'] = "Введено вручную"
+
+
+            if comp.based_on_labor_function: # Still include this for form pre-fill
                  comp_dict['based_on_labor_function_id'] = comp.based_on_labor_function.id
                  comp_dict['based_on_labor_function_code'] = comp.based_on_labor_function.code
                  comp_dict['based_on_labor_function_name'] = comp.based_on_labor_function.name
@@ -494,6 +526,14 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
                     all_indicator_ids_for_matrix.add(ind.id)
                     ind_dict = ind.to_dict();
                     ind_dict['competency_code'] = comp.code; ind_dict['competency_name'] = comp.name
+                    ind_dict['competency_type_code'] = comp_dict['type_code'] # Добавляем тип компетенции индикатору
+                    
+                    # ИСПРАВЛЕНО: Передача source_document_type, code, name для индикатора из компетенции
+                    ind_dict['source_document_id'] = comp_dict['source_document_id']
+                    ind_dict['source_document_code'] = comp_dict['source_document_code']
+                    ind_dict['source_document_name'] = comp_dict['source_document_name']
+                    ind_dict['source_document_type'] = comp_dict['source_document_type']
+
                     comp_dict['indicators'].append(ind_dict)
             competencies_data.append(comp_dict)
         matrix_response["competencies"] = competencies_data
@@ -820,7 +860,7 @@ def parse_fgos_file(file_bytes: bytes, filename: str) -> Dict[str, Any]:
              if not parsed_data.get('metadata'): raise ValueError("Failed to extract metadata from FGOS file.")
         return parsed_data
     except ValueError as e: logger.error(f"Parser ValueError for {filename}: {e}"); raise e
-    except Exception as e: logger.error(f"Unexpected error parsing {filename}: {e}", exc_info=True); raise Exception(f"Unexpected error parsing FGOS file '{filename}': {e}")
+    except Exception as e: logger.error(f"Unexpected error parsing {filename}: {e}", exc_info=True); raise Exception(f"Неожиданная ошибка при парсинге файла '{filename}': {e}")
 
 def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session, force_update: bool = False) -> Optional[FgosVo]:
     if not parsed_data or not parsed_data.get('metadata'):
@@ -1059,6 +1099,10 @@ def delete_fgos(fgos_id: int, session: Session, delete_related_competencies: boo
          
          if delete_related_competencies:
              logger.info(f"Attempting to delete related competencies for FGOS {fgos_id}.")
+             # SQLAlchemy will handle cascade delete for Competency because of cascade="all, delete-orphan" on FgosVo.competencies relationship.
+             # However, if delete_related_competencies is optional, we might need to manually delete here if relationships aren't configured for it.
+             # For now, if cascade is set, it will happen automatically. If not, this flag doesn't do anything by itself.
+             # Assuming cascade is set as per models.py, no explicit query needed here.
              pass
 
          session.delete(fgos_to_delete)
@@ -1095,13 +1139,16 @@ def save_prof_standard_data(parsed_data: Dict[str, Any], filename: str, session:
                 existing_ps.name = ps_name; existing_ps.order_number = parsed_data.get('order_number')
                 existing_ps.order_date = order_date_obj; existing_ps.registration_number = parsed_data.get('registration_number')
                 existing_ps.registration_date = registration_date_obj 
-                
+                existing_ps.activity_area_name = parsed_data.get('activity_area_name')
+                existing_ps.activity_purpose = parsed_data.get('activity_purpose')
+
                 session.add(existing_ps); current_ps = existing_ps
             else: raise IntegrityError(f"Профессиональный стандарт с кодом {ps_code} уже существует.", {}, None)
         else:
             current_ps = ProfStandard(
                 code=ps_code, name=ps_name, order_number=parsed_data.get('order_number'), order_date=order_date_obj, 
                 registration_number=parsed_data.get('registration_number'), registration_date=registration_date_obj, 
+                activity_area_name=parsed_data.get('activity_area_name'), activity_purpose=parsed_data.get('activity_purpose')
             )
             session.add(current_ps); session.flush() 
 

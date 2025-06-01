@@ -173,7 +173,7 @@ def create_new_competency():
         return jsonify({"error": "Компетенция с таким кодом уже существует для этого типа и ФГОС (если применимо)."}), 409
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Unexpected error creating competency: {e}", exc_info=True)
+        logger.error(f"Неожиданная ошибка сервера при создании компетенции: {e}", exc_info=True)
         return jsonify({"error": f"Неожиданная ошибка сервера при создании компетенции: {e}"}), 500
 
 
@@ -615,7 +615,7 @@ def search_profstandards_route():
     search_query = request.args.get('query', '').strip()
     ps_ids_str = request.args.get('ps_ids') # comma-separated string of IDs
     offset_str = request.args.get('offset', '0')
-    limit_str = request.args.get('limit', '5') # Default limit to 5 as per requirement
+    limit_str = request.args.get('limit', '50') # ИЗМЕНЕНИЕ: Увеличен лимит до 50
 
     ps_ids = []
     if ps_ids_str:
