@@ -881,10 +881,15 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
     fgos_direction_code = metadata.get('direction_code')
     fgos_education_level = metadata.get('education_level')
     fgos_generation_raw = metadata.get('generation')
+    
     fgos_generation = str(fgos_generation_raw).strip() if fgos_generation_raw is not None else ''
-    if not fgos_generation:
+    # Костыль
+    if not fgos_generation or fgos_generation.lower() != '3++':
         fgos_generation = '3++'
-        logger.warning(f"FGOS generation was missing or empty for '{filename}'. Defaulting to '{fgos_generation}'.")
+        logger.warning(f"FGOS generation was missing, empty or 'null' for '{filename}'. Defaulting to '{fgos_generation}'.")
+    else:
+        fgos_generation = str(fgos_generation)
+
     fgos_direction_name = metadata.get('direction_name')
 
     if not fgos_date_obj:
@@ -1101,8 +1106,7 @@ def delete_fgos(fgos_id: int, session: Session, delete_related_competencies: boo
              logger.info(f"Attempting to delete related competencies for FGOS {fgos_id}.")
              # SQLAlchemy will handle cascade delete for Competency because of cascade="all, delete-orphan" on FgosVo.competencies relationship.
              # However, if delete_related_competencies is optional, we might need to manually delete here if relationships aren't configured for it.
-             # For now, if cascade is set, it will happen automatically. If not, this flag doesn't do anything by itself.
-             # Assuming cascade is set as per models.py, no explicit query needed here.
+             # Assuming cascade is set, no explicit query needed here.
              pass
 
          session.delete(fgos_to_delete)
