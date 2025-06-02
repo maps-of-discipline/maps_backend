@@ -1,3 +1,4 @@
+# filepath: competencies_matrix/models.py
 from maps.models import db, AupInfo, AupData, SprDiscipline
 try:
     from auth.models import Users
@@ -223,6 +224,10 @@ class ProfStandard(db.Model, BaseModel):
     order_date = db.Column(db.Date, nullable=True, comment='Дата приказа')
     registration_number = db.Column(db.String(50), nullable=True, comment='Рег. номер Минюста')
     registration_date = db.Column(db.Date, nullable=True, comment='Дата регистрации в Минюсте')
+    # ИСПРАВЛЕНО: Добавлены отсутствующие поля
+    activity_area_name = db.Column(db.String(500), nullable=True, comment='Наименование вида профессиональной деятельности')
+    activity_purpose = db.Column(db.Text, nullable=True, comment='Основная цель вида профессиональной деятельности')
+
 
     generalized_labor_functions = relationship('GeneralizedLaborFunction', back_populates='prof_standard', cascade="all, delete-orphan")
     fgos_assoc = relationship('FgosRecommendedPs', back_populates='prof_standard', cascade="all, delete-orphan")
@@ -370,7 +375,7 @@ class Competency(db.Model, BaseModel):
     fgos = relationship('FgosVo', back_populates='competencies') 
 
     based_on_labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_labor_function.id'), nullable=True)
-    based_on_labor_function = relationship('LaborFunction', back_populates='competencies', foreign_keys=[based_on_labor_function_id])
+    based_on_labor_function = relationship('LaborFunction', back_populates='competencies', primaryjoin="LaborFunction.id==Competency.based_on_labor_function_id")
 
     code = db.Column(db.String(20), nullable=False, comment='Код компетенции (УК-1, ОПК-2, ПК-3...)')
     name = db.Column(db.Text, nullable=False, comment='Формулировка компетенции')

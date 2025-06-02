@@ -1137,12 +1137,16 @@ def save_prof_standard_data(parsed_data: Dict[str, Any], filename: str, session:
 
         if existing_ps:
             if force_update:
+                logger.info(f"Existing PS found ({existing_ps.id}). Force update. Deleting old structure and updating metadata...")
                 session.query(GeneralizedLaborFunction).filter_by(prof_standard_id=existing_ps.id).delete(synchronize_session='fetch')
                 session.flush() 
 
-                existing_ps.name = ps_name; existing_ps.order_number = parsed_data.get('order_number')
-                existing_ps.order_date = order_date_obj; existing_ps.registration_number = parsed_data.get('registration_number')
+                existing_ps.name = ps_name
+                existing_ps.order_number = parsed_data.get('order_number')
+                existing_ps.order_date = order_date_obj
+                existing_ps.registration_number = parsed_data.get('registration_number')
                 existing_ps.registration_date = registration_date_obj 
+                # ИСПРАВЛЕНО: Обновление новых полей при force_update
                 existing_ps.activity_area_name = parsed_data.get('activity_area_name')
                 existing_ps.activity_purpose = parsed_data.get('activity_purpose')
 
