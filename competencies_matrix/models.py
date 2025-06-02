@@ -1,4 +1,4 @@
-# filepath: competencies_matrix/models.py
+# competencies_matrix/models.py
 from maps.models import db, AupInfo, AupData, SprDiscipline
 try:
     from auth.models import Users
@@ -436,6 +436,15 @@ class Indicator(db.Model, BaseModel):
     code = db.Column(db.String(20), nullable=False, comment='Код индикатора (ИУК-1.1, ИОПК-2.3, ИПК-3.2...)')
     formulation = db.Column(db.Text, nullable=False, comment='Формулировка индикатора')
     source = db.Column(db.String(255), nullable=True, comment='Источник (ФГОС, ПООП, ВУЗ, ПС...)')
+    # НОВОЕ ПОЛЕ: Для хранения ID выбранных элементов ЗУН из ПС
+    # Ключи: 'labor_actions', 'required_skills', 'required_knowledge'
+    # Значения: список ID соответствующих элементов.
+    selected_ps_elements_ids = db.Column(db.JSON, nullable=True, default={
+        'labor_actions': [],
+        'required_skills': [],
+        'required_knowledge': []
+    }, comment='JSON массив ID выбранных элементов ПС (ТД, НУ, НЗ), на основе которых сформирован индикатор')
+
 
     labor_functions = relationship('LaborFunction', secondary='competencies_indicator_ps_link', back_populates='indicators')
     matrix_entries = relationship('CompetencyMatrix', back_populates='indicator', cascade="all, delete-orphan")
