@@ -1,9 +1,8 @@
-name: Deploy production
-
+name: Deploy Prod 
 on:
   push:
-    tags:
-      - "*"
+    branches:
+      - main
 
 jobs:
   deploy-dev:
@@ -26,6 +25,5 @@ jobs:
       - name: Restart Docker Compose
         working-directory: /home/kdadmin/apps/kd/prod
         run: |
-          docker-compose pull
-          docker-compose up -d
-
+          docker compose pull kd-prod-backend
+          docker compose up -d kd-prod-backend
