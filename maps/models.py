@@ -1,5 +1,9 @@
 from flask_sqlalchemy import SQLAlchemy
+from config import SQLALCHEMY_DATABASE_URI
+
+
 db = SQLAlchemy()
+print(f"Connecting to {SQLALCHEMY_DATABASE_URI}")
 
 
 class SerializationMixin:
@@ -18,7 +22,7 @@ class SprBranch(db.Model):
         return "<Branch %r>" % self.location
 
 
-class SprDegreeEducation(db.Model):
+class SprDegreeEducation(db.Model, SerializationMixin):
     __tablename__ = "spr_degree_education"
 
     id_degree = db.Column(db.Integer, primary_key=True)
@@ -40,8 +44,7 @@ class SprFaculty(db.Model, SerializationMixin):
     admin_only = db.Column(db.Boolean, default=0)
     branch = db.relationship("SprBranch")
 
-
-    aup_infos = db.relationship("AupInfo", back_populates="faculty", lazy="joined")
+    aup_infos = db.relationship("AupInfo", back_populates="faculty")
 
     def __repr__(self):
         return "<Faculty %r>" % self.name_faculty
@@ -65,6 +68,8 @@ class SprOKCO(db.Model):
 
     program_code = db.Column(db.String(255), primary_key=True)
     name_okco = db.Column(db.String(255), nullable=False)
+
+    profiles = db.relationship("NameOP", lazy="joined", back_populates="okco")
 
     def __repr__(self):
         return "<OKCO %r>" % self.name_okco
@@ -93,7 +98,7 @@ class AupInfo(db.Model, SerializationMixin):
 
     id_aup = db.Column(db.Integer, primary_key=True)
     file = db.Column(db.String(255), nullable=False)
-    num_aup = db.Column(db.String(255), nullable=False)
+    num_aup = db.Column(db.String(255), nullable=False, unique=True)
     base = db.Column(db.String(255), nullable=False)
     id_faculty = db.Column(
         db.Integer,
@@ -128,15 +133,17 @@ class AupInfo(db.Model, SerializationMixin):
     year_beg = db.Column(db.Integer, nullable=False)
     year_end = db.Column(db.Integer, nullable=False)
     is_actual = db.Column(db.Boolean, nullable=False)
+    is_delete = db.Column(db.Boolean, nullable=True)
+    date_delete = db.Column(db.DateTime, nullable=True)
 
     degree = db.relationship("SprDegreeEducation")
     form = db.relationship("SprFormEducation")
-    name_op = db.relationship("NameOP")
     faculty = db.relationship("SprFaculty")
     rop = db.relationship("SprRop")
     department = db.relationship("Department")
-    aup_data = db.relationship("AupData", back_populates="aup")
+    aup_data = db.relationship("AupData", back_populates="aup", passive_deletes=True)
     spec = db.relationship("NameOP")
+    weeks = db.relationship("Weeks")
 
     def __repr__(self):
         return "<№ AUP %r>" % self.num_aup
@@ -185,7 +192,7 @@ class Department(db.Model, SerializationMixin):
         return f"{self.name_department}"
 
 
-class NameOP(db.Model):
+class NameOP(db.Model, SerializationMixin):
     __tablename__ = "spr_name_op"
 
     id_spec = db.Column(db.Integer, primary_key=True)
@@ -197,7 +204,7 @@ class NameOP(db.Model):
     num_profile = db.Column(db.String(255), nullable=False)
     name_spec = db.Column(db.String(255), nullable=False)
 
-    okco = db.relationship("SprOKCO")
+    okco = db.relationship("SprOKCO", back_populates="profiles")
 
     def __repr__(self):
         return "<NameOP %r>" % self.id_spec
@@ -264,9 +271,26 @@ class D_ControlType(db.Model):
     __tablename__ = "d_control_type"
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
+    default_shortname = db.Column(db.String(255))
 
     def __repr__(self):
         return "<D_ControlType %r>" % self.title
+
+
+class ControlTypeShortName(db.Model, SerializationMixin):
+    __tablename__ = "control_type_short_name"
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tbl_users.id_user", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    control_type_id = db.Column(
+        db.Integer,
+        db.ForeignKey("d_control_type.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    shortname = db.Column(db.String(255))
 
 
 class D_EdIzmereniya(db.Model):
@@ -324,17 +348,15 @@ class AupData(db.Model):
         db.Integer, db.ForeignKey("tbl_aup.id_aup", ondelete="CASCADE"), nullable=False
     )
 
-    id_block = db.Column(
-        db.Integer, db.ForeignKey("d_blocks.id", ondelete="SET NULL")
-    )
+    id_block = db.Column(db.Integer, db.ForeignKey("d_blocks.id", ondelete="SET NULL"))
 
     shifr = db.Column(db.String(30), nullable=False)
 
     id_part = db.Column(db.Integer, db.ForeignKey("d_part.id", ondelete="SET NULL"))
 
-    id_module = db.Column(db.Integer, db.ForeignKey("d_modules.id", ondelete="SET DEFAULT"), default=1)
+    id_module = db.Column(db.Integer, db.ForeignKey("d_modules.id"), default=1)
 
-    id_group = db.Column(db.Integer, db.ForeignKey("groups.id_group", ondelete='SET DEFAULT'), default=1)
+    id_group = db.Column(db.Integer, db.ForeignKey("groups.id_group"), default=1)
 
     id_type_record = db.Column(
         db.Integer,
@@ -347,11 +369,10 @@ class AupData(db.Model):
         db.ForeignKey("spr_discipline.id", ondelete="SET NULL"),
         nullable=True,
     )
+    used_for_report = db.Column(db.Boolean)
 
     _discipline = db.Column("discipline", db.String(350), nullable=False)
-    id_period = db.Column(
-        db.Integer, db.ForeignKey("d_period.id"), nullable=False
-    )
+    id_period = db.Column(db.Integer, db.ForeignKey("d_period.id"), nullable=False)
     num_row = db.Column(db.Integer, nullable=False)
     id_type_control = db.Column(
         db.Integer, db.ForeignKey("d_control_type.id"), nullable=False
@@ -362,33 +383,20 @@ class AupData(db.Model):
     )
     zet = db.Column(db.Integer, nullable=False)
 
+    aup = db.relationship("AupInfo", back_populates="aup_data")
     block = db.relationship("D_Blocks", lazy="joined")
     part = db.relationship("D_Part")
     module = db.relationship("D_Modules", lazy="joined")
     type_record = db.relationship("D_TypeRecord", lazy="joined")
     type_control = db.relationship("D_ControlType", lazy="joined")
-    aup = db.relationship("AupInfo", back_populates="aup_data")
     ed_izmereniya = db.relationship("D_EdIzmereniya", lazy="joined")
     group = db.relationship("Groups", lazy="joined")
+    discipline = db.relationship("SprDiscipline", lazy="joined")
 
-    @property
-    def discipline(self) -> str:
-        return self._discipline
+    type_control = db.relationship("D_ControlType", lazy="joined")
 
-    @discipline.setter
-    def discipline(self, value: str):
-        discipline = SprDiscipline.query.filter_by(title=value).first()
-
-        if not discipline:
-            discipline = SprDiscipline(title=value)
-            db.session.add(discipline)
-            db.session.commit()
-
-        self.id_discipline = discipline.id
-        self._discipline = value
-
-    def __repr__(self):
-        return "<AupData %r>" % self.aup.num_aup
+    # def __repr__(self):
+    #     return "<AupData %r>" % self.aup.num_aup
 
     def copy(self, parent: AupInfo):
         return AupData(
@@ -399,13 +407,14 @@ class AupData(db.Model):
             id_module=self.id_module,
             id_group=self.id_group,
             id_type_record=self.id_type_record,
-            discipline=self.discipline,
+            id_discipline=self.id_discipline,
             id_period=self.id_period,
             num_row=self.num_row,
             id_type_control=self.id_type_control,
             amount=self.amount,
             id_edizm=self.id_edizm,
             zet=self.zet,
+            _discipline=self._discipline,
         )
 
 
@@ -423,10 +432,11 @@ class Revision(db.Model):
     date = db.Column(db.DateTime)
     isActual = db.Column(db.Boolean)
     user_id = db.Column(db.Integer, db.ForeignKey("tbl_users.id_user"), nullable=False)
-    aup_id = db.Column(db.Integer, db.ForeignKey("tbl_aup.id_aup"), nullable=False)
+    aup_id = db.Column(
+        db.Integer, db.ForeignKey("tbl_aup.id_aup", ondelete="CASCADE"), nullable=False
+    )
 
-
-    logs = db.relationship("ChangeLog", lazy="joined")
+    logs = db.relationship("ChangeLog", lazy="joined", passive_deletes=True)
 
 
 class ChangeLog(db.Model):
@@ -437,5 +447,23 @@ class ChangeLog(db.Model):
     field = db.Column(db.String(45))
     old = db.Column(db.String(500))
     new = db.Column(db.String(500))
-    revision_id = db.Column(db.Integer, db.ForeignKey("Revision.id", ondelete='CASCADE'), nullable=False)
+    revision_id = db.Column(
+        db.Integer, db.ForeignKey("Revision.id", ondelete="CASCADE"), nullable=False
+    )
 
+
+class Weeks(db.Model):
+    __tablename__ = "weeks"
+    aup_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tbl_aup.id_aup", ondelete="CASCADE"),
+        nullable=False,
+        primary_key=True,
+    )
+    period_id = db.Column(
+        db.Integer,
+        db.ForeignKey("d_period.id", ondelete="CASCADE"),
+        nullable=False,
+        primary_key=True,
+    )
+    amount = db.Column(db.Integer)

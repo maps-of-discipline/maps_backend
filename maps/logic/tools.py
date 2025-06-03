@@ -6,6 +6,7 @@ from openpyxl import load_workbook
 
 
 from maps.models import AupData
+import config 
 
 # # Условия фильтра, если добавлять категорию, то нужно исправить if
 skiplist = {
@@ -33,6 +34,10 @@ def timeit(func):
     def timeit_wrapper(*args, **kwargs):
         start_time = time.perf_counter()
         result = func(*args, **kwargs)
+
+        if not config.SHOW_DEBUG_EXECUTION_TIME:
+            return result
+
         end_time = time.perf_counter()
         total_time = end_time - start_time
         print(f'\033[94m[TIME]\033[0m Function \033[96m{func.__name__: <32}()\033[0m Took {total_time:.4f} seconds')
@@ -47,14 +52,6 @@ def get_maximum_rows(*, sheet_object):  # Взять максимальное з
         if not all(col.value is None for col in row):
             rows += 1
     return rows
-
-
-def take_aup_from_excel_file(file):
-    wb = load_workbook(file)
-    # ws = wb['Лист1']
-    value = wb['Лист1']['B2'].value
-    wb.save(file)
-    return str(value)
 
 
 def check_skiplist(zet_or_hours, value_discipline, value_record_type, value_block):
@@ -81,46 +78,6 @@ def check_sum_zet_in_type(data):
         if sum_zet_type == 0: return False
 
 
-@timeit
-def getAupInfo(file, filename):
-    data = pd.read_excel(file, sheet_name='Лист1')
-    aupInfo = dict()
-    data = data['Содержание']
-    #                     Наименование
-    # 0                     Номер АУП
-    # 1               Вид образования
-    # 2           Уровень образования
-    # 3   Направление (специальность)
-    # 4             Код специальности
-    # 5                  Квалификация
-    # 6       Профиль (специализация)
-    # 7                 Тип стандарта
-    # 8                     Факультет
-    # 9           Выпускающая кафедра
-    # 10               Форма обучения
-    # 11                   Год набора
-    # 12              Период обучения
-    # 13                      На базе
-    # 14    Фактический срок обучения
-    aupInfo["num"] = data[0]
-    aupInfo["type_education"] = data[1]
-    aupInfo["degree"] = data[2]
-    aupInfo["direction"] = data[3]
-    aupInfo["program_code"] = data[4]
-    aupInfo["qualification"] = data[5]
-    aupInfo["name_spec"] = data[6]
-    aupInfo["type_standard"] = data[7]
-    aupInfo["name_faculty"] = data[8]
-    aupInfo["department"] = data[9]
-    aupInfo["form_educ"] = data[10]
-    aupInfo["years_begin"] = data[11]
-    aupInfo["period_edication"] = data[12]
-    aupInfo["base"] = data[13]
-    aupInfo["full_years"] = data[14]
-    aupInfo["filename"] = filename
-    return aupInfo
-
-
 def get_grouped_disciplines(aup_data) -> dict[tuple[str, int], list[AupData]]:
     """
         Функция для группировки aupData по дисциплине и периоду.
@@ -134,7 +91,7 @@ def get_grouped_disciplines(aup_data) -> dict[tuple[str, int], list[AupData]]:
     for el in aup_data:
         el: AupData
 
-        key = (el.discipline, el.id_period)
+        key = (el.discipline.title, el.id_period)
         if key not in grouped_disciplines:
             grouped_disciplines.update({key: [el]})
         else:

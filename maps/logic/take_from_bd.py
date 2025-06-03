@@ -1,9 +1,25 @@
 import pandas as pd
 
 from maps.logic.global_variables import addGlobalVariable, getGroupId, getModuleId
-from maps.logic.tools import check_skiplist, prepare_shifr, timeit, get_grouped_disciplines
-from maps.models import AupData, AupInfo, Groups, db, D_Blocks, D_Part, D_TypeRecord, D_Period, D_ControlType, \
-    D_EdIzmereniya
+from maps.logic.tools import (
+    check_skiplist,
+    prepare_shifr,
+    timeit,
+    get_grouped_disciplines,
+)
+from maps.models import (
+    AupData,
+    AupInfo,
+    Groups,
+    db,
+    D_Blocks,
+    D_Part,
+    D_TypeRecord,
+    D_Period,
+    D_ControlType,
+    D_EdIzmereniya,
+    ControlTypeShortName,
+)
 
 blocks = {}
 blocks_r = {}
@@ -25,7 +41,7 @@ allow_control_types_block3 = [12, 14, 15]
 
 def create_json(aup: str) -> dict | None:
     """
-        Функция для преобразования данных из БД для формирования веб-версии карты дисциплин
+    Функция для преобразования данных из БД для формирования веб-версии карты дисциплин
     """
 
     aup_info: AupInfo = AupInfo.query.filter_by(num_aup=aup).first()
@@ -33,16 +49,24 @@ def create_json(aup: str) -> dict | None:
         return None
 
     result = {
-        "header": [aup_info.name_op.okco.program_code + '.' + aup_info.name_op.num_profile,
-                   aup_info.name_op.okco.name_okco, aup_info.name_op.name_spec, aup_info.faculty.name_faculty],
+        "header": [
+            aup_info.spec.okco.program_code + "." + aup_info.spec.num_profile,
+            aup_info.spec.okco.name_okco,
+            aup_info.spec.name_spec,
+            aup_info.faculty.name_faculty,
+        ],
         "year": aup_info.year_beg,
+        "info": aup_info.as_dict(),
     }
 
     data = []
-    for (discipline, id_period), loads in get_grouped_disciplines(aup_info.aup_data).items():
+    for (discipline, id_period), loads in get_grouped_disciplines(
+        aup_info.aup_data
+    ).items():
         el: AupData = loads[0]
         data_element = {
             "id": el.id,
+            "id_discipline": el.id_discipline,
             "discipline": discipline,
             "id_group": el.id_group,
             "id_block": el.id_block,
@@ -53,39 +77,55 @@ def create_json(aup: str) -> dict | None:
             "id_module": el.id_module,
             "num_col": id_period - 1,
             "num_row": el.num_row,
-            'id_type_record': el.id_type_record,
-            "is_skip": not check_skiplist(el.zet, el.discipline, el.type_record.title, el.block.title),
-            'type': {
-                'session': [],
-                'value': [],
-            }
+            "id_type_record": el.id_type_record,
+            "is_skip": not check_skiplist(
+                el.zet, el.discipline.title, el.type_record.title, el.block.title
+            ),
+            "type": {
+                "session": [],
+                "value": [],
+            },
         }
 
-        if data_element['is_skip']:
+        if data_element["is_skip"]:
             continue
 
+        control_types = [
+            "Зачет",
+            "Экзамен",
+            "Дифференцированный зачет",
+            "Курсовой проект",
+            "Курсовая работа",
+        ]
+
         for load in loads:
+            load_type = "load"
+
+            if load.type_control.title in control_types:
+                print(load.type_control.title)
+                load_type = "control"
+
             load = {
                 "amount": load.amount / 100,
-                "amount_type": 'hour' if load.ed_izmereniya.id == 1 else 'week',
+                "amount_type": "hour" if load.ed_izmereniya.id == 1 else "week",
                 "id": load.id,
                 "control_type_id": load.id_type_control,
-                "type": "control" if load.id_type_control in [1, 5, 9] else 'load'
+                "type": load_type,
             }
 
-            if load['type'] == 'control':
-                data_element['type']['session'].append(load)
+            if load["type"] in ["control", "course"]:
+                data_element["type"]["session"].append(load)
             else:
-                data_element['type']['value'].append(load)
+                data_element["type"]["value"].append(load)
 
         data.append(data_element)
-    result['data'] = data
+    result["data"] = data
     return result
 
 
 def get_shifr(shifr: str) -> dict:
     """
-        Функция для разложения шифра на составляющие
+    Функция для разложения шифра на составляющие
     """
     shifr = prepare_shifr(shifr)
     match shifr.split("."):
@@ -103,22 +143,22 @@ def get_shifr(shifr: str) -> dict:
         "block": block.replace("Б", "") if block else block,
         "part": part,
         "module": module,
-        "discipline": discipline
+        "discipline": discipline,
     }
 
 
 def get_allow_control_types(shifr):
     """
-        Функция для получения возможных типов контроля для Части (составляющая шифра)
+    Функция для получения возможных типов контроля для Части (составляющая шифра)
     """
     shifr_array = str.split(shifr, ".")
     try:
         part = shifr_array[0][1]
-        if part == '1':
+        if part == "1":
             return allow_control_types_block1
-        if part == '2':
+        if part == "2":
             return allow_control_types_block2
-        if part == '3':
+        if part == "3":
             return allow_control_types_block3
     except:
         return None
@@ -126,7 +166,7 @@ def get_allow_control_types(shifr):
 
 def create_json_print(aup_data):
     """
-        Функция для преобразования данных из БД для дальнейшего формирования печатной карты дисциплин
+    Функция для преобразования данных из БД для дальнейшего формирования печатной карты дисциплин
     """
     group_id_to_color = {el.id_group: el.color for el in Groups.query.all()}
 
@@ -143,163 +183,42 @@ def create_json_print(aup_data):
             "id_group": el.id_group,
             "num_col": id_period,
             "num_row": el.num_row,
-            "is_skip": not check_skiplist(el.zet, el.discipline, el.type_record.title, el.block.title),
-            "zet": zet / 36
+            "is_skip": not check_skiplist(
+                el.zet, el.discipline.title, el.type_record.title, el.block.title
+            ),
+            "zet": zet / 36,
+            "type": {
+                "session": [],
+                "value": [],
+            },
         }
 
-        if data_element['is_skip']:
+        if data_element["is_skip"]:
             continue
 
+        # Нагрузка
+        for load in loads:
+            load = {
+                "amount": load.amount / 100,
+                "amount_type": "ч." if load.ed_izmereniya.id == 1 else "нед.",
+                "id": load.id,
+                "control_type_id": load.id_type_control,
+                "type": "control" if load.id_type_control in [1, 5, 9] else "load",
+                "control_type_title": load.type_control.title,
+            }
+
+            if load["type"] == "control":
+                data_element["type"]["session"].append(load)
+            else:
+                data_element["type"]["value"].append(load)
         data.append(data_element)
 
     return {"data": data}
 
 
-@timeit
-def getAupData(file):
-    weight = {
-        'Проектная деятельность': 10,
-        'Введение в проектную деятельность': 10,
-        'Управление проектами': 10,
-        'Иностранный язык': 1
-    }
-
-    data = pd.read_excel(file, sheet_name="Лист2")
-    #             Наименование
-    # 0                   Блок.
-    # 1                   Шифр.
-    # 2                  Часть.
-    # 3                 Модуль.
-    # 4             Тип записи.
-    # 5             Дисциплина.
-    # 6        Период контроля.
-    # 7               Нагрузка----
-    # 8             Количество----
-    # 9               Ед. изм.----
-    # 10                   ЗЕТ----
-    # 11              групп ID.
-    # 12    Позиция в семестре.
-    # 13                   Вес.
-
-    allRow = []
-    modules = {}
-    groups = {}
-    for i in range(len(data)):
-        row = []
-        for column in data.columns:
-            row.append(data[column][i])
-
-        row[1] = prepare_shifr(row[1])
-
-        val = row[0]
-        row[0] = blocks.get(val)
-        if row[0] == None:
-            id = addGlobalVariable(db, D_Blocks, val)
-            blocks[val] = id
-            blocks_r[id] = val
-            row[0] = id
-
-        val = row[2]
-        row[2] = chast.get(val)
-        if row[2] == None:
-            id = addGlobalVariable(db, D_Part, val)
-            chast[val] = id
-            chast_r[id] = val
-            row[2] = id
-
-        if pd.isna(row[3]):
-            row[3] = "Без названия"
-        val = row[3]
-        row[3] = modules.get(val)
-        if row[3] == None:
-            id = getModuleId(db, val)
-            modules[val] = id
-            row[3] = id
-
-        if 'Модуль' in val:
-            val = val.strip()
-            val = val[8:-1].strip()
-        row.append(groups.get(val))
-        if row[11] == None:
-            id = getGroupId(db, val)
-            groups[val] = id
-            row[11] = id
-
-        val = row[4]
-        row[4] = type_record.get(val)
-        if row[4] == None:
-            id = addGlobalVariable(db, D_TypeRecord, val)
-            type_record[val] = id
-            type_record_r[id] = val
-            row[4] = id
-
-        val = row[6]
-        row[6] = period.get(val)
-        if row[6] == None:
-            id = addGlobalVariable(db, D_Period, val)
-            period[val] = id
-            period_r[id] = val
-            row[6] = id
-
-        val = row[7]
-        row[7] = control_type.get(val)
-        if row[7] == None:
-            id = addGlobalVariable(db, D_ControlType, val)
-            control_type[val] = id
-            control_type_r[id] = val
-            row[7] = id
-
-        val = row[9]
-        row[9] = ed_izmereniya.get(val)
-        if row[9] == None:
-            id = addGlobalVariable(db, D_EdIzmereniya, val)
-            ed_izmereniya[val] = id
-            ed_izmereniya_r[id] = val
-            row[9] = id
-
-        if pd.isna(row[8]):
-            row[8] = 0
-        else:
-            try:
-                row[8] = int(float(row[8].replace(',', '.')) * 100)
-            except:
-                row[8] = int(float(row[8]) * 100)
-
-        if pd.isna(row[10]):
-            row[10] = 0
-        else:
-            try:
-                row[10] = int(float(row[10].replace(',', '.')) * 100)
-            except:
-                row[10] = int(float(row[10]) * 100)
-
-        row.append("позиция")
-        row.append(weight.get(row[5], 5))
-
-        allRow.append(row)
-
-    allRow.sort(key=lambda x: (x[6], x[13], x[5]))
-
-    counter = 0
-    semestr = allRow[0][6]
-    disc = allRow[0][5]
-    for i in range(len(allRow)):
-        if allRow[i][6] != semestr:
-            semestr = allRow[i][6]
-            counter = -1
-        if allRow[i][5] != disc:
-            disc = allRow[i][5]
-            counter += 1
-
-        allRow[i][12] = counter
-
-    print(allRow)
-    return allRow
-
-
 def elective_disciplines(aup_info: AupInfo) -> dict:
     """
-        Функция для получения факультативных дисциплин учебного плана с суммарным объемам по всем видам нагрузок
+    Функция для получения факультативных дисциплин учебного плана с суммарным объемам по всем видам нагрузок
     """
     ELECTIVE_TYPE_ID = [13, 15, 16]
 
@@ -307,8 +226,39 @@ def elective_disciplines(aup_info: AupInfo) -> dict:
     for el in aup_info.aup_data:
         if el.id_type_record in ELECTIVE_TYPE_ID:
             try:
-                elective_disciplines[el.discipline] += el.amount // 100
+                elective_disciplines[el.discipline.title] += el.amount // 100
             except:
-                elective_disciplines[el.discipline] = el.amount // 100
+                elective_disciplines[el.discipline.title] = el.amount // 100
 
     return elective_disciplines
+
+
+def get_default_shortcuts():
+    """
+    Функция для получения сокращений нагрузки по умолчанию
+    """
+    data = D_ControlType.query.all()
+
+    if data:
+        shortcuts = {el.id: el.default_shortname for el in data}
+        return shortcuts
+
+    return None
+
+
+def get_user_shortcuts(user_id: int):
+    """
+    Функция для получения пользовательских сокращений нагрузки
+    """
+    shortcuts = get_default_shortcuts()
+
+    data = {
+        el.control_type_id: el.shortname
+        for el in ControlTypeShortName.query.filter(user_id=user_id).all()
+    }
+
+    if data:
+        for control_type_id, shortname in data.items():
+            shortcuts[control_type_id] = shortname
+
+    return shortcuts
