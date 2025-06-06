@@ -143,7 +143,11 @@ def saveMap(aup, static, papper_size, orientation, control: bool = False, load: 
             column = chr(ord("B") + i)
             cell = f"{column}{ROW_START_DISCIPLINES + merged}"
 
-            ws[cell] = el['discipline'] + load_and_control(el, load, control)
+            ws[cell] = el['discipline']
+            
+            if any([load, control]):
+                ws[cell] += load_and_control(el, load, control)
+              
             color = el['color'].replace('#', '')
 
             color_text_cell(ws, cell, color)
