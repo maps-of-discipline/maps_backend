@@ -10,6 +10,7 @@ from flask import current_app
 from sqlalchemy import create_engine, select, exists, and_, or_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
+from sqlalchemy import func # Import func for count
 
 from maps.models import db as local_db, SprDiscipline
 from maps.models import AupInfo as LocalAupInfo, AupData as LocalAupData
@@ -67,11 +68,13 @@ def _highlight_text(text: Optional[str], query: str) -> str:
 def search_prof_standards(
     search_query: str,
     ps_ids: Optional[List[int]] = None,
+    qualification_levels: Optional[List[str]] = None, # NEW PARAMETER
     offset: int = 0,
     limit: int = 5
 ) -> Dict[str, Any]:
     """
     Searches within professional standards (names, ОТФ, ТФ, ТД, НУ, НЗ) for the given query.
+    Applies qualification level filtering at the database level.
     Returns a paginated list of PS details with matching elements highlighted.
     Also includes flags to indicate if a section contains a match.
     """
@@ -80,135 +83,184 @@ def search_prof_standards(
 
     session: Session = local_db.session
 
-    # Query for ProfStandards, eagerly loading all nested structures
-    # to perform in-memory search and highlighting.
-    base_query = session.query(ProfStandard).options(
-        joinedload(ProfStandard.generalized_labor_functions)
-            .joinedload(GeneralizedLaborFunction.labor_functions)
-            .joinedload(LaborFunction.labor_actions),
-        joinedload(ProfStandard.generalized_labor_functions)
-            .joinedload(GeneralizedLaborFunction.labor_functions)
-            .joinedload(LaborFunction.required_skills),
-        joinedload(ProfStandard.generalized_labor_functions)
-            .joinedload(GeneralizedLaborFunction.labor_functions)
-            .joinedload(LaborFunction.required_knowledge)
+    glf_alias = aliased(GeneralizedLaborFunction)
+    lf_alias = aliased(LaborFunction)
+    la_alias = aliased(LaborAction)
+    rs_alias = aliased(RequiredSkill)
+    rk_alias = aliased(RequiredKnowledge)
+
+    # Build text search conditions across all relevant fields
+    search_conditions = []
+    query_lower = search_query.lower()
+    search_pattern = f"%{query_lower}%"
+
+    # PS level fields
+    search_conditions.append(ProfStandard.name.ilike(search_pattern))
+    search_conditions.append(ProfStandard.code.ilike(search_pattern))
+    search_conditions.append(ProfStandard.activity_area_name.ilike(search_pattern))
+    search_conditions.append(ProfStandard.activity_purpose.ilike(search_pattern))
+
+    # GLF level fields
+    search_conditions.append(glf_alias.name.ilike(search_pattern))
+    search_conditions.append(glf_alias.code.ilike(search_pattern))
+
+    # LF level fields
+    search_conditions.append(lf_alias.name.ilike(search_pattern))
+    search_conditions.append(lf_alias.code.ilike(search_pattern))
+
+    # LA, RS, RK descriptions
+    search_conditions.append(la_alias.description.ilike(search_pattern))
+    search_conditions.append(rs_alias.description.ilike(search_pattern))
+    search_conditions.append(rk_alias.description.ilike(search_pattern))
+    
+    text_search_filter = or_(*search_conditions)
+
+    # Base query for ProfStandard IDs, joining necessary tables for filtering
+    base_id_query = session.query(ProfStandard.id).distinct().outerjoin(
+        glf_alias, ProfStandard.generalized_labor_functions
+    ).outerjoin(
+        lf_alias, glf_alias.labor_functions
+    ).outerjoin(
+        la_alias, lf_alias.labor_actions
+    ).outerjoin(
+        rs_alias, lf_alias.required_skills
+    ).outerjoin(
+        rk_alias, lf_alias.required_knowledge
     )
 
+    # Apply specific PS IDs filter if provided
     if ps_ids:
-        base_query = base_query.filter(ProfStandard.id.in_(ps_ids))
+        base_id_query = base_id_query.filter(ProfStandard.id.in_(ps_ids))
 
-    all_matching_ps_details: List[Dict[str, Any]] = []
+    # Apply Qualification Level Filtering
+    level_filters_applied = False
+    if qualification_levels and len(qualification_levels) > 0:
+        level_filters_applied = True
+        # Filter on qualification_level in GLF or LF
+        # If a PS has any GLF or LF with a matching qualification_level, it should be included
+        # AND it must satisfy the text search criteria.
+        base_id_query = base_id_query.filter(
+            or_(
+                glf_alias.qualification_level.in_(qualification_levels),
+                lf_alias.qualification_level.in_(qualification_levels)
+            )
+        )
+        
+    # Apply text search filter - this will apply to the joined structure
+    base_id_query = base_id_query.filter(text_search_filter)
 
-    # Iterate through all relevant PS to find matches and apply highlighting
-    for ps in base_query.all():
-        ps_has_match = False
+    # Get total count BEFORE pagination
+    total_results = session.query(func.count(base_id_query.subquery().c.id)).scalar()
+
+    # Apply pagination to the IDs
+    paginated_ps_ids_query = base_id_query.order_by(ProfStandard.code).offset(offset).limit(limit)
+    paginated_ps_ids = [row[0] for row in paginated_ps_ids_query.all()]
+
+    if not paginated_ps_ids:
+        return { "total": 0, "items": [] }
+
+    # Fetch full ProfStandard objects with selectinload for efficient fetching of hierarchy
+    prof_standards = session.query(ProfStandard).options(
+        selectinload(ProfStandard.generalized_labor_functions)
+            .selectinload(GeneralizedLaborFunction.labor_functions)
+            .selectinload(LaborFunction.labor_actions),
+        selectinload(ProfStandard.generalized_labor_functions)
+            .selectinload(GeneralizedLaborFunction.labor_functions)
+            .selectinload(LaborFunction.required_skills),
+        selectinload(ProfStandard.generalized_labor_functions)
+            .selectinload(GeneralizedLaborFunction.labor_functions)
+            .selectinload(LaborFunction.required_knowledge)
+    ).filter(ProfStandard.id.in_(paginated_ps_ids)).order_by(ProfStandard.code).all()
+
+    # Process loaded objects to apply highlighting and `has_match` flags for frontend filtering
+    result_items: List[Dict[str, Any]] = []
+    for ps in prof_standards:
         ps_details = ps.to_dict()
-        ps_details['has_match'] = False
-        ps_details['generalized_labor_functions'] = [] # Rebuild the structure with matched children
-
-        query_lower = search_query.lower()
-
-        # Check PS metadata for match and apply highlighting
-        if (ps.name and query_lower in ps.name.lower()):
-            ps_has_match = True
-        if (ps.code and query_lower in ps.code.lower()):
-             ps_has_match = True
+        ps_details['has_match'] = False # Indicates if anything in this PS (or its children) matched the text query
+        
+        # Apply highlighting to PS-level fields and check for direct match
+        if ps.name and query_lower in ps.name.lower(): ps_details['has_match'] = True
+        if ps.code and query_lower in ps.code.lower(): ps_details['has_match'] = True
+        if ps.activity_area_name and query_lower in ps.activity_area_name.lower(): ps_details['has_match'] = True
+        if ps.activity_purpose and query_lower in ps.activity_purpose.lower(): ps_details['has_match'] = True
 
         ps_details['name'] = _highlight_text(ps.name, search_query)
         ps_details['code'] = _highlight_text(ps.code, search_query)
-        
-        if ps_details.get('activity_area_name'):
-            if query_lower in ps_details['activity_area_name'].lower():
-                ps_has_match = True
-            ps_details['activity_area_name'] = _highlight_text(ps_details['activity_area_name'], search_query)
-        if ps_details.get('activity_purpose'):
-            if query_lower in ps_details['activity_purpose'].lower():
-                ps_has_match = True
-            ps_details['activity_purpose'] = _highlight_text(ps_details['activity_purpose'], search_query)
+        ps_details['activity_area_name'] = _highlight_text(ps.activity_area_name, search_query)
+        ps_details['activity_purpose'] = _highlight_text(ps.activity_purpose, search_query)
 
-
-        for otf in ps.generalized_labor_functions:
-            otf_has_match = False
+        processed_glf_list = []
+        for otf in sorted(ps.generalized_labor_functions, key=lambda x: x.code):
             otf_details = otf.to_dict()
-            otf_details['has_match'] = False
-            otf_details['labor_functions'] = [] # Rebuild TF list
-
-            if (otf.name and query_lower in otf.name.lower()) or \
-               (otf.code and query_lower in otf.code.lower()):
-                otf_has_match = True
+            otf_details['has_match'] = False # Indicates if anything in this OTF (or its children) matched the text query
             
+            # Apply highlighting to OTF-level fields and check for direct match
+            if otf.name and query_lower in otf.name.lower(): otf_details['has_match'] = True
+            if otf.code and query_lower in otf.code.lower(): otf_details['has_match'] = True
+
             otf_details['name'] = _highlight_text(otf.name, search_query)
             otf_details['code'] = _highlight_text(otf.code, search_query)
 
-
-            for tf in otf.labor_functions:
-                tf_has_match = False
+            processed_tf_list = []
+            for tf in sorted(otf.labor_functions, key=lambda x: x.code):
                 tf_details = tf.to_dict()
-                tf_details['has_match'] = False
-                tf_details['labor_actions'] = []
-                tf_details['required_skills'] = []
-                tf_details['required_knowledge'] = []
-
-                if (tf.name and query_lower in tf.name.lower()) or \
-                   (tf.code and query_lower in tf.code.lower()):
-                    tf_has_match = True
+                tf_details['has_match'] = False # Indicates if anything in this TF (or its children) matched the text query
                 
+                # Apply highlighting to TF-level fields and check for direct match
+                if tf.name and query_lower in tf.name.lower(): tf_details['has_match'] = True
+                if tf.code and query_lower in tf.code.lower(): tf_details['has_match'] = True
+
                 tf_details['name'] = _highlight_text(tf.name, search_query)
                 tf_details['code'] = _highlight_text(tf.code, search_query)
 
-
-                for la in tf.labor_actions:
+                processed_la_list = []
+                for la in sorted(tf.labor_actions, key=lambda x: x.order):
                     la_details = la.to_dict()
                     if la.description and query_lower in la.description.lower():
-                        la_details['description'] = _highlight_text(la.description, search_query)
                         la_details['has_match'] = True
-                        tf_has_match = True
-                    tf_details['labor_actions'].append(la_details)
+                        tf_details['has_match'] = True # Propagate match up
+                    la_details['description'] = _highlight_text(la.description, search_query)
+                    processed_la_list.append(la_details)
+                tf_details['labor_actions'] = processed_la_list
 
-                for rs in tf.required_skills:
+                processed_rs_list = []
+                for rs in sorted(tf.required_skills, key=lambda x: x.order):
                     rs_details = rs.to_dict()
                     if rs.description and query_lower in rs.description.lower():
-                        rs_details['description'] = _highlight_text(rs.description, search_query)
                         rs_details['has_match'] = True
-                        tf_has_match = True
-                    tf_details['required_skills'].append(rs_details)
+                        tf_details['has_match'] = True # Propagate match up
+                    rs_details['description'] = _highlight_text(rs.description, search_query)
+                    processed_rs_list.append(rs_details)
+                tf_details['required_skills'] = processed_rs_list
 
-                for rk in tf.required_knowledge:
+                processed_rk_list = []
+                for rk in sorted(tf.required_knowledge, key=lambda x: x.order):
                     rk_details = rk.to_dict()
                     if rk.description and query_lower in rk.description.lower():
-                        rk_details['description'] = _highlight_text(rk.description, search_query)
                         rk_details['has_match'] = True
-                        tf_has_match = True
-                    tf_details['required_knowledge'].append(rk_details)
+                        tf_details['has_match'] = True # Propagate match up
+                    rk_details['description'] = _highlight_text(rk.description, search_query)
+                    processed_rk_list.append(rk_details)
+                tf_details['required_knowledge'] = processed_rk_list
                 
-                # Only add TF to OTF's list if it or its children match (for filtered display)
-                if tf_has_match:
-                    tf_details['has_match'] = True
-                    # Propagate match up the hierarchy
-                    otf_has_match = True
-                    otf_details['labor_functions'].append(tf_details)
-
-            # Only add OTF to PS's list if it or its children match (for filtered display)
-            if otf_has_match:
-                otf_details['has_match'] = True
-                # Propagate match up the hierarchy
-                ps_has_match = True
-                ps_details['generalized_labor_functions'].append(otf_details)
+                # Propagate match from TF to OTF
+                if tf_details['has_match']:
+                    otf_details['has_match'] = True
+                processed_tf_list.append(tf_details)
+            otf_details['labor_functions'] = processed_tf_list
+            
+            # Propagate match from OTF to PS
+            if otf_details['has_match']:
+                ps_details['has_match'] = True
+            processed_glf_list.append(otf_details)
+        ps_details['generalized_labor_functions'] = processed_glf_list
         
-        # Add PS to results if it or any of its children matched
-        if ps_has_match:
-            ps_details['has_match'] = True
-            all_matching_ps_details.append(ps_details)
+        result_items.append(ps_details)
 
-    all_matching_ps_details.sort(key=lambda x: x.get('code', ''))
-
-    total_results = len(all_matching_ps_details)
-    paginated_results = all_matching_ps_details[offset : offset + limit]
-
-    logger.info(f"Found {total_results} matching PS for query '{search_query}'. Returning {len(paginated_results)} (offset {offset}, limit {limit}).")
+    logger.info(f"Found {total_results} matching PS for query '{search_query}' (levels: {qualification_levels}). Returning {len(result_items)} (offset {offset}, limit {limit}).")
     return {
         "total": total_results,
-        "items": paginated_results
+        "items": result_items
     }
 
 def get_educational_programs_list() -> List[EducationalProgram]:
@@ -264,12 +316,11 @@ def get_external_aups_list(
 
             if form_education_name: filters.append(ExternalSprFormEducation.form == form_education_name)
             if year_beg: filters.append(ExternalAupInfo.year_beg == year_beg)
-            if degree_education_name: filters.append(ExternalSprDegreeEducation.name_deg == degree_education_name)
-
+            if degree_education_name: filters.append(ExternalAupInfo.qualification == degree_education_name) # Fix: use qualification instead of name_deg (from spr_degree_education.name_deg)
             query = query.join(ExternalAupInfo.spec, isouter=True)\
                          .join(ExternalNameOP.okco, isouter=True)
             query = query.join(ExternalAupInfo.form, isouter=True)
-            query = query.join(ExternalAupInfo.degree, isouter=True)
+            # query = query.join(ExternalAupInfo.degree, isouter=True) # Fix: remove join if using qualification
             query = query.join(ExternalAupInfo.faculty, isouter=True)
             query = query.join(ExternalAupInfo.department, isouter=True)
 
@@ -1291,7 +1342,7 @@ def get_prof_standard_details(ps_id: int) -> Optional[Dict[str, Any]]:
         ps = session.query(ProfStandard).options(
             selectinload(ProfStandard.generalized_labor_functions).selectinload(GeneralizedLaborFunction.labor_functions).selectinload(LaborFunction.labor_actions),
             selectinload(ProfStandard.generalized_labor_functions).selectinload(GeneralizedLaborFunction.labor_functions).selectinload(LaborFunction.required_skills),
-            selectinload(ProfStandard.generalized_labor_functions).selectinload(GeneralizedLaborFunction.labor_functions).selectinload(LaborFunction.required_knowledge)
+            selectinload(ProfStandard.generalized_labor_functions).selectinload(LaborFunction.labor_functions).selectinload(LaborFunction.required_knowledge)
         ).get(ps_id)
         if not ps: logger.warning(f"PS with ID {ps_id} not found."); return None
         

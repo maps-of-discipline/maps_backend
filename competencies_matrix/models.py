@@ -1,4 +1,4 @@
-# competencies_matrix/models.py
+# filepath: competencies_matrix/models.py
 from maps.models import db, AupInfo, AupData, SprDiscipline
 try:
     from auth.models import Users
@@ -294,8 +294,7 @@ class GeneralizedLaborFunction(db.Model, BaseModel):
     def __repr__(self): return f"<ОТФ {self.code} {self.name[:30]}...>"
 
     def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None) -> Dict[str, Any]:
-        data = super().to_dict(rules=rules, only=only)
-        return data
+        return super().to_dict(rules=rules, only=only)
 
 class LaborFunction(db.Model, BaseModel):
     """Трудовая функция (ТФ)"""
@@ -317,8 +316,7 @@ class LaborFunction(db.Model, BaseModel):
     def __repr__(self): return f"<ТФ {self.code} {self.name[:30]}...>"
 
     def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None) -> Dict[str, Any]:
-        data = super().to_dict(rules=rules, only=only)
-        return data
+        return super().to_dict(rules=rules, only=only)
 
 class LaborAction(db.Model, BaseModel):
     """Трудовое действие"""

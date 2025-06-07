@@ -287,7 +287,7 @@ def create_new_indicator():
         return jsonify({"error": "Индикатор с таким кодом уже существует для этой компетенции."}), 409
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Unexpected error creating indicator: {e}", exc_info=True)
+        logger.error(f"Неожиданная ошибка сервера при создании индикатора: {e}", exc_info=True)
         return jsonify({"error": f"Неожиданная ошибка сервера при создании индикатора: {e}"}), 500
 
 
@@ -614,6 +614,7 @@ def search_profstandards_route():
     """
     search_query = request.args.get('query', '').strip()
     ps_ids_str = request.args.get('ps_ids') # comma-separated string of IDs
+    levels_str = request.args.get('levels') # NEW: comma-separated string of qualification levels
     offset_str = request.args.get('offset', '0')
     limit_str = request.args.get('limit', '50') # ИЗМЕНЕНИЕ: Увеличен лимит до 50
 
@@ -624,6 +625,12 @@ def search_profstandards_route():
         except ValueError:
             return jsonify({"error": "Неверный формат ps_ids. Ожидается список целых чисел через запятую."}), 400
 
+    # NEW: Parse levels parameter
+    qualification_levels = []
+    if levels_str:
+        qualification_levels = [level.strip() for level in levels_str.split(',') if level.strip()]
+        # Optionally validate these levels against known valid levels if strict validation is needed
+    
     try:
         offset = int(offset_str)
         limit = int(limit_str)
@@ -634,7 +641,13 @@ def search_profstandards_route():
         return jsonify({"error": "Поисковый запрос должен содержать минимум 2 символа."}), 400
 
     try:
-        search_results = logic_search_prof_standards(search_query, ps_ids, offset, limit)
+        search_results = logic_search_prof_standards(
+            search_query, 
+            ps_ids=ps_ids, 
+            qualification_levels=qualification_levels, # NEW: Pass levels to logic
+            offset=offset, 
+            limit=limit
+        )
         return jsonify(search_results), 200
     except ValueError as e:
         logger.warning(f"Search PS route: Validation error: {e}")
