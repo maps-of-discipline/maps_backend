@@ -7,7 +7,7 @@ import json
 import re
 
 from flask import current_app
-from sqlalchemy import create_engine, select, exists, and_, or_
+from sqlalchemy import create_engine, select, exists, and_, or_, cast, Integer
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
 
@@ -68,20 +68,23 @@ def search_prof_standards(
     search_query: str,
     ps_ids: Optional[List[int]] = None,
     offset: int = 0,
-    limit: int = 5
+    limit: int = 5,
+    qualification_levels: Optional[List[int]] = None
 ) -> Dict[str, Any]:
     """
     Searches within professional standards (names, ОТФ, ТФ, ТД, НУ, НЗ) for the given query.
     Returns a paginated list of PS details with matching elements highlighted.
     Also includes flags to indicate if a section contains a match.
+    Filters by qualification_levels and specific ps_ids at the database level if provided.
     """
-    if not search_query or len(search_query) < 2:
+    if not search_query and not qualification_levels:
+        raise ValueError("Поисковый запрос должен содержать минимум 2 символа, либо должны быть выбраны уровни квалификации.")
+    if search_query and len(search_query) < 2:
         raise ValueError("Поисковый запрос должен содержать минимум 2 символа.")
 
     session: Session = local_db.session
 
-    # Query for ProfStandards, eagerly loading all nested structures
-    # to perform in-memory search and highlighting.
+    # Base query for ProfStandards, eagerly loading all nested structures.
     base_query = session.query(ProfStandard).options(
         joinedload(ProfStandard.generalized_labor_functions)
             .joinedload(GeneralizedLaborFunction.labor_functions)
@@ -94,122 +97,139 @@ def search_prof_standards(
             .joinedload(LaborFunction.required_knowledge)
     )
 
+    # ИЗМЕНЕНИЕ: Применяем фильтрацию по ID профстандартов, если они переданы
     if ps_ids:
+        logger.info(f"Filtering search by specific PS IDs: {ps_ids}")
         base_query = base_query.filter(ProfStandard.id.in_(ps_ids))
 
+    search_conditions = []
+    if search_query:
+        search_pattern = f"%{search_query.lower()}%"
+        search_conditions.extend([
+            ProfStandard.name.ilike(search_pattern),
+            ProfStandard.code.ilike(search_pattern),
+            GeneralizedLaborFunction.name.ilike(search_pattern),
+            LaborFunction.name.ilike(search_pattern),
+            LaborAction.description.ilike(search_pattern),
+            RequiredSkill.description.ilike(search_pattern),
+            RequiredKnowledge.description.ilike(search_pattern),
+        ])
+
+    filter_conditions = []
+    if qualification_levels:
+        filter_conditions.append(cast(GeneralizedLaborFunction.qualification_level, Integer).in_(qualification_levels))
+
+    if search_conditions:
+        filter_conditions.append(or_(*search_conditions))
+
+    # Join necessary tables and apply filters
+    if filter_conditions:
+        matching_ps_ids_subquery = session.query(ProfStandard.id).distinct().join(
+            GeneralizedLaborFunction, ProfStandard.id == GeneralizedLaborFunction.prof_standard_id
+        ).outerjoin(
+            LaborFunction, GeneralizedLaborFunction.id == LaborFunction.generalized_labor_function_id
+        ).outerjoin(
+            LaborAction, LaborFunction.id == LaborAction.labor_function_id
+        ).outerjoin(
+            RequiredSkill, LaborFunction.id == RequiredSkill.labor_function_id
+        ).outerjoin(
+            RequiredKnowledge, LaborFunction.id == RequiredKnowledge.labor_function_id
+        ).filter(and_(*filter_conditions)).subquery()
+        
+        base_query = base_query.filter(ProfStandard.id.in_(select(matching_ps_ids_subquery)))
+
+    # Get total count before pagination
+    total_results_query = base_query.with_entities(ProfStandard.id)
+    total_results = total_results_query.count()
+
+    # Apply sorting and pagination
+    paginated_query = base_query.order_by(ProfStandard.code).offset(offset).limit(limit)
+    all_ps_to_process = paginated_query.all()
+    
     all_matching_ps_details: List[Dict[str, Any]] = []
 
-    # Iterate through all relevant PS to find matches and apply highlighting
-    for ps in base_query.all():
-        ps_has_match = False
-        ps_details = ps.to_dict()
+    # Iterate through the pre-filtered PS to find matches and apply highlighting
+    for ps in all_ps_to_process:
+        ps_details = ps.to_dict(rules=['-generalized_labor_functions'])
         ps_details['has_match'] = False
-        ps_details['generalized_labor_functions'] = [] # Rebuild the structure with matched children
 
-        query_lower = search_query.lower()
-
-        # Check PS metadata for match and apply highlighting
-        if (ps.name and query_lower in ps.name.lower()):
-            ps_has_match = True
-        if (ps.code and query_lower in ps.code.lower()):
-             ps_has_match = True
-
+        query_lower = search_query.lower() if search_query else ""
+        
+        # Highlight PS metadata
         ps_details['name'] = _highlight_text(ps.name, search_query)
         ps_details['code'] = _highlight_text(ps.code, search_query)
+        ps_details['activity_area_name'] = _highlight_text(ps.activity_area_name, search_query)
+        ps_details['activity_purpose'] = _highlight_text(ps.activity_purpose, search_query)
         
-        if ps_details.get('activity_area_name'):
-            if query_lower in ps_details['activity_area_name'].lower():
-                ps_has_match = True
-            ps_details['activity_area_name'] = _highlight_text(ps_details['activity_area_name'], search_query)
-        if ps_details.get('activity_purpose'):
-            if query_lower in ps_details['activity_purpose'].lower():
-                ps_has_match = True
-            ps_details['activity_purpose'] = _highlight_text(ps_details['activity_purpose'], search_query)
+        if search_query and (query_lower in (ps.name or "").lower() or query_lower in (ps.code or "").lower()):
+            ps_details['has_match'] = True
 
-
+        filtered_generalized_labor_functions = []
         for otf in ps.generalized_labor_functions:
-            otf_has_match = False
-            otf_details = otf.to_dict()
+            if qualification_levels and otf.qualification_level and int(otf.qualification_level) not in qualification_levels:
+                continue
+                
+            otf_details = otf.to_dict(rules=['-labor_functions'])
             otf_details['has_match'] = False
-            otf_details['labor_functions'] = [] # Rebuild TF list
-
-            if (otf.name and query_lower in otf.name.lower()) or \
-               (otf.code and query_lower in otf.code.lower()):
-                otf_has_match = True
             
             otf_details['name'] = _highlight_text(otf.name, search_query)
             otf_details['code'] = _highlight_text(otf.code, search_query)
 
+            if search_query and (query_lower in (otf.name or "").lower() or query_lower in (otf.code or "").lower()):
+                otf_details['has_match'] = True
 
+            filtered_labor_functions = []
             for tf in otf.labor_functions:
+                tf_details = tf.to_dict(rules=['-labor_actions', '-required_skills', '-required_knowledge'])
                 tf_has_match = False
-                tf_details = tf.to_dict()
-                tf_details['has_match'] = False
-                tf_details['labor_actions'] = []
-                tf_details['required_skills'] = []
-                tf_details['required_knowledge'] = []
-
-                if (tf.name and query_lower in tf.name.lower()) or \
-                   (tf.code and query_lower in tf.code.lower()):
-                    tf_has_match = True
                 
                 tf_details['name'] = _highlight_text(tf.name, search_query)
                 tf_details['code'] = _highlight_text(tf.code, search_query)
 
-
+                if search_query and (query_lower in (tf.name or "").lower() or query_lower in (tf.code or "").lower()):
+                    tf_has_match = True
+                
+                tf_details['labor_actions'] = []
                 for la in tf.labor_actions:
                     la_details = la.to_dict()
-                    if la.description and query_lower in la.description.lower():
-                        la_details['description'] = _highlight_text(la.description, search_query)
-                        la_details['has_match'] = True
-                        tf_has_match = True
+                    la_details['has_match'] = search_query and query_lower in (la.description or "").lower()
+                    if la_details['has_match']: tf_has_match = True
+                    la_details['description'] = _highlight_text(la.description, search_query)
                     tf_details['labor_actions'].append(la_details)
 
+                tf_details['required_skills'] = []
                 for rs in tf.required_skills:
                     rs_details = rs.to_dict()
-                    if rs.description and query_lower in rs.description.lower():
-                        rs_details['description'] = _highlight_text(rs.description, search_query)
-                        rs_details['has_match'] = True
-                        tf_has_match = True
+                    rs_details['has_match'] = search_query and query_lower in (rs.description or "").lower()
+                    if rs_details['has_match']: tf_has_match = True
+                    rs_details['description'] = _highlight_text(rs.description, search_query)
                     tf_details['required_skills'].append(rs_details)
 
+                tf_details['required_knowledge'] = []
                 for rk in tf.required_knowledge:
                     rk_details = rk.to_dict()
-                    if rk.description and query_lower in rk.description.lower():
-                        rk_details['description'] = _highlight_text(rk.description, search_query)
-                        rk_details['has_match'] = True
-                        tf_has_match = True
+                    rk_details['has_match'] = search_query and query_lower in (rk.description or "").lower()
+                    if rk_details['has_match']: tf_has_match = True
+                    rk_details['description'] = _highlight_text(rk.description, search_query)
                     tf_details['required_knowledge'].append(rk_details)
                 
-                # Only add TF to OTF's list if it or its children match (for filtered display)
-                if tf_has_match:
-                    tf_details['has_match'] = True
-                    # Propagate match up the hierarchy
-                    otf_has_match = True
-                    otf_details['labor_functions'].append(tf_details)
+                if tf_has_match or not search_query:
+                    tf_details['has_match'] = tf_has_match
+                    filtered_labor_functions.append(tf_details)
+                    otf_details['has_match'] = True
 
-            # Only add OTF to PS's list if it or its children match (for filtered display)
-            if otf_has_match:
-                otf_details['has_match'] = True
-                # Propagate match up the hierarchy
-                ps_has_match = True
-                ps_details['generalized_labor_functions'].append(otf_details)
-        
-        # Add PS to results if it or any of its children matched
-        if ps_has_match:
-            ps_details['has_match'] = True
+            if otf_details['has_match'] or not search_query:
+                otf_details['labor_functions'] = filtered_labor_functions
+                filtered_generalized_labor_functions.append(otf_details)
+                ps_details['has_match'] = True
+
+        ps_details['generalized_labor_functions'] = filtered_generalized_labor_functions
+        if ps_details['has_match'] or not search_query:
             all_matching_ps_details.append(ps_details)
 
-    all_matching_ps_details.sort(key=lambda x: x.get('code', ''))
+    logger.info(f"Found {total_results} matching PS for query '{search_query}' and levels {qualification_levels}. Returning {len(all_matching_ps_details)} (offset {offset}, limit {limit}).")
+    return {"total": total_results, "items": all_matching_ps_details}
 
-    total_results = len(all_matching_ps_details)
-    paginated_results = all_matching_ps_details[offset : offset + limit]
-
-    logger.info(f"Found {total_results} matching PS for query '{search_query}'. Returning {len(paginated_results)} (offset {offset}, limit {limit}).")
-    return {
-        "total": total_results,
-        "items": paginated_results
-    }
 
 def get_educational_programs_list() -> List[EducationalProgram]:
     """Fetches list of all educational programs."""

@@ -1,7 +1,7 @@
 # filepath: competencies_matrix/routes.py
 from flask import request, jsonify, abort
 from . import competencies_matrix_bp
-from typing import Optional
+from typing import Optional, List
 
 from .logic import (
     get_educational_programs_list, get_program_details,
@@ -19,7 +19,7 @@ from .logic import (
     delete_indicator as logic_delete_indicator,
     get_external_aups_list, get_external_aup_disciplines,
     delete_prof_standard as logic_delete_profstandard,
-    search_prof_standards as logic_search_prof_standards, # ИЗМЕНЕНИЕ: Добавлен импорт
+    search_prof_standards as logic_search_prof_standards,
 )
 
 from auth.logic import login_required, approved_required, admin_only
@@ -274,7 +274,7 @@ def create_new_indicator():
         indicator = create_indicator(data, db.session)
         if not indicator:
             db.session.rollback()
-            return jsonify({"error": "Не удалось создать индикатор. Проверьте данные или возможно, он уже существует/родительская компетенция не найдена."}), 400
+            return jsonify({"error": "Не удалось создать индикатор. Проверьте данные или возможно, она уже существует/родительская компетенция не найдена."}), 400
         db.session.commit()
         return jsonify(indicator.to_dict(rules=['-matrix_entries'], include_competency=True)), 201
     except ValueError as e:
@@ -624,17 +624,32 @@ def search_profstandards_route():
         except ValueError:
             return jsonify({"error": "Неверный формат ps_ids. Ожидается список целых чисел через запятую."}), 400
 
+    # ИЗМЕНЕНИЕ: Получение qualification_levels из запроса
+    qualification_levels_str: Optional[List[str]] = request.args.getlist('qualification_levels')
+    qualification_levels: Optional[List[int]] = None
+    if qualification_levels_str:
+        try:
+            qualification_levels = [int(level) for level in qualification_levels_str if level.isdigit()]
+            if not qualification_levels: qualification_levels = None # Если список пуст после фильтрации
+        except ValueError:
+            return jsonify({"error": "Неверный формат qualification_levels. Ожидается список целых чисел."}), 400
+
     try:
         offset = int(offset_str)
         limit = int(limit_str)
     except ValueError:
         return jsonify({"error": "Неверный формат offset или limit. Ожидаются целые числа."}), 400
     
-    if len(search_query) < 2:
+    # ИЗМЕНЕНИЕ: Разрешаем поиск, если есть уровни квалификации, даже без query
+    if not search_query and not qualification_levels:
+        return jsonify({"error": "Поисковый запрос должен содержать минимум 2 символа, либо должны быть выбраны уровни квалификации."}), 400
+    if search_query and len(search_query) < 2:
         return jsonify({"error": "Поисковый запрос должен содержать минимум 2 символа."}), 400
 
+
     try:
-        search_results = logic_search_prof_standards(search_query, ps_ids, offset, limit)
+        # ИЗМЕНЕНИЕ: Передача qualification_levels в logic_search_prof_standards
+        search_results = logic_search_prof_standards(search_query, ps_ids, offset, limit, qualification_levels)
         return jsonify(search_results), 200
     except ValueError as e:
         logger.warning(f"Search PS route: Validation error: {e}")
