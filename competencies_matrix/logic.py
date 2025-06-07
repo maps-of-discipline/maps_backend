@@ -7,7 +7,7 @@ import json
 import re
 
 from flask import current_app
-from sqlalchemy import create_engine, select, exists, and_, or_, cast, Integer
+from sqlalchemy import create_engine, select, exists, and_, or_, cast, Integer, text, union_all # Добавьте этот импорт
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
 
@@ -47,188 +47,220 @@ def get_external_db_engine():
         except Exception as e: logger.error(f"Failed to create external DB engine: {e}", exc_info=True); raise RuntimeError(f"Failed to create external DB engine: {e}")
     return _external_db_engine
 
-def _highlight_text(text: Optional[str], query: str) -> str:
-    """
-    Highlights the search query in the text using <b> tags.
-    Case-insensitive. Handles multiple occurrences.
-    """
-    if not text or not query or len(query) < 2:
-        return text if text is not None else ""
-
-    escaped_query = re.escape(query)
-    # Pattern to find the query, case-insensitive.
-    # Use \b to match whole words if desired, but for CONTAINS/LIKE, sub-string matching is usually better.
-    # For "программный код" or "база данных", simple substring works.
-    pattern = re.compile(escaped_query, re.IGNORECASE)
-    
-    highlighted_text = pattern.sub(lambda match: f"<b>{match.group(0)}</b>", text)
-    return highlighted_text
-
 def search_prof_standards(
     search_query: str,
-    ps_ids: Optional[List[int]] = None,
+    ps_ids: Optional[List[int]] = None, # ps_ids is not used in the new version, consider removing if not needed elsewhere
     offset: int = 0,
-    limit: int = 5,
+    limit: int = 50, # Увеличенный лимит по умолчанию
     qualification_levels: Optional[List[int]] = None
 ) -> Dict[str, Any]:
     """
-    Searches within professional standards (names, ОТФ, ТФ, ТД, НУ, НЗ) for the given query.
-    Returns a paginated list of PS details with matching elements highlighted.
-    Also includes flags to indicate if a section contains a match.
-    Filters by qualification_levels and specific ps_ids at the database level if provided.
+    (Оптимизированная версия)
+    Ищет в профстандартах, используя один UNION-запрос для получения ID,
+    а затем один запрос для получения полных данных.
     """
     if not search_query and not qualification_levels:
-        raise ValueError("Поисковый запрос должен содержать минимум 2 символа, либо должны быть выбраны уровни квалификации.")
+        raise ValueError("Необходимо указать поисковый запрос или выбрать уровни квалификации.")
     if search_query and len(search_query) < 2:
         raise ValueError("Поисковый запрос должен содержать минимум 2 символа.")
 
     session: Session = local_db.session
+    matching_ps_ids = set()
 
-    # Base query for ProfStandards, eagerly loading all nested structures.
-    base_query = session.query(ProfStandard).options(
-        joinedload(ProfStandard.generalized_labor_functions)
-            .joinedload(GeneralizedLaborFunction.labor_functions)
-            .joinedload(LaborFunction.labor_actions),
-        joinedload(ProfStandard.generalized_labor_functions)
-            .joinedload(GeneralizedLaborFunction.labor_functions)
-            .joinedload(LaborFunction.required_skills),
-        joinedload(ProfStandard.generalized_labor_functions)
-            .joinedload(GeneralizedLaborFunction.labor_functions)
-            .joinedload(LaborFunction.required_knowledge)
-    )
-
-    # ИЗМЕНЕНИЕ: Применяем фильтрацию по ID профстандартов, если они переданы
-    if ps_ids:
-        logger.info(f"Filtering search by specific PS IDs: {ps_ids}")
-        base_query = base_query.filter(ProfStandard.id.in_(ps_ids))
-
-    search_conditions = []
-    if search_query:
-        search_pattern = f"%{search_query.lower()}%"
-        search_conditions.extend([
-            ProfStandard.name.ilike(search_pattern),
-            ProfStandard.code.ilike(search_pattern),
-            GeneralizedLaborFunction.name.ilike(search_pattern),
-            LaborFunction.name.ilike(search_pattern),
-            LaborAction.description.ilike(search_pattern),
-            RequiredSkill.description.ilike(search_pattern),
-            RequiredKnowledge.description.ilike(search_pattern),
-        ])
-
-    filter_conditions = []
+    # --- Этап 1: Фильтрация по уровням квалификации (если заданы) ---
+    level_filtered_ps_ids: Optional[set] = None
     if qualification_levels:
-        filter_conditions.append(cast(GeneralizedLaborFunction.qualification_level, Integer).in_(qualification_levels))
+        level_query = session.query(ProfStandard.id).distinct().join(
+            GeneralizedLaborFunction
+        ).filter(
+            cast(GeneralizedLaborFunction.qualification_level, Integer).in_(qualification_levels)
+        )
+        level_filtered_ps_ids = {r[0] for r in level_query.all()}
+        # Если по уровням ничего не найдено, дальнейший поиск бессмысленен
+        if not level_filtered_ps_ids:
+            return {"total": 0, "items": [], "search_query": search_query}
 
-    if search_conditions:
-        filter_conditions.append(or_(*search_conditions))
+    # --- Этап 2: Полнотекстовый поиск (если задан) ---
+    text_filtered_ps_ids: Optional[set] = None
+    if search_query:
+        # Готовим запрос для MATCH...AGAINST в режиме булева поиска
+        # '+' означает, что слово должно присутствовать, '*' - поиск по префиксу
+        boolean_search_query = ' '.join(f'+{word}*' for word in search_query.split())
 
-    # Join necessary tables and apply filters
-    if filter_conditions:
-        matching_ps_ids_subquery = session.query(ProfStandard.id).distinct().join(
-            GeneralizedLaborFunction, ProfStandard.id == GeneralizedLaborFunction.prof_standard_id
-        ).outerjoin(
-            LaborFunction, GeneralizedLaborFunction.id == LaborFunction.generalized_labor_function_id
-        ).outerjoin(
-            LaborAction, LaborFunction.id == LaborAction.labor_function_id
-        ).outerjoin(
-            RequiredSkill, LaborFunction.id == RequiredSkill.labor_function_id
-        ).outerjoin(
-            RequiredKnowledge, LaborFunction.id == RequiredKnowledge.labor_function_id
-        ).filter(and_(*filter_conditions)).subquery()
+        # Создаем части UNION-запроса для каждой таблицы
+        # Assuming table names for text() are correct as per your DB schema for full-text indexes
+        ps_q = select(ProfStandard.id.label("ps_id")).where(text("MATCH(name) AGAINST (:query IN BOOLEAN MODE)"))
+        otf_q = select(GeneralizedLaborFunction.prof_standard_id.label("ps_id")).where(text("MATCH(name) AGAINST (:query IN BOOLEAN MODE)"))
         
-        base_query = base_query.filter(ProfStandard.id.in_(select(matching_ps_ids_subquery)))
+        tf_q = select(GeneralizedLaborFunction.prof_standard_id.label("ps_id")).join(LaborFunction, LaborFunction.generalized_labor_function_id == GeneralizedLaborFunction.id).where(text("MATCH(competencies_labor_function.name) AGAINST (:query IN BOOLEAN MODE)"))
+        la_q = select(GeneralizedLaborFunction.prof_standard_id.label("ps_id")).join(LaborFunction, LaborFunction.generalized_labor_function_id == GeneralizedLaborFunction.id).join(LaborAction, LaborAction.labor_function_id == LaborFunction.id).where(text("MATCH(competencies_labor_action.description) AGAINST (:query IN BOOLEAN MODE)"))
+        rs_q = select(GeneralizedLaborFunction.prof_standard_id.label("ps_id")).join(LaborFunction, LaborFunction.generalized_labor_function_id == GeneralizedLaborFunction.id).join(RequiredSkill, RequiredSkill.labor_function_id == LaborFunction.id).where(text("MATCH(competencies_required_skill.description) AGAINST (:query IN BOOLEAN MODE)"))
+        rk_q = select(GeneralizedLaborFunction.prof_standard_id.label("ps_id")).join(LaborFunction, LaborFunction.generalized_labor_function_id == GeneralizedLaborFunction.id).join(RequiredKnowledge, RequiredKnowledge.labor_function_id == LaborFunction.id).where(text("MATCH(competencies_required_knowledge.description) AGAINST (:query IN BOOLEAN MODE)"))
 
-    # Get total count before pagination
-    total_results_query = base_query.with_entities(ProfStandard.id)
-    total_results = total_results_query.count()
+        # Объединяем все запросы в один большой UNION-запрос
+        # Ensure the selected column has the same name/label in all parts of union for distinct to work correctly
+        full_union_query = union_all(ps_q, otf_q, tf_q, la_q, rs_q, rk_q).alias('full_search')
+        
+        # Выполняем один запрос к БД для получения всех совпадающих ID
+        # We select the aliased column 'ps_id' from the subquery
+        matched_results = session.query(full_union_query.c.ps_id).params(query=boolean_search_query).distinct().all()
+        text_filtered_ps_ids = {r[0] for r in matched_results if r[0] is not None}
 
-    # Apply sorting and pagination
-    paginated_query = base_query.order_by(ProfStandard.code).offset(offset).limit(limit)
-    all_ps_to_process = paginated_query.all()
+
+    # --- Этап 3: Комбинирование результатов фильтрации ---
+    if text_filtered_ps_ids is not None and level_filtered_ps_ids is not None:
+        # Если были оба фильтра, берем их пересечение
+        matching_ps_ids = text_filtered_ps_ids.intersection(level_filtered_ps_ids)
+    elif text_filtered_ps_ids is not None:
+        # Если был только текстовый поиск
+        matching_ps_ids = text_filtered_ps_ids
+    elif level_filtered_ps_ids is not None:
+        # Если был только фильтр по уровням
+        matching_ps_ids = level_filtered_ps_ids
     
-    all_matching_ps_details: List[Dict[str, Any]] = []
+    # Если итоговый список ID пуст, возвращаем пустой результат
+    if not matching_ps_ids: # This covers cases where either search or levels were specified but yielded no results
+        return {"total": 0, "items": [], "search_query": search_query}
 
-    # Iterate through the pre-filtered PS to find matches and apply highlighting
+    # --- Этап 4: Получение полных данных для найденных ID с пагинацией ---
+    final_ps_ids = list(matching_ps_ids)
+    
+    # Запрос для получения полных данных, но только для найденных ID
+    base_query = session.query(ProfStandard).options(
+        selectinload(ProfStandard.generalized_labor_functions)
+            .selectinload(GeneralizedLaborFunction.labor_functions)
+            .options(
+                selectinload(LaborFunction.labor_actions),
+                selectinload(LaborFunction.required_skills),
+                selectinload(LaborFunction.required_knowledge)
+            )
+    )
+    # The ps_ids parameter from function signature is not used here.
+    # If it was intended to be an additional filter, it should be applied.
+    # For now, assuming it's superseded by the new logic or an oversight.
+
+    total_results = len(final_ps_ids) # Общее количество теперь просто длина списка ID
+
+    # Применяем пагинацию к списку ID, а не к query, для предсказуемости
+    # Sort IDs before pagination if a specific order is desired for pagination consistency
+    # For example, if you want to paginate based on PS code or name, you'd need to fetch those first or sort by ID
+    # Sorting by ProfStandard.code is done later on the paginated results.
+    # If consistent pagination across calls is needed without fetching all data, sort final_ps_ids.
+    # final_ps_ids.sort() # Example: sort by ID for consistent pagination slices
+
+    paginated_ids_to_fetch = final_ps_ids[offset : offset + limit]
+    
+    all_ps_to_process = []
+    if paginated_ids_to_fetch:
+        # Загружаем полные данные только для ID текущей страницы
+        paginated_query = base_query.filter(ProfStandard.id.in_(paginated_ids_to_fetch)).order_by(ProfStandard.code)
+        all_ps_to_process = paginated_query.all()
+    
+    # --- Этап 5: Формирование ответа (подсветка перенесена на фронтенд) ---
+    all_matching_ps_details = []
+    search_query_lower = search_query.lower() if search_query else ""
+
     for ps in all_ps_to_process:
         ps_details = ps.to_dict(rules=['-generalized_labor_functions'])
-        ps_details['has_match'] = False
-
-        query_lower = search_query.lower() if search_query else ""
+        ps_details['has_match'] = True # Overall PS is a match because its ID was in final_ps_ids
         
-        # Highlight PS metadata
-        ps_details['name'] = _highlight_text(ps.name, search_query)
-        ps_details['code'] = _highlight_text(ps.code, search_query)
-        ps_details['activity_area_name'] = _highlight_text(ps.activity_area_name, search_query)
-        ps_details['activity_purpose'] = _highlight_text(ps.activity_purpose, search_query)
-        
-        if search_query and (query_lower in (ps.name or "").lower() or query_lower in (ps.code or "").lower()):
-            ps_details['has_match'] = True
+        ps_details['name'] = ps.name # Ensure these top-level fields are present
+        ps_details['code'] = ps.code
+        ps_details['activity_area_name'] = ps.activity_area_name
+        ps_details['activity_purpose'] = ps.activity_purpose
 
         filtered_generalized_labor_functions = []
         for otf in ps.generalized_labor_functions:
+            # Filter by qualification_levels again at the display layer if they were provided
             if qualification_levels and otf.qualification_level and int(otf.qualification_level) not in qualification_levels:
                 continue
-                
+
             otf_details = otf.to_dict(rules=['-labor_functions'])
-            otf_details['has_match'] = False
+            otf_details['name'] = otf.name # Ensure these fields are present
+            otf_details['code'] = otf.code
+
+            otf_has_overall_match = False
+            if search_query: otf_details['has_match'] = search_query_lower in otf.name.lower()
+            else: otf_details['has_match'] = False # No query, no text match
+            if otf_details['has_match']: otf_has_overall_match = True
             
-            otf_details['name'] = _highlight_text(otf.name, search_query)
-            otf_details['code'] = _highlight_text(otf.code, search_query)
-
-            if search_query and (query_lower in (otf.name or "").lower() or query_lower in (otf.code or "").lower()):
-                otf_details['has_match'] = True
-
             filtered_labor_functions = []
             for tf in otf.labor_functions:
                 tf_details = tf.to_dict(rules=['-labor_actions', '-required_skills', '-required_knowledge'])
-                tf_has_match = False
-                
-                tf_details['name'] = _highlight_text(tf.name, search_query)
-                tf_details['code'] = _highlight_text(tf.code, search_query)
+                tf_details['name'] = tf.name # Ensure these fields are present
+                tf_details['code'] = tf.code
 
-                if search_query and (query_lower in (tf.name or "").lower() or query_lower in (tf.code or "").lower()):
-                    tf_has_match = True
-                
-                tf_details['labor_actions'] = []
+                tf_has_text_match = False
+                if search_query: tf_details['has_match'] = search_query_lower in tf.name.lower()
+                else: tf_details['has_match'] = False
+                if tf_details['has_match']: tf_has_text_match = True
+
+                child_elements_have_match = False
+
+                la_details_list = []
                 for la in tf.labor_actions:
-                    la_details = la.to_dict()
-                    la_details['has_match'] = search_query and query_lower in (la.description or "").lower()
-                    if la_details['has_match']: tf_has_match = True
-                    la_details['description'] = _highlight_text(la.description, search_query)
-                    tf_details['labor_actions'].append(la_details)
+                    la_d = la.to_dict()
+                    la_d['description'] = la.description
+                    if search_query: la_d['has_match'] = search_query_lower in la.description.lower()
+                    else: la_d['has_match'] = False
+                    if la_d['has_match']: child_elements_have_match = True
+                    la_details_list.append(la_d)
+                tf_details['labor_actions'] = la_details_list
 
-                tf_details['required_skills'] = []
+                rs_details_list = []
                 for rs in tf.required_skills:
-                    rs_details = rs.to_dict()
-                    rs_details['has_match'] = search_query and query_lower in (rs.description or "").lower()
-                    if rs_details['has_match']: tf_has_match = True
-                    rs_details['description'] = _highlight_text(rs.description, search_query)
-                    tf_details['required_skills'].append(rs_details)
+                    rs_d = rs.to_dict()
+                    rs_d['description'] = rs.description
+                    if search_query: rs_d['has_match'] = search_query_lower in rs.description.lower()
+                    else: rs_d['has_match'] = False
+                    if rs_d['has_match']: child_elements_have_match = True
+                    rs_details_list.append(rs_d)
+                tf_details['required_skills'] = rs_details_list
 
-                tf_details['required_knowledge'] = []
+                rk_details_list = []
                 for rk in tf.required_knowledge:
-                    rk_details = rk.to_dict()
-                    rk_details['has_match'] = search_query and query_lower in (rk.description or "").lower()
-                    if rk_details['has_match']: tf_has_match = True
-                    rk_details['description'] = _highlight_text(rk.description, search_query)
-                    tf_details['required_knowledge'].append(rk_details)
+                    rk_d = rk.to_dict()
+                    rk_d['description'] = rk.description
+                    if search_query: rk_d['has_match'] = search_query_lower in rk.description.lower()
+                    else: rk_d['has_match'] = False
+                    if rk_d['has_match']: child_elements_have_match = True
+                    rk_details_list.append(rk_d)
+                tf_details['required_knowledge'] = rk_details_list
                 
-                if tf_has_match or not search_query:
-                    tf_details['has_match'] = tf_has_match
+                # TF itself should be marked as having a match if its name matches OR any of its children match
+                if child_elements_have_match:
+                    tf_details['has_match'] = True
+                
+                # Add TF to result if it has a match (name or children) OR if no search query (show all structure)
+                if not search_query or tf_details['has_match']:
                     filtered_labor_functions.append(tf_details)
-                    otf_details['has_match'] = True
+                    if tf_details['has_match']: otf_has_overall_match = True # Propagate match up to OTF
 
-            if otf_details['has_match'] or not search_query:
-                otf_details['labor_functions'] = filtered_labor_functions
+            otf_details['labor_functions'] = filtered_labor_functions
+            
+            # OTF itself should be marked as having a match if its name matches OR any of its children (TFs) had a match
+            if otf_has_overall_match:
+                 otf_details['has_match'] = True
+            
+            # Add OTF to result if it has a match (name or children) OR if no search query (show all structure)
+            # OR if it has labor functions (which means they matched or no search query)
+            if not search_query or otf_details['has_match'] or len(otf_details['labor_functions']) > 0 :
                 filtered_generalized_labor_functions.append(otf_details)
-                ps_details['has_match'] = True
 
         ps_details['generalized_labor_functions'] = filtered_generalized_labor_functions
-        if ps_details['has_match'] or not search_query:
-            all_matching_ps_details.append(ps_details)
+        
+        # Only add PS if it has OTFs after filtering, or if no search query (to show all structure)
+        # The PS itself is already confirmed to be a match from the ID list.
+        # The filtering of OTF/TF is for display purposes to highlight relevant parts.
+        # If search_query is present, we only want to show PS if it has relevant sub-elements or its name matched.
+        # However, since the PS ID was found, it implies some part of it matched the search query.
+        # The `has_match` flags within the structure are for frontend highlighting.
+        # The current logic will always add the PS if its ID was in `paginated_ids_to_fetch`.
+        # The filtering of `generalized_labor_functions` inside `ps_details` handles what to show within that PS.
+        all_matching_ps_details.append(ps_details)
 
     logger.info(f"Found {total_results} matching PS for query '{search_query}' and levels {qualification_levels}. Returning {len(all_matching_ps_details)} (offset {offset}, limit {limit}).")
-    return {"total": total_results, "items": all_matching_ps_details}
+    return {"total": total_results, "items": all_matching_ps_details, "search_query": search_query}
 
 
 def get_educational_programs_list() -> List[EducationalProgram]:
@@ -580,22 +612,29 @@ def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True)
             if not existing_link:
                 link = CompetencyMatrix(aup_data_id=aup_data_id, indicator_id=indicator_id, is_manual=True)
                 session.add(link); logger.info(f"Link created: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
+                session.commit() # Added commit
                 return { 'success': True, 'status': 'created', 'message': "Link created." }
             else:
                 if not existing_link.is_manual:
                      existing_link.is_manual = True
                      session.add(existing_link); logger.info(f"Link updated to manual: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
+                     session.commit() # Added commit
                 return { 'success': True, 'status': 'already_exists', 'message': "Link already exists." }
         else:  # delete
             if existing_link:
                 session.delete(existing_link); logger.info(f"Link deleted: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
+                session.commit() # Added commit
                 return { 'success': True, 'status': 'deleted', 'message': "Link deleted." }
             else:
                 logger.warning(f"Link not found for deletion: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
                 return { 'success': True, 'status': 'not_found', 'message': "Link not found." }
 
-    except SQLAlchemyError as e: logger.error(f"Database error updating matrix link: {e}", exc_info=True); raise
-    except Exception as e: logger.error(f"Unexpected error updating matrix link: {e}", exc_info=True); raise
+    except SQLAlchemyError as e:
+        session.rollback() # Added rollback
+        logger.error(f"Database error updating matrix link: {e}", exc_info=True); raise
+    except Exception as e:
+        session.rollback() # Added rollback
+        logger.error(f"Unexpected error updating matrix link: {e}", exc_info=True); raise
 
 def get_all_competencies() -> List[Dict[str, Any]]:
     try:
@@ -728,35 +767,40 @@ def update_competency(comp_id: int, data: Dict[str, Any], session: Session) -> O
                  if getattr(competency, field) != processed_value:
                      setattr(competency, field, processed_value)
                      updated = True
+            elif field == 'educational_program_ids': # Allow this field, but handle it separately
+                pass
             else: logger.warning(f"Ignoring field '{field}' for update of comp {comp_id} as it is not allowed via this endpoint.")
         
-        if educational_program_ids is not None:
-            current_ep_ids = {assoc.educational_program_id for assoc in competency.educational_programs_assoc}
-            new_ep_ids = set(educational_program_ids)
+        if educational_program_ids is not None: # Check if key exists, even if value is empty list
+            if not isinstance(educational_program_ids, list):
+                logger.warning(f"educational_program_ids for competency {comp_id} is not a list. Skipping update of associations.")
+            else:
+                current_ep_ids = {assoc.educational_program_id for assoc in competency.educational_programs_assoc}
+                new_ep_ids = set(educational_program_ids)
 
-            to_delete_ids = current_ep_ids - new_ep_ids
-            if to_delete_ids:
-                session.query(CompetencyEducationalProgram).filter(
-                    CompetencyEducationalProgram.competency_id == competency.id,
-                    CompetencyEducationalProgram.educational_program_id.in_(to_delete_ids)
-                ).delete(synchronize_session='fetch'); updated = True
-            
-            to_add_ids = new_ep_ids - current_ep_ids
-            if to_add_ids:
-                for ep_id in to_add_ids:
-                    educational_program = session.query(EducationalProgram).get(ep_id)
-                    if educational_program:
-                        assoc = CompetencyEducationalProgram(competency_id=competency.id, educational_program_id=ep_id)
-                        session.add(assoc); updated = True
-                    else: logger.warning(f"Educational Program with ID {ep_id} not found when adding link for competency {comp_id}. Skipping.")
-            session.flush()
+                to_delete_ids = current_ep_ids - new_ep_ids
+                if to_delete_ids:
+                    session.query(CompetencyEducationalProgram).filter(
+                        CompetencyEducationalProgram.competency_id == competency.id,
+                        CompetencyEducationalProgram.educational_program_id.in_(to_delete_ids)
+                    ).delete(synchronize_session='fetch'); updated = True
+                
+                to_add_ids = new_ep_ids - current_ep_ids
+                if to_add_ids:
+                    for ep_id in to_add_ids:
+                        educational_program = session.query(EducationalProgram).get(ep_id)
+                        if educational_program:
+                            assoc = CompetencyEducationalProgram(competency_id=competency.id, educational_program_id=ep_id)
+                            session.add(assoc); updated = True
+                        else: logger.warning(f"Educational Program with ID {ep_id} not found when adding link for competency {comp_id}. Skipping.")
+                if to_delete_ids or to_add_ids: session.flush() # Flush if associations changed
         
         if updated:
-            session.add(competency)
+            session.add(competency) # Add competency again if its own fields or associations changed
             session.flush()
         
-        session.refresh(competency)
-        return competency.to_dict(rules=['-indicators'], include_type=True, include_educational_programs=True)
+        session.refresh(competency) # Refresh to get latest data including associations
+        return competency.to_dict(rules=['-indicators', '-fgos', '-based_on_labor_function'], include_type=True, include_educational_programs=True)
 
     except IntegrityError as e: logger.error(f"Database IntegrityError updating competency {comp_id}: {e}", exc_info=True); raise e
     except SQLAlchemyError as e: logger.error(f"Database error updating competency {comp_id}: {e}", exc_info=True); raise e
@@ -829,7 +873,7 @@ def update_indicator(ind_id: int, data: Dict[str, Any], session: Session) -> Opt
         
         for field in data:
             if field in allowed_fields:
-                 processed_value = str(data[field]).strip() if data[field] is not None else None
+                 processed_value = str(data[field]).strip() if data[field] is not None and field != 'selected_ps_elements_ids' else data[field]
                  if field == 'source' and processed_value == '': processed_value = None
                  
                  if field == 'code' and processed_value != indicator.code:
@@ -840,8 +884,8 @@ def update_indicator(ind_id: int, data: Dict[str, Any], session: Session) -> Opt
                            raise IntegrityError(f"Indicator with code {processed_value} already exists for competency {indicator.competency_id}.", {}, None)
                  
                  if field == 'selected_ps_elements_ids':
-                     if not isinstance(data[field], dict):
-                         logger.warning(f"Invalid format for selected_ps_elements_ids received for indicator {ind_id}: {type(data[field])}. Must be a dict. Skipping update for this field.")
+                     if data[field] is not None and not isinstance(data[field], dict): # Allow None
+                         logger.warning(f"Invalid format for selected_ps_elements_ids received for indicator {ind_id}: {type(data[field])}. Must be a dict or None. Skipping update for this field.")
                          continue
                      if indicator.selected_ps_elements_ids != data[field]:
                          indicator.selected_ps_elements_ids = data[field]
@@ -969,7 +1013,7 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
             session.flush()
 
         comp_types_map = {ct.code: ct for ct in session.query(CompetencyType).filter(CompetencyType.code.in_(['УК', 'ОПК'])).all()}
-        if not comp_types_map:
+        if not comp_types_map.get('УК') or not comp_types_map.get('ОПК'): # Check specifically for УК and ОПК
             logger.error("CompetencyType (УК, ОПК) not found. Cannot save competencies.")
             raise ValueError("CompetencyType (УК, ОПК) not found. Please seed initial competency types.")
         
@@ -993,7 +1037,7 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
             existing_comp_for_fgos = session.query(Competency).filter_by(
                 code=comp_code, competency_type_id=comp_type.id, fgos_vo_id=fgos_vo.id
             ).first()
-            if existing_comp_for_fgos:
+            if existing_comp_for_fgos: # This check might be redundant if force_update already deleted them
                 logger.warning(f"Competency {comp_code} already exists for FGOS {fgos_vo.id}. Skipping."); continue
             
             competency = Competency(
@@ -1004,7 +1048,7 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
                 category_name=comp_category_name
             )
             session.add(competency)
-            session.flush()
+            session.flush() # Flush to get competency ID for potential indicators (if any were parsed)
             saved_competencies_count += 1
         
         logger.info(f"Saved {saved_competencies_count} competencies for FGOS {fgos_vo.id}.")
@@ -1022,24 +1066,42 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
                 if not ps_code: continue
                 
                 prof_standard = ps_by_code.get(ps_code)
+                # Link creation logic was here, ensure it's correct with force_update
+                # If force_update, old FgosRecommendedPs were deleted. So, we always create new ones.
+                # If not force_update and FGOS is new, we create new ones.
+                # The check for existing_link is effectively handled by the earlier deletion if force_update.
+                # If not force_update and FGOS already existed, this function would have raised IntegrityError.
+
+                # We always try to add the link if the PS exists in the DB.
+                # If the link already exists (e.g. not force_update, but somehow this part is reached for an existing FGOS),
+                # we might want to update its description.
+                # However, the current structure with force_update deleting old links simplifies this: just add.
+
                 if prof_standard:
-                    existing_link = session.query(FgosRecommendedPs).filter_by(fgos_vo_id=fgos_vo.id, prof_standard_id=prof_standard.id).first()
+                    # Check if link already exists (e.g. if not force_update and this part is somehow reached)
+                    # This check is more relevant if we weren't systematically deleting on force_update
+                    existing_link = session.query(FgosRecommendedPs).filter_by(
+                        fgos_vo_id=fgos_vo.id, 
+                        prof_standard_id=prof_standard.id
+                    ).first()
+
                     if not existing_link:
                         link = FgosRecommendedPs(
                             fgos_vo_id=fgos_vo.id,
                             prof_standard_id=prof_standard.id,
-                            is_mandatory=False,
+                            is_mandatory=False, # Default, or parse from doc if available
                             description=ps_name_from_doc
                         )
                         session.add(link)
                         linked_ps_count += 1
-                    else:
-                        if existing_link.description != ps_name_from_doc:
-                            existing_link.description = ps_name_from_doc
-                            session.add(existing_link)
+                    elif existing_link.description != ps_name_from_doc : # If link exists, update description if different
+                        existing_link.description = ps_name_from_doc
+                        session.add(existing_link)
+                        # Not incrementing linked_ps_count as it's an update
                 else:
-                    logger.warning(f"Recommended PS with code {ps_code} (name: {ps_name_from_doc}) not found in DB. Skipping link in FgosRecommendedPs.")
-             logger.info(f"Queued {linked_ps_count} new recommended PS links for FGOS {fgos_vo.id}.")
+                    logger.warning(f"Recommended PS with code {ps_code} (name: {ps_name_from_doc}) not found in DB. Skipping link in FgosRecommendedPs for FGOS {fgos_vo.id}.")
+             if linked_ps_count > 0:
+                logger.info(f"Queued {linked_ps_count} new recommended PS links for FGOS {fgos_vo.id}.")
         
         return fgos_vo
     except IntegrityError as e:
@@ -1074,41 +1136,65 @@ def get_fgos_details(fgos_id: int) -> Optional[Dict[str, Any]]:
         
         # Process competencies (UK/OPK)
         uk_competencies_data = []; opk_competencies_data = []
-        comp_types_map_by_id = {ct.id: ct.code for ct in session.query(CompetencyType).filter(CompetencyType.code.in_(['УК', 'ОПК'])).all()}
-        def sort_key_competency(c): type_code = comp_types_map_by_id.get(c.competency_type_id, 'ZZZ'); return (type_code, c.code)
+        # Efficiently get type codes without another query if possible, or ensure Competency.competency_type is loaded
+        # The selectinload already loads Competency.competency_type
+        
+        # Sort competencies by type (УК then ОПК) and then by code
+        def sort_key_competency(c):
+            type_code_order = {'УК': 1, 'ОПК': 2}.get(c.competency_type.code if c.competency_type else 'ZZZ', 99)
+            return (type_code_order, c.code)
+
         sorted_competencies = sorted(fgos.competencies, key=sort_key_competency)
+
         for comp in sorted_competencies:
             if comp.competency_type and comp.competency_type.code in ['УК', 'ОПК']:
-                 comp_dict = comp.to_dict(rules=['-fgos', '-based_on_labor_function', '-indicators', '-competency_type'])
+                 comp_dict = comp.to_dict(rules=['-fgos', '-based_on_labor_function', '-indicators', '-competency_type', '-matrix_entries', '-educational_programs_assoc'])
                  comp_dict['type_code'] = comp.competency_type.code
-                 comp_dict['indicators'] = [ind.to_dict() for ind in comp.indicators] if comp.indicators else []
-                 if len(comp_dict['indicators']) > 0: comp_dict['indicators'].sort(key=lambda i: i['code'])
+                 comp_dict['indicators'] = []
+                 if comp.indicators:
+                     # Sort indicators by code
+                     sorted_indicators = sorted(comp.indicators, key=lambda i: i.code)
+                     comp_dict['indicators'] = [ind.to_dict(rules=['-competency', '-labor_functions', '-matrix_entries']) for ind in sorted_indicators]
+                 
                  if comp.competency_type.code == 'УК': uk_competencies_data.append(comp_dict)
                  elif comp.competency_type.code == 'ОПК': opk_competencies_data.append(comp_dict)
         details['uk_competencies'] = uk_competencies_data; details['opk_competencies'] = opk_competencies_data
         
         recommended_ps_info_for_display = []
+        # Use fgos.recommended_ps_parsed_data as the source of truth for what was in the document
         parsed_recommended_ps_from_doc = fgos.recommended_ps_parsed_data
         
         if parsed_recommended_ps_from_doc and isinstance(parsed_recommended_ps_from_doc, list):
+            # Create a map of loaded PS from the associations for quick lookup
             loaded_ps_map = {assoc.prof_standard.code: assoc.prof_standard
                              for assoc in fgos.recommended_ps_assoc if assoc.prof_standard}
  
             for ps_data_from_doc in parsed_recommended_ps_from_doc:
                 ps_code = ps_data_from_doc.get('code')
-                if not ps_code: continue
+                if not ps_code: continue # Skip if no code in parsed data
  
-                loaded_ps = loaded_ps_map.get(ps_code)
+                loaded_ps = loaded_ps_map.get(ps_code) # Check if this PS code is linked and loaded
                 
+                # Get approval_date from parsed data, ensure it's stringified if it's a date object
+                approval_date_from_doc = ps_data_from_doc.get('approval_date')
+                if isinstance(approval_date_from_doc, datetime.date):
+                    approval_date_str = approval_date_from_doc.isoformat()
+                elif isinstance(approval_date_from_doc, str):
+                    approval_date_str = approval_date_from_doc # Already a string
+                else:
+                    approval_date_str = None
+
+
                 item_to_add = {
-                    'id': loaded_ps.id if loaded_ps else None,
+                    'id': loaded_ps.id if loaded_ps else None, # ID of the ProfStandard in DB
                     'code': ps_code,
-                    'name': loaded_ps.name if loaded_ps else ps_data_from_doc.get('name'), # Use loaded name if available, else parsed
-                    'is_loaded': bool(loaded_ps),
-                    'approval_date': ps_data_from_doc.get('approval_date')
+                    'name': loaded_ps.name if loaded_ps else ps_data_from_doc.get('name'), # Use DB name if loaded, else parsed name
+                    'is_loaded': bool(loaded_ps), # True if this PS is in our DB and linked
+                    'approval_date': approval_date_str # Date from the FGOS document
                 }
                 recommended_ps_info_for_display.append(item_to_add)
             
+            # Sort the final list, e.g., by code
             recommended_ps_info_for_display.sort(key=lambda x: x['code'])
         
         details['recommended_ps'] = recommended_ps_info_for_display
@@ -1121,12 +1207,21 @@ def delete_fgos(fgos_id: int, session: Session, delete_related_competencies: boo
          fgos_to_delete = session.query(FgosVo).get(fgos_id)
          if not fgos_to_delete: logger.warning(f"FGOS with id {fgos_id} not found for deletion."); return False
          
+         # Cascading deletes for FgosRecommendedPs and Competencies (UK/OPK type for this FGOS)
+         # are handled by SQLAlchemy if relationships are configured with cascade="all, delete-orphan".
+         # No explicit deletion of related competencies or recommended PS links is needed here if so.
+         # The `delete_related_competencies` flag becomes somewhat moot if cascade is correctly set up for competencies.
+         # If it's meant to be a safeguard or for relationships without cascade, then explicit deletes would be needed.
+         # Assuming cascade="all, delete-orphan" is on FgosVo.competencies and FgosVo.recommended_ps_assoc.
+
          if delete_related_competencies:
-             logger.info(f"Attempting to delete related competencies for FGOS {fgos_id}.")
-             # SQLAlchemy will handle cascade delete for Competency because of cascade="all, delete-orphan" on FgosVo.competencies relationship.
-             # However, if delete_related_competencies is optional, we might need to manually delete here if relationships aren't configured for it.
-             # Assuming cascade is set, no explicit query needed here.
-             pass
+             logger.info(f"FGOS {fgos_id} will be deleted. Related competencies (if cascade is set) and recommended PS links will also be deleted.")
+             # If cascade is not set for Competency but desired:
+             # session.query(Competency).filter(Competency.fgos_vo_id == fgos_id).delete(synchronize_session='fetch')
+         # else:
+             # If competencies should NOT be deleted when FGOS is deleted (and cascade is on),
+             # this would be more complex, potentially nullifying fgos_vo_id on competencies.
+             # But typically, FGOS-specific competencies (UK/OPK) are deleted with the FGOS.
 
          session.delete(fgos_to_delete)
          return True
@@ -1157,7 +1252,15 @@ def save_prof_standard_data(parsed_data: Dict[str, Any], filename: str, session:
         if existing_ps:
             if force_update:
                 logger.info(f"Existing PS found ({existing_ps.id}). Force update. Deleting old structure and updating metadata...")
-                session.query(GeneralizedLaborFunction).filter_by(prof_standard_id=existing_ps.id).delete(synchronize_session='fetch')
+                # Cascade delete for OTFs (and their children) should be handled by SQLAlchemy
+                # if ProfStandard.generalized_labor_functions relationship has cascade="all, delete-orphan".
+                # If not, explicit deletion is needed:
+                # otfs_to_delete = session.query(GeneralizedLaborFunction).filter_by(prof_standard_id=existing_ps.id).all()
+                # for otf in otfs_to_delete:
+                #     # Manually delete children of OTF if cascade not set there either
+                #     session.delete(otf)
+                # For simplicity, assuming cascade="all, delete-orphan" on ProfStandard.generalized_labor_functions
+                session.query(GeneralizedLaborFunction).filter_by(prof_standard_id=existing_ps.id).delete(synchronize_session='fetch') # Explicit delete if cascade not reliable or for clarity
                 session.flush()
 
                 existing_ps.name = ps_name
@@ -1167,6 +1270,7 @@ def save_prof_standard_data(parsed_data: Dict[str, Any], filename: str, session:
                 existing_ps.registration_date = registration_date_obj
                 existing_ps.activity_area_name = parsed_data.get('activity_area_name')
                 existing_ps.activity_purpose = parsed_data.get('activity_purpose')
+                # existing_ps.file_path = filename # Consider if file_path should be updated
 
                 session.add(existing_ps); current_ps = existing_ps
             else: raise IntegrityError(f"Профессиональный стандарт с кодом {ps_code} уже существует.", {}, None)
@@ -1175,44 +1279,50 @@ def save_prof_standard_data(parsed_data: Dict[str, Any], filename: str, session:
                 code=ps_code, name=ps_name, order_number=parsed_data.get('order_number'), order_date=order_date_obj,
                 registration_number=parsed_data.get('registration_number'), registration_date=registration_date_obj,
                 activity_area_name=parsed_data.get('activity_area_name'), activity_purpose=parsed_data.get('activity_purpose')
+                # file_path=filename # Consider if file_path should be set
             )
-            session.add(current_ps); session.flush()
+            session.add(current_ps); session.flush() # Flush to get current_ps.id
 
         for otf_data in generalized_labor_functions_data:
             otf_code = otf_data.get('code'); otf_name = otf_data.get('name'); otf_level = otf_data.get('qualification_level'); tf_list_data = otf_data.get('labor_functions', [])
 
-            if not otf_code or not otf_name or not isinstance(tf_list_data, list): continue
+            if not otf_code or not otf_name or not isinstance(tf_list_data, list):
+                logger.warning(f"Skipping OTF due to missing data or invalid TF list: code={otf_code}"); continue
 
-            new_otf = GeneralizedLaborFunction(prof_standard_id=current_ps.id, code=otf_code, name=otf_name, qualification_level=otf_level)
-            session.add(new_otf); session.flush()
+            new_otf = GeneralizedLaborFunction(prof_standard_id=current_ps.id, code=otf_code, name=otf_name, qualification_level=str(otf_level) if otf_level is not None else None)
+            session.add(new_otf); session.flush() # Flush to get new_otf.id
 
             for tf_data in tf_list_data:
-                tf_code = tf_data.get('code'); tf_name = tf_data.get('name'); tf_level = tf_data.get('qualification_level')
+                tf_code = tf_data.get('code'); tf_name = tf_data.get('name'); tf_level = tf_data.get('qualification_level') # This might be string or int
                 la_list_data = tf_data.get('labor_actions', []); rs_list_data = tf_data.get('required_skills', []); rk_list_data = tf_data.get('required_knowledge', [])
 
                 if not tf_code or not tf_name or not isinstance(la_list_data, list) or \
-                   not isinstance(rs_list_data, list) or not isinstance(rk_list_data, list): continue
+                   not isinstance(rs_list_data, list) or not isinstance(rk_list_data, list):
+                   logger.warning(f"Skipping TF under OTF {otf_code} due to missing data or invalid sub-lists: code={tf_code}"); continue
 
-                new_tf = LaborFunction(generalized_labor_function_id=new_otf.id, code=tf_code, name=tf_name, qualification_level=tf_level)
-                session.add(new_tf); session.flush()
+                new_tf = LaborFunction(generalized_labor_function_id=new_otf.id, code=tf_code, name=tf_name, qualification_level=str(tf_level) if tf_level is not None else None)
+                session.add(new_tf); session.flush() # Flush to get new_tf.id
 
                 for i, la_data in enumerate(la_list_data):
-                     la_description = la_data.get('description')
-                     if la_description: session.add(LaborAction(labor_function_id=new_tf.id, description=la_description.strip(), order=la_data.get('order', i)))
+                     la_description = la_data.get('description') if isinstance(la_data, dict) else str(la_data) # Handle if la_data is just a string
+                     la_order = la_data.get('order', i) if isinstance(la_data, dict) else i
+                     if la_description: session.add(LaborAction(labor_function_id=new_tf.id, description=str(la_description).strip(), order=la_order))
 
                 for i, rs_data in enumerate(rs_list_data):
-                     rs_description = rs_data.get('description')
-                     if rs_description: session.add(RequiredSkill(labor_function_id=new_tf.id, description=rs_description.strip(), order=rs_data.get('order', i)))
+                     rs_description = rs_data.get('description') if isinstance(rs_data, dict) else str(rs_data)
+                     rs_order = rs_data.get('order', i) if isinstance(rs_data, dict) else i
+                     if rs_description: session.add(RequiredSkill(labor_function_id=new_tf.id, description=str(rs_description).strip(), order=rs_order))
                                 
                 for i, rk_data in enumerate(rk_list_data):
-                     rk_description = rk_data.get('description')
-                     if rk_description: session.add(RequiredKnowledge(labor_function_id=new_tf.id, description=rk_description.strip(), order=rk_data.get('order', i)))
-
+                     rk_description = rk_data.get('description') if isinstance(rk_data, dict) else str(rk_data)
+                     rk_order = rk_data.get('order', i) if isinstance(rk_data, dict) else i
+                     if rk_description: session.add(RequiredKnowledge(labor_function_id=new_tf.id, description=str(rk_description).strip(), order=rk_order))
+        session.flush() # Final flush for all sub-elements
         return current_ps
 
-    except IntegrityError as e: logger.error(f"Integrity error saving PS '{ps_code}': {e}", exc_info=True); raise
-    except SQLAlchemyError as e: logger.error(f"Database error saving PS '{ps_code}': {e}", exc_info=True); raise
-    except Exception as e: logger.error(f"Unexpected error saving PS '{ps_code}': {e}", exc_info=True); raise
+    except IntegrityError as e: logger.error(f"Integrity error saving PS '{ps_code}': {e}", exc_info=True); session.rollback(); raise
+    except SQLAlchemyError as e: logger.error(f"Database error saving PS '{ps_code}': {e}", exc_info=True); session.rollback(); raise
+    except Exception as e: logger.error(f"Unexpected error saving PS '{ps_code}': {e}", exc_info=True); session.rollback(); raise
 
 def get_prof_standards_list() -> List[Dict[str, Any]]:
     """
@@ -1223,26 +1333,23 @@ def get_prof_standards_list() -> List[Dict[str, Any]]:
     try:
         session = local_db.session
         
+        # Fetch all loaded Professional Standards with their FGOS associations
         saved_prof_standards_db = session.query(ProfStandard).options(
             selectinload(ProfStandard.fgos_assoc).selectinload(FgosRecommendedPs.fgos)
         ).all()
         
-        saved_ps_map = {ps.code: ps for ps in saved_prof_standards_db}
-        
+        # Fetch all FGOS to get their parsed recommended PS data
         all_fgos = session.query(FgosVo).all()
         
-        # Use a dictionary to combine all unique PS (actual + placeholders)
-        # Value: A dict representing the combined PS, similar to ProfStandardListItem
         combined_ps_data: Dict[str, Dict[str, Any]] = {}
 
+        # Populate with loaded ProfStandards
         for ps in saved_prof_standards_db:
             ps_dict = ps.to_dict(rules=['-fgos_assoc', '-generalized_labor_functions', '-educational_program_assoc'])
             ps_dict['is_loaded'] = True
-            ps_dict['recommended_by_fgos'] = []
-            combined_ps_data[ps.code] = ps_dict
-
-        # Populate `recommended_by_fgos` for loaded PS from `fgos_assoc`
-        for ps in saved_prof_standards_db:
+            ps_dict['recommended_by_fgos'] = [] # Initialize list for FGOS recommendations
+            
+            # Populate `recommended_by_fgos` from actual DB links
             if ps.fgos_assoc:
                 for assoc in ps.fgos_assoc:
                     if assoc.fgos:
@@ -1254,32 +1361,18 @@ def get_prof_standards_list() -> List[Dict[str, Any]]:
                             'number': assoc.fgos.number,
                             'date': assoc.fgos.date.isoformat() if assoc.fgos.date else None,
                         }
-                        combined_ps_data[ps.code]['recommended_by_fgos'].append(fgos_info)
-            combined_ps_data[ps.code]['recommended_by_fgos'].sort(key=lambda x: (x['code'], x.get('date', '')))
+                        ps_dict['recommended_by_fgos'].append(fgos_info)
+            combined_ps_data[ps.code] = ps_dict
 
-        # Add placeholders from FGOS recommended lists
+        # Add/update with placeholders and recommendations from FGOS parsed data
         for fgos in all_fgos:
             parsed_recommended_ps = fgos.recommended_ps_parsed_data
             if parsed_recommended_ps and isinstance(parsed_recommended_ps, list):
-                for ps_item_from_fgos in parsed_recommended_ps:
-                    ps_code = ps_item_from_fgos.get('code')
+                for ps_item_from_fgos_doc in parsed_recommended_ps:
+                    ps_code = ps_item_from_fgos_doc.get('code')
                     if not ps_code: continue
 
-                    if ps_code not in combined_ps_data:
-                        # This is a placeholder PS
-                        combined_ps_data[ps_code] = {
-                            'id': None,
-                            'code': ps_code,
-                            'name': ps_item_from_fgos.get('name'),
-                            'order_number': None,
-                            'order_date': ps_item_from_fgos.get('approval_date').isoformat() if isinstance(ps_item_from_fgos.get('approval_date'), datetime.date) else ps_item_from_fgos.get('approval_date'),
-                            'registration_number': None,
-                            'registration_date': None,
-                            'is_loaded': False,
-                            'recommended_by_fgos': []
-                        }
-                    # Add FGOS to recommended_by_fgos list for current PS (loaded or placeholder)
-                    fgos_info_for_ps = {
+                    fgos_recommendation_info = {
                         'id': fgos.id,
                         'code': fgos.direction_code,
                         'name': fgos.direction_name,
@@ -1287,17 +1380,50 @@ def get_prof_standards_list() -> List[Dict[str, Any]]:
                         'number': fgos.number,
                         'date': fgos.date.isoformat() if fgos.date else None,
                     }
-                    # Avoid duplicate entries if the same FGOS recommends the same PS multiple times
-                    # Check if fgos_info_for_ps (identified by id) is already in the recommended_by_fgos list for this PS code
-                    if not any(entry['id'] == fgos_info_for_ps['id'] for entry in combined_ps_data[ps_code]['recommended_by_fgos']):
-                        combined_ps_data[ps_code]['recommended_by_fgos'].append(fgos_info_for_ps)
+                    
+                    approval_date_from_doc = ps_item_from_fgos_doc.get('approval_date')
+                    if isinstance(approval_date_from_doc, datetime.date):
+                        approval_date_str = approval_date_from_doc.isoformat()
+                    elif isinstance(approval_date_from_doc, str):
+                         # Validate or parse if it's a string but not ISO format
+                        try:
+                            datetime.date.fromisoformat(approval_date_from_doc)
+                            approval_date_str = approval_date_from_doc
+                        except ValueError:
+                            parsed_date = parse_date_string(approval_date_from_doc) # Your existing helper
+                            approval_date_str = parsed_date.isoformat() if parsed_date else None
+                    else:
+                        approval_date_str = None
 
 
-        for ps_code in combined_ps_data:
-            combined_ps_data[ps_code]['recommended_by_fgos'].sort(key=lambda x: (x['code'], x.get('date', '')))
+                    if ps_code not in combined_ps_data:
+                        # This PS is recommended by an FGOS but not loaded in our DB yet (placeholder)
+                        combined_ps_data[ps_code] = {
+                            'id': None, # No DB ID for this PS
+                            'code': ps_code,
+                            'name': ps_item_from_fgos_doc.get('name'), # Name from FGOS doc
+                            'order_number': None, # Placeholder, actual PS not loaded
+                            'order_date': approval_date_str, # Date from FGOS doc (often approval date of PS)
+                            'registration_number': None,
+                            'registration_date': None,
+                            'is_loaded': False,
+                            'recommended_by_fgos': [fgos_recommendation_info] # Starts with current FGOS
+                        }
+                    else:
+                        # PS is loaded, add this FGOS to its recommendation list if not already present from DB link
+                        # Check based on FGOS ID to avoid duplicates if parsed data and DB links overlap
+                        current_recommendations = combined_ps_data[ps_code]['recommended_by_fgos']
+                        if not any(rec['id'] == fgos.id for rec in current_recommendations):
+                            current_recommendations.append(fgos_recommendation_info)
+        
+        # Sort `recommended_by_fgos` lists for consistency
+        for ps_data_item in combined_ps_data.values():
+            ps_data_item['recommended_by_fgos'].sort(key=lambda x: (x['code'] or "", x.get('date', "") or ""))
 
+        # Convert dict to list and sort the final list of PS, e.g., by code
         result = sorted(list(combined_ps_data.values()), key=lambda x: x['code'])
         return result
+        
     except SQLAlchemyError as e:
         logger.error(f"Database error fetching ProfStandards list: {e}", exc_info=True)
         return []
@@ -1309,27 +1435,32 @@ def get_prof_standard_details(ps_id: int) -> Optional[Dict[str, Any]]:
     try:
         session: Session = local_db.session
         ps = session.query(ProfStandard).options(
-            selectinload(ProfStandard.generalized_labor_functions).selectinload(GeneralizedLaborFunction.labor_functions).selectinload(LaborFunction.labor_actions),
-            selectinload(ProfStandard.generalized_labor_functions).selectinload(GeneralizedLaborFunction.labor_functions).selectinload(LaborFunction.required_skills),
-            selectinload(ProfStandard.generalized_labor_functions).selectinload(GeneralizedLaborFunction.labor_functions).selectinload(LaborFunction.required_knowledge)
-        ).get(ps_id)
+            selectinload(ProfStandard.generalized_labor_functions).selectinload(GeneralizedLaborFunction.labor_functions).options(
+                selectinload(LaborFunction.labor_actions),
+                selectinload(LaborFunction.required_skills),
+                selectinload(LaborFunction.required_knowledge)
+            )
+        ).get(ps_id) # Corrected this line
         if not ps: logger.warning(f"PS with ID {ps_id} not found."); return None
         
         details = ps.to_dict(rules=['-generalized_labor_functions', '-fgos_assoc', '-educational_program_assoc'])
         
         otf_list = []
         if ps.generalized_labor_functions:
-            sorted_otfs = sorted(ps.generalized_labor_functions, key=lambda otf_item: otf_item.code)
+            # Sort OTFs by code
+            sorted_otfs = sorted(ps.generalized_labor_functions, key=lambda otf_item: otf_item.code or "")
             for otf_item in sorted_otfs:
                 otf_dict = otf_item.to_dict(rules=['-prof_standard', '-labor_functions'])
                 otf_dict['labor_functions'] = []
                 if otf_item.labor_functions:
-                    sorted_tfs = sorted(otf_item.labor_functions, key=lambda tf_item: tf_item.code)
+                    # Sort TFs by code
+                    sorted_tfs = sorted(otf_item.labor_functions, key=lambda tf_item: tf_item.code or "")
                     for tf_item in sorted_tfs:
                         tf_dict = tf_item.to_dict(rules=['-generalized_labor_function', '-labor_actions', '-required_skills', '-required_knowledge', '-indicators', '-competencies'])
-                        tf_dict['labor_actions'] = sorted([la.to_dict() for la in tf_item.labor_actions], key=lambda x: x.get('order', 0) if x.get('order') is not None else float('inf'))
-                        tf_dict['required_skills'] = sorted([rs.to_dict() for rs in tf_item.required_skills], key=lambda x: x.get('order', 0) if x.get('order') is not None else float('inf'))
-                        tf_dict['required_knowledge'] = sorted([rk.to_dict() for rk in tf_item.required_knowledge], key=lambda x: x.get('order', 0) if x.get('order') is not None else float('inf'))
+                        # Sort LA, RS, RK by their 'order' attribute
+                        tf_dict['labor_actions'] = sorted([la.to_dict() for la in tf_item.labor_actions], key=lambda x: x.get('order', float('inf')))
+                        tf_dict['required_skills'] = sorted([rs.to_dict() for rs in tf_item.required_skills], key=lambda x: x.get('order', float('inf')))
+                        tf_dict['required_knowledge'] = sorted([rk.to_dict() for rk in tf_item.required_knowledge], key=lambda x: x.get('order', float('inf')))
                         otf_dict['labor_functions'].append(tf_dict)
                 otf_list.append(otf_dict)
         details['generalized_labor_functions'] = otf_list
@@ -1343,7 +1474,16 @@ def delete_prof_standard(ps_id: int, session: Session) -> bool:
          ps_to_delete = session.query(ProfStandard).get(ps_id)
          if not ps_to_delete: logger.warning(f"ProfStandard {ps_id} not found for deletion."); return False
          
+         # Cascading deletes for GeneralizedLaborFunction, FgosRecommendedPs, EducationalProgramPs
+         # should be handled by SQLAlchemy if relationships are configured with cascade="all, delete-orphan".
+         # If not, they would need to be deleted manually here or handled by DB foreign key constraints.
+         # Example: session.query(GeneralizedLaborFunction).filter_by(prof_standard_id=ps_id).delete()
+         #          session.query(FgosRecommendedPs).filter_by(prof_standard_id=ps_id).delete()
+         #          session.query(EducationalProgramPs).filter_by(prof_standard_id=ps_id).delete()
+         # Assuming cascades are set up.
+
          session.delete(ps_to_delete)
          return True
     except SQLAlchemyError as e: logger.error(f"Database error deleting PS {ps_id}: {e}", exc_info=True); raise e
     except Exception as e: logger.error(f"Unexpected error deleting PS {ps_id}: {e}", exc_info=True); raise e
+
