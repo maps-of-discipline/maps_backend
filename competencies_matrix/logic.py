@@ -7,7 +7,7 @@ import json
 import re
 
 from flask import current_app
-from sqlalchemy import create_engine, select, exists, and_, or_, cast, Integer, text, union_all # Добавьте этот импорт
+from sqlalchemy import create_engine, select, exists, and_, or_, cast, Integer, text, union_all
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
 
@@ -49,23 +49,36 @@ def get_external_db_engine():
 
 def search_prof_standards(
     search_query: str,
-    ps_ids: Optional[List[int]] = None, # ps_ids is not used in the new version, consider removing if not needed elsewhere
+    ps_ids: Optional[List[int]] = None,
     offset: int = 0,
-    limit: int = 50, # Увеличенный лимит по умолчанию
+    limit: int = 50,
     qualification_levels: Optional[List[int]] = None
 ) -> Dict[str, Any]:
     """
     (Оптимизированная версия)
-    Ищет в профстандартах, используя один UNION-запрос для получения ID,
-    а затем один запрос для получения полных данных.
+    Ищет в профстандартах, используя полнотекстовый поиск.
+    Работает в несколько этапов для максимальной производительности:
+    1. Получает ID профстандартов, отфильтрованных по уровню квалификации.
+    2. Получает ID профстандартов, отфильтрованных по тексту запроса через FTS.
+    3. Пересекает эти два набора ID, чтобы получить итоговый список.
+    4. Применяет дополнительный фильтр по `ps_ids` (если заданы) к итоговому списку ID.
+    5. Загружает полные данные только для итогового списка ID с пагинацией.
     """
-    if not search_query and not qualification_levels:
-        raise ValueError("Необходимо указать поисковый запрос или выбрать уровни квалификации.")
-    if search_query and len(search_query) < 2:
+    if not search_query and not qualification_levels and not ps_ids: # ИЗМЕНЕНИЕ: Разрешаем поиск только по ps_ids
+        raise ValueError("Необходимо указать поисковый запрос, выбрать уровни квалификации или выбрать конкретные профстандарты.")
+    if search_query and len(search_query) < 2 and search_query: # ИЗМЕНЕНИЕ: search_query пустой, если его нет
         raise ValueError("Поисковый запрос должен содержать минимум 2 символа.")
 
     session: Session = local_db.session
-    matching_ps_ids = set()
+    
+    # Инициализируем набор всех ID профстандартов, если нет начального фильтра
+    # или заданы только ps_ids.
+    # Это будет наш "стартовый" набор, который затем будет сужаться.
+    initial_ps_ids_set: set
+    if ps_ids:
+        initial_ps_ids_set = set(ps_ids) # Если ps_ids заданы, начинаем с них
+    else:
+        initial_ps_ids_set = {ps.id for ps in session.query(ProfStandard.id).all()} # Иначе - все ID в базе
 
     # --- Этап 1: Фильтрация по уровням квалификации (если заданы) ---
     level_filtered_ps_ids: Optional[set] = None
@@ -76,83 +89,58 @@ def search_prof_standards(
             cast(GeneralizedLaborFunction.qualification_level, Integer).in_(qualification_levels)
         )
         level_filtered_ps_ids = {r[0] for r in level_query.all()}
-        # Если по уровням ничего не найдено, дальнейший поиск бессмысленен
+        # Если фильтр по уровням есть, но нет совпадений, то и итоговых не будет
         if not level_filtered_ps_ids:
             return {"total": 0, "items": [], "search_query": search_query}
 
     # --- Этап 2: Полнотекстовый поиск (если задан) ---
     text_filtered_ps_ids: Optional[set] = None
     if search_query:
-        # Готовим запрос для MATCH...AGAINST в режиме булева поиска
-        # '+' означает, что слово должно присутствовать, '*' - поиск по префиксу
         boolean_search_query = ' '.join(f'+{word}*' for word in search_query.split())
-
-        # Создаем части UNION-запроса для каждой таблицы
-        # Assuming table names for text() are correct as per your DB schema for full-text indexes
-        ps_q = select(ProfStandard.id.label("ps_id")).where(text("MATCH(name) AGAINST (:query IN BOOLEAN MODE)"))
-        otf_q = select(GeneralizedLaborFunction.prof_standard_id.label("ps_id")).where(text("MATCH(name) AGAINST (:query IN BOOLEAN MODE)"))
         
-        tf_q = select(GeneralizedLaborFunction.prof_standard_id.label("ps_id")).join(LaborFunction, LaborFunction.generalized_labor_function_id == GeneralizedLaborFunction.id).where(text("MATCH(competencies_labor_function.name) AGAINST (:query IN BOOLEAN MODE)"))
-        la_q = select(GeneralizedLaborFunction.prof_standard_id.label("ps_id")).join(LaborFunction, LaborFunction.generalized_labor_function_id == GeneralizedLaborFunction.id).join(LaborAction, LaborAction.labor_function_id == LaborFunction.id).where(text("MATCH(competencies_labor_action.description) AGAINST (:query IN BOOLEAN MODE)"))
-        rs_q = select(GeneralizedLaborFunction.prof_standard_id.label("ps_id")).join(LaborFunction, LaborFunction.generalized_labor_function_id == GeneralizedLaborFunction.id).join(RequiredSkill, RequiredSkill.labor_function_id == LaborFunction.id).where(text("MATCH(competencies_required_skill.description) AGAINST (:query IN BOOLEAN MODE)"))
-        rk_q = select(GeneralizedLaborFunction.prof_standard_id.label("ps_id")).join(LaborFunction, LaborFunction.generalized_labor_function_id == GeneralizedLaborFunction.id).join(RequiredKnowledge, RequiredKnowledge.labor_function_id == LaborFunction.id).where(text("MATCH(competencies_required_knowledge.description) AGAINST (:query IN BOOLEAN MODE)"))
+        # Запросы к FTS-индексам. Выполняем 6 отдельных быстрых запросов.
+        ps_ids_from_ps = {r[0] for r in session.query(ProfStandard.id).filter(text("MATCH(name) AGAINST (:query IN BOOLEAN MODE)").bindparams(query=boolean_search_query)).all()}
+        ps_ids_from_otf = {r[0] for r in session.query(GeneralizedLaborFunction.prof_standard_id).filter(text("MATCH(name) AGAINST (:query IN BOOLEAN MODE)").bindparams(query=boolean_search_query)).all()}
+        ps_ids_from_tf = {r[0] for r in session.query(GeneralizedLaborFunction.prof_standard_id).join(LaborFunction).filter(text("MATCH(competencies_labor_function.name) AGAINST (:query IN BOOLEAN MODE)").bindparams(query=boolean_search_query)).all()}
+        ps_ids_from_la = {r[0] for r in session.query(GeneralizedLaborFunction.prof_standard_id).join(LaborFunction).join(LaborAction).filter(text("MATCH(competencies_labor_action.description) AGAINST (:query IN BOOLEAN MODE)").bindparams(query=boolean_search_query)).all()}
+        ps_ids_from_rs = {r[0] for r in session.query(GeneralizedLaborFunction.prof_standard_id).join(LaborFunction).join(RequiredSkill).filter(text("MATCH(competencies_required_skill.description) AGAINST (:query IN BOOLEAN MODE)").bindparams(query=boolean_search_query)).all()}
+        ps_ids_from_rk = {r[0] for r in session.query(GeneralizedLaborFunction.prof_standard_id).join(LaborFunction).join(RequiredKnowledge).filter(text("MATCH(competencies_required_knowledge.description) AGAINST (:query IN BOOLEAN MODE)").bindparams(query=boolean_search_query)).all()}
 
-        # Объединяем все запросы в один большой UNION-запрос
-        # Ensure the selected column has the same name/label in all parts of union for distinct to work correctly
-        full_union_query = union_all(ps_q, otf_q, tf_q, la_q, rs_q, rk_q).alias('full_search')
-        
-        # Выполняем один запрос к БД для получения всех совпадающих ID
-        # We select the aliased column 'ps_id' from the subquery
-        matched_results = session.query(full_union_query.c.ps_id).params(query=boolean_search_query).distinct().all()
-        text_filtered_ps_ids = {r[0] for r in matched_results if r[0] is not None}
+        text_filtered_ps_ids = ps_ids_from_ps.union(ps_ids_from_otf, ps_ids_from_tf, ps_ids_from_la, ps_ids_from_rs, ps_ids_from_rk)
 
+        if not text_filtered_ps_ids:
+            return {"total": 0, "items": [], "search_query": search_query}
 
     # --- Этап 3: Комбинирование результатов фильтрации ---
-    if text_filtered_ps_ids is not None and level_filtered_ps_ids is not None:
-        # Если были оба фильтра, берем их пересечение
-        matching_ps_ids = text_filtered_ps_ids.intersection(level_filtered_ps_ids)
-    elif text_filtered_ps_ids is not None:
-        # Если был только текстовый поиск
-        matching_ps_ids = text_filtered_ps_ids
-    elif level_filtered_ps_ids is not None:
-        # Если был только фильтр по уровням
-        matching_ps_ids = level_filtered_ps_ids
+    # Начинаем с initial_ps_ids_set и последовательно пересекаем с другими фильтрами
+    final_matching_ps_ids: set = initial_ps_ids_set
+
+    if text_filtered_ps_ids is not None: # Если текстовый поиск был выполнен, пересекаем его результаты
+        final_matching_ps_ids = final_matching_ps_ids.intersection(text_filtered_ps_ids)
     
-    # Если итоговый список ID пуст, возвращаем пустой результат
-    if not matching_ps_ids: # This covers cases where either search or levels were specified but yielded no results
+    if level_filtered_ps_ids is not None: # Если фильтр по уровням был выполнен, пересекаем его результаты
+        final_matching_ps_ids = final_matching_ps_ids.intersection(level_filtered_ps_ids)
+    
+    # Если после всех фильтров список пуст
+    if not final_matching_ps_ids:
         return {"total": 0, "items": [], "search_query": search_query}
 
     # --- Этап 4: Получение полных данных для найденных ID с пагинацией ---
-    final_ps_ids = list(matching_ps_ids)
-    
-    # Запрос для получения полных данных, но только для найденных ID
-    base_query = session.query(ProfStandard).options(
-        selectinload(ProfStandard.generalized_labor_functions)
-            .selectinload(GeneralizedLaborFunction.labor_functions)
-            .options(
-                selectinload(LaborFunction.labor_actions),
-                selectinload(LaborFunction.required_skills),
-                selectinload(LaborFunction.required_knowledge)
-            )
-    )
-    # The ps_ids parameter from function signature is not used here.
-    # If it was intended to be an additional filter, it should be applied.
-    # For now, assuming it's superseded by the new logic or an oversight.
-
-    total_results = len(final_ps_ids) # Общее количество теперь просто длина списка ID
-
-    # Применяем пагинацию к списку ID, а не к query, для предсказуемости
-    # Sort IDs before pagination if a specific order is desired for pagination consistency
-    # For example, if you want to paginate based on PS code or name, you'd need to fetch those first or sort by ID
-    # Sorting by ProfStandard.code is done later on the paginated results.
-    # If consistent pagination across calls is needed without fetching all data, sort final_ps_ids.
-    # final_ps_ids.sort() # Example: sort by ID for consistent pagination slices
-
-    paginated_ids_to_fetch = final_ps_ids[offset : offset + limit]
+    final_ps_ids_list = sorted(list(final_matching_ps_ids))
+    total_results = len(final_ps_ids_list)
+    paginated_ids_to_fetch = final_ps_ids_list[offset : offset + limit]
     
     all_ps_to_process = []
     if paginated_ids_to_fetch:
-        # Загружаем полные данные только для ID текущей страницы
+        base_query = session.query(ProfStandard).options(
+            selectinload(ProfStandard.generalized_labor_functions)
+                .selectinload(GeneralizedLaborFunction.labor_functions)
+                .options(
+                    selectinload(LaborFunction.labor_actions),
+                    selectinload(LaborFunction.required_skills),
+                    selectinload(LaborFunction.required_knowledge)
+                )
+        )
         paginated_query = base_query.filter(ProfStandard.id.in_(paginated_ids_to_fetch)).order_by(ProfStandard.code)
         all_ps_to_process = paginated_query.all()
     
@@ -162,106 +150,62 @@ def search_prof_standards(
 
     for ps in all_ps_to_process:
         ps_details = ps.to_dict(rules=['-generalized_labor_functions'])
-        ps_details['has_match'] = True # Overall PS is a match because its ID was in final_ps_ids
-        
-        ps_details['name'] = ps.name # Ensure these top-level fields are present
+        ps_details['name'] = ps.name
         ps_details['code'] = ps.code
-        ps_details['activity_area_name'] = ps.activity_area_name
-        ps_details['activity_purpose'] = ps.activity_purpose
-
+        
         filtered_generalized_labor_functions = []
         for otf in ps.generalized_labor_functions:
-            # Filter by qualification_levels again at the display layer if they were provided
+            # Filtering OTFs by qualification_levels is done on the ID set level already.
+            # This check is technically redundant if `level_filtered_ps_ids` is properly used
+            # but can act as a safeguard if levels are passed to this stage in a different way.
+            # However, it's better to ensure level filtering affects final_matching_ps_ids.
+            # For robustness, we keep it here for OTF-specific levels, as PS can have OTFs of different levels.
             if qualification_levels and otf.qualification_level and int(otf.qualification_level) not in qualification_levels:
                 continue
 
             otf_details = otf.to_dict(rules=['-labor_functions'])
-            otf_details['name'] = otf.name # Ensure these fields are present
+            otf_details['name'] = otf.name
             otf_details['code'] = otf.code
-
-            otf_has_overall_match = False
-            if search_query: otf_details['has_match'] = search_query_lower in otf.name.lower()
-            else: otf_details['has_match'] = False # No query, no text match
-            if otf_details['has_match']: otf_has_overall_match = True
+            
+            # has_match flags are for frontend filtering/highlighting
+            otf_details['has_match'] = search_query_lower in otf.name.lower() if search_query else False
             
             filtered_labor_functions = []
             for tf in otf.labor_functions:
                 tf_details = tf.to_dict(rules=['-labor_actions', '-required_skills', '-required_knowledge'])
-                tf_details['name'] = tf.name # Ensure these fields are present
+                tf_details['name'] = tf.name
                 tf_details['code'] = tf.code
-
-                tf_has_text_match = False
-                if search_query: tf_details['has_match'] = search_query_lower in tf.name.lower()
-                else: tf_details['has_match'] = False
-                if tf_details['has_match']: tf_has_text_match = True
-
-                child_elements_have_match = False
-
-                la_details_list = []
-                for la in tf.labor_actions:
-                    la_d = la.to_dict()
-                    la_d['description'] = la.description
-                    if search_query: la_d['has_match'] = search_query_lower in la.description.lower()
-                    else: la_d['has_match'] = False
-                    if la_d['has_match']: child_elements_have_match = True
-                    la_details_list.append(la_d)
-                tf_details['labor_actions'] = la_details_list
-
-                rs_details_list = []
-                for rs in tf.required_skills:
-                    rs_d = rs.to_dict()
-                    rs_d['description'] = rs.description
-                    if search_query: rs_d['has_match'] = search_query_lower in rs.description.lower()
-                    else: rs_d['has_match'] = False
-                    if rs_d['has_match']: child_elements_have_match = True
-                    rs_details_list.append(rs_d)
-                tf_details['required_skills'] = rs_details_list
-
-                rk_details_list = []
-                for rk in tf.required_knowledge:
-                    rk_d = rk.to_dict()
-                    rk_d['description'] = rk.description
-                    if search_query: rk_d['has_match'] = search_query_lower in rk.description.lower()
-                    else: rk_d['has_match'] = False
-                    if rk_d['has_match']: child_elements_have_match = True
-                    rk_details_list.append(rk_d)
-                tf_details['required_knowledge'] = rk_details_list
                 
-                # TF itself should be marked as having a match if its name matches OR any of its children match
-                if child_elements_have_match:
-                    tf_details['has_match'] = True
+                tf_name_matches = search_query_lower in tf.name.lower() if search_query else False
+                tf_has_child_match = False
+
+                for la in tf.labor_actions: la.has_match = search_query_lower in la.description.lower() if search_query else False
+                for rs in tf.required_skills: rs.has_match = search_query_lower in rs.description.lower() if search_query else False
+                for rk in tf.required_knowledge: rk.has_match = search_query_lower in rk.description.lower() if search_query else False
                 
-                # Add TF to result if it has a match (name or children) OR if no search query (show all structure)
-                if not search_query or tf_details['has_match']:
-                    filtered_labor_functions.append(tf_details)
-                    if tf_details['has_match']: otf_has_overall_match = True # Propagate match up to OTF
+                tf_has_child_match = any(la.has_match for la in tf.labor_actions) or \
+                                   any(rs.has_match for rs in tf.required_skills) or \
+                                   any(rk.has_match for rk in tf.required_knowledge)
+                                   
+                tf_details['has_match'] = tf_name_matches or tf_has_child_match
+                
+                # We need to return ALL TFs and their ZUNs within the matched PS. Frontend will filter the display.
+                tf_details['labor_actions'] = [la.to_dict() for la in tf.labor_actions]
+                tf_details['required_skills'] = [rs.to_dict() for rs in tf.required_skills]
+                tf_details['required_knowledge'] = [rk.to_dict() for rk in tf.required_knowledge]
+                filtered_labor_functions.append(tf_details) # Always append, let frontend filter display
 
             otf_details['labor_functions'] = filtered_labor_functions
             
-            # OTF itself should be marked as having a match if its name matches OR any of its children (TFs) had a match
-            if otf_has_overall_match:
-                 otf_details['has_match'] = True
-            
-            # Add OTF to result if it has a match (name or children) OR if no search query (show all structure)
-            # OR if it has labor functions (which means they matched or no search query)
-            if not search_query or otf_details['has_match'] or len(otf_details['labor_functions']) > 0 :
-                filtered_generalized_labor_functions.append(otf_details)
+            # Always append OTF if it was part of the matched PS (final_matching_ps_ids)
+            # Frontend will handle the 'has_match' and `displayMode`
+            filtered_generalized_labor_functions.append(otf_details)
 
         ps_details['generalized_labor_functions'] = filtered_generalized_labor_functions
-        
-        # Only add PS if it has OTFs after filtering, or if no search query (to show all structure)
-        # The PS itself is already confirmed to be a match from the ID list.
-        # The filtering of OTF/TF is for display purposes to highlight relevant parts.
-        # If search_query is present, we only want to show PS if it has relevant sub-elements or its name matched.
-        # However, since the PS ID was found, it implies some part of it matched the search query.
-        # The `has_match` flags within the structure are for frontend highlighting.
-        # The current logic will always add the PS if its ID was in `paginated_ids_to_fetch`.
-        # The filtering of `generalized_labor_functions` inside `ps_details` handles what to show within that PS.
         all_matching_ps_details.append(ps_details)
 
-    logger.info(f"Found {total_results} matching PS for query '{search_query}' and levels {qualification_levels}. Returning {len(all_matching_ps_details)} (offset {offset}, limit {limit}).")
+    logger.info(f"Found {total_results} matching PS for query '{search_query}' and levels {qualification_levels} and ps_ids {ps_ids}. Returning {len(all_matching_ps_details)} (offset {offset}, limit {limit}).")
     return {"total": total_results, "items": all_matching_ps_details, "search_query": search_query}
-
 
 def get_educational_programs_list() -> List[EducationalProgram]:
     """Fetches list of all educational programs."""
@@ -316,7 +260,7 @@ def get_external_aups_list(
 
             if form_education_name: filters.append(ExternalSprFormEducation.form == form_education_name)
             if year_beg: filters.append(ExternalAupInfo.year_beg == year_beg)
-            if degree_education_name: filters.append(ExternalSprDegreeEducation.name_deg == degree_education_name)
+            if degree_education_name: filters.append(ExternalAupInfo.degree.has(ExternalSprDegreeEducation.name_deg == degree_education_name)) # ИСПРАВЛЕНИЕ ДЛЯ ФИЛЬТРАЦИИ ПО ИМЕНИ, а не ID
 
             query = query.join(ExternalAupInfo.spec, isouter=True)\
                          .join(ExternalNameOP.okco, isouter=True)
@@ -500,7 +444,7 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
             pk_competencies = session.query(Competency).options(
                 selectinload(Competency.indicators),
                 selectinload(Competency.competency_type),
-                selectinload(Competency.educational_programs_assoc), # For filtering by Educational Program
+                selectinload(Competency.educational_programs_assoc).selectinload(CompetencyEducationalProgram.educational_program), # For filtering by Educational Program
                 selectinload(Competency.based_on_labor_function) # For source_document_type
                     .selectinload(LaborFunction.generalized_labor_function)
                     .selectinload(GeneralizedLaborFunction.prof_standard) # For source_document_type
@@ -1474,16 +1418,7 @@ def delete_prof_standard(ps_id: int, session: Session) -> bool:
          ps_to_delete = session.query(ProfStandard).get(ps_id)
          if not ps_to_delete: logger.warning(f"ProfStandard {ps_id} not found for deletion."); return False
          
-         # Cascading deletes for GeneralizedLaborFunction, FgosRecommendedPs, EducationalProgramPs
-         # should be handled by SQLAlchemy if relationships are configured with cascade="all, delete-orphan".
-         # If not, they would need to be deleted manually here or handled by DB foreign key constraints.
-         # Example: session.query(GeneralizedLaborFunction).filter_by(prof_standard_id=ps_id).delete()
-         #          session.query(FgosRecommendedPs).filter_by(prof_standard_id=ps_id).delete()
-         #          session.query(EducationalProgramPs).filter_by(prof_standard_id=ps_id).delete()
-         # Assuming cascades are set up.
-
          session.delete(ps_to_delete)
          return True
     except SQLAlchemyError as e: logger.error(f"Database error deleting PS {ps_id}: {e}", exc_info=True); raise e
     except Exception as e: logger.error(f"Unexpected error deleting PS {ps_id}: {e}", exc_info=True); raise e
-
