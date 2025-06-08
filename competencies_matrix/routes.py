@@ -1,5 +1,5 @@
 # filepath: competencies_matrix/routes.py
-from flask import request, jsonify, abort
+from flask import request, jsonify, abort, send_file
 from . import competencies_matrix_bp
 from typing import Optional, List
 
@@ -20,12 +20,13 @@ from .logic import (
     get_external_aups_list, get_external_aup_disciplines,
     delete_prof_standard as logic_delete_profstandard,
     search_prof_standards as logic_search_prof_standards,
+    generate_prof_standard_excel_export_logic
 )
 
 from auth.logic import login_required, approved_required, admin_only
-import logging
+import logging, datetime, io
 from .models import db, Competency, Indicator, CompetencyType, ProfStandard 
-from sqlalchemy.orm import joinedload 
+from sqlalchemy.orm import joinedload
 from sqlalchemy.exc import IntegrityError 
 
 logger = logging.getLogger(__name__)
@@ -447,7 +448,7 @@ def delete_fgos_route(fgos_id):
  
     try:
         deleted = delete_fgos(fgos_id, db.session, delete_related_competencies=delete_related_competencies)
- 
+
         if deleted:
             db.session.commit()
             return jsonify({"success": True, "message": "ФГОС успешно удален"}), 200
@@ -702,3 +703,27 @@ def get_external_aup_disciplines_route(aup_id):
     except Exception as e:
         logger.error(f"Error in GET /external/aups/{aup_id}/disciplines: {e}", exc_info=True)
         abort(500, description=f"Ошибка сервера при получении списка дисциплин из внешней БД: {e}");
+
+@competencies_matrix_bp.route('/profstandards/export-selected', methods=['POST'])
+@login_required
+@approved_required
+def export_selected_profstandards():
+    data = request.get_json()
+    if not data or not data.get('profStandards'):
+        abort(400, description="Нет данных о выбранных профстандартах для экспорта.")
+    try:
+        excel_bytes = generate_prof_standard_excel_export_logic(data)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"Перечень_ТФ_{timestamp}.xlsx"
+        return send_file(
+            io.BytesIO(excel_bytes),
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        abort(500, description=f"Не удалось выполнить экспорт в Excel: {e}")

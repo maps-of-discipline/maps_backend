@@ -29,6 +29,7 @@ from .external_models import (
 
 from . import fgos_parser
 from . import parsers
+from . import exports # <-- НОВЫЙ ИМПОРТ: Модуль экспорта
 
 from .parsing_utils import parse_date_string
 
@@ -1422,3 +1423,13 @@ def delete_prof_standard(ps_id: int, session: Session) -> bool:
          return True
     except SQLAlchemyError as e: logger.error(f"Database error deleting PS {ps_id}: {e}", exc_info=True); raise e
     except Exception as e: logger.error(f"Unexpected error deleting PS {ps_id}: {e}", exc_info=True); raise e
+
+def generate_prof_standard_excel_export_logic(selected_data: Dict[str, Any]) -> bytes:
+    if not selected_data or not selected_data.get('profStandards'):
+        raise ValueError("Нет данных для экспорта.")
+    try:
+        excel_bytes = exports.generate_tf_list_excel_export(selected_data)
+        return excel_bytes
+    except Exception as e:
+        logger.error(f"Error generating Excel export for TF list: {e}", exc_info=True)
+        raise RuntimeError(f"Не удалось сгенерировать Excel-файл: {e}")
