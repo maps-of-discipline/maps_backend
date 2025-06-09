@@ -1,10 +1,11 @@
-# filepath: competencies_matrix/logic.py
+# competencies_matrix/logic.py
 from typing import Dict, List, Any, Optional
 import datetime
 import traceback
 import logging
 import json
 import re
+import io
 
 from flask import current_app
 from sqlalchemy import create_engine, select, exists, and_, or_, cast, Integer, text, union_all
@@ -30,6 +31,7 @@ from .external_models import (
 from . import fgos_parser
 from . import parsers
 from . import exports # <-- НОВЫЙ ИМПОРТ: Модуль экспорта
+from . import nlp # <-- НОВЫЙ ИМПОРТ: NLP модуль для распоряжений
 
 from .parsing_utils import parse_date_string
 
@@ -49,7 +51,7 @@ def get_external_db_engine():
     return _external_db_engine
 
 def search_prof_standards(
-    search_query: str,
+    search_query: str, # ИЗМЕНЕНИЕ: search_query теперь может быть пустой строкой
     ps_ids: Optional[List[int]] = None,
     offset: int = 0,
     limit: int = 50,
@@ -65,9 +67,12 @@ def search_prof_standards(
     4. Применяет дополнительный фильтр по `ps_ids` (если заданы) к итоговому списку ID.
     5. Загружает полные данные только для итогового списка ID с пагинацией.
     """
-    if not search_query and not qualification_levels and not ps_ids: # ИЗМЕНЕНИЕ: Разрешаем поиск только по ps_ids
+    # ИЗМЕНЕНИЕ: Условие для ValueError. Разрешаем поиск, если заданы ps_ids ИЛИ qualification_levels, даже без search_query.
+    if not search_query and not qualification_levels and (ps_ids is None or len(ps_ids) == 0):
         raise ValueError("Необходимо указать поисковый запрос, выбрать уровни квалификации или выбрать конкретные профстандарты.")
-    if search_query and len(search_query) < 2 and search_query: # ИЗМЕНЕНИЕ: search_query пустой, если его нет
+    
+    # ИЗМЕНЕНИЕ: Проверка длины search_query только если он не пустой
+    if search_query and len(search_query) < 2:
         raise ValueError("Поисковый запрос должен содержать минимум 2 символа.")
 
     session: Session = local_db.session
@@ -94,9 +99,9 @@ def search_prof_standards(
         if not level_filtered_ps_ids:
             return {"total": 0, "items": [], "search_query": search_query}
 
-    # --- Этап 2: Полнотекстовый поиск (если задан) ---
+    # --- Этап 2: Полнотекстовый поиск (если search_query не пустой и достаточно длинный) ---
     text_filtered_ps_ids: Optional[set] = None
-    if search_query:
+    if search_query and len(search_query) >= 2: # ИЗМЕНЕНИЕ: Условие для выполнения FTS
         boolean_search_query = ' '.join(f'+{word}*' for word in search_query.split())
         
         # Запросы к FTS-индексам. Выполняем 6 отдельных быстрых запросов.
@@ -111,6 +116,9 @@ def search_prof_standards(
 
         if not text_filtered_ps_ids:
             return {"total": 0, "items": [], "search_query": search_query}
+    # else:
+    #   Если search_query пустой или слишком короткий, text_filtered_ps_ids остаётся None,
+    #   и этот фильтр не будет применён на следующем этапе.
 
     # --- Этап 3: Комбинирование результатов фильтрации ---
     # Начинаем с initial_ps_ids_set и последовательно пересекаем с другими фильтрами
@@ -147,7 +155,7 @@ def search_prof_standards(
     
     # --- Этап 5: Формирование ответа (подсветка перенесена на фронтенд) ---
     all_matching_ps_details = []
-    search_query_lower = search_query.lower() if search_query else ""
+    search_query_lower = search_query.lower() if search_query else "" # ИЗМЕНЕНИЕ: search_query_lower может быть пустой
 
     for ps in all_ps_to_process:
         ps_details = ps.to_dict(rules=['-generalized_labor_functions'])
@@ -169,7 +177,8 @@ def search_prof_standards(
             otf_details['code'] = otf.code
             
             # has_match flags are for frontend filtering/highlighting
-            otf_details['has_match'] = search_query_lower in otf.name.lower() if search_query else False
+            # ИЗМЕНЕНИЕ: Проверка на has_match только если search_query не пустой
+            otf_details['has_match'] = search_query_lower and search_query_lower in otf.name.lower() or False
             
             filtered_labor_functions = []
             for tf in otf.labor_functions:
@@ -177,12 +186,12 @@ def search_prof_standards(
                 tf_details['name'] = tf.name
                 tf_details['code'] = tf.code
                 
-                tf_name_matches = search_query_lower in tf.name.lower() if search_query else False
+                tf_name_matches = search_query_lower and search_query_lower in tf.name.lower() or False # ИЗМЕНЕНИЕ
                 tf_has_child_match = False
 
-                for la in tf.labor_actions: la.has_match = search_query_lower in la.description.lower() if search_query else False
-                for rs in tf.required_skills: rs.has_match = search_query_lower in rs.description.lower() if search_query else False
-                for rk in tf.required_knowledge: rk.has_match = search_query_lower in rk.description.lower() if search_query else False
+                for la in tf.labor_actions: la.has_match = search_query_lower and search_query_lower in la.description.lower() or False # ИЗМЕНЕНИЕ
+                for rs in tf.required_skills: rs.has_match = search_query_lower and search_query_lower in rs.description.lower() or False # ИЗМЕНЕНИЕ
+                for rk in tf.required_knowledge: rk.has_match = search_query_lower and search_query_lower in rk.description.lower() or False # ИЗМЕНЕНИЕ
                 
                 tf_has_child_match = any(la.has_match for la in tf.labor_actions) or \
                                    any(rs.has_match for rs in tf.required_skills) or \
@@ -617,8 +626,7 @@ def get_all_competencies() -> List[Dict[str, Any]]:
                     comp_dict['source_document_name'] = ps.name
                     comp_dict['source_document_type'] = "Профстандарт"
                 else:
-                    # Manually created PK without direct PS link or link not found
-                    comp_dict['source_document_type'] = "Ручной ввод"
+                    comp_dict['source_document_type'] = "Ручной ввод" # PK created manually, without TF/PS link
                     comp_dict['source_document_code'] = "N/A"
                     comp_dict['source_document_name'] = "Введено вручную"
 
@@ -626,7 +634,6 @@ def get_all_competencies() -> List[Dict[str, Any]]:
                 comp_dict['based_on_labor_function_id'] = comp.based_on_labor_function.id
                 comp_dict['based_on_labor_function_code'] = comp.based_on_labor_function.code
                 comp_dict['based_on_labor_function_name'] = comp.based_on_labor_function.name
-
             result.append(comp_dict)
         return result
     except Exception as e: logger.error(f"Error fetching all competencies with source info: {e}", exc_info=True); raise
@@ -635,8 +642,7 @@ def get_competency_details(comp_id: int) -> Optional[Dict[str, Any]]:
     try:
         competency = local_db.session.query(Competency).options(
             joinedload(Competency.competency_type),
-            joinedload(Competency.indicators),
-            joinedload(Competency.educational_programs_assoc).joinedload(CompetencyEducationalProgram.educational_program)
+            joinedload(Competency.indicators)
         ).get(comp_id)
         if not competency: logger.warning(f"Competency with id {comp_id} not found."); return None
         result = competency.to_dict(rules=['-fgos', '-based_on_labor_function'], include_indicators=True, include_type=True, include_educational_programs=True)
@@ -789,13 +795,17 @@ def create_indicator(data: Dict[str, Any], session: Session) -> Optional[Indicat
         competency = session.query(Competency).get(data['competency_id'])
         if not competency: raise ValueError(f"Родительская компетенция с ID '{data['competency_id']}' не найдена.")
         
-        existing_indicator = session.query(Indicator).filter_by(code=str(data['code']).strip(), competency_id=data['competency_id']).first()
-        if existing_indicator: raise IntegrityError(f"Indicator with code {data['code']} already exists for competency {data['competency_id']}.", {}, None)
-        
         selected_ps_elements_ids = data.get('selected_ps_elements_ids')
         if selected_ps_elements_ids is not None and not isinstance(selected_ps_elements_ids, dict):
             logger.warning(f"Invalid format for selected_ps_elements_ids: {type(selected_ps_elements_ids)}. Must be a dict. Ignoring.")
             selected_ps_elements_ids = None # Or default to empty dict
+        elif selected_ps_elements_ids is None: # Explicitly default to empty dict if None
+            selected_ps_elements_ids = {} # For consistency
+
+        # Проверяем, есть ли индикатор с таким же кодом для данной компетенции
+        existing_indicator = session.query(Indicator).filter_by(code=str(data['code']).strip(), competency_id=data['competency_id']).first()
+        if existing_indicator:
+            raise IntegrityError(f"Индикатор с кодом '{data['code']}' уже существует для компетенции '{competency.code}'.", {}, None)
 
         indicator = Indicator(
             competency_id=data['competency_id'], code=str(data['code']).strip(), formulation=str(data['formulation']).strip(),
@@ -832,6 +842,7 @@ def update_indicator(ind_id: int, data: Dict[str, Any], session: Session) -> Opt
                      if data[field] is not None and not isinstance(data[field], dict): # Allow None
                          logger.warning(f"Invalid format for selected_ps_elements_ids received for indicator {ind_id}: {type(data[field])}. Must be a dict or None. Skipping update for this field.")
                          continue
+                     # Check if content of dict changed
                      if indicator.selected_ps_elements_ids != data[field]:
                          indicator.selected_ps_elements_ids = data[field]
                          updated = True
@@ -861,7 +872,8 @@ def delete_indicator(ind_id: int, session: Session) -> bool:
 
 def parse_fgos_file(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     try:
-        parsed_data = fgos_parser.parse_fgos_pdf(file_bytes, filename)
+        text_content = fgos_parser.extract_text(io.BytesIO(file_bytes)) # ИЗМЕНЕНИЕ: Используем pdfminer напрямую
+        parsed_data = nlp.parse_fgos_with_gemini(text_content) # ИЗМЕНЕНИЕ: Вызываем nlp.py
         if not parsed_data or not parsed_data.get('metadata'):
              logger.warning(f"Parsing failed or returned insufficient metadata for {filename}")
              if not parsed_data: raise ValueError("Parser returned empty data.")
@@ -892,7 +904,7 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
     
     fgos_generation = str(fgos_generation_raw).strip() if fgos_generation_raw is not None else ''
     # Костыль
-    if not fgos_generation or fgos_generation.lower() != '3++':
+    if not fgos_generation or fgos_generation.lower() == 'null': # ИЗМЕНЕНИЕ: Добавлена проверка на 'null'
         fgos_generation = '3++'
         logger.warning(f"FGOS generation was missing, empty or 'null' for '{filename}'. Defaulting to '{fgos_generation}'.")
     else:
@@ -1433,3 +1445,266 @@ def generate_prof_standard_excel_export_logic(selected_data: Dict[str, Any]) -> 
     except Exception as e:
         logger.error(f"Error generating Excel export for TF list: {e}", exc_info=True)
         raise RuntimeError(f"Не удалось сгенерировать Excel-файл: {e}")
+
+# --- НОВАЯ ФУНКЦИЯ ---
+from pdfminer.high_level import extract_text # Импортируем здесь для PDF-парсинга
+
+def process_uk_indicators_disposition_file(file_bytes: bytes, filename: str) -> Dict[str, Any]:
+    """
+    (НОВАЯ ФУНКЦИЯ)
+    Обрабатывает PDF-файл распоряжения с индикаторами УК,
+    извлекает данные через NLP и подготавливает их для предпросмотра/сравнения.
+    """
+    logger.info(f"Starting processing UK indicators disposition file: {filename}")
+    
+    try:
+        text_content = extract_text(io.BytesIO(file_bytes))
+        parsed_disposition_data = nlp.parse_uk_indicators_disposition_with_gemini(text_content)
+
+        if not parsed_disposition_data or not parsed_disposition_data.get('disposition_metadata'):
+            logger.error(f"NLP parsing failed or returned insufficient metadata for disposition {filename}.")
+            raise ValueError("Не удалось извлечь основные метаданные из файла распоряжения.")
+
+        disposition_meta = parsed_disposition_data['disposition_metadata']
+        applies_to_list = parsed_disposition_data.get('applies_to', [])
+        parsed_uk_competencies = parsed_disposition_data.get('uk_competencies_with_indicators', [])
+
+        result: Dict[str, Any] = {
+            "disposition_metadata": disposition_meta,
+            "filename": filename,
+            "parsed_uk_competencies": parsed_uk_competencies,
+            "applicable_fgos": [], # Список ФГОС, к которым относится распоряжение
+            "existing_uk_data_for_diff": {} # Данные существующих УК/ИУК для сравнения
+        }
+
+        # --- Поиск соответствующего ФГОС ВО в БД ---
+        session = local_db.session
+        applicable_fgos_found: List[FgosVo] = []
+        uk_type = session.query(CompetencyType).filter_by(code='УК').first()
+        if not uk_type:
+            logger.warning("CompetencyType 'УК' not found. Cannot perform diff or save UKs.")
+            result["error"] = "Тип компетенции 'УК' не найден в БД. Пожалуйста, инициализируйте справочники."
+            return result # Ранний выход, если нет типа УК
+
+        for applies_to_entry in applies_to_list:
+            direction_code = applies_to_entry.get('direction_code')
+            education_level = applies_to_entry.get('education_level')
+
+            fgos_query = session.query(FgosVo).filter(
+                FgosVo.education_level == education_level
+            ).order_by(FgosVo.date.desc()) # Берем самый новый, если несколько
+
+            if direction_code:
+                fgos_query = fgos_query.filter(FgosVo.direction_code == direction_code)
+            
+            fgos_record = fgos_query.first() # Берем один наиболее подходящий ФГОС
+            
+            if fgos_record:
+                applicable_fgos_found.append(fgos_record)
+                
+                # --- Сбор существующих УК/ИУК для сравнения (diff) ---
+                existing_uk_competencies = session.query(Competency).options(
+                    selectinload(Competency.indicators)
+                ).filter(
+                    Competency.fgos_vo_id == fgos_record.id,
+                    Competency.competency_type_id == uk_type.id
+                ).all()
+
+                for uk_comp in existing_uk_competencies:
+                    uk_comp_dict = uk_comp.to_dict(rules=['-indicators']) # Base dict for UK
+                    uk_comp_dict['indicators'] = {ind.code: ind.to_dict() for ind in uk_comp.indicators} # Indicators by code
+                    result["existing_uk_data_for_diff"][uk_comp.code] = uk_comp_dict # Store by UK code
+                
+                logger.info(f"Found applicable FGOS {fgos_record.direction_code} ({fgos_record.education_level}) for disposition. Existing UKs: {len(existing_uk_competencies)}")
+            else:
+                logger.warning(f"No FGOS found for disposition applying to direction_code='{direction_code}' education_level='{education_level}'.")
+                # Можно добавить информацию в 'result' об отсутствии ФГОС
+                if "fgos_not_found_warnings" not in result:
+                    result["fgos_not_found_warnings"] = []
+                result["fgos_not_found_warnings"].append(
+                    f"Не найден ФГОС для направления '{direction_code}' ({education_level}), к которому относится распоряжение. Индикаторы для него не будут сопоставлены."
+                )
+
+        if not applicable_fgos_found and not result.get("fgos_not_found_warnings"):
+            result["error"] = "Не удалось определить ФГОС, к которому относится распоряжение. Убедитесь, что ФГОС загружен."
+            return result
+
+        result["applicable_fgos"] = [fgos.to_dict() for fgos in applicable_fgos_found]
+        return result
+
+    except ValueError as e:
+        logger.error(f"Data validation or parsing error for disposition {filename}: {e}", exc_info=True)
+        raise ValueError(f"Ошибка парсинга распоряжения: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error processing disposition file {filename}: {e}", exc_info=True)
+        raise Exception(f"Неожиданная ошибка при обработке файла распоряжения: {e}")
+
+def save_uk_indicators_from_disposition(
+    parsed_disposition_data: Dict[str, Any],
+    filename: str,
+    session: Session,
+    fgos_id: int, # Конкретный FGOS, с которым связываем
+    force_update_uk: bool = False, # Перезаписать УК, если изменилась формулировка
+    resolutions: Optional[Dict[str, str]] = None # Для будущих разрешений конфликтов
+) -> Dict[str, Any]:
+    """
+    (НОВАЯ ФУНКЦИЯ)
+    Сохраняет/обновляет индикаторы УК из спарсенного распоряжения в базу данных.
+    """
+    if resolutions is None:
+        resolutions = {} # Default empty dict if no specific resolutions provided
+
+    logger.info(f"Saving UK indicators from disposition file: {filename} for FGOS ID: {fgos_id}. Force update UK: {force_update_uk}")
+    
+    saved_uk_count = 0
+    updated_uk_count = 0
+    skipped_uk_count = 0
+    saved_indicator_count = 0
+    updated_indicator_count = 0
+    skipped_indicator_count = 0
+
+    try:
+        fgos_vo = session.query(FgosVo).get(fgos_id)
+        if not fgos_vo:
+            raise ValueError(f"ФГОС ВО с ID {fgos_id} не найден. Невозможно сохранить индикаторы УК.")
+
+        uk_type = session.query(CompetencyType).filter_by(code='УК').first()
+        if not uk_type:
+            raise ValueError("Тип компетенции 'УК' не найден в БД. Пожалуйста, инициализируйте справочники.")
+        
+        disposition_meta = parsed_disposition_data.get('disposition_metadata', {})
+        source_string = f"Распоряжение №{disposition_meta.get('number', 'N/A')} от {disposition_meta.get('date', 'N/A')}"
+
+        for parsed_uk_data in parsed_disposition_data.get('uk_competencies_with_indicators', []):
+            uk_code = parsed_uk_data.get('code')
+            uk_name = parsed_uk_data.get('name')
+            uk_category_name = parsed_uk_data.get('category_name')
+
+            if not uk_code or not uk_name:
+                logger.warning(f"Skipping parsed UK due to missing code/name: {parsed_uk_data}. Must have 'code' and 'name'.")
+                skipped_uk_count += 1
+                continue
+
+            existing_uk_comp = session.query(Competency).filter_by(
+                code=uk_code,
+                competency_type_id=uk_type.id,
+                fgos_vo_id=fgos_vo.id
+            ).first()
+
+            current_uk_comp = None
+            uk_resolution_key = f"uk_comp_{uk_code}"
+
+            if existing_uk_comp:
+                if existing_uk_comp.name != uk_name:
+                    # Конфликт формулировок УК. Разрешение:
+                    # 'use_new' - использовать формулировку из распоряжения
+                    # 'use_old' - оставить старую
+                    # 'skip' - пропустить
+                    resolution = resolutions.get(uk_resolution_key, 'use_new' if force_update_uk else 'use_old')
+                    
+                    if resolution == 'use_new':
+                        existing_uk_comp.name = uk_name
+                        existing_uk_comp.category_name = uk_category_name # Update category name too
+                        session.add(existing_uk_comp)
+                        updated_uk_count += 1
+                        logger.info(f"Updated UK '{uk_code}' name for FGOS {fgos_id}. Old: '{existing_uk_comp.name}', New: '{uk_name}'.")
+                    elif resolution == 'use_old':
+                        skipped_uk_count += 1
+                        logger.info(f"Skipped updating UK '{uk_code}' name for FGOS {fgos_id} (resolution: use_old).")
+                    elif resolution == 'skip':
+                        skipped_uk_count += 1
+                        logger.info(f"Skipped UK '{uk_code}' entirely for FGOS {fgos_id} (resolution: skip).")
+                        continue # Пропускаем и его индикаторы
+                else: # Name is the same, just ensure it's recorded
+                    skipped_uk_count += 1
+                    logger.debug(f"UK '{uk_code}' already exists and name is identical for FGOS {fgos_id}. Skipping update.")
+                current_uk_comp = existing_uk_comp
+            else:
+                current_uk_comp = Competency(
+                    competency_type_id=uk_type.id,
+                    fgos_vo_id=fgos_vo.id,
+                    code=uk_code,
+                    name=uk_name,
+                    category_name=uk_category_name
+                )
+                session.add(current_uk_comp)
+                saved_uk_count += 1
+                logger.info(f"Created new UK '{uk_code}' for FGOS {fgos_id}.")
+            
+            session.flush() # Ensure UK ID is available for indicators
+
+            # --- Сохранение Индикаторов УК ---
+            for parsed_indicator_data in parsed_uk_data.get('indicators', []):
+                indicator_code = parsed_indicator_data.get('code')
+                indicator_formulation = parsed_indicator_data.get('formulation')
+
+                if not indicator_code or not indicator_formulation:
+                    logger.warning(f"Skipping parsed Indicator due to missing code/formulation: {parsed_indicator_data}.")
+                    skipped_indicator_count += 1
+                    continue
+                
+                existing_indicator = session.query(Indicator).filter_by(
+                    code=indicator_code,
+                    competency_id=current_uk_comp.id
+                ).first()
+
+                indicator_resolution_key = f"indicator_{uk_code}_{indicator_code}"
+
+                if existing_indicator:
+                    if existing_indicator.formulation != indicator_formulation:
+                        # Конфликт формулировок индикатора. Разрешение:
+                        resolution = resolutions.get(indicator_resolution_key, 'use_new' if force_update_uk else 'use_old')
+                        
+                        if resolution == 'use_new':
+                            existing_indicator.formulation = indicator_formulation
+                            existing_indicator.source = source_string
+                            session.add(existing_indicator)
+                            updated_indicator_count += 1
+                            logger.info(f"Updated Indicator '{indicator_code}' for UK '{uk_code}'. Old: '{existing_indicator.formulation}', New: '{indicator_formulation}'.")
+                        elif resolution == 'use_old':
+                            skipped_indicator_count += 1
+                            logger.info(f"Skipped updating Indicator '{indicator_code}' for UK '{uk_code}' (resolution: use_old).")
+                        elif resolution == 'skip':
+                            skipped_indicator_count += 1
+                            logger.info(f"Skipped Indicator '{indicator_code}' for UK '{uk_code}' entirely (resolution: skip).")
+                            continue
+                    else: # Formulation is the same
+                        skipped_indicator_count += 1
+                        logger.debug(f"Indicator '{indicator_code}' for UK '{uk_code}' already exists and formulation is identical. Skipping update.")
+                else:
+                    new_indicator = Indicator(
+                        competency_id=current_uk_comp.id,
+                        code=indicator_code,
+                        formulation=indicator_formulation,
+                        source=source_string
+                    )
+                    session.add(new_indicator)
+                    saved_indicator_count += 1
+                    logger.info(f"Created new Indicator '{indicator_code}' for UK '{uk_code}'.")
+            
+            session.flush() # Flush after each UK and its indicators
+        
+        return {
+            "success": True,
+            "message": "Индикаторы УК успешно сохранены/обновлены.",
+            "summary": {
+                "saved_uk": saved_uk_count,
+                "updated_uk": updated_uk_count,
+                "skipped_uk": skipped_uk_count,
+                "saved_indicator": saved_indicator_count,
+                "updated_indicator": updated_indicator_count,
+                "skipped_indicator": skipped_indicator_count,
+            }
+        }
+    except ValueError as e:
+        logger.error(f"Validation error saving UK indicators: {e}", exc_info=True)
+        session.rollback()
+        raise e
+    except SQLAlchemyError as e:
+        logger.error(f"Database error saving UK indicators: {e}", exc_info=True)
+        session.rollback()
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error saving UK indicators: {e}", exc_info=True)
+        session.rollback()
+        raise e

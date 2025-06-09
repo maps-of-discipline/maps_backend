@@ -1,4 +1,4 @@
-# filepath: competencies_matrix/routes.py
+# competencies_matrix/routes.py
 from flask import request, jsonify, abort, send_file
 from . import competencies_matrix_bp
 from typing import Optional, List
@@ -20,7 +20,10 @@ from .logic import (
     get_external_aups_list, get_external_aup_disciplines,
     delete_prof_standard as logic_delete_profstandard,
     search_prof_standards as logic_search_prof_standards,
-    generate_prof_standard_excel_export_logic
+    generate_prof_standard_excel_export_logic,
+    # --- НОВЫЕ ИМПОРТЫ ДЛЯ РАСПОРЯЖЕНИЙ ---
+    process_uk_indicators_disposition_file,
+    save_uk_indicators_from_disposition
 )
 
 from auth.logic import login_required, approved_required, admin_only
@@ -460,6 +463,74 @@ def delete_fgos_route(fgos_id):
         logger.error(f"Error deleting FGOS {fgos_id}: {e}", exc_info=True)
         abort(500, description=f"Не удалось удалить ФГОС: {e}")
 
+# --- НОВЫЕ ЭНДПОИНТЫ ДЛЯ РАСПОРЯЖЕНИЙ ---
+@competencies_matrix_bp.route('/fgos/uk-indicators/upload', methods=['POST'])
+@login_required
+@approved_required
+@admin_only
+def upload_uk_indicators_disposition():
+    """Upload and parse a PDF file containing UK indicators disposition."""
+    if 'file' not in request.files:
+        abort(400, description="Файл не найден в запросе.")
+    file = request.files['file']
+    if file.filename == '' or not file.filename.lower().endswith('.pdf'):
+        abort(400, description="Файл не выбран или неверный формат (требуется PDF).")
+
+    try:
+        file_bytes = file.read()
+        parsed_data = process_uk_indicators_disposition_file(file_bytes, file.filename)
+        
+        if not parsed_data or not parsed_data.get('disposition_metadata'):
+            logger.error(f"Upload UK Disposition: Parsing succeeded but essential metadata missing for {file.filename}.")
+            abort(400, description="Не удалось извлечь основные метаданные из файла распоряжения.")
+
+        return jsonify(parsed_data), 200
+    except ValueError as e:
+        logger.error(f"Upload UK Disposition: Parsing Error for {file.filename}: {e}")
+        abort(400, description=f"Ошибка парсинга файла распоряжения: {e}")
+    except Exception as e:
+        logger.error(f"Upload UK Disposition: Unexpected error processing file {file.filename}: {e}", exc_info=True)
+        abort(500, description=f"Неожиданная ошибка сервера при обработке файла распоряжения: {e}")
+
+@competencies_matrix_bp.route('/fgos/uk-indicators/save', methods=['POST'])
+@login_required
+@approved_required
+@admin_only
+def save_uk_indicators_disposition():
+    """Save parsed UK indicators from disposition data to the DB."""
+    data = request.get_json()
+    parsed_disposition_data = data.get('parsed_data')
+    filename = data.get('filename')
+    fgos_id = data.get('fgos_id') # ID FGOS, к которому привязываем
+    options = data.get('options', {}) # force_update_uk, resolutions
+
+    if not all([parsed_disposition_data, filename, fgos_id is not None]):
+        abort(400, description="Некорректные данные для сохранения (отсутствуют parsed_data, filename или fgos_id).")
+
+    try:
+        save_result = save_uk_indicators_from_disposition(
+            parsed_disposition_data=parsed_disposition_data,
+            filename=filename,
+            session=db.session,
+            fgos_id=fgos_id,
+            force_update_uk=options.get('force_update_uk', False),
+            resolutions=options.get('resolutions')
+        )
+        db.session.commit()
+        return jsonify({"success": True, "message": "Индикаторы УК успешно сохранены/обновлены.", "summary": save_result.get('summary')}), 201
+    except ValueError as e:
+        db.session.rollback()
+        logger.error(f"Validation error saving UK indicators from disposition: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 400
+    except IntegrityError as e:
+        db.session.rollback()
+        logger.error(f"Integrity error saving UK indicators from disposition: {e.orig}", exc_info=True)
+        return jsonify({"error": "Ошибка целостности данных при сохранении индикаторов УК. Возможно, дублирующийся код."}), 409
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Unexpected error saving UK indicators from disposition: {e}", exc_info=True)
+        return jsonify({"error": f"Неожиданная ошибка сервера при сохранении индикаторов УК: {e}"}), 500
+
 
 # Professional Standards Endpoints
 @competencies_matrix_bp.route('/profstandards/parse-preview', methods=['POST'])
@@ -641,9 +712,13 @@ def search_profstandards_route():
     except ValueError:
         return jsonify({"error": "Неверный формат offset или limit. Ожидаются целые числа."}), 400
     
-    # ИЗМЕНЕНИЕ: Разрешаем поиск, если есть уровни квалификации, даже без query
-    if not search_query and not qualification_levels:
-        return jsonify({"error": "Поисковый запрос должен содержать минимум 2 символа, либо должны быть выбраны уровни квалификации."}), 400
+    # ИЗМЕНЕНИЕ: Разрешаем поиск, если есть уровни квалификации ИЛИ выбранные PS, даже без query
+    # Проверка длины search_query только если он не пустой
+    if (not search_query or len(search_query) < 2) and not qualification_levels and (ps_ids is None or len(ps_ids) == 0):
+        # Если нет ни запроса, ни уровней, ни выбранных PS, то это ошибка
+        return jsonify({"error": "Поисковый запрос должен содержать минимум 2 символа, либо должны быть выбраны уровни квалификации, либо выбран как минимум один профстандарт."}), 400
+    
+    # Если search_query задан, но слишком короткий, это ошибка
     if search_query and len(search_query) < 2:
         return jsonify({"error": "Поисковый запрос должен содержать минимум 2 символа."}), 400
 
