@@ -475,10 +475,16 @@ def upload_uk_indicators_disposition():
     file = request.files['file']
     if file.filename == '' or not file.filename.lower().endswith('.pdf'):
         abort(400, description="Файл не выбран или неверный формат (требуется PDF).")
+    
+    # ИЗМЕНЕНИЕ: Получаем education_level из запроса
+    education_level = request.args.get('education_level')
+    if not education_level:
+        abort(400, description="Не указан уровень образования (education_level) для распоряжения.")
 
     try:
         file_bytes = file.read()
-        parsed_data = process_uk_indicators_disposition_file(file_bytes, file.filename)
+        # ИЗМЕНЕНИЕ: Передаем education_level в логику
+        parsed_data = process_uk_indicators_disposition_file(file_bytes, file.filename, education_level)
         
         if not parsed_data or not parsed_data.get('disposition_metadata'):
             logger.error(f"Upload UK Disposition: Parsing succeeded but essential metadata missing for {file.filename}.")
@@ -486,7 +492,7 @@ def upload_uk_indicators_disposition():
 
         return jsonify(parsed_data), 200
     except ValueError as e:
-        logger.error(f"Upload UK Disposition: Parsing Error for {file.filename}: {e}")
+        logger.error(f"Upload UK Disposition: Parsing Error for {file.filename}: {e}", exc_info=True)
         abort(400, description=f"Ошибка парсинга файла распоряжения: {e}")
     except Exception as e:
         logger.error(f"Upload UK Disposition: Unexpected error processing file {file.filename}: {e}", exc_info=True)
@@ -501,18 +507,22 @@ def save_uk_indicators_disposition():
     data = request.get_json()
     parsed_disposition_data = data.get('parsed_data')
     filename = data.get('filename')
-    fgos_id = data.get('fgos_id') # ID FGOS, к которому привязываем
+    # ИЗМЕНЕНИЕ: Принимаем список fgos_ids
+    fgos_ids = data.get('fgos_ids') 
     options = data.get('options', {}) # force_update_uk, resolutions
 
-    if not all([parsed_disposition_data, filename, fgos_id is not None]):
-        abort(400, description="Некорректные данные для сохранения (отсутствуют parsed_data, filename или fgos_id).")
+    if not all([parsed_disposition_data, filename, fgos_ids]):
+        abort(400, description="Некорректные данные для сохранения (отсутствуют parsed_data, filename или fgos_ids).")
+    
+    if not isinstance(fgos_ids, list) or not fgos_ids:
+        abort(400, description="fgos_ids должен быть непустым списком.")
 
     try:
         save_result = save_uk_indicators_from_disposition(
             parsed_disposition_data=parsed_disposition_data,
             filename=filename,
             session=db.session,
-            fgos_id=fgos_id,
+            fgos_ids=fgos_ids, # ИЗМЕНЕНИЕ: Передаем список
             force_update_uk=options.get('force_update_uk', False),
             resolutions=options.get('resolutions')
         )
