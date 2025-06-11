@@ -1443,11 +1443,24 @@ def delete_prof_standard(ps_id: int, session: Session) -> bool:
     except SQLAlchemyError as e: logger.error(f"Database error deleting PS {ps_id}: {e}", exc_info=True); raise e
     except Exception as e: logger.error(f"Unexpected error deleting PS {ps_id}: {e}", exc_info=True); raise e
 
-def generate_prof_standard_excel_export_logic(selected_data: Dict[str, Any]) -> bytes:
+def generate_prof_standard_excel_export_logic(selected_data: Dict[str, Any], opop_id: Optional[int]) -> bytes:
+    """
+    Готовит данные и вызывает функцию генерации Excel.
+    """
     if not selected_data or not selected_data.get('profStandards'):
         raise ValueError("Нет данных для экспорта.")
+
+    # Получаем данные об ОП для заголовка
+    opop_data = {'direction_code': '', 'direction_name': '', 'profile_name': ''}
+    if opop_id:
+        program = EducationalProgram.query.get(opop_id)
+        if program:
+            opop_data['direction_code'] = program.code
+            opop_data['direction_name'] = program.title # Или другое поле, если есть
+            opop_data['profile_name'] = program.profile
+    
     try:
-        excel_bytes = exports.generate_tf_list_excel_export(selected_data)
+        excel_bytes = exports.generate_tf_list_excel_export(selected_data, opop_data)
         return excel_bytes
     except Exception as e:
         logger.error(f"Error generating Excel export for TF list: {e}", exc_info=True)

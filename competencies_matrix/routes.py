@@ -796,13 +796,21 @@ def get_external_aup_disciplines_route(aup_id):
 @login_required
 @approved_required
 def export_selected_profstandards():
+    """
+    Exports selected TFs to an Excel file.
+    Expects 'opop_id' and 'profStandards' in the JSON body.
+    """
     data = request.get_json()
+    opop_id = data.get('opopId') # Ожидаем ID ОП для заголовка
+
     if not data or not data.get('profStandards'):
         abort(400, description="Нет данных о выбранных профстандартах для экспорта.")
+    
     try:
-        excel_bytes = generate_prof_standard_excel_export_logic(data)
+        excel_bytes = generate_prof_standard_excel_export_logic(data, opop_id)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"Перечень_ТФ_{timestamp}.xlsx"
+        
         return send_file(
             io.BytesIO(excel_bytes),
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
