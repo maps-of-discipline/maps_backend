@@ -5,7 +5,7 @@ from typing import Dict, List, Any # Убираем Tuple, т.к. не испо�
 
 from pdfminer.high_level import extract_text
 
-from .nlp import parse_fgos_with_gemini 
+from .nlp_logic import parse_fgos_with_gemini 
 
 logger = logging.getLogger(__name__)
 

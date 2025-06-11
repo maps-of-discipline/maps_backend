@@ -14,13 +14,6 @@ from .parsing_utils import parse_date_string
 
 logger = logging.getLogger(__name__)
 
-# --- Удален весь код _clean_text_fgos ---
-# --- Удален весь код _extract_fgos_metadata ---
-# --- Удален весь код _add_buffered_comp_to_list ---
-# --- Удален весь код _extract_uk_opk ---
-# --- Удален весь код _extract_recommended_ps_fgos ---
-# --- Удален весь код parse_fgos_pdf ---
-
 def parse_prof_standard_xml(xml_content: bytes) -> Dict[str, Any]:
     """
     Парсит XML-файл Профессионального Стандарта.

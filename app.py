@@ -16,7 +16,7 @@ from maps.routes import maps_module
 from unification import unification_blueprint
 from auth.routes import auth as auth_blueprint
 from administration.routes import admin as admin_blueprint
-from competencies_matrix import competencies_matrix_bp
+from competencies_matrix import competencies_matrix_bp # <-- ИМПОРТ competencies_matrix_bp
 from utils.handlers import handle_exception
 
 from cli_commands.db_seed import seed_command
@@ -51,7 +51,7 @@ cache.init_app(app)
 
 CORS(
     app,
-    origins=["http://localhost:5173", "http://127.0.0.1:5173"], 
+    origins=["http://localhost:5173", "http://127.0.0.0.1:5173"], 
     supports_credentials=True,
     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=[

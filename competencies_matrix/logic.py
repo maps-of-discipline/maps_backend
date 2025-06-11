@@ -31,7 +31,7 @@ from .external_models import (
 from . import fgos_parser
 from . import parsers
 from . import exports # <-- НОВЫЙ ИМПОРТ: Модуль экспорта
-from . import nlp # <-- НОВЫЙ ИМПОРТ: NLP модуль для распоряжений
+from . import nlp_logic
 
 from .parsing_utils import parse_date_string
 
@@ -874,7 +874,7 @@ def delete_indicator(ind_id: int, session: Session) -> bool:
 def parse_fgos_file(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     try:
         text_content = fgos_parser.extract_text(io.BytesIO(file_bytes)) # ИЗМЕНЕНИЕ: Используем pdfminer напрямую
-        parsed_data = nlp.parse_fgos_with_gemini(text_content) # ИЗМЕНЕНИЕ: Вызываем nlp.py
+        parsed_data = nlp_logic.parse_fgos_with_gemini(text_content) # ИЗМЕНЕНИЕ: Вызываем nlp_logic.py
         if not parsed_data or not parsed_data.get('metadata'):
              logger.warning(f"Parsing failed or returned insufficient metadata for {filename}")
              if not parsed_data: raise ValueError("Parser returned empty data.")
@@ -1467,7 +1467,7 @@ def process_uk_indicators_disposition_file(file_bytes: bytes, filename: str, edu
     try:
         # ИЗМЕНЕНИЕ: Передаем education_level в NLP парсер
         text_content = extract_text(io.BytesIO(file_bytes))
-        parsed_disposition_data = nlp.parse_uk_indicators_disposition_with_gemini(text_content, education_level=education_level)
+        parsed_disposition_data = nlp_logic.parse_uk_indicators_disposition_with_gemini(text_content, education_level=education_level)
 
         if not parsed_disposition_data or not parsed_disposition_data.get('disposition_metadata'):
             raise ValueError("Не удалось извлечь метаданные из файла распоряжения.")

@@ -1,48 +1,19 @@
-# competencies_matrix/nlp.py
-import os
+# competencies_matrix/nlp_logic.py
 import json
 import logging
 import re
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
-try:
-    from google import genai
-    from google.genai import types
-    GOOGLE_GENAI_SDK_AVAILABLE = True
-except ImportError:
-    logging.error("google-genai package not found. Please install it using 'pip install google-genai'.")
-    genai = None
-    types = None
-    GOOGLE_GENAI_SDK_AVAILABLE = False
+# Импортируем конфигурацию и клиент из нового файла
+from .nlp_config import get_gemini_client, get_gemini_types, GOOGLE_GENAI_SDK_AVAILABLE, GEMINI_MODEL_NAME
 
 # Импортируем утилиту парсинга дат
 from .parsing_utils import parse_date_string
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-# --- Конфигурация Gemini API ---
-GOOGLE_AI_API_KEY = os.getenv("GOOGLE_AI_API_KEY")
-if not GOOGLE_AI_API_KEY: # Для локальной отладки без .env
-    GOOGLE_AI_API_KEY = "AIzaSyDA0NoIT1yhuJwUzmAPqXl_lUOJ4chnaQA" # не менять
-    
-GEMINI_MODEL_NAME = "gemini-2.0-flash-lite" # не менять
-
-gemini_client = None
-if GOOGLE_AI_API_KEY and GOOGLE_GENAI_SDK_AVAILABLE and genai:
-    try:
-        gemini_client = genai.Client(api_key=GOOGLE_AI_API_KEY) # не менять
-        logger.info(f"Google Gemini API client configured successfully.")
-    except Exception as e:
-        logger.error(f"Failed to configure Google Gemini API client: {e}")
-        gemini_client = None
-elif GOOGLE_GENAI_SDK_AVAILABLE and genai: 
-    logger.warning("GOOGLE_AI_API_KEY environment variable is not set. Gemini API will not be used for parsing.")
-else:
-    logger.warning("Google GenAI SDK is not available. Gemini API will not be used for parsing.")
-
+# logger.setLevel(logging.DEBUG) # Уровень логирования можно настраивать через app.py
 
 def _create_fgos_prompt(fgos_text: str) -> str:
     """
@@ -170,22 +141,23 @@ Here is the disposition document text to parse:
 
 def _call_gemini_api(prompt_content: str) -> Dict[str, Any]:
     """Helper function to call the Gemini API and parse the response."""
+    gemini_client = get_gemini_client() # Получаем клиент
+    gemini_types = get_gemini_types() # Получаем types
+    
     if not gemini_client:
         raise RuntimeError("Gemini API client is not configured.")
 
     logger.debug(f"Sending prompt to Gemini (first 500 chars):\n{prompt_content[:500]}...")
     
-    # не менять
     response = gemini_client.models.generate_content(
         model=GEMINI_MODEL_NAME,
         contents=[prompt_content],
-        config=types.GenerateContentConfig(
+        config=gemini_types.GenerateContentConfig( # ИСПРАВЛЕНО: используем gemini_types
             temperature=0.0,
             max_output_tokens=8192 
         )
     )
     
-    # ИСПРАВЛЕНО: Более надежная обработка ответа
     try:
         response_text = response.text
     except Exception as e:
@@ -254,13 +226,14 @@ def parse_fgos_with_gemini(fgos_text: str) -> Dict[str, Any]:
     Использует Gemini API для парсинга текста ФГОС ВО
     и извлечения структурированных данных.
     """
+    gemini_client = get_gemini_client() # Получаем клиент
+    gemini_types = get_gemini_types() # Получаем types
+
     if not gemini_client:
         if not GOOGLE_GENAI_SDK_AVAILABLE:
             logger.error("Gemini SDK (google-genai) is not available.")
             raise RuntimeError("Gemini SDK (google-genai) is not available. Cannot parse FGOS with NLP.")
-        elif not GOOGLE_AI_API_KEY:
-            logger.error("GOOGLE_AI_API_KEY environment variable is not set.")
-            raise RuntimeError("GOOGLE_AI_API_KEY environment variable is not set. Cannot parse FGOS with NLP.")
+        # else: GOOGLE_AI_API_KEY check is done in get_gemini_client()
         else:
             logger.error("Gemini API client model was not initialized (likely due to configuration error).")
             raise RuntimeError("Gemini API client model was not initialized. Cannot parse FGOS with NLP.")
@@ -273,7 +246,7 @@ def parse_fgos_with_gemini(fgos_text: str) -> Dict[str, Any]:
         response = gemini_client.models.generate_content(
             model=GEMINI_MODEL_NAME,
             contents=[prompt_content],
-            config=types.GenerateContentConfig(
+            config=gemini_types.GenerateContentConfig( # ИСПРАВЛЕНО: используем gemini_types
                 temperature=0.0,
                 max_output_tokens=8192 
             )
