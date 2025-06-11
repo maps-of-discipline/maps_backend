@@ -1,4 +1,4 @@
-# competencies_matrix/logic.py
+# filepath: competencies_matrix/logic.py
 from typing import Dict, List, Any, Optional
 import datetime
 import traceback
@@ -31,7 +31,7 @@ from .external_models import (
 from . import fgos_parser
 from . import parsers
 from . import exports # <-- НОВЫЙ ИМПОРТ: Модуль экспорта
-from . import nlp_logic
+from . import nlp_logic # <-- Н НОВЫЙ ИМПОРТ: NLP-логика
 
 from .parsing_utils import parse_date_string
 
@@ -1658,3 +1658,42 @@ def save_uk_indicators_from_disposition(
         logger.error(f"Error saving UK indicators from disposition: {e}", exc_info=True)
         session.rollback()
         raise e
+
+# НОВАЯ ФУНКЦИЯ
+def handle_pk_name_correction(raw_phrase: str) -> Dict[str, str]:
+    """
+    Обрабатывает запрос на коррекцию имени ПК с использованием NLP.
+    """
+    if not raw_phrase or not isinstance(raw_phrase, str):
+        raise ValueError("Некорректная сырая фраза для коррекции.")
+    
+    try:
+        corrected_name = nlp_logic.correct_pk_name_with_gemini(raw_phrase)
+        return corrected_name
+    except RuntimeError as e:
+        logger.error(f"NLP correction failed: {e}", exc_info=True)
+        raise RuntimeError(f"Ошибка NLP при коррекции названия ПК: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error in handle_pk_name_correction: {e}", exc_info=True)
+        raise RuntimeError(f"Неизвестная ошибка при коррекции названия ПК: {e}")
+
+# НОВАЯ ФУНКЦИЯ
+def handle_pk_ipk_generation(
+    selected_tfs_data: List[Dict],
+    selected_zun_elements: Dict[str, List[Dict]]
+) -> Dict[str, Any]:
+    """
+    Обрабатывает запрос на генерацию ПК и ИПК с использованием NLP.
+    """
+    if not selected_tfs_data and not selected_zun_elements:
+        raise ValueError("Необходимо выбрать Трудовые Функции или их элементы для генерации.")
+    
+    try:
+        generated_data = nlp_logic.generate_pk_ipk_with_gemini(selected_tfs_data, selected_zun_elements)
+        return generated_data
+    except RuntimeError as e:
+        logger.error(f"NLP generation failed: {e}", exc_info=True)
+        raise RuntimeError(f"Ошибка NLP при генерации ПК/ИПК: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error in handle_pk_ipk_generation: {e}", exc_info=True)
+        raise RuntimeError(f"Неизвестная ошибка при генерации ПК/ИПК: {e}")

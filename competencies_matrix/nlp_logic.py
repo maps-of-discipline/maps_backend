@@ -1,4 +1,4 @@
-# competencies_matrix/nlp_logic.py
+# filepath: competencies_matrix/nlp_logic.py
 import json
 import logging
 import re
@@ -136,6 +136,97 @@ The JSON should be formatted as follows:
 Here is the disposition document text to parse:
 
 {disposition_text}
+"""
+    return prompt
+
+def _create_pk_correction_prompt(raw_phrase: str) -> str:
+    """
+    Создает промпт для Gemini API для грамматической коррекции сырой фразы
+    в формулировку Профессиональной Компетенции.
+    """
+    prompt = f"""
+Ты - лингвистический ассистент, специализирующийся на академических формулировках.
+Твоя задача - преобразовать предоставленную сырую фразу в грамматически корректную и подходящую для описания ПРОФЕССИОНАЛЬНОЙ КОМПЕТЕНЦИИ в контексте высшего образования.
+
+Строгие правила:
+1.  Фраза ДОЛЖНА начинаться со слова "Способен" (или "Способна", если контекст женского рода, но по умолчанию "Способен").
+2.  Сохрани основной смысл исходной фразы.
+3.  Обеспечь грамматическую и стилистическую корректность на русском языке.
+4.  НЕ добавляй никаких объяснений, преамбул, разметки Markdown, кроме самой откорректированной фразы.
+5.  НЕ добавляй никаких лишних символов или знаков препинания в конце (например, точку).
+
+Пример:
+Исходная фраза: "Разработка и отладка программного кода"
+Результат: "Способен разрабатывать и отлаживать программный код"
+
+Исходная фраза: "Анализ возможностей реализации требований к компьютерному программному обеспечению"
+Результат: "Способен анализировать возможности реализации требований к компьютерному программному обеспечению"
+
+Исходная фраза: "Исправление дефектов программного кода, зафиксированных в базе данных дефектов"
+Результат: "Способен исправлять дефекты программного кода, зафиксированные в базе данных дефектов"
+
+Исходная фраза: "{raw_phrase}"
+Результат:
+"""
+    return prompt
+
+def _create_pk_ipk_generation_prompt(
+    selected_tfs_data: List[Dict],
+    selected_zun_elements: Dict[str, List[Dict]]
+) -> str:
+    """
+    Создает промпт для Gemini API для генерации формулировок ПК и ИПК на основе
+    выбранных Трудовых Функций и ЗУН-элементов.
+    """
+    tfs_json = json.dumps([{"code": tf['code'], "name": tf['name'], "qualification_level": tf.get('qualification_level')} for tf in selected_tfs_data], ensure_ascii=False, indent=2)
+    
+    actions_json = json.dumps([{"description": item['description']} for item in selected_zun_elements.get('labor_actions', [])], ensure_ascii=False, indent=2)
+    skills_json = json.dumps([{"description": item['description']} for item in selected_zun_elements.get('required_skills', [])], ensure_ascii=False, indent=2)
+    knowledge_json = json.dumps([{"description": item['description']} for item in selected_zun_elements.get('required_knowledge', [])], ensure_ascii=False, indent=2)
+
+    prompt = f"""
+Ты - эксперт-методист по разработке образовательных программ.
+Твоя задача - на основе предоставленных данных из Профессиональных Стандартов (Трудовых Функций и их элементов: Трудовых Действий, Необходимых Умений, Необходимых Знаний) сформулировать:
+1.  Наименование Профессиональной Компетенции (ПК).
+2.  Три формулировки Индикаторов Достижения Компетенции (ИПК): "Знает", "Умеет", "Владеет".
+
+Строгие правила:
+1.  Возвращай ответ ТОЛЬКО в JSON-формате, обернутый в ```json ... ```.
+2.  НЕ добавляй никаких объяснений, преамбул, или других фраз вне JSON.
+3.  Формулировка ПК ДОЛЖНА начинаться со слова "Способен". Она должна быть обобщающей для всех предоставленных ТФ.
+4.  Формулировки ИПК "Знает", "Умеет", "Владеет" должны:
+    *   Быть КОРОТКИМИ, емкими, ОБОБЩАЮЩИМИ основные идеи из соответствующих разделов (НЗ, НУ, ТД).
+    *   НЕ использовать прямую конкатенацию всех пунктов. СИНТЕЗИРУЙ суть.
+    *   "Знает": Обобщает Необходимые Знания.
+    *   "Умеет": Обобщает Необходимые Умения.
+    *   "Владеет": Обобщает Трудовые Действия.
+5.  Если какой-то раздел ЗУН пуст, соответствующее поле в JSON должно быть пустой строкой.
+6.  Все строки должны быть на русском языке.
+
+JSON Schema:
+```json
+{{
+    "pk_name": "STRING (Формулировка Профессиональной Компетенции)",
+    "ipk_indicators": {{
+        "znaet": "STRING (Обобщенная формулировка Знаний)",
+        "umeet": "STRING (Обобщенная формулировка Умений)",
+        "vladeet": "STRING (Обобщенная формулировка Владения/Действий)"
+    }}
+}}
+```
+
+Данные:
+Трудовые Функции (TF):
+{tfs_json}
+
+Трудовые Действия (Labor Actions):
+{actions_json}
+
+Необходимые Умения (Required Skills):
+{skills_json}
+
+Необходимые Знания (Required Knowledge):
+{knowledge_json}
 """
     return prompt
 
@@ -332,3 +423,73 @@ def parse_fgos_with_gemini(fgos_text: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error parsing FGOS with Gemini API: {e}", exc_info=True)
         raise RuntimeError(f"Ошибка при парсинге ФГОС с помощью Gemini API: {e}")
+
+# НОВАЯ ФУНКЦИЯ
+def correct_pk_name_with_gemini(raw_phrase: str) -> Dict[str, str]:
+    """
+    Использует Gemini API для грамматической коррекции сырой фразы
+    в формулировку Профессиональной Компетенции.
+    """
+    try:
+        prompt = _create_pk_correction_prompt(raw_phrase)
+        response_text = _call_gemini_api(prompt) # _call_gemini_api теперь возвращает сырой текст, если нет JSON
+        
+        # Если NLP вернет только текст, то просто используем его
+        if isinstance(response_text, str):
+            return {"corrected_name": response_text.strip()}
+        # Если вдруг вернет JSON, который мы не ожидали (что маловероятно для такого промпта),
+        # то можно добавить логику обработки. Пока будем считать, что он возвращает только текст.
+        
+        # Fallback for unexpected JSON response
+        if isinstance(response_text, dict) and 'corrected_name' in response_text:
+            return response_text # If Gemini decides to output JSON despite prompt
+        
+        # Fallback if text is not in 'response_text' (e.g. LLM decided to put it in a different key)
+        if response_text is not None and isinstance(response_text, dict):
+            logger.warning(f"Unexpected non-string response from PK correction prompt: {response_text}. Trying to extract text.")
+            for key, value in response_text.items():
+                if isinstance(value, str) and len(value) > 20: # Heuristic: assume it's the long text
+                    return {"corrected_name": value.strip()}
+
+        logger.error(f"Gemini did not return expected string for PK name correction. Raw response: {response_text}")
+        raise ValueError("NLP не смог сгенерировать корректное название ПК.")
+    except Exception as e:
+        logger.error(f"Error calling Gemini for PK name correction: {e}", exc_info=True)
+        raise RuntimeError(f"Ошибка при коррекции названия ПК через NLP: {e}")
+
+# НОВАЯ ФУНКЦИЯ
+def generate_pk_ipk_with_gemini(
+    selected_tfs_data: List[Dict],
+    selected_zun_elements: Dict[str, List[Dict]]
+) -> Dict[str, Any]:
+    """
+    Использует Gemini API для генерации формулировок ПК и ИПК на основе
+    выбранных Трудовых Функций и ЗУН-элементов.
+    """
+    try:
+        prompt = _create_pk_ipk_generation_prompt(selected_tfs_data, selected_zun_elements)
+        parsed_data = _call_gemini_api(prompt)
+        
+        # Basic validation of the expected JSON structure
+        if not isinstance(parsed_data, dict) or \
+           'pk_name' not in parsed_data or \
+           not isinstance(parsed_data.get('ipk_indicators'), dict) or \
+           'znaet' not in parsed_data['ipk_indicators'] or \
+           'umeet' not in parsed_data['ipk_indicators'] or \
+           'vladeet' not in parsed_data['ipk_indicators']:
+            logger.error(f"Generated JSON from Gemini has unexpected structure: {parsed_data}")
+            raise ValueError("Сгенерированный JSON имеет неверную структуру.")
+        
+        # Clean up formulations (remove extra spaces, newlines)
+        if isinstance(parsed_data['pk_name'], str):
+            parsed_data['pk_name'] = re.sub(r'\s+', ' ', parsed_data['pk_name']).strip()
+        
+        for key in ['znaet', 'umeet', 'vladeet']:
+            if isinstance(parsed_data['ipk_indicators'].get(key), str):
+                parsed_data['ipk_indicators'][key] = re.sub(r'\s+', ' ', parsed_data['ipk_indicators'][key]).strip()
+        
+        logger.info("Successfully generated PK/IPK formulations using Gemini API.")
+        return parsed_data
+    except Exception as e:
+        logger.error(f"Error generating PK/IPK with Gemini API: {e}", exc_info=True)
+        raise RuntimeError(f"Ошибка при генерации ПК/ИПК через NLP: {e}")

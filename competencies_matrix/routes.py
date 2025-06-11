@@ -1,4 +1,4 @@
-# competencies_matrix/routes.py
+# filepath: competencies_matrix/routes.py
 from flask import request, jsonify, abort, send_file
 from . import competencies_matrix_bp
 from typing import Optional, List
@@ -23,7 +23,10 @@ from .logic import (
     generate_prof_standard_excel_export_logic,
     # --- НОВЫЕ ИМПОРТЫ ДЛЯ РАСПОРЯЖЕНИЙ ---
     process_uk_indicators_disposition_file,
-    save_uk_indicators_from_disposition
+    save_uk_indicators_from_disposition,
+    # --- НОВЫЕ ИМПОРТЫ ДЛЯ NLP ГЕНЕРАЦИИ ПК/ИПК ---
+    handle_pk_name_correction,
+    handle_pk_ipk_generation
 )
 
 from auth.logic import login_required, approved_required, admin_only
@@ -812,3 +815,52 @@ def export_selected_profstandards():
         return jsonify({"error": str(e)}), 500
     except Exception as e:
         abort(500, description=f"Не удалось выполнить экспорт в Excel: {e}")
+
+# --- НОВЫЕ ЭНДПОИНТЫ ДЛЯ NLP ГЕНЕРАЦИИ ПК/ИПК ---
+@competencies_matrix_bp.route('/pk-generation/correct-name', methods=['POST'])
+@login_required
+@approved_required
+def pk_name_correction_route():
+    """Corrects a raw phrase to a proper PK name using NLP."""
+    data = request.get_json()
+    raw_phrase = data.get('raw_phrase')
+    if not raw_phrase:
+        abort(400, description="Отсутствует 'raw_phrase' для коррекции.")
+    
+    try:
+        result = handle_pk_name_correction(raw_phrase)
+        return jsonify(result), 200
+    except ValueError as e:
+        logger.error(f"Validation error for PK name correction: {e}")
+        return jsonify({"error": str(e)}), 400
+    except RuntimeError as e: # Catch NLP-specific runtime errors
+        logger.error(f"NLP error for PK name correction: {e}")
+        return jsonify({"error": f"Ошибка NLP: {e}"}), 500
+    except Exception as e:
+        logger.error(f"Unexpected error in PK name correction route: {e}", exc_info=True)
+        abort(500, description=f"Неожиданная ошибка сервера при коррекции названия ПК: {e}")
+
+@competencies_matrix_bp.route('/pk-generation/generate-pk-ipk', methods=['POST'])
+@login_required
+@approved_required
+def generate_pk_ipk_route():
+    """Generates PK name and IPK formulations using NLP based on selected TF and ZUNs."""
+    data = request.get_json()
+    selected_tfs_data = data.get('selected_tfs_data')
+    selected_zun_elements = data.get('selected_zun_elements')
+
+    if not selected_tfs_data and not selected_zun_elements:
+        abort(400, description="Отсутствуют данные для генерации. Необходимо выбрать ТФ или ЗУН-элементы.")
+    
+    try:
+        generated_data = handle_pk_ipk_generation(selected_tfs_data, selected_zun_elements)
+        return jsonify(generated_data), 200
+    except ValueError as e:
+        logger.error(f"Validation error for PK/IPK generation: {e}")
+        return jsonify({"error": str(e)}), 400
+    except RuntimeError as e: # Catch NLP-specific runtime errors
+        logger.error(f"NLP error for PK/IPK generation: {e}")
+        return jsonify({"error": f"Ошибка NLP: {e}"}), 500
+    except Exception as e:
+        logger.error(f"Unexpected error in PK/IPK generation route: {e}", exc_info=True)
+        abort(500, description=f"Неожиданная ошибка сервера при генерации ПК/ИПК: {e}")
