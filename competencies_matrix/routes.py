@@ -872,3 +872,26 @@ def generate_pk_ipk_route():
     except Exception as e:
         logger.error(f"Unexpected error in PK/IPK generation route: {e}", exc_info=True)
         abort(500, description=f"Неожиданная ошибка сервера при генерации ПК/ИПК: {e}")
+
+# В competencies_matrix/routes.py
+@competencies_matrix_bp.route('/competencies/batch-create-from-tf', methods=['POST'])
+@login_required
+@approved_required
+@admin_only
+def batch_create_competencies_from_tf():
+    """
+    Пакетное создание ПК и их ИПК на основе массива данных из фронтенда.
+    """
+    data_list = request.get_json()
+    if not isinstance(data_list, list):
+        abort(400, description="Ожидается массив объектов для создания.")
+
+    # Вызываем новую функцию в logic.py, которая обработает все в одной транзакции
+    try:
+        results = logic.batch_create_pk_and_ipk(data_list, db.session)
+        db.session.commit()
+        return jsonify(results), 201
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error during batch creation: {e}", exc_info=True)
+        return jsonify({"error": f"Ошибка пакетного создания: {e}"}), 500

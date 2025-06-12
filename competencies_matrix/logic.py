@@ -1690,7 +1690,6 @@ def handle_pk_name_correction(raw_phrase: str) -> Dict[str, str]:
         logger.error(f"Unexpected error in handle_pk_name_correction: {e}", exc_info=True)
         raise RuntimeError(f"Неизвестная ошибка при коррекции названия ПК: {e}")
 
-# НОВАЯ ФУНКЦИЯ
 def handle_pk_ipk_generation(
     selected_tfs_data: List[Dict],
     selected_zun_elements: Dict[str, List[Dict]]
@@ -1710,3 +1709,37 @@ def handle_pk_ipk_generation(
     except Exception as e:
         logger.error(f"Unexpected error in handle_pk_ipk_generation: {e}", exc_info=True)
         raise RuntimeError(f"Неизвестная ошибка при генерации ПК/ИПК: {e}")
+
+def batch_create_pk_and_ipk(data_list: List[Dict[str, Any]], session: Session) -> Dict:
+    created_count = 0
+    errors = []
+    for item_data in data_list:
+        try:
+            # Логика из create_competency
+            pk_payload = {
+                'code': item_data.get('pk_code'),
+                'name': item_data.get('pk_name'),
+                'type_code': 'ПК',
+                'based_on_labor_function_id': item_data.get('tf_id')
+            }
+            new_pk = create_competency(pk_payload, session)
+            session.flush() # Получаем ID для new_pk
+
+            # Логика из create_indicator
+            formulation = f"Знает: {item_data.get('ipk_znaet')}\\nУмеет: {item_data.get('ipk_umeet')}\\nВладеет: {item_data.get('ipk_vladeet')}"
+            ipk_payload = {
+                'competency_id': new_pk.id,
+                'code': f"ИПК-{new_pk.code.replace('ПК-', '')}.1",
+                'formulation': formulation,
+                'source': f"ПС {item_data.get('ps_code')}"
+            }
+            create_indicator(ipk_payload, session)
+            created_count += 1
+        except Exception as e:
+            errors.append({'pk_code': item_data.get('pk_code'), 'error': str(e)})
+
+    if errors:
+        # Если были ошибки, можно откатить всю транзакцию или вернуть частичный результат
+        raise Exception(f"Завершено с ошибками. Успешно: {created_count}, Ошибки: {len(errors)}. Подробности: {errors}")
+
+    return {"success": True, "created_count": created_count}
