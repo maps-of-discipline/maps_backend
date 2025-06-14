@@ -1,5 +1,5 @@
 # filepath: competencies_matrix/logic.py
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple # Добавлено Tuple
 import datetime
 import traceback
 import logging
@@ -30,8 +30,8 @@ from .external_models import (
 
 from . import fgos_parser
 from . import parsers
-from . import exports # <-- НОВЫЙ ИМПОРТ: Модуль экспорта
-from . import nlp_logic # <-- Н НОВЫЙ ИМПОРТ: NLP-логика
+from . import exports
+from . import nlp_logic
 
 from .parsing_utils import parse_date_string
 
@@ -51,42 +51,27 @@ def get_external_db_engine():
     return _external_db_engine
 
 def search_prof_standards(
-    search_query: str, # ИЗМЕНЕНИЕ: search_query теперь может быть пустой строкой
+    search_query: str,
     ps_ids: Optional[List[int]] = None,
     offset: int = 0,
     limit: int = 50,
     qualification_levels: Optional[List[int]] = None
 ) -> Dict[str, Any]:
-    """
-    (Оптимизированная версия)
-    Ищет в профстандартах, используя полнотекстовый поиск.
-    Работает в несколько этапов для максимальной производительности:
-    1. Получает ID профстандартов, отфильтрованных по уровню квалификации.
-    2. Получает ID профстандартов, отфильтрованных по тексту запроса через FTS.
-    3. Пересекает эти два набора ID, чтобы получить итоговый список.
-    4. Применяет дополнительный фильтр по `ps_ids` (если заданы) к итоговому списку ID.
-    5. Загружает полные данные только для итогового списка ID с пагинацией.
-    """
-    # ИЗМЕНЕНИЕ: Условие для ValueError. Разрешаем поиск, если заданы ps_ids ИЛИ qualification_levels, даже без search_query.
+    """(Оптимизированная версия) Ищет в профстандартах, используя полнотекстовый поиск."""
     if not search_query and not qualification_levels and (ps_ids is None or len(ps_ids) == 0):
         raise ValueError("Необходимо указать поисковый запрос, выбрать уровни квалификации или выбрать конкретные профстандарты.")
     
-    # ИЗМЕНЕНИЕ: Проверка длины search_query только если он не пустой
     if search_query and len(search_query) < 2:
         raise ValueError("Поисковый запрос должен содержать минимум 2 символа.")
 
     session: Session = local_db.session
     
-    # Инициализируем набор всех ID профстандартов, если нет начального фильтра
-    # или заданы только ps_ids.
-    # Это будет наш "стартовый" набор, который затем будет сужаться.
     initial_ps_ids_set: set
     if ps_ids:
-        initial_ps_ids_set = set(ps_ids) # Если ps_ids заданы, начинаем с них
+        initial_ps_ids_set = set(ps_ids)
     else:
-        initial_ps_ids_set = {ps.id for ps in session.query(ProfStandard.id).all()} # Иначе - все ID в базе
+        initial_ps_ids_set = {ps.id for ps in session.query(ProfStandard.id).all()}
 
-    # --- Этап 1: Фильтрация по уровням квалификации (если заданы) ---
     level_filtered_ps_ids: Optional[set] = None
     if qualification_levels:
         level_query = session.query(ProfStandard.id).distinct().join(
@@ -95,16 +80,13 @@ def search_prof_standards(
             cast(GeneralizedLaborFunction.qualification_level, Integer).in_(qualification_levels)
         )
         level_filtered_ps_ids = {r[0] for r in level_query.all()}
-        # Если фильтр по уровням есть, но нет совпадений, то и итоговых не будет
         if not level_filtered_ps_ids:
             return {"total": 0, "items": [], "search_query": search_query}
 
-    # --- Этап 2: Полнотекстовый поиск (если search_query не пустой и достаточно длинный) ---
     text_filtered_ps_ids: Optional[set] = None
-    if search_query and len(search_query) >= 2: # ИЗМЕНЕНИЕ: Условие для выполнения FTS
+    if search_query and len(search_query) >= 2:
         boolean_search_query = ' '.join(f'+{word}*' for word in search_query.split())
         
-        # Запросы к FTS-индексам. Выполняем 6 отдельных быстрых запросов.
         ps_ids_from_ps = {r[0] for r in session.query(ProfStandard.id).filter(text("MATCH(name) AGAINST (:query IN BOOLEAN MODE)").bindparams(query=boolean_search_query)).all()}
         ps_ids_from_otf = {r[0] for r in session.query(GeneralizedLaborFunction.prof_standard_id).filter(text("MATCH(name) AGAINST (:query IN BOOLEAN MODE)").bindparams(query=boolean_search_query)).all()}
         ps_ids_from_tf = {r[0] for r in session.query(GeneralizedLaborFunction.prof_standard_id).join(LaborFunction).filter(text("MATCH(competencies_labor_function.name) AGAINST (:query IN BOOLEAN MODE)").bindparams(query=boolean_search_query)).all()}
@@ -116,25 +98,18 @@ def search_prof_standards(
 
         if not text_filtered_ps_ids:
             return {"total": 0, "items": [], "search_query": search_query}
-    # else:
-    #   Если search_query пустой или слишком короткий, text_filtered_ps_ids остаётся None,
-    #   и этот фильтр не будет применён на следующем этапе.
 
-    # --- Этап 3: Комбинирование результатов фильтрации ---
-    # Начинаем с initial_ps_ids_set и последовательно пересекаем с другими фильтрами
     final_matching_ps_ids: set = initial_ps_ids_set
 
-    if text_filtered_ps_ids is not None: # Если текстовый поиск был выполнен, пересекаем его результаты
+    if text_filtered_ps_ids is not None:
         final_matching_ps_ids = final_matching_ps_ids.intersection(text_filtered_ps_ids)
     
-    if level_filtered_ps_ids is not None: # Если фильтр по уровням был выполнен, пересекаем его результаты
+    if level_filtered_ps_ids is not None:
         final_matching_ps_ids = final_matching_ps_ids.intersection(level_filtered_ps_ids)
     
-    # Если после всех фильтров список пуст
     if not final_matching_ps_ids:
         return {"total": 0, "items": [], "search_query": search_query}
 
-    # --- Этап 4: Получение полных данных для найденных ID с пагинацией ---
     final_ps_ids_list = sorted(list(final_matching_ps_ids))
     total_results = len(final_ps_ids_list)
     paginated_ids_to_fetch = final_ps_ids_list[offset : offset + limit]
@@ -153,9 +128,8 @@ def search_prof_standards(
         paginated_query = base_query.filter(ProfStandard.id.in_(paginated_ids_to_fetch)).order_by(ProfStandard.code)
         all_ps_to_process = paginated_query.all()
     
-    # --- Этап 5: Формирование ответа (подсветка перенесена на фронтенд) ---
     all_matching_ps_details = []
-    search_query_lower = search_query.lower() if search_query else "" # ИЗМЕНЕНИЕ: search_query_lower может быть пустой
+    search_query_lower = search_query.lower() if search_query else ""
 
     for ps in all_ps_to_process:
         ps_details = ps.to_dict(rules=['-generalized_labor_functions'])
@@ -164,11 +138,6 @@ def search_prof_standards(
         
         filtered_generalized_labor_functions = []
         for otf in ps.generalized_labor_functions:
-            # Filtering OTFs by qualification_levels is done on the ID set level already.
-            # This check is technically redundant if `level_filtered_ps_ids` is properly used
-            # but can act as a safeguard if levels are passed to this stage in a different way.
-            # However, it's better to ensure level filtering affects final_matching_ps_ids.
-            # For robustness, we keep it here for OTF-specific levels, as PS can have OTFs of different levels.
             if qualification_levels and otf.qualification_level and int(otf.qualification_level) not in qualification_levels:
                 continue
 
@@ -176,8 +145,6 @@ def search_prof_standards(
             otf_details['name'] = otf.name
             otf_details['code'] = otf.code
             
-            # has_match flags are for frontend filtering/highlighting
-            # ИЗМЕНЕНИЕ: Проверка на has_match только если search_query не пустой
             otf_details['has_match'] = search_query_lower and search_query_lower in otf.name.lower() or False
             
             filtered_labor_functions = []
@@ -186,12 +153,11 @@ def search_prof_standards(
                 tf_details['name'] = tf.name
                 tf_details['code'] = tf.code
                 
-                tf_name_matches = search_query_lower and search_query_lower in tf.name.lower() or False # ИЗМЕНЕНИЕ
-                tf_has_child_match = False
-
-                for la in tf.labor_actions: la.has_match = search_query_lower and search_query_lower in la.description.lower() or False # ИЗМЕНЕНИЕ
-                for rs in tf.required_skills: rs.has_match = search_query_lower and search_query_lower in rs.description.lower() or False # ИЗМЕНЕНИЕ
-                for rk in tf.required_knowledge: rk.has_match = search_query_lower and search_query_lower in rk.description.lower() or False # ИЗМЕНЕНИЕ
+                tf_name_matches = search_query_lower and search_query_lower in tf.name.lower() or False
+                
+                for la in tf.labor_actions: la.has_match = search_query_lower and search_query_lower in la.description.lower() or False
+                for rs in tf.required_skills: rs.has_match = search_query_lower and search_query_lower in rs.description.lower() or False
+                for rk in tf.required_knowledge: rk.has_match = search_query_lower and search_query_lower in rk.description.lower() or False
                 
                 tf_has_child_match = any(la.has_match for la in tf.labor_actions) or \
                                    any(rs.has_match for rs in tf.required_skills) or \
@@ -199,16 +165,13 @@ def search_prof_standards(
                                    
                 tf_details['has_match'] = tf_name_matches or tf_has_child_match
                 
-                # We need to return ALL TFs and their ZUNs within the matched PS. Frontend will filter the display.
                 tf_details['labor_actions'] = [la.to_dict() for la in tf.labor_actions]
                 tf_details['required_skills'] = [rs.to_dict() for rs in tf.required_skills]
                 tf_details['required_knowledge'] = [rk.to_dict() for rk in tf.required_knowledge]
-                filtered_labor_functions.append(tf_details) # Always append, let frontend filter display
+                filtered_labor_functions.append(tf_details)
 
             otf_details['labor_functions'] = filtered_labor_functions
             
-            # Always append OTF if it was part of the matched PS (final_matching_ps_ids)
-            # Frontend will handle the 'has_match' and `displayMode`
             filtered_generalized_labor_functions.append(otf_details)
 
         ps_details['generalized_labor_functions'] = filtered_generalized_labor_functions
@@ -244,6 +207,100 @@ def get_program_details(program_id: int) -> Optional[Dict[str, Any]]:
     except SQLAlchemyError as e: logger.error(f"Database error for program_id {program_id}: {e}", exc_info=True); return None
     except Exception as e: logger.error(f"Unexpected error for program_id {program_id}: {e}", exc_info=True); return None
 
+def create_educational_program(
+    data: Dict[str, Any], session: Session
+) -> EducationalProgram:
+    """
+    (ИЗМЕНЕНО)
+    Создает новую образовательную программу (ОПОП).
+    - Проверяет наличие обязательных полей.
+    - Проверяет на дубликаты.
+    - Связывает с ФГОС ВО.
+    - Связывает с АУП.
+    - АВТОМАТИЧЕСКИ СОЗДАЕТ ПУСТУЮ МАТРИЦУ КОМПЕТЕНЦИЙ для связанного АУП.
+    """
+    required_fields = ['title', 'code', 'enrollment_year', 'form_of_education']
+    if not all(data.get(field) for field in required_fields):
+        raise ValueError(f"Обязательные поля не заполнены: {', '.join(required_fields)}.")
+
+    existing_program = session.query(EducationalProgram).filter_by(
+        code=data['code'], profile=data.get('profile'),
+        enrollment_year=data.get('enrollment_year'), form_of_education=data.get('form_of_education')
+    ).first()
+    if existing_program:
+        raise IntegrityError(f"Образовательная программа с такими параметрами уже существует (ID: {existing_program.id}).", {}, None)
+
+    fgos_vo = None
+    if data.get('fgos_id'):
+        fgos_vo = session.query(FgosVo).get(data['fgos_id'])
+        if not fgos_vo: logger.warning(f"FGOS с ID {data['fgos_id']} не найден.")
+
+    new_program = EducationalProgram(
+        title=data['title'], code=data['code'], profile=data.get('profile'),
+        qualification=data.get('qualification'), form_of_education=data.get('form_of_education'),
+        enrollment_year=data.get('enrollment_year'), fgos=fgos_vo
+    )
+    session.add(new_program)
+    session.flush()
+
+    aup_info = None
+    if data.get('num_aup'):
+        aup_info = session.query(LocalAupInfo).filter_by(num_aup=data['num_aup']).first()
+        if aup_info:
+            has_primary_aup = session.query(EducationalProgramAup).filter_by(educational_program_id=new_program.id, is_primary=True).count() > 0
+            link = EducationalProgramAup(educational_program_id=new_program.id, aup_id=aup_info.id_aup, is_primary=(not has_primary_aup))
+            session.add(link)
+            logger.info(f"Связь ОПОП (ID: {new_program.id}) с АУП (ID: {aup_info.id_aup}) создана.")
+        else:
+            logger.warning(f"АУП с номером '{data['num_aup']}' не найден в локальной БД. Связь с ОПОП не создана.")
+
+    # --- НОВЫЙ БЛОК: Автоматическое создание пустой матрицы ---
+    if aup_info and fgos_vo:
+        logger.info(f"Начинаем автоматическое создание пустой матрицы для АУП {aup_info.num_aup}")
+        try:
+            # 1. Получаем все дисциплины (aup_data_id) для данного АУП
+            discipline_entries = session.query(LocalAupData.id).filter_by(id_aup=aup_info.id_aup).all()
+            aup_data_ids = {entry.id for entry in discipline_entries}
+
+            # 2. Получаем все индикаторы, релевантные для этой ОП
+            # УК/ОПК из связанного ФГОС + ПК из самой ОП
+            relevant_competency_ids = session.query(Competency.id).filter(
+                (Competency.fgos_vo_id == fgos_vo.id) | # УК и ОПК
+                (Competency.educational_programs_assoc.any(educational_program_id=new_program.id)) # ПК
+            ).subquery()
+            
+            relevant_indicator_ids = {
+                indicator.id for indicator in session.query(Indicator.id).filter(Indicator.competency_id.in_(relevant_competency_ids)).all()
+            }
+
+            if not aup_data_ids or not relevant_indicator_ids:
+                logger.warning("Не найдены дисциплины или индикаторы для создания матрицы. Пропускаем.")
+            else:
+                # 3. Создаем "пустые" связи для каждой дисциплины и каждого индикатора
+                matrix_links_to_create = []
+                for aup_data_id in aup_data_ids:
+                    for indicator_id in relevant_indicator_ids:
+                        matrix_links_to_create.append(
+                            CompetencyMatrix(
+                                aup_data_id=aup_data_id,
+                                indicator_id=indicator_id,
+                                is_manual=False, # По умолчанию связь не ручная
+                                relevance_score=None
+                            )
+                        )
+                
+                if matrix_links_to_create:
+                    session.bulk_save_objects(matrix_links_to_create)
+                    logger.info(f"Успешно создано {len(matrix_links_to_create)} пустых связей для матрицы АУП {aup_info.num_aup}")
+
+        except Exception as e:
+            logger.error(f"Ошибка при автоматическом создании матрицы для АУП {aup_info.num_aup}: {e}", exc_info=True)
+            # Не прерываем основной процесс создания ОПОП из-за ошибки в создании матрицы
+            # Можно добавить логику для отката только этой части, если нужно
+
+    session.refresh(new_program)
+    return new_program
+
 
 def get_external_aups_list(
     program_code: Optional[str] = None, profile_num: Optional[str] = None, profile_name: Optional[str] = None,
@@ -270,7 +327,7 @@ def get_external_aups_list(
 
             if form_education_name: filters.append(ExternalSprFormEducation.form == form_education_name)
             if year_beg: filters.append(ExternalAupInfo.year_beg == year_beg)
-            if degree_education_name: filters.append(ExternalAupInfo.degree.has(ExternalSprDegreeEducation.name_deg == degree_education_name)) # ИСПРАВЛЕНИЕ ДЛЯ ФИЛЬТРАЦИИ ПО ИМЕНИ, а не ID
+            if degree_education_name: filters.append(ExternalAupInfo.degree.has(ExternalSprDegreeEducation.name_deg == degree_education_name))
 
             query = query.join(ExternalAupInfo.spec, isouter=True)\
                          .join(ExternalNameOP.okco, isouter=True)
@@ -294,8 +351,12 @@ def get_external_aups_list(
             query = query.order_by(ExternalAupInfo.year_beg.desc(), ExternalAupInfo.num_aup)
             if limit is not None: query = query.offset(offset).limit(limit)
             external_aups = query.all()
-            result_items = [aup.as_dict() for aup in external_aups]
-
+            result_items = []
+            for aup in external_aups:
+                aup_dict = aup.as_dict()
+                if aup.qualification: aup_dict['qualification'] = aup.qualification
+                if aup.degree and aup.degree.name_deg: aup_dict['education_level'] = aup.degree.name_deg
+                result_items.append(aup_dict)
             logger.info(f"Fetched {len(result_items)} of {total_count} AUPs from external KD DB.")
             return {"total": total_count, "items": result_items}
 
@@ -669,7 +730,7 @@ def create_competency(data: Dict[str, Any], session: Session) -> Optional[Compet
     
     try:
         comp_type = session.query(CompetencyType).filter_by(code=data['type_code']).first()
-        if not comp_type: raise ValueError(f"Тип компетенции с кодом '{data['type_code']}' не найден.") # Corrected 'type_type' to 'type_code'
+        if not comp_type: raise ValueError(f"Тип компетенции с кодом '{data['type_code']}' не найден.")
         
         existing_comp = session.query(Competency).filter_by(code=str(data['code']).strip(), competency_type_id=comp_type.id).first()
         if existing_comp: raise IntegrityError(f"Competency with code {data['code']} already exists for this type.", {}, None)
@@ -968,7 +1029,7 @@ def save_fgos_data(parsed_data: Dict[str, Any], filename: str, session: Session,
                 recommended_ps_parsed_data=clean_recommended_ps_for_json
             )
             session.add(fgos_vo)
-            session.flush()
+            session.flush() # Flush to get fgos_vo.id
 
         comp_types_map = {ct.code: ct for ct in session.query(CompetencyType).filter(CompetencyType.code.in_(['УК', 'ОПК'])).all()}
         if not comp_types_map.get('УК') or not comp_types_map.get('ОПК'): # Check specifically for УК and ОПК
@@ -1690,6 +1751,7 @@ def handle_pk_name_correction(raw_phrase: str) -> Dict[str, str]:
         logger.error(f"Unexpected error in handle_pk_name_correction: {e}", exc_info=True)
         raise RuntimeError(f"Неизвестная ошибка при коррекции названия ПК: {e}")
 
+# НОВАЯ ФУНКЦИЯ
 def handle_pk_ipk_generation(
     selected_tfs_data: List[Dict],
     selected_zun_elements: Dict[str, List[Dict]]
@@ -1742,4 +1804,4 @@ def batch_create_pk_and_ipk(data_list: List[Dict[str, Any]], session: Session) -
         # Если были ошибки, можно откатить всю транзакцию или вернуть частичный результат
         raise Exception(f"Завершено с ошибками. Успешно: {created_count}, Ошибки: {len(errors)}. Подробности: {errors}")
 
-    return {"success": True, "created_count": created_count}
+    return {"success_count": created_count, "error_count": len(errors), "errors": errors}

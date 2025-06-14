@@ -21,12 +21,13 @@ from .logic import (
     delete_prof_standard as logic_delete_profstandard,
     search_prof_standards as logic_search_prof_standards,
     generate_prof_standard_excel_export_logic,
-    # --- НОВЫЕ ИМПОРТЫ ДЛЯ РАСПОРЯЖЕНИЙ ---
     process_uk_indicators_disposition_file,
     save_uk_indicators_from_disposition,
-    # --- НОВЫЕ ИМПОРТЫ ДЛЯ NLP ГЕНЕРАЦИИ ПК/ИПК ---
     handle_pk_name_correction,
-    handle_pk_ipk_generation
+    handle_pk_ipk_generation,
+    # НОВЫЙ ИМПОРТ ДЛЯ СОЗДАНИЯ ОПОП
+    create_educational_program,
+    batch_create_pk_and_ipk,
 )
 
 from auth.logic import login_required, approved_required, admin_only
@@ -51,6 +52,37 @@ def get_programs():
         ) for p in programs_list
     ]
     return jsonify(result)
+
+@competencies_matrix_bp.route('/programs', methods=['POST'])
+@login_required
+@approved_required
+@admin_only # Только админ или методист может создавать ОПОП
+def create_program_route():
+    """Создает новую образовательную программу (ОПОП) на основе данных от фронтенда."""
+    data = request.get_json()
+    if not data:
+        abort(400, description="Отсутствуют данные в теле запроса.")
+    try:
+        new_program_obj = create_educational_program(data, db.session)
+        db.session.commit()
+        
+        # Возвращаем детали созданной программы, чтобы фронтенд мог их использовать
+        # `to_dict` должен быть реализован в модели, чтобы корректно включать связи
+        return jsonify(new_program_obj.to_dict(include_aup_list=True, include_fgos=True)), 201
+
+    except ValueError as e:
+        db.session.rollback()
+        logger.error(f"Validation error creating program: {e}")
+        return jsonify({"error": str(e)}), 400
+    except IntegrityError:
+        db.session.rollback()
+        logger.error(f"Integrity error creating program", exc_info=True)
+        return jsonify({"error": "Образовательная программа с такими параметрами (код, профиль, год, форма) уже существует."}), 409
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Unexpected error creating program: {e}", exc_info=True)
+        return jsonify({"error": f"Неожиданная ошибка сервера при создании образовательной программы."}), 500
+
 
 @competencies_matrix_bp.route('/programs/<int:program_id>', methods=['GET'])
 @login_required
@@ -102,20 +134,18 @@ def manage_matrix_link():
     result = update_matrix_link(aup_data_id, indicator_id, create=is_creating)
  
     if result['success']:
-        db.session.commit()
+        # db.session.commit() # Commit handled within update_matrix_link now
         if is_creating:
             status_code = 201 if result['status'] == 'created' else 200
             return jsonify({"status": result['status'], "message": result.get('message', "Операция выполнена")}), status_code
         else:
-            status_code = 200 if result['status'] == 'deleted' else 404
+            status_code = 200 if result['status'] == 'deleted' else 404 if result['status'] == 'not_found' else 200
             return jsonify({"status": result['status'], "message": result.get('message', "Операция выполнена")}), status_code
     else:
-        db.session.rollback()
+        # db.session.rollback() # Rollback handled within update_matrix_link
         error_msg = result.get('message', "Не удалось выполнить операцию")
         status_code = 500
         if result.get('error_type') == 'indicator_not_found': status_code = 404
-        elif result.get('error_type') == 'database_error': status_code = 500
-        elif result.get('error_type') == 'unexpected_error': status_code = 500
         logger.error(f"Error processing matrix link request via logic: {error_msg}. Details: {result.get('details')}")
         return jsonify({"status": "error", "message": error_msg}), status_code
 
@@ -882,13 +912,13 @@ def batch_create_competencies_from_tf():
     """
     Пакетное создание ПК и их ИПК на основе массива данных из фронтенда.
     """
-    data_list = request.get_json()
+    data = request.get_json()
+    data_list = data.get('items', []) # Ожидаем, что данные придут в ключе 'items'
     if not isinstance(data_list, list):
-        abort(400, description="Ожидается массив объектов для создания.")
+        abort(400, description="Ожидается массив объектов в поле 'items' для создания.")
 
-    # Вызываем новую функцию в logic.py, которая обработает все в одной транзакции
     try:
-        results = logic.batch_create_pk_and_ipk(data_list, db.session)
+        results = batch_create_pk_and_ipk(data_list, db.session)
         db.session.commit()
         return jsonify(results), 201
     except Exception as e:
