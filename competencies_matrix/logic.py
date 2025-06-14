@@ -13,7 +13,12 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
 
 from maps.models import db as local_db, SprDiscipline
-from maps.models import AupInfo as LocalAupInfo, AupData as LocalAupData
+from maps.models import (
+    AupInfo as LocalAupInfo, AupData as LocalAupData,
+    SprFaculty, Department, SprDegreeEducation, SprFormEducation # Импортируем модели для клонирования
+)
+# ИЗМЕНЕНИЕ: Импортируем хелперы из нашего локального файла utils.py
+from .utils import find_or_create_lookup, find_or_create_name_op
 
 from .models import (
     EducationalProgram, Competency, Indicator, CompetencyMatrix,
@@ -207,17 +212,77 @@ def get_program_details(program_id: int) -> Optional[Dict[str, Any]]:
     except SQLAlchemyError as e: logger.error(f"Database error for program_id {program_id}: {e}", exc_info=True); return None
     except Exception as e: logger.error(f"Unexpected error for program_id {program_id}: {e}", exc_info=True); return None
 
+def _clone_external_aup_to_local(
+    external_aup_data: Dict[str, Any], session: Session
+) -> Optional[LocalAupInfo]:
+    """
+    Клонирует данные о АУП из внешнего источника (словаря) в локальную БД.
+    Возвращает созданный или найденный локальный объект AupInfo.
+    """
+    aup_num = external_aup_data.get('num_aup')
+    if not aup_num:
+        logger.error("External AUP data is missing 'num_aup'. Cannot clone.")
+        return None
+
+    # 1. Проверяем, может он уже есть локально
+    local_aup = session.query(LocalAupInfo).filter_by(num_aup=aup_num).first()
+    if local_aup:
+        logger.info(f"Local AUP {aup_num} already exists. Returning existing record.")
+        return local_aup
+
+    # 2. Клонируем связанные сущности (факультет, кафедра и т.д.)
+    logger.info(f"Cloning external AUP {aup_num} to local DB.")
+    try:
+        faculty = find_or_create_lookup(SprFaculty, {'name_faculty': external_aup_data.get("faculty_name")}, {'id_branch': 1}, session)
+        department = find_or_create_lookup(Department, {'name_department': external_aup_data.get("department_name")}, {}, session)
+        degree = find_or_create_lookup(SprDegreeEducation, {'name_deg': external_aup_data.get("degree_education_name")}, {}, session)
+        form = find_or_create_lookup(SprFormEducation, {'form': external_aup_data.get("form_education_name")}, {}, session)
+        name_op = find_or_create_name_op(external_aup_data.get("program_code"), external_aup_data.get("name_spec"), external_aup_data.get("name_okco"), session)
+
+        if not all([faculty, degree, form, name_op]):
+            raise ValueError("Failed to find or create essential related entities for cloning.")
+
+        # 3. Создаем саму запись AupInfo
+        is_actual = datetime.datetime.today().year <= (external_aup_data.get('year_end') or 0)
+
+        new_local_aup = LocalAupInfo(
+            num_aup=aup_num,
+            id_faculty=faculty.id_faculty,
+            id_degree=degree.id_degree,
+            id_form=form.id_form,
+            id_spec=name_op.id_spec,
+            id_department=department.id_department if department else None,
+            year_beg=external_aup_data.get('year_beg'),
+            year_end=external_aup_data.get('year_end'),
+            qualification=external_aup_data.get('qualification'),
+            type_standard=external_aup_data.get('type_standard'),
+            base=external_aup_data.get('base'),
+            period_educ=external_aup_data.get('period_educ'),
+            years=external_aup_data.get('years'),
+            months=external_aup_data.get('months'),
+            is_actual=is_actual,
+            is_delete=False,
+            file=f"cloned_from_kd_{aup_num}" # Условное имя файла
+        )
+        session.add(new_local_aup)
+        session.flush() # Получаем ID
+        logger.info(f"Successfully cloned external AUP {aup_num} to local DB with ID {new_local_aup.id_aup}.")
+        return new_local_aup
+
+    except Exception as e:
+        logger.error(f"Error cloning external AUP {aup_num} to local DB: {e}", exc_info=True)
+        # Не перебрасываем ошибку, чтобы не прерывать основной процесс, просто вернем None
+        return None
+
+
+# ИЗМЕНЕННАЯ ФУНКЦИЯ: create_educational_program
 def create_educational_program(
     data: Dict[str, Any], session: Session
 ) -> EducationalProgram:
     """
     (ИЗМЕНЕНО)
-    Создает новую образовательную программу (ОПОП).
-    - Проверяет наличие обязательных полей.
-    - Проверяет на дубликаты.
-    - Связывает с ФГОС ВО.
-    - Связывает с АУП.
-    - АВТОМАТИЧЕСКИ СОЗДАЕТ ПУСТУЮ МАТРИЦУ КОМПЕТЕНЦИЙ для связанного АУП.
+    Создает ОПОП. Если АУП не найден локально, клонирует его из внешней БД.
+    Затем создает пустую матрицу.
     """
     required_fields = ['title', 'code', 'enrollment_year', 'form_of_education']
     if not all(data.get(field) for field in required_fields):
@@ -245,17 +310,35 @@ def create_educational_program(
 
     aup_info = None
     if data.get('num_aup'):
-        aup_info = session.query(LocalAupInfo).filter_by(num_aup=data['num_aup']).first()
+        # --- НОВЫЙ БЛОК ЛОГИКИ С КЛОНИРОВАНИЕМ ---
+        aup_num_to_link = data['num_aup']
+        # 1. Ищем АУП в локальной БД
+        aup_info = session.query(LocalAupInfo).filter_by(num_aup=aup_num_to_link).first()
+
+        if not aup_info:
+            logger.warning(f"АУП с номером '{aup_num_to_link}' не найден в локальной БД. Попытка клонирования из внешней БД...")
+            # 2. Если не нашли локально, ищем во внешней и клонируем
+            external_aups_list = get_external_aups_list(search_query=aup_num_to_link, limit=1)
+            if external_aups_list.get('items'):
+                external_aup_data = external_aups_list['items'][0]
+                aup_info = _clone_external_aup_to_local(external_aup_data, session)
+            else:
+                logger.error(f"АУП {aup_num_to_link} не найден и во внешней БД. Невозможно создать связь.")
+        # --- КОНЕЦ НОВОГО БЛОКА ---
+
         if aup_info:
             has_primary_aup = session.query(EducationalProgramAup).filter_by(educational_program_id=new_program.id, is_primary=True).count() > 0
             link = EducationalProgramAup(educational_program_id=new_program.id, aup_id=aup_info.id_aup, is_primary=(not has_primary_aup))
             session.add(link)
             logger.info(f"Связь ОПОП (ID: {new_program.id}) с АУП (ID: {aup_info.id_aup}) создана.")
         else:
-            logger.warning(f"АУП с номером '{data['num_aup']}' не найден в локальной БД. Связь с ОПОП не создана.")
+            logger.error(f"Не удалось ни найти, ни склонировать АУП {data.get('num_aup')}. Связь с ОПОП не создана.")
 
-    # --- НОВЫЙ БЛОК: Автоматическое создание пустой матрицы ---
+
+    # --- Блок создания пустой матрицы (остается без изменений) ---
     if aup_info and fgos_vo:
+        # ... (код создания пустой матрицы)
+        # ... (он теперь будет работать, так как aup_info - это локальный объект)
         logger.info(f"Начинаем автоматическое создание пустой матрицы для АУП {aup_info.num_aup}")
         try:
             # 1. Получаем все дисциплины (aup_data_id) для данного АУП
@@ -1805,3 +1888,39 @@ def batch_create_pk_and_ipk(data_list: List[Dict[str, Any]], session: Session) -
         raise Exception(f"Завершено с ошибками. Успешно: {created_count}, Ошибки: {len(errors)}. Подробности: {errors}")
 
     return {"success_count": created_count, "error_count": len(errors), "errors": errors}
+
+# --- НОВАЯ ФУНКЦИЯ: Удаление образовательной программы ---
+def delete_educational_program(program_id: int, delete_cloned_aups: bool, session: Session) -> bool:
+    """
+    Удаляет образовательную программу и, опционально, связанные с ней
+    ЛОКАЛЬНЫЕ клонированные АУПы.
+    """
+    try:
+        program_to_delete = session.query(EducationalProgram).options(
+            selectinload(EducationalProgram.aup_assoc)
+        ).get(program_id)
+
+        if not program_to_delete:
+            logger.warning(f"Educational Program with id {program_id} not found for deletion.")
+            return False
+
+        if delete_cloned_aups:
+            # Находим все АУПы, связанные с этой программой
+            aup_ids_to_delete = [assoc.aup_id for assoc in program_to_delete.aup_assoc]
+            if aup_ids_to_delete:
+                logger.info(f"Cascading delete for program {program_id}: Deleting associated local AUPs with IDs: {aup_ids_to_delete}")
+                # Удаляем сами записи АУП, каскадное удаление (в maps.models) должно удалить aup_data и др.
+                session.query(LocalAupInfo).filter(LocalAupInfo.id_aup.in_(aup_ids_to_delete)).delete(synchronize_session=False)
+
+        # Удаляем саму программу. Связи в EducationalProgramAup, EducationalProgramPs, CompetencyEducationalProgram
+        # удалятся каскадно, если настроено в моделях.
+        session.delete(program_to_delete)
+        logger.info(f"Successfully marked Educational Program ID {program_id} for deletion.")
+        return True
+
+    except SQLAlchemyError as e:
+        logger.error(f"Database error deleting Educational Program {program_id}: {e}", exc_info=True)
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error deleting Educational Program {program_id}: {e}", exc_info=True)
+        raise e

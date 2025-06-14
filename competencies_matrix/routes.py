@@ -28,6 +28,7 @@ from .logic import (
     # НОВЫЙ ИМПОРТ ДЛЯ СОЗДАНИЯ ОПОП
     create_educational_program,
     batch_create_pk_and_ipk,
+    delete_educational_program, # <-- НОВЫЙ ИМПОРТ
 )
 
 from auth.logic import login_required, approved_required, admin_only
@@ -925,3 +926,28 @@ def batch_create_competencies_from_tf():
         db.session.rollback()
         logger.error(f"Error during batch creation: {e}", exc_info=True)
         return jsonify({"error": f"Ошибка пакетного создания: {e}"}), 500
+
+# НОВЫЙ ЭНДПОИНТ: Удаление Образовательной Программы
+@competencies_matrix_bp.route('/programs/<int:program_id>', methods=['DELETE'])
+@login_required
+@approved_required
+@admin_only
+def delete_program_route(program_id: int):
+    """Удаляет образовательную программу и, опционально, связанные с ней локальные АУПы."""
+    # Получаем флаг из query-параметров
+    delete_cloned_aups = request.args.get('delete_cloned_aups', 'false').lower() == 'true'
+    
+    try:
+        deleted = delete_educational_program(program_id, delete_cloned_aups, db.session)
+        if deleted:
+            db.session.commit()
+            return jsonify({"success": True, "message": "Образовательная программа успешно удалена"}), 200
+        else:
+            db.session.rollback()
+            return jsonify({"success": False, "error": "Образовательная программа не найдена"}), 404
+            
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error deleting program {program_id}: {e}", exc_info=True)
+        # Ошибка будет перехвачена глобальным обработчиком ошибок 500, который вернет JSON
+        abort(500, description=f"Не удалось удалить образовательную программу: {e}")
