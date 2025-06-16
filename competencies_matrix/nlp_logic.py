@@ -27,7 +27,7 @@ Strictly adhere to the specified JSON schema.
 
 **DO NOT** include any other text, explanations, or markdown outside of the JSON block.
 **DO NOT** include any conversational phrases like "Here is the JSON output:".
-**DO NOT** omit any fields from the required JSON structure. If a field's value cannot be found, set it to `null` (for numbers/strings/dates) or `[]` (for lists), or `false` (for booleans).
+**DO NOT** omit any fields from the required JSON structure. If a field's value cannot be found, set it to `null` (for numbers/strings/dates) or `[]` (for lists), or `false` (for booleans). uk_competencies.category_name goes before uk_competencies.name, which means that every competency should have a category name.
 **ENSURE** all date formats are "YYYY-MM-DD".
 **ENSURE** all string values are properly escaped for JSON.
 **ENSURE** that the output is **only** the JSON block wrapped in ```json ... ```.
@@ -42,20 +42,19 @@ The JSON should be formatted as follows:
         "direction_code": "STRING",
         "direction_name": "STRING",
         "education_level": "STRING",
-        "generation": "STRING"
+        "generation": "3++"
     }},
     "uk_competencies": [
         {{
             "code": "STRING",
-            "name": "STRING",
-            "category_name": "STRING"
+            "category_name": "STRING",
+            "name": "STRING"
         }}
     ],
     "opk_competencies": [
         {{
             "code": "STRING",
-            "name": "STRING",
-            "category_name": "STRING"
+            "name": "STRING"
         }}
     ],
     "recommended_ps": [
@@ -356,7 +355,7 @@ def parse_fgos_with_gemini(fgos_text: str) -> Dict[str, Any]:
         else:
             response_text = response.text.strip()
             
-        logger.debug(f"Full Gemini response for debugging (potentially large):\n{response_text}")
+        logger.info(f"Full Gemini response for debugging (potentially large):\n{response_text}")
 
         json_match = re.search(r'```\s*json\s*(.*?)\s*```', response_text, re.DOTALL | re.IGNORECASE)
         if not json_match:
@@ -432,23 +431,18 @@ def correct_pk_name_with_gemini(raw_phrase: str) -> Dict[str, str]:
     """
     try:
         prompt = _create_pk_correction_prompt(raw_phrase)
-        response_text = _call_gemini_api(prompt) # _call_gemini_api теперь возвращает сырой текст, если нет JSON
+        response_text = _call_gemini_api(prompt)
         
-        # Если NLP вернет только текст, то просто используем его
         if isinstance(response_text, str):
             return {"corrected_name": response_text.strip()}
-        # Если вдруг вернет JSON, который мы не ожидали (что маловероятно для такого промпта),
-        # то можно добавить логику обработки. Пока будем считать, что он возвращает только текст.
         
-        # Fallback for unexpected JSON response
         if isinstance(response_text, dict) and 'corrected_name' in response_text:
-            return response_text # If Gemini decides to output JSON despite prompt
+            return response_text
         
-        # Fallback if text is not in 'response_text' (e.g. LLM decided to put it in a different key)
         if response_text is not None and isinstance(response_text, dict):
             logger.warning(f"Unexpected non-string response from PK correction prompt: {response_text}. Trying to extract text.")
             for key, value in response_text.items():
-                if isinstance(value, str) and len(value) > 20: # Heuristic: assume it's the long text
+                if isinstance(value, str) and len(value) > 20:
                     return {"corrected_name": value.strip()}
 
         logger.error(f"Gemini did not return expected string for PK name correction. Raw response: {response_text}")
@@ -470,7 +464,6 @@ def generate_pk_ipk_with_gemini(
         prompt = _create_pk_ipk_generation_prompt(selected_tfs_data, selected_zun_elements)
         parsed_data = _call_gemini_api(prompt)
         
-        # Basic validation of the expected JSON structure
         if not isinstance(parsed_data, dict) or \
            'pk_name' not in parsed_data or \
            not isinstance(parsed_data.get('ipk_indicators'), dict) or \
@@ -480,7 +473,6 @@ def generate_pk_ipk_with_gemini(
             logger.error(f"Generated JSON from Gemini has unexpected structure: {parsed_data}")
             raise ValueError("Сгенерированный JSON имеет неверную структуру.")
         
-        # Clean up formulations (remove extra spaces, newlines)
         if isinstance(parsed_data['pk_name'], str):
             parsed_data['pk_name'] = re.sub(r'\s+', ' ', parsed_data['pk_name']).strip()
         

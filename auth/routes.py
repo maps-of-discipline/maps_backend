@@ -38,19 +38,20 @@ def get_current_user_info():
     # g.user is set by the @login_required decorator
     # g.auth_payload contains the decoded JWT token payload
     
-    print(f"DEBUG: /api/auth/user called for user ID: {g.user.id_user}, login: {g.user.login}")
-    print(f"DEBUG: Original JWT payload (g.auth_payload): {g.auth_payload}")
+    # Use logging instead of print for production
+    # logging.debug(f"/api/auth/user called for user ID: {g.user.id_user}, login: {g.user.login}")
+    # logging.debug(f"Original JWT payload (g.auth_payload): {g.auth_payload}")
 
     # Start with the existing payload
     response_payload = g.auth_payload.copy()
-    print(f"DEBUG: Initial response payload: {response_payload}")
+    # logging.debug(f"Initial response payload: {response_payload}")
 
     # --- CRUTCH FIX START ---
     # Manually add permissions object if user is admin
     is_admin = any(role.id_role == 1 for role in g.user.roles) # Check if user has role ID 1 (Admin)
     
     if is_admin:
-        print(f"DEBUG: User {g.user.login} IS an admin. Adding admin permissions.")
+        # logging.debug(f"User {g.user.login} IS an admin. Adding admin permissions.")
         if 'permissions' not in response_payload:
             response_payload['permissions'] = {}
             
@@ -62,16 +63,16 @@ def get_current_user_info():
         }
         # You could potentially add permissions for other roles here too if needed for testing
         # Example: Add student permissions if admin should also see student views
-        # response_payload['permissions']['student'] = { ... } 
+        # response_payload['permissions']['student'] = { ... }
     else:
-        print(f"DEBUG: User {g.user.login} is NOT an admin. No permissions added.")
+        # logging.debug(f"User {g.user.login} is NOT an admin. No permissions added.")
         # Ensure permissions object exists even if empty for non-admins
         if 'permissions' not in response_payload:
              response_payload['permissions'] = {}
 
     # --- CRUTCH FIX END ---
 
-    print(f"DEBUG: Final response payload for /api/auth/user: {response_payload}")
+    # logging.debug(f"Final response payload for /api/auth/user: {response_payload}")
     
     # Return the modified payload
     return jsonify(response_payload)
@@ -110,23 +111,23 @@ def login():
     request_data = request.get_json()
 
     if 'login' not in request_data:
-        print("Login key missing, returning 401/400")
+        # logging.warning("Login key missing, returning 401/400")
         return make_response("Login is required", 400)
 
     if 'password' not in request_data:
-        print("Password key missing, returning 401/400")
+        # logging.warning("Password key missing, returning 401/400")
         return make_response("Password is required", 400)
 
     user = Users.query.filter_by(login=request_data['login']).first()
 
     if not user:
-        print("User not found, returning 400")
+        # logging.warning("User not found, returning 400")
         return make_response("No such user", 400)
 
     password_correct = user.check_password(request_data['password'])
 
     if not password_correct:
-        print("Incorrect password, returning 400")
+        # logging.warning("Incorrect password, returning 400")
         return make_response('Incorrect password', 400)
 
     # Generate tokens
@@ -149,8 +150,8 @@ def login():
         }
     }
 
-    print(f"Login successful for user {user.id_user}, returning 200")
-    print(f"DEBUG Login response: {response}")
+    # logging.info(f"Login successful for user {user.id_user}, returning 200")
+    # logging.debug(f"Login response: {response}")
     return make_response(json.dumps(response, ensure_ascii=False), 200)
 
 
@@ -184,13 +185,13 @@ def request_reset():
     msg.body = f"To reset your password, visit the following link: {reset_url}"
 
     current_app.extensions['mail'].send(msg)
-    print(password_reset_tokens)
+    # logging.debug(f"Password reset tokens: {password_reset_tokens}") # Remove or use proper logging
     return jsonify({"message": "Instructions to reset your password have been sent to your email."}), 200
 
 
 @auth.route('/reset-password/<token>', methods=['POST'])
 def reset_with_token(token):
-    pprint(token)
+    # pprint(token) # Remove or use proper logging
     if not token or token not in password_reset_tokens:
         return jsonify({"error": "Invalid or expired token"}), 400
 
@@ -217,7 +218,7 @@ def lk_login():
     lk_url = current_app.config.get('LK_URL')
     
     if not lk_url:
-        print("DEBUG: LK_URL not configured, attempting direct login")
+        # logging.warning("LK_URL not configured, attempting direct login") # Use logging
         # LK integration is not available, try direct login
         if not user:
             return make_response("No such user", 400)
@@ -233,7 +234,7 @@ def lk_login():
             'approved': user.approved_lk or False,
         }
         
-        print(f"DEBUG Login response: {response}")
+        # logging.debug(f"Login response: {response}") # Use logging
         return make_response(json.dumps(response, ensure_ascii=False), 200)
     
     # If LK_URL is configured, proceed with normal LK auth flow
@@ -267,7 +268,7 @@ def lk_login():
         user.name = name
         user.email = email
     except Exception as e:
-        print(f"DEBUG: LK authentication failed: {str(e)}")
+        # logging.error(f"LK authentication failed: {str(e)}") # Use logging
         return make_response(f"LK authentication failed: {str(e)}", 500)
 
     db.session.add(user)
@@ -288,5 +289,5 @@ def lk_login():
         }
     }
 
-    print(f"DEBUG Login response: {response}")
+    # logging.debug(f"Login response: {response}") # Use logging
     return make_response(json.dumps(response, ensure_ascii=False), 200)

@@ -1236,12 +1236,8 @@ def get_fgos_details(fgos_id: int) -> Optional[Dict[str, Any]]:
         
         details = fgos.to_dict(rules=['-competencies', '-recommended_ps_assoc', '-educational_programs'])
         
-        # Process competencies (UK/OPK)
         uk_competencies_data = []; opk_competencies_data = []
-        # Efficiently get type codes without another query if possible, or ensure Competency.competency_type is loaded
-        # The selectinload already loads Competency.competency_type
-        
-        # Sort competencies by type (УК then ОПК) and then by code
+
         def sort_key_competency(c):
             type_code_order = {'УК': 1, 'ОПК': 2}.get(c.competency_type.code if c.competency_type else 'ZZZ', 99)
             return (type_code_order, c.code)
@@ -1314,23 +1310,9 @@ def delete_fgos(fgos_id: int, session: Session, delete_related_competencies: boo
     try:
          fgos_to_delete = session.query(FgosVo).get(fgos_id)
          if not fgos_to_delete: logger.warning(f"FGOS with id {fgos_id} not found for deletion."); return False
-         
-         # Cascading deletes for FgosRecommendedPs and Competencies (UK/OPK type for this FGOS)
-         # are handled by SQLAlchemy if relationships are configured with cascade="all, delete-orphan".
-         # No explicit deletion of related competencies or recommended PS links is needed here if so.
-         # The `delete_related_competencies` flag becomes somewhat moot if cascade is correctly set up for competencies.
-         # If it's meant to be a safeguard or for relationships without cascade, then explicit deletes would be needed.
-         # Assuming cascade="all, delete-orphan" is on FgosVo.competencies and FgosVo.recommended_ps_assoc.
 
          if delete_related_competencies:
              logger.info(f"FGOS {fgos_id} will be deleted. Related competencies (if cascade is set) and recommended PS links will also be deleted.")
-             # If cascade is not set for Competency but desired:
-             # session.query(Competency).filter(Competency.fgos_vo_id == fgos_id).delete(synchronize_session='fetch')
-         # else:
-             # If competencies should NOT be deleted when FGOS is deleted (and cascade is on),
-             # this would be more complex, potentially nullifying fgos_vo_id on competencies.
-             # But typically, FGOS-specific competencies (UK/OPK) are deleted with the FGOS.
-
          session.delete(fgos_to_delete)
          return True
     except SQLAlchemyError as e: logger.error(f"Database error deleting FGOS {fgos_id}: {e}", exc_info=True); raise e
@@ -1685,30 +1667,80 @@ def process_uk_indicators_disposition_file(file_bytes: bytes, filename: str, edu
         logger.error(f"Неожиданная ошибка при обработке файла распоряжения: {e}", exc_info=True)
         raise Exception(f"Неожиданная ошибка при обработке файла распоряжения: {e}")
 
+def _shift_competency_codes(
+    session: Session, 
+    fgos_id: int, 
+    competency_type_id: int, 
+    start_number: int, 
+    prefix: str = 'УК-'
+):
+    """
+    Сдвигает номера кодов компетенций на +1, начиная с указанного номера.
+    Например, при вставке новой УК-7, старая УК-7 -> УК-8, УК-8 -> УК-9 и т.д.
+    """
+    # Выбираем все компетенции, которые нужно сдвинуть (УК-7, УК-8, ...)
+    # и сортируем их в ОБРАТНОМ порядке (УК-9, УК-8, УК-7), чтобы избежать конфликтов при обновлении
+    competencies_to_shift = session.query(Competency).filter(
+        Competency.fgos_vo_id == fgos_id,
+        Competency.competency_type_id == competency_type_id,
+        # Используем извлечение числовой части кода для сравнения
+        # Это не самый производительный способ, но для редкой операции вставки он подойдет.
+        # В идеале, номер компетенции должен храниться в отдельном числовом поле.
+        local_db.func.substring_index(Competency.code, '-', -1).cast(Integer) >= start_number
+    ).order_by(
+        local_db.func.substring_index(Competency.code, '-', -1).cast(Integer).desc()
+    ).all()
+
+    if not competencies_to_shift:
+        logger.info(f"Сдвиг кодов для {prefix}{start_number} не требуется, т.к. компетенции не найдены.")
+        return
+
+    logger.info(f"Начинается сдвиг {len(competencies_to_shift)} компетенций, начиная с {prefix}{start_number}.")
+    for comp in competencies_to_shift:
+        try:
+            current_num = int(comp.code.split('-')[-1])
+            new_code = f"{prefix}{current_num + 1}"
+            logger.info(f"Сдвиг: {comp.code} -> {new_code} (ID: {comp.id})")
+            comp.code = new_code
+            session.add(comp)
+        except (ValueError, IndexError):
+            logger.error(f"Не удалось распарсить код компетенции для сдвига: '{comp.code}'")
+            # Можно добавить обработку ошибок, например, пропустить эту компетенцию
+            continue
+    session.flush() # Применяем все изменения кодов
+    logger.info("Сдвиг кодов компетенций завершен.")
+
+
+# ОБНОВЛЕННАЯ ФУНКЦИЯ: save_uk_indicators_from_disposition
 def save_uk_indicators_from_disposition(
     parsed_disposition_data: Dict[str, Any],
     filename: str,
     session: Session,
-    fgos_ids: List[int], # ИЗМЕНЕНИЕ: Принимаем список ID
+    fgos_ids: List[int],
     force_update_uk: bool = False,
-    resolutions: Optional[Dict[str, str]] = None # Для будущих разрешений конфликтов
+    # ИЗМЕНЕНИЕ: resolutions теперь содержит не только 'use_new'/'use_old', но и отредактированные коды
+    # Пример: { 'uk_code_УК-7': 'УК-8', 'indicator_code_УК-7_ИУК-7.1': 'ИУК-8.1', ... }
+    resolutions: Optional[Dict[str, str]] = None
 ) -> Dict[str, Any]:
     """
-    (ИЗМЕНЕНО)
-    Сохраняет/обновляет индикаторы УК из распоряжения, применяя их к каждому ФГОС из списка fgos_ids.
+    (ОБНОВЛЕНО)
+    Сохраняет/обновляет индикаторы УК из распоряжения.
+    1. Уважает 'resolutions' для выбора "старой" формулировки.
+    2. Использует отредактированные коды из 'resolutions'.
+    3. Выполняет сдвиг кодов существующих УК/ИУК при необходимости.
     """
     if resolutions is None:
         resolutions = {}
 
-    logger.info(f"Saving UK indicators from disposition file: {filename} for FGOS IDs: {fgos_ids}. Force update UK: {force_update_uk}")
-    
+    logger.info(f"Сохранение индикаторов УК из {filename} для ФГОС ID: {fgos_ids}. Перезапись: {force_update_uk}. Решения: {resolutions}")
+
     summary = {
         "saved_uk": 0, "updated_uk": 0, "skipped_uk": 0,
-        "saved_indicator": 0, "updated_indicator": 0, "skipped_indicator": 0
+        "saved_indicator": 0, "updated_indicator": 0, "skipped_indicator": 0,
+        "shifted_uk": 0, "shifted_indicator": 0
     }
 
     try:
-        # Проверяем, что все ФГОСы существуют
         fgos_records = session.query(FgosVo).filter(FgosVo.id.in_(fgos_ids)).all()
         if len(fgos_records) != len(fgos_ids):
             found_ids = {r.id for r in fgos_records}
@@ -1717,18 +1749,16 @@ def save_uk_indicators_from_disposition(
 
         uk_type = session.query(CompetencyType).filter_by(code='УК').first()
         if not uk_type:
-            raise ValueError("Тип компетенции 'УК' не найден в БД. Пожалуйста, инициализируйте справочники.")
-        
+            raise ValueError("Тип компетенции 'УК' не найден в БД.")
+
         disposition_meta = parsed_disposition_data.get('disposition_metadata', {})
         source_string = f"Распоряжение №{disposition_meta.get('number', 'N/A')} от {disposition_meta.get('date', 'N/A')}"
 
-        # --- Основной цикл по каждому выбранному ФГОСу ---
         for fgos_vo in fgos_records:
-            logger.info(f"Processing FGOS ID: {fgos_vo.id} ({fgos_vo.direction_code})")
-            
-            # Если перезаписываем, сначала удаляем старые УК для этого ФГОСа
+            logger.info(f"Обработка ФГОС ID: {fgos_vo.id} ({fgos_vo.direction_code})")
+
             if force_update_uk:
-                logger.info(f"Force update is ON for FGOS {fgos_vo.id}. Deleting existing UKs.")
+                logger.info(f"Принудительное обновление для ФГОС {fgos_vo.id}. Удаление существующих УК.")
                 session.query(Competency).filter(
                     Competency.fgos_vo_id == fgos_vo.id,
                     Competency.competency_type_id == uk_type.id
@@ -1736,87 +1766,128 @@ def save_uk_indicators_from_disposition(
                 session.flush()
 
             for parsed_uk_data in parsed_disposition_data.get('uk_competencies_with_indicators', []):
-                uk_code = parsed_uk_data.get('code')
-                uk_name = parsed_uk_data.get('name')
-                uk_category_name = parsed_uk_data.get('category_name')
-
-                if not uk_code or not uk_name:
-                    logger.warning(f"Skipping parsed UK due to missing code/name for FGOS {fgos_vo.id}.")
+                original_uk_code = parsed_uk_data.get('code')
+                
+                # --- ЛОГИКА ОБНОВЛЕНИЯ КОДА УК ---
+                # Получаем финальный код УК, который нужно использовать, из resolutions
+                final_uk_code_resolution_key = f"uk_code_{original_uk_code}"
+                final_uk_code = resolutions.get(final_uk_code_resolution_key, original_uk_code)
+                
+                if not final_uk_code:
+                    logger.warning(f"Пропуск УК: код пустой после резолвинга для {original_uk_code}")
                     summary['skipped_uk'] += 1
                     continue
                 
-                # Ищем УК только в контексте текущего ФГОСа
-                existing_uk_comp = session.query(Competency).filter_by(
-                    code=uk_code,
-                    competency_type_id=uk_type.id,
-                    fgos_vo_id=fgos_vo.id
-                ).first()
-
-                current_uk_comp: Optional[Competency] = None
-
-                if existing_uk_comp:
-                    # Если есть, обновляем название
-                    if existing_uk_comp.name != uk_name:
-                        existing_uk_comp.name = uk_name
-                        existing_uk_comp.category_name = uk_category_name # Update category name too
-                        session.add(existing_uk_comp)
-                        summary['updated_uk'] += 1
-                    else:
-                        summary['skipped_uk'] += 1
+                # --- ЛОГИКА ОБНОВЛЕНИЯ НАЗВАНИЯ УК ---
+                # Проверяем, нужно ли использовать старое название
+                use_old_name_resolution_key = f"uk_comp_{original_uk_code}_name"
+                if resolutions.get(use_old_name_resolution_key) == 'use_old':
+                    # Если пользователь выбрал "не менять", мы пропускаем обновление этой УК
+                    logger.info(f"Пропуск обновления названия для УК {original_uk_code} согласно решению пользователя.")
+                    summary['skipped_uk'] += 1
+                    # Но мы все равно должны обработать ее индикаторы, поэтому находим ее в БД
+                    existing_uk_comp = session.query(Competency).filter_by(code=original_uk_code, fgos_vo_id=fgos_vo.id, competency_type_id=uk_type.id).first()
+                    if not existing_uk_comp:
+                        # Если ее нет, мы не можем добавить индикаторы. Это редкий случай.
+                        logger.warning(f"Не удалось найти существующую УК {original_uk_code} для добавления индикаторов.")
+                        continue # Переходим к следующей УК из распоряжения
                     current_uk_comp = existing_uk_comp
                 else:
-                    # Если нет, создаем новую УК для этого ФГОСа
-                    current_uk_comp = Competency(
-                        competency_type_id=uk_type.id,
-                        fgos_vo_id=fgos_vo.id,
-                        code=uk_code,
-                        name=uk_name,
-                        category_name=uk_category_name
-                    )
-                    session.add(current_uk_comp)
-                    summary['saved_uk'] += 1
+                    # Иначе, продолжаем логику создания/обновления
+                    uk_name = parsed_uk_data.get('name')
+                    uk_category_name = parsed_uk_data.get('category_name')
+                    if not uk_name:
+                        logger.warning(f"Пропуск УК {final_uk_code}: отсутствует название.")
+                        summary['skipped_uk'] += 1
+                        continue
+
+                    # Ищем существующую УК по финальному коду
+                    existing_uk_comp = session.query(Competency).filter_by(code=final_uk_code, fgos_vo_id=fgos_vo.id, competency_type_id=uk_type.id).first()
+                    
+                    if existing_uk_comp:
+                        # Если нашли - обновляем
+                        existing_uk_comp.name = uk_name
+                        existing_uk_comp.category_name = uk_category_name
+                        session.add(existing_uk_comp)
+                        summary['updated_uk'] += 1
+                        current_uk_comp = existing_uk_comp
+                    else:
+                        # Если не нашли - создаем новую. Сначала проверяем, не занят ли код.
+                        is_code_busy = session.query(Competency).filter_by(code=final_uk_code, fgos_vo_id=fgos_vo.id).count() > 0
+                        if is_code_busy:
+                            try:
+                                # Если код занят, сдвигаем
+                                start_num_to_shift = int(final_uk_code.split('-')[-1])
+                                _shift_competency_codes(session, fgos_vo.id, uk_type.id, start_num_to_shift)
+                                summary['shifted_uk'] += 1
+                            except (ValueError, IndexError):
+                                raise ValueError(f"Не удалось распарсить числовую часть кода '{final_uk_code}' для сдвига.")
+
+                        # Создаем новую УК
+                        current_uk_comp = Competency(
+                            competency_type_id=uk_type.id, fgos_vo_id=fgos_vo.id,
+                            code=final_uk_code, name=uk_name, category_name=uk_category_name
+                        )
+                        session.add(current_uk_comp)
+                        summary['saved_uk'] += 1
                 
-                session.flush()
+                session.flush() # Получаем ID для current_uk_comp
 
-                # --- Сохранение Индикаторов для этой УК и этого ФГОСа ---
+                # --- ОБНОВЛЕННАЯ ЛОГИКА ОБРАБОТКИ ИНДИКАТОРОВ ---
                 for parsed_indicator_data in parsed_uk_data.get('indicators', []):
-                    indicator_code = parsed_indicator_data.get('code')
+                    original_ind_code = parsed_indicator_data.get('code')
+                    
+                    # --- Логика обновления кода индикатора ---
+                    final_ind_code_resolution_key = f"indicator_{original_uk_code}_{original_ind_code}_code"
+                    final_ind_code = resolutions.get(final_ind_code_resolution_key, original_ind_code)
+                    
+                    if not final_ind_code:
+                        logger.warning(f"Пропуск индикатора: код пустой для {original_ind_code}")
+                        summary['skipped_indicator'] += 1
+                        continue
+                        
+                    # --- Логика обновления формулировки индикатора ---
+                    use_old_formulation_key = f"indicator_{original_uk_code}_{original_ind_code}_formulation"
+                    if resolutions.get(use_old_formulation_key) == 'use_old':
+                        logger.info(f"Пропуск обновления формулировки для индикатора {original_ind_code} согласно решению пользователя.")
+                        summary['skipped_indicator'] += 1
+                        continue # Просто пропускаем этот индикатор
+                        
                     indicator_formulation = parsed_indicator_data.get('formulation')
-
-                    if not indicator_code or not indicator_formulation:
+                    if not indicator_formulation:
                         summary['skipped_indicator'] += 1
                         continue
                     
-                    existing_indicator = session.query(Indicator).filter_by(
-                        code=indicator_code,
-                        competency_id=current_uk_comp.id
-                    ).first()
-
+                    existing_indicator = session.query(Indicator).filter_by(code=final_ind_code, competency_id=current_uk_comp.id).first()
+                    
                     if existing_indicator:
-                        if existing_indicator.formulation != indicator_formulation:
-                            existing_indicator.formulation = indicator_formulation
-                            existing_indicator.source = source_string
-                            session.add(existing_indicator)
-                            summary['updated_indicator'] += 1
-                        else:
-                            summary['skipped_indicator'] += 1
+                        existing_indicator.formulation = indicator_formulation
+                        existing_indicator.source = source_string
+                        session.add(existing_indicator)
+                        summary['updated_indicator'] += 1
                     else:
+                        # Проверяем, не занят ли код индикатора (на случай ручного редактирования)
+                        is_ind_code_busy = session.query(Indicator).filter_by(code=final_ind_code, competency_id=current_uk_comp.id).count() > 0
+                        if is_ind_code_busy:
+                           # В рамках ИУК обычно нет сдвига, т.к. их коды жестко связаны с кодом УК.
+                           # Но если пользователь ввел код, который уже есть, нужно выдать ошибку.
+                           logger.error(f"Код индикатора '{final_ind_code}' уже занят для компетенции {current_uk_comp.code}. Пропуск.")
+                           summary['skipped_indicator'] += 1
+                           continue
+                           
                         new_indicator = Indicator(
-                            competency_id=current_uk_comp.id,
-                            code=indicator_code,
-                            formulation=indicator_formulation,
-                            source=source_string
+                            competency_id=current_uk_comp.id, code=final_ind_code,
+                            formulation=indicator_formulation, source=source_string
                         )
                         session.add(new_indicator)
                         summary['saved_indicator'] += 1
-        
+
         return {"success": True, "message": "Индикаторы УК успешно обработаны.", "summary": summary}
     except Exception as e:
         logger.error(f"Error saving UK indicators from disposition: {e}", exc_info=True)
         session.rollback()
         raise e
-
-# НОВАЯ ФУНКЦИЯ
+    
 def handle_pk_name_correction(raw_phrase: str) -> Dict[str, str]:
     """
     Обрабатывает запрос на коррекцию имени ПК с использованием NLP.

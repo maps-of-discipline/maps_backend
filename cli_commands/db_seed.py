@@ -151,23 +151,25 @@ def seed_command():
         logger.info("Skipping Competency Matrix links seeding (will be created manually via UI for MVP).")
 
         logger.info("Seeding Test Users...")
-        test_user, _ = find_or_create(session, Users, login='testuser',
-            defaults={'password_hash': generate_password_hash('password', method='pbkdf2:sha256'),
-                      'name': 'Тестовый Методист', 'email': 'testuser@example.com',
-                      'approved_lk': True, 'id_department': dept_web.id_department}
-        )
-        if role_methodologist and test_user and role_methodologist not in test_user.roles:
-            test_user.roles.append(role_methodologist)
-            logger.debug(f"Linking testuser ({test_user.id_user}) with role {role_methodologist.name_role}")
+        # For production, remove or comment out default user creation for security.
+        # Users should be created through a secure registration process or admin interface.
+        # test_user, _ = find_or_create(session, Users, login='testuser',
+        #     defaults={'password_hash': generate_password_hash('password', method='pbkdf2:sha256'),
+        #               'name': 'Тестовый Методист', 'email': 'testuser@example.com',
+        #               'approved_lk': True, 'id_department': dept_web.id_department}
+        # )
+        # if role_methodologist and test_user and role_methodologist not in test_user.roles:
+        #     test_user.roles.append(role_methodologist)
+        #     logger.debug(f"Linking testuser ({test_user.id_user}) with role {role_methodologist.name_role}")
 
-        admin_user, _ = find_or_create(session, Users, login='admin',
-            defaults={'password_hash': generate_password_hash('admin', method='pbkdf2:sha256'),
-                      'name': 'Admin User', 'email': 'admin@example.com',
-                      'approved_lk': True, 'id_department': dept_web.id_department}
-        )
-        if role_admin and admin_user and role_admin not in admin_user.roles:
-            admin_user.roles.append(role_admin)
-            logger.debug(f"Linking admin ({admin_user.id_user}) with role {role_admin.name_role}")
+        # admin_user, _ = find_or_create(session, Users, login='admin',
+        #     defaults={'password_hash': generate_password_hash('admin', method='pbkdf2:sha256'),
+        #               'name': 'Admin User', 'email': 'admin@example.com',
+        #               'approved_lk': True, 'id_department': dept_web.id_department}
+        # )
+        # if role_admin and admin_user and role_admin not in admin_user.roles:
+        #     admin_user.roles.append(role_admin)
+        #     logger.debug(f"Linking admin ({admin_user.id_user}) with role {role_admin.name_role}")
 
         session.commit()
         logger.info("Test users seeded.")

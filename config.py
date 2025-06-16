@@ -5,19 +5,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Базовая конфигурация Flask
-DEBUG = True
+DEBUG = False # Set to False for production
 TESTING = False
-SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+SECRET_KEY = os.getenv('SECRET_KEY') # Must be set in production environment variables
 
 SHOW_DEBUG_EXECUTION_TIME = False
-LOG_LEVEL = logging.INFO
+LOG_LEVEL = logging.INFO # Adjust as needed for production
 
 # Настройки базы данных
-SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/competencies')
+SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL') # Must be set in production environment variables
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 # Настройка подключения к внешней БД Карт Дисциплин (KD)
-EXTERNAL_KD_DATABASE_URL = os.getenv('EXTERNAL_KD_DATABASE_URL', 'mysql+pymysql://competencies:MTIzcXdlYXNk@kd.mospolytech.ru:3306/kd_sandbox')
+EXTERNAL_KD_DATABASE_URL = os.getenv('EXTERNAL_KD_DATABASE_URL') # Must be set in production environment variables
 
 # Конфигурация множественных БД
 SQLALCHEMY_BINDS = {
@@ -49,4 +49,4 @@ REFRESH_TOKEN_LIFETIME = 7 * 24 * 3600  # 7 days in seconds
 
 TELEGRAM_URL = 'https://api.telegram.org'
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
-TELEGRAM_CHAT_ID = -4226743295
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID') # Should be set in production environment variables
