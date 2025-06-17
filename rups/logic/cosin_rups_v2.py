@@ -165,7 +165,7 @@ def couldBeCredited(target: Discipline, variant: Discipline) -> bool:
     }
 
     return (
-        variant.control in mapper
+        target.control in mapper
         and variant.control in mapper[target.control]
         and target.zet <= variant.zet
     )
