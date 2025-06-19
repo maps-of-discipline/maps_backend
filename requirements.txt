@@ -56,3 +56,4 @@ pdfminer.six>=20250416,<20260000
 chardet>=5.1.0,<6.0.0
 google-genai>=1.16.0
 openpyxl
+docxtpl
