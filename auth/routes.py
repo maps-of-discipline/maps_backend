@@ -110,7 +110,7 @@ def refresh_view():
 def login():
     request_data = request.get_json()
 
-    if 'login' not in request_data:
+    if 'username' not in request_data:
         # logging.warning("Login key missing, returning 401/400")
         return make_response("Login is required", 400)
 
@@ -118,7 +118,7 @@ def login():
         # logging.warning("Password key missing, returning 401/400")
         return make_response("Password is required", 400)
 
-    user = Users.query.filter_by(login=request_data['login']).first()
+    user = Users.query.filter_by(login=request_data['username']).first()
 
     if not user:
         # logging.warning("User not found, returning 400")
@@ -142,7 +142,7 @@ def login():
         'user': {
             'id': user.id_user,
             'name': user.name or '',
-            'login': user.login,
+            'username': user.login,  # Use username if available, otherwise login
             'surname': '',  # Add surname if available in your user model
             'roles': [{'id': role.id_role, 'name': role.name_role} for role in user.roles],
             'permissions': {},  # Will be populated if needed

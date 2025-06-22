@@ -51,7 +51,7 @@ cache.init_app(app)
 
 CORS(
     app,
-    origins=["http://localhost:5173", "http://127.0.0.0.1:5173"], 
+    origins=os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173').split(','),
     supports_credentials=True,
     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=[
