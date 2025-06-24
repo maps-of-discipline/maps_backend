@@ -14,9 +14,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# --- Конфигурация Gemini API ---
-# Используется переменная окружения GOOGLE_AI_API_KEY.
-# Для локальной отладки без .env используется хардкодный ключ (только для dev).
 GOOGLE_AI_API_KEY = os.getenv("GOOGLE_AI_API_KEY")
 if not GOOGLE_AI_API_KEY:
     # GOOGLE_AI_API_KEY = "AIzaSyDA0NoIT1yhuJwUzmAPqXl_lUOJ4chnaQA" # ЗАГЛУШКА: НЕ МЕНЯТЬ!

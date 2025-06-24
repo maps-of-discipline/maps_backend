@@ -5,15 +5,15 @@ import re
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
-# Импортируем конфигурацию и клиент из нового файла
+# Import configuration and client
 from .nlp_config import get_gemini_client, get_gemini_types, GOOGLE_GENAI_SDK_AVAILABLE, GEMINI_MODEL_NAME
 
-# Импортируем утилиту парсинга дат
+# Import date parsing utility
 from .parsing_utils import parse_date_string
 
 
 logger = logging.getLogger(__name__)
-# logger.setLevel(logging.DEBUG) # Уровень логирования можно настраивать через app.py
+# logger.setLevel(logging.DEBUG)
 
 def _create_fgos_prompt(fgos_text: str) -> str:
     """
@@ -242,9 +242,9 @@ def _call_gemini_api(prompt_content: str) -> Dict[str, Any]:
     response = gemini_client.models.generate_content(
         model=GEMINI_MODEL_NAME,
         contents=[prompt_content],
-        config=gemini_types.GenerateContentConfig( # ИСПРАВЛЕНО: используем gemini_types
+        config=gemini_types.GenerateContentConfig(
             temperature=0.0,
-            max_output_tokens=8192 
+            max_output_tokens=8192
         )
     )
     
@@ -316,14 +316,13 @@ def parse_fgos_with_gemini(fgos_text: str) -> Dict[str, Any]:
     Использует Gemini API для парсинга текста ФГОС ВО
     и извлечения структурированных данных.
     """
-    gemini_client = get_gemini_client() # Получаем клиент
-    gemini_types = get_gemini_types() # Получаем types
+    gemini_client = get_gemini_client()
+    gemini_types = get_gemini_types()
 
     if not gemini_client:
         if not GOOGLE_GENAI_SDK_AVAILABLE:
             logger.error("Gemini SDK (google-genai) is not available.")
             raise RuntimeError("Gemini SDK (google-genai) is not available. Cannot parse FGOS with NLP.")
-        # else: GOOGLE_AI_API_KEY check is done in get_gemini_client()
         else:
             logger.error("Gemini API client model was not initialized (likely due to configuration error).")
             raise RuntimeError("Gemini API client model was not initialized. Cannot parse FGOS with NLP.")
@@ -336,9 +335,9 @@ def parse_fgos_with_gemini(fgos_text: str) -> Dict[str, Any]:
         response = gemini_client.models.generate_content(
             model=GEMINI_MODEL_NAME,
             contents=[prompt_content],
-            config=gemini_types.GenerateContentConfig( # ИСПРАВЛЕНО: используем gemini_types
+            config=gemini_types.GenerateContentConfig(
                 temperature=0.0,
-                max_output_tokens=8192 
+                max_output_tokens=8192
             )
         )
         
@@ -365,7 +364,7 @@ def parse_fgos_with_gemini(fgos_text: str) -> Dict[str, Any]:
                 logger.info("Successfully parsed response_text as raw JSON.")
             except json.JSONDecodeError as json_err:
                 logger.error(f"Failed to parse response_text as raw JSON: {json_err}")
-                logger.debug(f"Content that failed to parse: {response_text}") # Полный текст для отладки
+                logger.debug(f"Content that failed to parse: {response_text}")
                 raise ValueError(f"Gemini response was not valid JSON and did not contain a JSON markdown block. Error: {json_err}")
         else:
             json_str = json_match.group(1).strip()
@@ -373,10 +372,10 @@ def parse_fgos_with_gemini(fgos_text: str) -> Dict[str, Any]:
                 parsed_data = json.loads(json_str)
             except json.JSONDecodeError as json_err:
                 logger.error(f"Failed to parse extracted JSON string from markdown block: {json_err}")
-                logger.debug(f"Extracted JSON string that failed to parse: {json_str}") # Полный текст для отладки
+                logger.debug(f"Extracted JSON string that failed to parse: {json_str}")
                 raise ValueError(f"Extracted JSON string from markdown block was not valid JSON. Error: {json_err}")
 
-        # --- ГАРАНТИЯ ПРЕОБРАЗОВАНИЯ ДАТЫ для metadata.order_date и recommended_ps.approval_date ---
+        # Ensure date conversion for metadata.order_date and recommended_ps.approval_date
         if 'metadata' in parsed_data and isinstance(parsed_data['metadata'], dict):
             order_date_value = parsed_data['metadata'].get('order_date')
             if isinstance(order_date_value, str):
@@ -395,7 +394,7 @@ def parse_fgos_with_gemini(fgos_text: str) -> Dict[str, Any]:
                 parsed_data['metadata']['order_date'] = None
         else:
             if 'metadata' not in parsed_data: parsed_data['metadata'] = {}
-            parsed_data['metadata']['order_date'] = None # Ensure it exists if parsing failed
+            parsed_data['metadata']['order_date'] = None
 
         if 'recommended_ps' in parsed_data and isinstance(parsed_data['recommended_ps'], list):
             for ps_entry in parsed_data['recommended_ps']:
@@ -423,11 +422,9 @@ def parse_fgos_with_gemini(fgos_text: str) -> Dict[str, Any]:
         logger.error(f"Error parsing FGOS with Gemini API: {e}", exc_info=True)
         raise RuntimeError(f"Ошибка при парсинге ФГОС с помощью Gemini API: {e}")
 
-# НОВАЯ ФУНКЦИЯ
 def correct_pk_name_with_gemini(raw_phrase: str) -> Dict[str, str]:
     """
-    Использует Gemini API для грамматической коррекции сырой фразы
-    в формулировку Профессиональной Компетенции.
+    Uses Gemini API to grammatically correct a raw phrase into a Professional Competency formulation.
     """
     try:
         prompt = _create_pk_correction_prompt(raw_phrase)
@@ -451,14 +448,12 @@ def correct_pk_name_with_gemini(raw_phrase: str) -> Dict[str, str]:
         logger.error(f"Error calling Gemini for PK name correction: {e}", exc_info=True)
         raise RuntimeError(f"Ошибка при коррекции названия ПК через NLP: {e}")
 
-# НОВАЯ ФУНКЦИЯ
 def generate_pk_ipk_with_gemini(
     selected_tfs_data: List[Dict],
     selected_zun_elements: Dict[str, List[Dict]]
 ) -> Dict[str, Any]:
     """
-    Использует Gemini API для генерации формулировок ПК и ИПК на основе
-    выбранных Трудовых Функций и ЗУН-элементов.
+    Uses Gemini API to generate PK and IPK formulations based on selected Labor Functions and ZUN elements.
     """
     try:
         prompt = _create_pk_ipk_generation_prompt(selected_tfs_data, selected_zun_elements)

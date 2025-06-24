@@ -102,7 +102,7 @@ class ExternalAupData(ExternalBase):
     id_aup = Column(Integer, ForeignKey("tbl_aup.id_aup"))
     shifr = Column(String(30))
     id_discipline = Column(Integer, ForeignKey("spr_discipline.id")) # Внешний ключ к spr_discipline
-    discipline = Column(String(350)) # Используем это поле как основное название
+    _discipline = Column("discipline", String(350)) # ИЗМЕНЕНИЕ: Переименовано в _discipline, чтобы не конфликтовать с relationship
     id_period = Column(Integer) # Семестр
     num_row = Column(Integer)
     id_type_record = Column(Integer) # FK к d_type_record, но саму таблицу не определяем, если не нужна
@@ -112,12 +112,14 @@ class ExternalAupData(ExternalBase):
     amount = Column(Integer)
 
     # Отношение к SprDiscipline, если нужно будет доставать каноничное имя из справочника
-    # spr_discipline = relationship("ExternalSprDiscipline", foreign_keys=[id_discipline], lazy='joined')
+    spr_discipline = relationship("ExternalSprDiscipline", foreign_keys=[id_discipline], lazy='joined') # ИЗМЕНЕНИЕ: Добавлено отношение
 
     def as_dict(self) -> Dict[str, Any]:
         data = {c.name: getattr(self, c.name) for c in self.__table__.columns}
-        # if self.spr_discipline:
-        #     data['spr_discipline_title'] = self.spr_discipline.title
+        if self.spr_discipline: # ИЗМЕНЕНИЕ: Проверяем наличие связанного объекта
+            data['discipline'] = self.spr_discipline.title # ИЗМЕНЕНИЕ: Возвращаем title из spr_discipline
+        else:
+            data['discipline'] = self._discipline # ИЗМЕНЕНИЕ: Если нет, используем _discipline
         return data
 
 class ExternalSprDiscipline(ExternalBase):
