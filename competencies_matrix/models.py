@@ -14,6 +14,7 @@ from sqlalchemy.orm import relationship, backref
 from sqlalchemy import inspect
 from typing import List, Dict, Any, Optional
 import datetime
+import re
 
 from sqlalchemy.types import TypeEngine 
 try:
@@ -21,12 +22,17 @@ try:
 except AttributeError:
     db.JSON = db.Column(TypeEngine)
 
+def to_snake_case(name: str) -> str:
+    """Converts a PascalCase string to snake_case."""
+    name = re.sub(r'(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', name).lower()
+
 class BaseModel:
     """Base class for models with common functionality like ID, timestamps, and to_dict method."""
 
     @declared_attr
     def __tablename__(cls):
-        return f"competencies_{cls.__name__.lower()}"
+        return f"competencies_{to_snake_case(cls.__name__)}"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
@@ -64,7 +70,6 @@ class BaseModel:
 
 class FgosVo(db.Model, BaseModel):
     """ФГОС ВО (Федеральный государственный образовательный стандарт высшего образования)"""
-    # __tablename__ = 'competencies_fgos_vo' # Унаследован от BaseModel
 
     number = db.Column(db.String(50), nullable=False, comment='Номер приказа')
     date = db.Column(db.Date, nullable=False, comment='Дата утверждения')
@@ -94,7 +99,6 @@ class FgosVo(db.Model, BaseModel):
 
 class EducationalProgram(db.Model, BaseModel):
     """Образовательная программа (направление подготовки)"""
-    # __tablename__ = 'competencies_educational_program' # Унаследован от BaseModel
 
     title = db.Column(db.String(255), nullable=False)
     code = db.Column(db.String(50), nullable=False, comment='Код направления, например 09.03.01')
@@ -177,7 +181,6 @@ class EducationalProgram(db.Model, BaseModel):
 
 class EducationalProgramAup(db.Model, BaseModel):
     """Связь Образовательной программы и АУП"""
-    # __tablename__ = 'competencies_educational_program_aup' # Унаследован от BaseModel
 
     educational_program_id = db.Column(db.Integer, db.ForeignKey('competencies_educational_program.id', ondelete="CASCADE"), nullable=False)
     aup_id = db.Column(db.Integer, db.ForeignKey('tbl_aup.id_aup', ondelete="CASCADE"), nullable=False)
@@ -221,7 +224,6 @@ class EducationalProgramAup(db.Model, BaseModel):
 
 class ProfStandard(db.Model, BaseModel):
     """Профессиональный стандарт"""
-    # __tablename__ = 'competencies_prof_standard' # Унаследован от BaseModel
 
     code = db.Column(db.String(50), nullable=False, unique=True, comment='Код профстандарта, например 06.001')
     name = db.Column(db.String(255), nullable=False, comment='Название профстандарта')
@@ -245,7 +247,6 @@ class ProfStandard(db.Model, BaseModel):
 
 class FgosRecommendedPs(db.Model, BaseModel):
     """Связь между ФГОС и рекомендованными в нем профстандартами"""
-    # __tablename__ = 'competencies_fgos_recommended_ps' # Унаследован от BaseModel
 
     fgos_vo_id = db.Column(db.Integer, db.ForeignKey('competencies_fgos_vo.id', ondelete="CASCADE"), nullable=False)
     prof_standard_id = db.Column(db.Integer, db.ForeignKey('competencies_prof_standard.id', ondelete="CASCADE"), nullable=False)
@@ -266,7 +267,6 @@ class FgosRecommendedPs(db.Model, BaseModel):
 
 class EducationalProgramPs(db.Model, BaseModel):
     """Связь между Образовательной программой и выбранными профстандартами"""
-    # __tablename__ = 'competencies_educational_program_ps' # Унаследован от BaseModel
 
     educational_program_id = db.Column(db.Integer, db.ForeignKey('competencies_educational_program.id', ondelete="CASCADE"), nullable=False)
     prof_standard_id = db.Column(db.Integer, db.ForeignKey('competencies_prof_standard.id', ondelete="CASCADE"), nullable=False)
@@ -286,7 +286,6 @@ class EducationalProgramPs(db.Model, BaseModel):
 
 class GeneralizedLaborFunction(db.Model, BaseModel):
     """Обобщенная трудовая функция (ОТФ)"""
-    # __tablename__ = 'competencies_generalized_labor_function' # Унаследован от BaseModel
 
     prof_standard_id = db.Column(db.Integer, db.ForeignKey('competencies_prof_standard.id', ondelete="CASCADE"), nullable=False)
     prof_standard = relationship('ProfStandard', back_populates='generalized_labor_functions')
@@ -303,7 +302,6 @@ class GeneralizedLaborFunction(db.Model, BaseModel):
 
 class LaborFunction(db.Model, BaseModel):
     """Трудовая функция (ТФ)"""
-    # __tablename__ = 'competencies_labor_function' # Унаследована от BaseModel
 
     generalized_labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_generalized_labor_function.id', ondelete="CASCADE"), nullable=False)
     generalized_labor_function = relationship('GeneralizedLaborFunction', back_populates='labor_functions')
@@ -325,7 +323,6 @@ class LaborFunction(db.Model, BaseModel):
 
 class LaborAction(db.Model, BaseModel):
     """Трудовое действие"""
-    # __tablename__ = 'competencies_labor_action' # Унаследовано от BaseModel
 
     labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_labor_function.id', ondelete="CASCADE"), nullable=False)
     labor_function = relationship('LaborFunction', back_populates='labor_actions')
@@ -336,7 +333,6 @@ class LaborAction(db.Model, BaseModel):
 
 class RequiredSkill(db.Model, BaseModel):
     """Необходимое умение"""
-    # __tablename__ = 'competencies_required_skill' # Унаследовано от BaseModel
 
     labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_labor_function.id', ondelete="CASCADE"), nullable=False)
     labor_function = relationship('LaborFunction', back_populates='required_skills')
@@ -347,7 +343,6 @@ class RequiredSkill(db.Model, BaseModel):
 
 class RequiredKnowledge(db.Model, BaseModel):
     """Необходимое знание"""
-    # __tablename__ = 'competencies_required_knowledge' # Унаследовано от BaseModel
 
     labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_labor_function.id', ondelete="CASCADE"), nullable=False)
     labor_function = relationship('LaborFunction', back_populates='required_knowledge')
@@ -358,7 +353,6 @@ class RequiredKnowledge(db.Model, BaseModel):
 
 class CompetencyType(db.Model, BaseModel):
     """Тип компетенции (УК, ОПК, ПК)"""
-    # __tablename__ = 'competencies_competency_type' # Унаследовано от BaseModel
 
     name = db.Column(db.String(100), nullable=False, comment='Название типа компетенции')
     code = db.Column(db.String(10), nullable=False, unique=True, comment='Код типа (УК, ОПК, ПК)')
@@ -369,7 +363,6 @@ class CompetencyType(db.Model, BaseModel):
 
 class Competency(db.Model, BaseModel):
     """Компетенция (УК, ОПК, ПК)"""
-    # __tablename__ = 'competencies_competency' # Унаследовано от BaseModel
 
     competency_type_id = db.Column(db.Integer, db.ForeignKey('competencies_competency_type.id'), nullable=False)
     competency_type = relationship('CompetencyType', back_populates='competencies')
@@ -413,7 +406,6 @@ class Competency(db.Model, BaseModel):
 
 class CompetencyEducationalProgram(db.Model, BaseModel): 
     """Связь между Компетенцией и Образовательной программой"""
-    # __tablename__ = 'competencies_competency_educational_program' # Унаследована от BaseModel
 
     competency_id = db.Column(db.Integer, db.ForeignKey('competencies_competency.id', ondelete="CASCADE"), nullable=False)
     educational_program_id = db.Column(db.Integer, db.ForeignKey('competencies_educational_program.id', ondelete="CASCADE"), nullable=False)
@@ -431,7 +423,6 @@ class CompetencyEducationalProgram(db.Model, BaseModel):
 
 class Indicator(db.Model, BaseModel):
     """Индикатор достижения компетенции (ИДК)"""
-    # __tablename__ = 'competencies_indicator' # Унаследована от BaseModel
 
     competency_id = db.Column(db.Integer, db.ForeignKey('competencies_competency.id', ondelete="CASCADE"), nullable=False)
     competency = relationship('Competency', back_populates='indicators')
@@ -468,7 +459,6 @@ class Indicator(db.Model, BaseModel):
 
 class IndicatorPsLink(db.Model, BaseModel):
     """Связь между индикатором компетенции и трудовой функцией"""
-    # __tablename__ = 'competencies_indicator_ps_link' # Унаследована от BaseModel
 
     indicator_id = db.Column(db.Integer, db.ForeignKey('competencies_indicator.id', ondelete="CASCADE"), nullable=False)
     labor_function_id = db.Column(db.Integer, db.ForeignKey('competencies_labor_function.id', ondelete="CASCADE"), nullable=False)
@@ -481,7 +471,10 @@ class IndicatorPsLink(db.Model, BaseModel):
 
 class CompetencyMatrix(db.Model, BaseModel):
     """Матрица компетенций - связь между дисциплиной (AupData) и индикатором компетенции"""
-    # __tablename__ = 'competencies_matrix' # Унаследована от BaseModel
+
+    # --- ДОБАВЛЕНО ЯВНОЕ ИМЯ ТАБЛИЦЫ ---
+    __tablename__ = 'competencies_matrix'
+    # -------------------------------------
 
     aup_data_id = db.Column(db.Integer, db.ForeignKey('aup_data.id', ondelete="CASCADE"), nullable=False)
     indicator_id = db.Column(db.Integer, db.ForeignKey('competencies_indicator.id', ondelete="CASCADE"), nullable=False)

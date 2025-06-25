@@ -25,10 +25,9 @@ from .logic import (
     save_uk_indicators_from_disposition,
     handle_pk_name_correction,
     handle_pk_ipk_generation,
-    # НОВЫЙ ИМПОРТ ДЛЯ СОЗДАНИЯ ОПОП
     create_educational_program,
     batch_create_pk_and_ipk,
-    delete_educational_program, # <-- НОВЫЙ ИМПОРТ
+    delete_educational_program, 
 )
 
 from auth.logic import login_required, approved_required, admin_only
@@ -57,7 +56,7 @@ def get_programs():
 @competencies_matrix_bp.route('/programs', methods=['POST'])
 @login_required
 @approved_required
-@admin_only # Только админ или методист может создавать ОПОП
+@admin_only 
 def create_program_route():
     """Создает новую образовательную программу (ОПОП) на основе данных от фронтенда."""
     data = request.get_json()
@@ -67,8 +66,6 @@ def create_program_route():
         new_program_obj = create_educational_program(data, db.session)
         db.session.commit()
         
-        # Возвращаем детали созданной программы, чтобы фронтенд мог их использовать
-        # `to_dict` должен быть реализован в модели, чтобы корректно включать связи
         return jsonify(new_program_obj.to_dict(include_aup_list=True, include_fgos=True)), 201
 
     except ValueError as e:
@@ -135,7 +132,6 @@ def manage_matrix_link():
     result = update_matrix_link(aup_data_id, indicator_id, create=is_creating)
  
     if result['success']:
-        # db.session.commit() # Commit handled within update_matrix_link now
         if is_creating:
             status_code = 201 if result['status'] == 'created' else 200
             return jsonify({"status": result['status'], "message": result.get('message', "Операция выполнена")}), status_code
@@ -143,10 +139,10 @@ def manage_matrix_link():
             status_code = 200 if result['status'] == 'deleted' else 404 if result['status'] == 'not_found' else 200
             return jsonify({"status": result['status'], "message": result.get('message', "Операция выполнена")}), status_code
     else:
-        # db.session.rollback() # Rollback handled within update_matrix_link
         error_msg = result.get('message', "Не удалось выполнить операцию")
         status_code = 500
-        if result.get('error_type') == 'indicator_not_found': status_code = 404
+        if result.get('error_type') == 'aup_data_not_found': status_code = 404
+        if result.get('error_type') == 'indicator_not_found': status_code = 404 # Added this, though logic already checks before link
         logger.error(f"Error processing matrix link request via logic: {error_msg}. Details: {result.get('details')}")
         return jsonify({"status": "error", "message": error_msg}), status_code
 
@@ -543,7 +539,7 @@ def save_uk_indicators_disposition():
     filename = data.get('filename')
     # ИЗМЕНЕНИЕ: Принимаем список fgos_ids
     fgos_ids = data.get('fgos_ids') 
-    options = data.get('options', {}) # force_update_uk, resolutions
+    options = data.get('options', {}) 
 
     if not all([parsed_disposition_data, filename, fgos_ids]):
         abort(400, description="Некорректные данные для сохранения (отсутствуют parsed_data, filename или fgos_ids).")
@@ -556,7 +552,7 @@ def save_uk_indicators_disposition():
             parsed_disposition_data=parsed_disposition_data,
             filename=filename,
             session=db.session,
-            fgos_ids=fgos_ids, # ИЗМЕНЕНИЕ: Передаем список
+            fgos_ids=fgos_ids, 
             force_update_uk=options.get('force_update_uk', False),
             resolutions=options.get('resolutions')
         )
@@ -661,11 +657,11 @@ def save_profstandard():
         }), status_code
 
     except IntegrityError as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+        db.session.rollback() 
         logger.error(f"Integrity error saving PS: {e.orig}", exc_info=True)
         return jsonify({"error": "Профессиональный стандарт с таким кодом уже существует."}), 409
     except Exception as e:
-        db.session.rollback() # ЯВНЫЙ ОТКАТ
+        db.session.rollback() 
         logger.error(f"Error saving PS data from file {filename}: {e}", exc_info=True)
         abort(500, description=f"Неожиданная ошибка сервера при сохранении: {e}")
 
@@ -718,7 +714,6 @@ def delete_profstandard(ps_id):
         logger.error(f"Error deleting professional standard {ps_id}: {e}", exc_info=True)
         abort(500, description=f"Не удалось удалить профессиональный стандарт: {e}")
 
-# --- НОВЫЙ ЭНДПОИНТ: Поиск по Профстандартам ---
 @competencies_matrix_bp.route('/profstandards/search', methods=['GET'])
 @login_required
 @approved_required
@@ -729,9 +724,9 @@ def search_profstandards_route():
     Returns a paginated list of PS details with matching elements highlighted.
     """
     search_query = request.args.get('query', '').strip()
-    ps_ids_str = request.args.get('ps_ids') # comma-separated string of IDs
+    ps_ids_str = request.args.get('ps_ids') 
     offset_str = request.args.get('offset', '0')
-    limit_str = request.args.get('limit', '50') # ИЗМЕНЕНИЕ: Увеличен лимит до 50
+    limit_str = request.args.get('limit', '50') 
 
     ps_ids = []
     if ps_ids_str:
@@ -740,13 +735,12 @@ def search_profstandards_route():
         except ValueError:
             return jsonify({"error": "Неверный формат ps_ids. Ожидается список целых чисел через запятую."}), 400
 
-    # ИЗМЕНЕНИЕ: Получение qualification_levels из запроса
     qualification_levels_str: Optional[List[str]] = request.args.getlist('qualification_levels')
     qualification_levels: Optional[List[int]] = None
     if qualification_levels_str:
         try:
             qualification_levels = [int(level) for level in qualification_levels_str if level.isdigit()]
-            if not qualification_levels: qualification_levels = None # Если список пуст после фильтрации
+            if not qualification_levels: qualification_levels = None 
         except ValueError:
             return jsonify({"error": "Неверный формат qualification_levels. Ожидается список целых чисел."}), 400
 
@@ -756,19 +750,14 @@ def search_profstandards_route():
     except ValueError:
         return jsonify({"error": "Неверный формат offset или limit. Ожидаются целые числа."}), 400
     
-    # ИЗМЕНЕНИЕ: Разрешаем поиск, если есть уровни квалификации ИЛИ выбранные PS, даже без query
-    # Проверка длины search_query только если он не пустой
     if (not search_query or len(search_query) < 2) and not qualification_levels and (ps_ids is None or len(ps_ids) == 0):
-        # Если нет ни запроса, ни уровней, ни выбранных PS, то это ошибка
         return jsonify({"error": "Поисковый запрос должен содержать минимум 2 символа, либо должны быть выбраны уровни квалификации, либо выбран как минимум один профстандарт."}), 400
     
-    # Если search_query задан, но слишком короткий, это ошибка
     if search_query and len(search_query) < 2:
         return jsonify({"error": "Поисковый запрос должен содержать минимум 2 символа."}), 400
 
 
     try:
-        # ИЗМЕНЕНИЕ: Передача qualification_levels в logic_search_prof_standards
         search_results = logic_search_prof_standards(search_query, ps_ids, offset, limit, qualification_levels)
         return jsonify(search_results), 200
     except ValueError as e:
@@ -832,7 +821,7 @@ def export_selected_profstandards():
     Expects 'opop_id' and 'profStandards' in the JSON body.
     """
     data = request.get_json()
-    opop_id = data.get('opopId') # Ожидаем ID ОП для заголовка
+    opop_id = data.get('opopId') 
 
     if not data or not data.get('profStandards'):
         abort(400, description="Нет данных о выбранных профстандартах для экспорта.")
@@ -855,7 +844,6 @@ def export_selected_profstandards():
     except Exception as e:
         abort(500, description=f"Не удалось выполнить экспорт в Excel: {e}")
 
-# --- НОВЫЕ ЭНДПОИНТЫ ДЛЯ NLP ГЕНЕРАЦИИ ПК/ИПК ---
 @competencies_matrix_bp.route('/pk-generation/correct-name', methods=['POST'])
 @login_required
 @approved_required
@@ -872,7 +860,7 @@ def pk_name_correction_route():
     except ValueError as e:
         logger.error(f"Validation error for PK name correction: {e}")
         return jsonify({"error": str(e)}), 400
-    except RuntimeError as e: # Catch NLP-specific runtime errors
+    except RuntimeError as e: 
         logger.error(f"NLP error for PK name correction: {e}")
         return jsonify({"error": f"Ошибка NLP: {e}"}), 500
     except Exception as e:
@@ -897,14 +885,13 @@ def generate_pk_ipk_route():
     except ValueError as e:
         logger.error(f"Validation error for PK/IPK generation: {e}")
         return jsonify({"error": str(e)}), 400
-    except RuntimeError as e: # Catch NLP-specific runtime errors
+    except RuntimeError as e: 
         logger.error(f"NLP error for PK/IPK generation: {e}")
         return jsonify({"error": f"Ошибка NLP: {e}"}), 500
     except Exception as e:
         logger.error(f"Unexpected error in PK/IPK generation route: {e}", exc_info=True)
         abort(500, description=f"Неожиданная ошибка сервера при генерации ПК/ИПК: {e}")
 
-# В competencies_matrix/routes.py
 @competencies_matrix_bp.route('/competencies/batch-create-from-tf', methods=['POST'])
 @login_required
 @approved_required
@@ -914,7 +901,7 @@ def batch_create_competencies_from_tf():
     Пакетное создание ПК и их ИПК на основе массива данных из фронтенда.
     """
     data = request.get_json()
-    data_list = data.get('items', []) # Ожидаем, что данные придут в ключе 'items'
+    data_list = data.get('items', []) 
     if not isinstance(data_list, list):
         abort(400, description="Ожидается массив объектов в поле 'items' для создания.")
 
@@ -927,14 +914,12 @@ def batch_create_competencies_from_tf():
         logger.error(f"Error during batch creation: {e}", exc_info=True)
         return jsonify({"error": f"Ошибка пакетного создания: {e}"}), 500
 
-# НОВЫЙ ЭНДПОИНТ: Удаление Образовательной Программы
 @competencies_matrix_bp.route('/programs/<int:program_id>', methods=['DELETE'])
 @login_required
 @approved_required
 @admin_only
 def delete_program_route(program_id: int):
     """Удаляет образовательную программу и, опционально, связанные с ней локальные АУПы."""
-    # Получаем флаг из query-параметров
     delete_cloned_aups = request.args.get('delete_cloned_aups', 'false').lower() == 'true'
     
     try:
@@ -949,5 +934,4 @@ def delete_program_route(program_id: int):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error deleting program {program_id}: {e}", exc_info=True)
-        # Ошибка будет перехвачена глобальным обработчиком ошибок 500, который вернет JSON
         abort(500, description=f"Не удалось удалить образовательную программу: {e}")

@@ -216,25 +216,22 @@ def _clone_external_aup_to_local(
     external_aup_data: Dict[str, Any], session: Session
 ) -> Optional[LocalAupInfo]:
     """
-    Клонирует данные о АУП (tbl_aup и aup_data) из внешнего источника в локальную БД.
+    Клонирует данные о АУП из внешнего источника (словаря) в локальную БД.
     Возвращает созданный или найденный локальный объект AupInfo.
     """
     aup_num = external_aup_data.get('num_aup')
-    external_aup_id = external_aup_data.get('id_aup') # ID внешней AupInfo
-    if not aup_num or external_aup_id is None:
-        logger.error("External AUP data is missing 'num_aup' or 'id_aup'. Cannot clone.")
+    if not aup_num:
+        logger.error("External AUP data is missing 'num_aup'. Cannot clone.")
         return None
 
     # 1. Проверяем, может он уже есть локально
     local_aup = session.query(LocalAupInfo).filter_by(num_aup=aup_num).first()
     if local_aup:
         logger.info(f"Local AUP {aup_num} already exists. Returning existing record.")
-        # Для простоты, если tbl_aup уже есть, предполагаем, что aup_data тоже в порядке.
-        # В более сложном сценарии здесь может понадобиться проверка и синхронизация aup_data.
         return local_aup
 
     # 2. Клонируем связанные сущности (факультет, кафедра и т.д.)
-    logger.info(f"Cloning external AUP {aup_num} (ID: {external_aup_id}) to local DB.")
+    logger.info(f"Cloning external AUP {aup_num} to local DB.")
     try:
         faculty = find_or_create_lookup(SprFaculty, {'name_faculty': external_aup_data.get("faculty_name")}, {'id_branch': 1}, session)
         department = find_or_create_lookup(Department, {'name_department': external_aup_data.get("department_name")}, {}, session)
@@ -245,7 +242,7 @@ def _clone_external_aup_to_local(
         if not all([faculty, degree, form, name_op]):
             raise ValueError("Failed to find or create essential related entities for cloning.")
 
-        # 3. Создаем саму запись AupInfo (tbl_aup)
+        # 3. Создаем саму запись AupInfo
         is_actual = datetime.datetime.today().year <= (external_aup_data.get('year_end') or 0)
 
         new_local_aup = LocalAupInfo(
@@ -265,46 +262,17 @@ def _clone_external_aup_to_local(
             months=external_aup_data.get('months'),
             is_actual=is_actual,
             is_delete=False,
-            file=f"cloned_from_kd_{aup_num}"
+            file=f"cloned_from_kd_{aup_num}" # Условное имя файла
         )
         session.add(new_local_aup)
-        session.flush() # Получаем ID новой локальной AupInfo
-
-        # 4. Клонируем записи aup_data
-        external_aup_data_entries = get_external_aup_disciplines(external_aup_id) # Используем ID внешнего AUP
-        
-        if not external_aup_data_entries:
-            logger.warning(f"No aup_data entries found in external DB for AUP ID {external_aup_id}. Skipping aup_data cloning.")
-        else:
-            logger.info(f"Cloning {len(external_aup_data_entries)} aup_data entries for AUP {aup_num}.")
-            for ext_data in external_aup_data_entries:
-                # Находим или создаем запись в spr_discipline
-                spr_discipline = find_or_create_lookup(SprDiscipline, {'title': ext_data.get('title')}, {}, session)
-                if not spr_discipline:
-                    logger.warning(f"Could not find or create SprDiscipline for title '{ext_data.get('title')}'. Skipping aup_data entry.")
-                    continue
-
-                new_local_aup_data = LocalAupData(
-                    id_aup=new_local_aup.id_aup, # Привязываем к новой локальной AupInfo
-                    shifr=ext_data.get('shifr'),
-                    id_discipline=spr_discipline.id, # Используем ID локального SprDiscipline
-                    _discipline=ext_data.get('title'), # Сохраняем текстовое название в _discipline (старое поле)
-                    id_period=ext_data.get('semester'),
-                    num_row=ext_data.get('num_row'),
-                    id_type_record=ext_data.get('id_type_record'),
-                    zet=int(ext_data.get('zet', 0) * 100), # Zet * 100
-                    amount=ext_data.get('amount'),
-                    id_type_control=ext_data.get('id_type_control')
-                )
-                session.add(new_local_aup_data)
-            session.flush() # Сохраняем все новые LocalAupData
-
-        logger.info(f"Successfully cloned external AUP {aup_num} and its aup_data to local DB with ID {new_local_aup.id_aup}.")
+        session.flush() # Получаем ID
+        logger.info(f"Successfully cloned external AUP {aup_num} to local DB with ID {new_local_aup.id_aup}.")
         return new_local_aup
 
     except Exception as e:
         logger.error(f"Error cloning external AUP {aup_num} to local DB: {e}", exc_info=True)
-        return None # Не перебрасываем ошибку, чтобы не прерывать основной процесс, просто вернем None
+        # Не перебрасываем ошибку, чтобы не прерывать основной процесс, просто вернем None
+        return None
 
 
 # ИЗМЕНЕННАЯ ФУНКЦИЯ: create_educational_program
@@ -479,31 +447,53 @@ def get_external_aups_list(
 
 
 def get_external_aup_disciplines(aup_id: int) -> List[Dict[str, Any]]:
-    """Fetches discipline entries (AupData) for a specific AUP from external KD DB."""
+    """
+    (ИСПРАВЛЕНО)
+    Fetches discipline entries (AupData) for a specific AUP from external KD DB.
+    Uses the model's as_dict() method to correctly format the output.
+    """
     engine = get_external_db_engine()
     with Session(engine) as session:
         try:
-            aup_data_entries = session.query(ExternalAupData).options(joinedload(ExternalAupData.spr_discipline)).filter(ExternalAupData.id_aup == aup_id)\
-                .order_by(ExternalAupData.id_period, ExternalAupData.shifr, ExternalAupData.id).all() # ИЗМЕНЕНИЕ: Добавлено joinedload
+            # Eagerly load the related spr_discipline to avoid N+1 queries
+            aup_data_entries = session.query(ExternalAupData).options(
+                joinedload(ExternalAupData.spr_discipline)
+            ).filter(
+                ExternalAupData.id_aup == aup_id
+            ).order_by(
+                ExternalAupData.id_period, ExternalAupData.shifr, ExternalAupData.id
+            ).all()
 
             result = []
             for entry in aup_data_entries:
-                 result.append({
-                     'aup_data_id': entry.id, 'id_aup': entry.id_aup, 'discipline_id': entry.id_discipline,
-                     'title': entry.spr_discipline.title if entry.spr_discipline else entry._discipline, # ИЗМЕНЕНИЕ: Используем title из spr_discipline, если доступен
-                     'semester': entry.id_period, 'shifr': entry.shifr,
-                     'id_type_record': entry.id_type_record, 'zet': (entry.zet / 100) if entry.zet is not None else 0,
-                     'amount': entry.amount, 'id_type_control': entry.id_type_control
-                 })
+                entry_dict = entry.as_dict()
+                
+                # Формируем словарь для ответа, чтобы он соответствовал ожиданиям фронтенда
+                # и предыдущей логике. as_dict уже вернул нам 'discipline' с правильным названием.
+                result.append({
+                    'aup_data_id': entry_dict.get('id'),
+                    'id_aup': entry_dict.get('id_aup'),
+                    'discipline_id': entry_dict.get('id_discipline'),
+                    'title': entry_dict.get('discipline'), # <-- Используем поле из as_dict
+                    'semester': entry_dict.get('id_period'),
+                    'shifr': entry_dict.get('shifr'),
+                    'id_type_record': entry_dict.get('id_type_record'),
+                    'zet': (entry_dict.get('zet', 0) / 100) if entry_dict.get('zet') is not None else 0,
+                    'amount': entry_dict.get('amount'),
+                    'id_type_control': entry_dict.get('id_type_control')
+                })
+            
+            logger.info(f"Successfully fetched {len(result)} disciplines for external AUP ID {aup_id}.")
             return result
-        except Exception as e: logger.error(f"Error fetching external AupData for external AUP ID {aup_id}: {e}", exc_info=True); raise
+        except Exception as e:
+            logger.error(f"Error fetching external AupData for external AUP ID {aup_id}: {e}", exc_info=True)
+            raise
 
 
 def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
     """
-    (ОБНОВЛЕНО)
     Collects all data needed for the competency matrix for a given AUP number.
-    Ensures disciplines are from the local DB (cloning from external if necessary).
+    Fetches disciplines from external KD DB and competencies/links from local DB.
     """
     logger.info(f"Processing request for AUP num: {aup_num}")
     session: Session = local_db.session
@@ -518,7 +508,6 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
     fgos: Optional[FgosVo] = None
     
     try:
-        # 1. Сначала пытаемся найти АУП в ЛОКАЛЬНОЙ базе данных
         local_aup_info_entry = session.query(LocalAupInfo).options(
             selectinload(LocalAupInfo.educational_program_links)
                 .selectinload(EducationalProgramAup.educational_program)
@@ -526,7 +515,7 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
         ).filter_by(num_aup=aup_num).first()
 
         if local_aup_info_entry:
-            matrix_response["aup_info"] = local_aup_info_entry.as_dict()
+            matrix_response["aup_info"] = local_aup_info_entry.as_dict() if hasattr(local_aup_info_entry, 'as_dict') and callable(local_aup_info_entry.as_dict) else {'id_aup': local_aup_info_entry.id_aup, 'num_aup': local_aup_info_entry.num_aup}
             
             if local_aup_info_entry.educational_program_links:
                 primary_assoc = next((assoc for assoc in local_aup_info_entry.educational_program_links if assoc.is_primary), None)
@@ -534,202 +523,206 @@ def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
                 if assoc_to_use and assoc_to_use.educational_program:
                     educational_program = assoc_to_use.educational_program
                     if educational_program.fgos: fgos = educational_program.fgos
-            
-            # Если нашли локальный AUPInfo, всегда пытаемся загрузить дисциплины из ЛОКАЛЬНОЙ AupData
-            try:
-                local_aup_data_entries = session.query(LocalAupData).options(joinedload(LocalAupData.discipline)).filter(LocalAupData.id_aup == local_aup_info_entry.id_aup).order_by(LocalAupData.id_period, LocalAupData.shifr, LocalAupData.id).all()
+        else: logger.warning(f"LocalAupInfo for num_aup '{aup_num}' not found.")
+    except Exception as e_local_aup:
+        logger.error(f"Error finding LocalAupInfo for num_aup '{aup_num}': {e_local_aup}", exc_info=True)
+        current_error_details = matrix_response.get("error_details", "") or ""
+        matrix_response["error_details"] = (current_error_details + f" Error finding local AUP record {aup_num}: {e_local_aup}.")
 
-                if local_aup_data_entries:
-                    matrix_response["disciplines"] = [{
+    external_disciplines: List[Dict[str, Any]] = []
+    external_aup_id_for_disciplines: Optional[int] = None
+    attempted_external_fetch = False
+
+    try:
+        external_aup_search_result = get_external_aups_list(search_query=aup_num, limit=1)
+        attempted_external_fetch = True
+
+        if external_aup_search_result["total"] > 0 and external_aup_search_result["items"]:
+            exact_match_aup = next((item for item in external_aup_search_result["items"] if item.get('num_aup') == aup_num), None)
+            if exact_match_aup:
+                external_aup_id_for_disciplines = exact_match_aup.get('id_aup')
+                matrix_response["external_aup_id"] = external_aup_id_for_disciplines
+                matrix_response["external_aup_num"] = exact_match_aup.get('num_aup', aup_num)
+                if not local_aup_info_entry: matrix_response["aup_info"] = exact_match_aup; matrix_response["source"] = "external_header_only"
+                
+                if external_aup_id_for_disciplines is not None:
+                    external_disciplines = get_external_aup_disciplines(external_aup_id_for_disciplines)
+                    matrix_response["disciplines"] = external_disciplines
+                    if local_aup_info_entry and matrix_response["source"] != "local_fallback_disciplines": matrix_response["source"] = "local_with_external_disciplines"
+                    elif not local_aup_info_entry: matrix_response["source"] = "external_only"
+                else:
+                    error_msg = f" External AUP {aup_num} found, but its ID is missing. Disciplines not loaded."
+                    current_error_details = matrix_response.get("error_details", "") or ""
+                    matrix_response["error_details"] = (current_error_details + error_msg)
+            else:
+                error_msg = f" AUP {aup_num} not found (exact match) in external DB. Disciplines not loaded."
+                current_error_details = matrix_response.get("error_details", "") or ""
+                matrix_response["error_details"] = (current_error_details + error_msg)
+        else:
+            error_msg = f" AUP {aup_num} not found in external DB. Disciplines not loaded."
+            current_error_details = matrix_response.get("error_details", "") or ""
+            matrix_response["error_details"] = (current_error_details + error_msg)
+    except Exception as e_ext_disciplines:
+        attempted_external_fetch = True
+        logger.error(f"Error during external KD lookup/discipline fetch for num_aup '{aup_num}': {e_ext_disciplines}", exc_info=True)
+        current_error_details = matrix_response.get("error_details", "") or ""
+        matrix_response["error_details"] = (current_error_details + f" Error loading disciplines for AUP {aup_num} from external DB: {e_ext_disciplines}.")
+
+    if not external_disciplines and local_aup_info_entry:
+        try:
+            local_aup_data_entries = session.query(LocalAupData).options(joinedload(LocalAupData.discipline)).filter(LocalAupData.id_aup == local_aup_info_entry.id_aup).order_by(LocalAupData.id_period, LocalAupData.shifr, LocalAupData.id).all()
+
+            if local_aup_data_entries:
+                local_disciplines_for_response = []
+                for entry in local_aup_data_entries:
+                    local_disciplines_for_response.append({
                         'aup_data_id': entry.id, 'id_aup': entry.id_aup, 'discipline_id': entry.id_discipline,
-                        'title': entry.discipline.title if entry.discipline else entry._discipline, # Используем title из SprDiscipline, если joined
+                        'title': entry.discipline.title if entry.discipline else entry._discipline,
                         'semester': entry.id_period, 'shifr': entry.shifr,
                         'id_type_record': entry.id_type_record, 'zet': (entry.zet / 100) if entry.zet is not None else 0,
                         'amount': entry.amount, 'id_type_control': entry.id_type_control
-                    } for entry in local_aup_data_entries]
-                    matrix_response["source"] = "local_only"
-                else:
-                    logger.warning(f"No disciplines found in LOCAL AupData for local AUP ID {local_aup_info_entry.id_aup}.")
-                    matrix_response["error_details"] = (matrix_response.get("error_details", "") or "") + " No local discipline data found for this AUP."
+                    })
+                matrix_response["disciplines"] = local_disciplines_for_response
+                matrix_response["source"] = "local_fallback_disciplines"
+                fallback_msg = " Using local discipline data."
+                current_error_details = matrix_response.get("error_details", "") or ""
+                if current_error_details and attempted_external_fetch: matrix_response["error_details"] += fallback_msg
+                else: matrix_response["error_details"] = "Using local discipline data (external could not be loaded or was not requested)."
+            else: logger.warning(f"No disciplines found in LOCAL AupData for local AUP ID {local_aup_info_entry.id_aup} either.")
+        except Exception as e_local_disc:
+            logger.error(f"Error fetching local disciplines for AUP {local_aup_info_entry.id_aup}: {e_local_disc}", exc_info=True)
+            current_error_details = matrix_response.get("error_details", "") or ""
+            matrix_response["error_details"] = (current_error_details + f" Error loading local disciplines: {e_local_disc}.")
 
-            except Exception as e_local_disciplines:
-                logger.error(f"Error fetching LOCAL disciplines for AUP {aup_num}: {e_local_disciplines}", exc_info=True)
-                matrix_response["error_details"] = (matrix_response.get("error_details", "") or "") + f" Error loading local disciplines: {e_local_disciplines}."
-        else:
-            # Если локальный AUPInfo не найден, пытаемся найти его во внешней БД и склонировать
-            logger.info(f"Local AUPInfo for num_aup '{aup_num}' not found. Attempting to clone from external DB...")
-            external_aup_search_result = get_external_aups_list(search_query=aup_num, limit=1)
-            
-            if external_aup_search_result["total"] > 0 and external_aup_search_result["items"]:
-                exact_match_aup_data = next((item for item in external_aup_search_result["items"] if item.get('num_aup') == aup_num), None)
-                if exact_match_aup_data:
-                    # Клонируем внешний АУП и его данные в локальную БД
-                    cloned_local_aup = _clone_external_aup_to_local(exact_match_aup_data, session)
-                    
-                    if cloned_local_aup:
-                        # Рекурсивно вызываем функцию, чтобы получить данные матрицы, теперь, когда АУП локальный
-                        logger.info(f"Successfully cloned AUP {aup_num}. Re-fetching matrix with local AUP.")
-                        session.commit() # Коммитим клонирование перед повторным запросом
-                        return get_matrix_for_aup(aup_num) # Рекурсивный вызов
-                    else:
-                        error_msg = f" AUP {aup_num} found externally, but failed to clone to local DB. Disciplines not loaded."
-                        matrix_response["error_details"] = (matrix_response.get("error_details", "") or "") + error_msg
-                else:
-                    error_msg = f" AUP {aup_num} not found (exact match) in external DB. Disciplines not loaded."
-                    matrix_response["error_details"] = (matrix_response.get("error_details", "") or "") + error_msg
-            else:
-                error_msg = f" AUP {aup_num} not found in external DB. Disciplines not loaded."
-                matrix_response["error_details"] = (matrix_response.get("error_details", "") or "") + error_msg
-                
-    except Exception as e_top_level:
-        logger.error(f"Top-level error in get_matrix_for_aup for AUP num '{aup_num}': {e_top_level}", exc_info=True)
-        matrix_response["error_details"] = (matrix_response.get("error_details", "") or "") + f" Top-level error: {e_top_level}."
-        
-    # --- Если мы достигли этого места, local_aup_info_entry должен быть заполнен (либо найден, либо из рекурсивного вызова) ---
-    # Перезагружаем или убеждаемся, что educational_program и fgos доступны, если они не были в исходной загрузке
-    if not educational_program and local_aup_info_entry and local_aup_info_entry.educational_program_links:
-        primary_assoc = next((assoc for assoc in local_aup_info_entry.educational_program_links if assoc.is_primary), None)
-        assoc_to_use = primary_assoc or local_aup_info_entry.educational_program_links[0]
-        if assoc_to_use and assoc_to_use.educational_program:
-            educational_program = assoc_to_use.educational_program
-            if educational_program.fgos: fgos = educational_program.fgos
-            
-    # Загружаем компетенции и связи (существующая логика, но теперь гарантированно используются ЛОКАЛЬНЫЕ AUP_DATA ID)
-    comp_types_q = session.query(CompetencyType).filter(CompetencyType.code.in_(['УК', 'ОПК', 'ПК'])).all()
-    comp_types = {ct.code: ct for ct in comp_types_q}
-    relevant_competencies = []
+    if local_aup_info_entry:
+        if matrix_response["source"] not in ["local_fallback_disciplines", "external_header_only", "external_only"]:
+             matrix_response["source"] = "local_only" if not external_disciplines else "local_with_external_disciplines"
 
-    # ... (существующая логика загрузки компетенций УК/ОПК/ПК и заполнения matrix_response["competencies"]) ...
-    # Эта часть остается практически неизменной, так как она работает с локальными компетенциями и индикаторами.
-    # Главное, что 'matrix_response["disciplines"]' теперь содержит ЛОКАЛЬНЫЕ 'aup_data_id'.
+        comp_types_q = session.query(CompetencyType).filter(CompetencyType.code.in_(['УК', 'ОПК', 'ПК'])).all()
+        comp_types = {ct.code: ct for ct in comp_types_q}
+        relevant_competencies = []
 
-    if educational_program and educational_program.fgos:
-        fgos_id_to_load = educational_program.fgos.id
-        uk_type = comp_types.get('УК'); opk_type = comp_types.get('ОПК')
-        uk_opk_ids_to_load = [tid.id for tid in [uk_type, opk_type] if tid]
-        if uk_opk_ids_to_load:
-            uk_opk_competencies = session.query(Competency).options(
+        if educational_program and educational_program.fgos:
+            fgos_id_to_load = educational_program.fgos.id
+            uk_type = comp_types.get('УК'); opk_type = comp_types.get('ОПК')
+            uk_opk_ids_to_load = [tid.id for tid in [uk_type, opk_type] if tid]
+            if uk_opk_ids_to_load:
+                uk_opk_competencies = session.query(Competency).options(
+                    selectinload(Competency.indicators),
+                    selectinload(Competency.competency_type),
+                    selectinload(Competency.fgos) # For source_document_type
+                ).filter(Competency.fgos_vo_id == fgos_id_to_load, Competency.competency_type_id.in_(uk_opk_ids_to_load)).all()
+                relevant_competencies.extend(uk_opk_competencies)
+            else: logger.warning(f"Competency types УК/ОПК not found in DB. Cannot load УК/ОПК for FGOS ID {fgos_id_to_load}.")
+        elif educational_program and not educational_program.fgos: logger.warning(f"Educational Program ID {educational_program.id} linked to AUP {aup_num} has no FGOS linked. Skipping УК/ОПК.")
+        else: logger.warning(f"No Educational Program linked to local AUP {aup_num}. Skipping УК/ОПК loading.")
+
+        pk_type = comp_types.get('ПК')
+        if pk_type:
+            pk_competencies = session.query(Competency).options(
                 selectinload(Competency.indicators),
                 selectinload(Competency.competency_type),
-                selectinload(Competency.fgos) 
-            ).filter(Competency.fgos_vo_id == fgos_id_to_load, Competency.competency_type_id.in_(uk_opk_ids_to_load)).all()
-            relevant_competencies.extend(uk_opk_competencies)
-        else: logger.warning(f"Competency types УК/ОПК not found in DB. Cannot load УК/ОПК for FGOS ID {fgos_id_to_load}.")
-    elif educational_program and not educational_program.fgos: logger.warning(f"Educational Program ID {educational_program.id} linked to AUP {aup_num} has no FGOS linked. Skipping УК/ОПК.")
-    else: logger.warning(f"No Educational Program linked to local AUP {aup_num}. Skipping УК/ОПК loading.")
-
-    pk_type = comp_types.get('ПК')
-    if pk_type:
-        pk_competencies = session.query(Competency).options(
-            selectinload(Competency.indicators),
-            selectinload(Competency.competency_type),
-            selectinload(Competency.educational_programs_assoc).selectinload(CompetencyEducationalProgram.educational_program), 
-            selectinload(Competency.based_on_labor_function)
-                .selectinload(LaborFunction.generalized_labor_function)
-                .selectinload(GeneralizedLaborFunction.prof_standard)
-        ).filter(Competency.competency_type_id == pk_type.id).all()
-        
-        filtered_pk_competencies = []
-        if educational_program:
-            for pk_comp in pk_competencies:
-                if any(assoc.educational_program_id == educational_program.id for assoc in pk_comp.educational_programs_assoc):
-                    filtered_pk_competencies.append(pk_comp)
-            relevant_competencies.extend(filtered_pk_competencies)
-        else:
-            relevant_competencies.extend(pk_competencies) # Если нет связи с ОП, покажем все ПК (как в MVP)
-    else: logger.warning(f"Competency type ПК not found in DB. Skipping ПК loading.")
-
-    competencies_data = []; all_indicator_ids_for_matrix = set()
-    comp_type_id_sort_order = {ct.id: i for i, ct_code in enumerate(['УК', 'ОПК', 'ПК']) for ct in comp_types_q if ct.code == ct_code}
-    relevant_competencies.sort(key=lambda c: (comp_type_id_sort_order.get(c.competency_type_id, 999), c.code))
-
-    for comp in relevant_competencies:
-        type_code = comp.competency_type.code if comp.competency_type else "UNKNOWN"
-        comp_dict = comp.to_dict(rules=['-indicators', '-competency_type', '-fgos', '-based_on_labor_function', '-matrix_entries', '-educational_programs_assoc'])
-        comp_dict['type_code'] = type_code
-        comp_dict['indicators'] = []
-
-        comp_dict['source_document_id'] = None
-        comp_dict['source_document_code'] = None
-        comp_dict['source_document_name'] = None
-        comp_dict['source_document_type'] = None
-
-        if comp.competency_type and comp.competency_type.code in ['УК', 'ОПК']:
-            if comp.fgos:
-                comp_dict['source_document_id'] = comp.fgos.id
-                comp_dict['source_document_code'] = comp.fgos.direction_code
-                comp_dict['source_document_name'] = comp.fgos.direction_name
-                comp_dict['source_document_type'] = "ФГОС ВО"
-        elif comp.competency_type and comp.competency_type.code == 'ПК':
-            if comp.based_on_labor_function and \
-               comp.based_on_labor_function.generalized_labor_function and \
-               comp.based_on_labor_function.generalized_labor_function.prof_standard:
-                ps = comp.based_on_labor_function.generalized_labor_function.prof_standard
-                comp_dict['source_document_id'] = ps.id
-                comp_dict['source_document_code'] = ps.code
-                comp_dict['source_document_name'] = ps.name
-                comp_dict['source_document_type'] = "Профстандарт"
+                selectinload(Competency.educational_programs_assoc).selectinload(CompetencyEducationalProgram.educational_program), # For filtering by Educational Program
+                selectinload(Competency.based_on_labor_function) # For source_document_type
+                    .selectinload(LaborFunction.generalized_labor_function)
+                    .selectinload(GeneralizedLaborFunction.prof_standard) # For source_document_type
+            ).filter(Competency.competency_type_id == pk_type.id).all()
+            
+            filtered_pk_competencies = []
+            if educational_program:
+                for pk_comp in pk_competencies:
+                    if any(assoc.educational_program_id == educational_program.id for assoc in pk_comp.educational_programs_assoc):
+                        filtered_pk_competencies.append(pk_comp)
+                relevant_competencies.extend(filtered_pk_competencies)
             else:
-                comp_dict['source_document_type'] = "Ручной ввод"
-                comp_dict['source_document_code'] = "N/A"
-                comp_dict['source_document_name'] = "Введено вручную"
+                # If Educational Program is not found or not linked, but PKs exist, display all PKs (as in MVP)
+                relevant_competencies.extend(pk_competencies)
+        else: logger.warning(f"Competency type ПК not found in DB. Skipping ПК loading.")
 
-        if comp.based_on_labor_function:
-             comp_dict['based_on_labor_function_id'] = comp.based_on_labor_function.id
-             comp_dict['based_on_labor_function_code'] = comp.based_on_labor_function.code
-             comp_dict['based_on_labor_function_name'] = comp.based_on_labor_function.name
+        competencies_data = []; all_indicator_ids_for_matrix = set()
+        comp_type_id_sort_order = {ct.id: i for i, ct_code in enumerate(['УК', 'ОПК', 'ПК']) for ct in comp_types_q if ct.code == ct_code}
+        relevant_competencies.sort(key=lambda c: (comp_type_id_sort_order.get(c.competency_type_id, 999), c.code))
 
-        if comp.indicators:
-            sorted_indicators = sorted(comp.indicators, key=lambda i: i.code)
-            for ind in sorted_indicators:
-                all_indicator_ids_for_matrix.add(ind.id)
-                ind_dict = ind.to_dict();
-                ind_dict['competency_code'] = comp.code; ind_dict['competency_name'] = comp.name
-                ind_dict['competency_type_code'] = comp_dict['type_code']
-                
-                ind_dict['source_document_id'] = comp_dict['source_document_id']
-                ind_dict['source_document_code'] = comp_dict['source_document_code']
-                ind_dict['source_document_name'] = comp_dict['source_document_name']
-                ind_dict['source_document_type'] = comp_dict['source_document_type']
-                ind_dict['selected_ps_elements_ids'] = ind.selected_ps_elements_ids
+        for comp in relevant_competencies:
+            type_code = comp.competency_type.code if comp.competency_type else "UNKNOWN"
+            comp_dict = comp.to_dict(rules=['-indicators', '-competency_type', '-fgos', '-based_on_labor_function', '-matrix_entries', '-educational_programs_assoc'])
+            comp_dict['type_code'] = type_code;
+            comp_dict['indicators'] = []
+
+            comp_dict['source_document_id'] = None
+            comp_dict['source_document_code'] = None
+            comp_dict['source_document_name'] = None
+            comp_dict['source_document_type'] = None
+
+            if comp.competency_type and comp.competency_type.code in ['УК', 'ОПК']:
+                if comp.fgos:
+                    comp_dict['source_document_id'] = comp.fgos.id
+                    comp_dict['source_document_code'] = comp.fgos.direction_code
+                    comp_dict['source_document_name'] = comp.fgos.direction_name
+                    comp_dict['source_document_type'] = "ФГОС ВО"
+            elif comp.competency_type and comp.competency_type.code == 'ПК':
+                if comp.based_on_labor_function and \
+                   comp.based_on_labor_function.generalized_labor_function and \
+                   comp.based_on_labor_function.generalized_labor_function.prof_standard:
+                    ps = comp.based_on_labor_function.generalized_labor_function.prof_standard
+                    comp_dict['source_document_id'] = ps.id
+                    comp_dict['source_document_code'] = ps.code
+                    comp_dict['source_document_name'] = ps.name
+                    comp_dict['source_document_type'] = "Профстандарт"
+                else:
+                    comp_dict['source_document_type'] = "Ручной ввод" # PK created manually, without TF/PS link
+                    comp_dict['source_document_code'] = "N/A"
+                    comp_dict['source_document_name'] = "Введено вручную"
 
 
-                comp_dict['indicators'].append(ind_dict)
-        competencies_data.append(comp_dict)
-    matrix_response["competencies"] = competencies_data
+            if comp.based_on_labor_function: # Still include this for form pre-fill
+                 comp_dict['based_on_labor_function_id'] = comp.based_on_labor_function.id
+                 comp_dict['based_on_labor_function_code'] = comp.based_on_labor_function.code
+                 comp_dict['based_on_labor_function_name'] = comp.based_on_labor_function.name
 
-    if matrix_response["disciplines"] and all_indicator_ids_for_matrix:
-        discipline_source_aup_data_ids = [d['aup_data_id'] for d in matrix_response["disciplines"] if d.get('aup_data_id') is not None]
-        if discipline_source_aup_data_ids:
-            existing_links_db = session.query(CompetencyMatrix).filter(
-                CompetencyMatrix.aup_data_id.in_(discipline_source_aup_data_ids),
-                CompetencyMatrix.indicator_id.in_(list(all_indicator_ids_for_matrix))
-            ).all()
-            matrix_response["links"] = [link.to_dict(only=('aup_data_id', 'indicator_id', 'is_manual')) for link in existing_links_db]
-        else: logger.debug("No valid aup_data_ids from disciplines to load links for.")
-    else: logger.debug("No disciplines loaded or no indicators for matrix, local links will be empty.")
+            if comp.indicators:
+                sorted_indicators = sorted(comp.indicators, key=lambda i: i.code)
+                for ind in sorted_indicators:
+                    all_indicator_ids_for_matrix.add(ind.id)
+                    ind_dict = ind.to_dict();
+                    ind_dict['competency_code'] = comp.code; ind_dict['competency_name'] = comp.name
+                    ind_dict['competency_type_code'] = comp_dict['type_code']
+                    
+                    ind_dict['source_document_id'] = comp_dict['source_document_id']
+                    ind_dict['source_document_code'] = comp_dict['source_document_code']
+                    ind_dict['source_document_name'] = comp_dict['source_document_name']
+                    ind_dict['source_document_type'] = comp_dict['source_document_type']
+                    ind_dict['selected_ps_elements_ids'] = ind.selected_ps_elements_ids
+
+
+                    comp_dict['indicators'].append(ind_dict)
+            competencies_data.append(comp_dict)
+        matrix_response["competencies"] = competencies_data
+
+        if matrix_response["disciplines"] and all_indicator_ids_for_matrix:
+            discipline_source_aup_data_ids = [d['aup_data_id'] for d in matrix_response["disciplines"] if d.get('aup_data_id') is not None]
+            if discipline_source_aup_data_ids:
+                existing_links_db = session.query(CompetencyMatrix).filter(
+                    CompetencyMatrix.aup_data_id.in_(discipline_source_aup_data_ids),
+                    CompetencyMatrix.indicator_id.in_(list(all_indicator_ids_for_matrix))
+                ).all()
+                matrix_response["links"] = [link.to_dict(only=('aup_data_id', 'indicator_id', 'is_manual')) for link in existing_links_db]
+            else: logger.debug("No valid aup_data_ids from disciplines to load links for.")
+        else: logger.debug("No disciplines loaded or no indicators for matrix, local links will be empty.")
     
-    # Определение финального источника данных после всех попыток
-    if matrix_response["disciplines"] and matrix_response["source"] == "not_found":
-        matrix_response["source"] = "local_only" # Если дисциплины загружены, источник - локальный
-    elif not matrix_response["disciplines"]:
+    if not local_aup_info_entry and not matrix_response["disciplines"] and matrix_response["source"] != "external_header_only":
         matrix_response["source"] = "not_found"
-        if not matrix_response.get("error_details"):
-            matrix_response["error_details"] = f"AUP {aup_num} not found or no disciplines loaded."
-        
-    logger.info(f"Final matrix data source: {matrix_response['source']}")
+        logger.error(f"AUP with num_aup '{aup_num}' not found in local DB. External search also failed or yielded no disciplines.")
+        current_error_details = matrix_response.get("error_details", "") or ""
+        if not current_error_details: matrix_response["error_details"] = f"AUP {aup_num} not found in local or external DB, or disciplines could not be loaded."
+        if not matrix_response.get("aup_info") and not matrix_response.get("disciplines"): return None
+
     return matrix_response
 
 def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True) -> Dict[str, Any]:
     """Creates or deletes a Discipline(AUP)-Indicator link in the matrix."""
     session: Session = local_db.session
     try:
-        # Проверяем существование aup_data_id в ЛОКАЛЬНОЙ базе
-        aup_data_exists = session.query(exists().where(LocalAupData.id == aup_data_id)).scalar()
-        if not aup_data_exists:
-            message = f"AUP data entry with id {aup_data_id} not found in LOCAL DB. Cannot link."
-            logger.warning(message); return { 'success': False, 'status': 'error', 'message': message, 'error_type': 'aup_data_not_found' }
-
         indicator_exists = session.query(exists().where(Indicator.id == indicator_id)).scalar()
         if not indicator_exists:
             message = f"Indicator with id {indicator_id} not found in local DB."
@@ -740,22 +733,22 @@ def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True)
         if create:
             if not existing_link:
                 link = CompetencyMatrix(aup_data_id=aup_data_id, indicator_id=indicator_id, is_manual=True)
-                session.add(link); logger.info(f"Link created: Local AupData ID {aup_data_id} <-> Indicator {indicator_id}")
+                session.add(link); logger.info(f"Link created: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
                 session.commit() # Added commit
                 return { 'success': True, 'status': 'created', 'message': "Link created." }
             else:
                 if not existing_link.is_manual:
                      existing_link.is_manual = True
-                     session.add(existing_link); logger.info(f"Link updated to manual: Local AupData ID {aup_data_id} <-> Indicator {indicator_id}")
+                     session.add(existing_link); logger.info(f"Link updated to manual: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
                      session.commit() # Added commit
                 return { 'success': True, 'status': 'already_exists', 'message': "Link already exists." }
         else:  # delete
             if existing_link:
-                session.delete(existing_link); logger.info(f"Link deleted: Local AupData ID {aup_data_id} <-> Indicator {indicator_id}")
+                session.delete(existing_link); logger.info(f"Link deleted: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
                 session.commit() # Added commit
                 return { 'success': True, 'status': 'deleted', 'message': "Link deleted." }
             else:
-                logger.warning(f"Link not found for deletion: Local AupData ID {aup_data_id} <-> Indicator {indicator_id}")
+                logger.warning(f"Link not found for deletion: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
                 return { 'success': True, 'status': 'not_found', 'message': "Link not found." }
 
     except SQLAlchemyError as e:
@@ -919,7 +912,7 @@ def update_competency(comp_id: int, data: Dict[str, Any], session: Session) -> O
                         if educational_program:
                             assoc = CompetencyEducationalProgram(competency_id=competency.id, educational_program_id=ep_id)
                             session.add(assoc); updated = True
-                        else: logger.warning(f"Educational Program with ID {ep_id} not found. Skipping link for competency {comp_id}.")
+                        else: logger.warning(f"Educational Program with ID {ep_id} not found when adding link for competency {comp_id}. Skipping.")
                 if to_delete_ids or to_add_ids: session.flush() # Flush if associations changed
         
         if updated:
@@ -1967,8 +1960,7 @@ def batch_create_pk_and_ipk(data_list: List[Dict[str, Any]], session: Session) -
                 'code': item_data.get('pk_code'),
                 'name': item_data.get('pk_name'),
                 'type_code': 'ПК',
-                'based_on_labor_function_id': item_data.get('tf_id'),
-                'educational_program_ids': item_data.get('educational_program_ids', []) # NEW: передаем EP IDs
+                'based_on_labor_function_id': item_data.get('tf_id')
             }
             new_pk = create_competency(pk_payload, session)
             session.flush() # Получаем ID для new_pk
@@ -1977,21 +1969,20 @@ def batch_create_pk_and_ipk(data_list: List[Dict[str, Any]], session: Session) -
             formulation = f"Знает: {item_data.get('ipk_znaet')}\\nУмеет: {item_data.get('ipk_umeet')}\\nВладеет: {item_data.get('ipk_vladeet')}"
             ipk_payload = {
                 'competency_id': new_pk.id,
-                'code': f"ИПК-{new_pk.code.replace('ПК-', '')}.1", # TODO: Generate proper IPK code based on existing ones for this PK
+                'code': f"ИПК-{new_pk.code.replace('ПК-', '')}.1",
                 'formulation': formulation,
-                'source': f"ПС {item_data.get('ps_code')}" if item_data.get('ps_code') else "Ручной ввод",
-                'selected_ps_elements_ids': item_data.get('selected_ps_elements_ids') # NEW: ЗУН элементы
+                'source': f"ПС {item_data.get('ps_code')}"
             }
             create_indicator(ipk_payload, session)
             created_count += 1
         except Exception as e:
             errors.append({'pk_code': item_data.get('pk_code'), 'error': str(e)})
 
-    # Вместо выбрасывания исключения, возвращаем сводку
     if errors:
-        return {"success_count": created_count, "error_count": len(errors), "errors": errors}
-    else:
-        return {"success_count": created_count, "error_count": 0, "errors": []}
+        # Если были ошибки, можно откатить всю транзакцию или вернуть частичный результат
+        raise Exception(f"Завершено с ошибками. Успешно: {created_count}, Ошибки: {len(errors)}. Подробности: {errors}")
+
+    return {"success_count": created_count, "error_count": len(errors), "errors": errors}
 
 # --- НОВАЯ ФУНКЦИЯ: Удаление образовательной программы ---
 def delete_educational_program(program_id: int, delete_cloned_aups: bool, session: Session) -> bool:

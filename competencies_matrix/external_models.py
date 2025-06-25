@@ -98,29 +98,49 @@ class ExternalAupInfo(ExternalBase):
 
 class ExternalAupData(ExternalBase):
     __tablename__ = "aup_data"
-    id = Column(Integer, primary_key=True) # Это id записи в aup_data
+    id = Column(Integer, primary_key=True)
     id_aup = Column(Integer, ForeignKey("tbl_aup.id_aup"))
     shifr = Column(String(30))
-    id_discipline = Column(Integer, ForeignKey("spr_discipline.id")) # Внешний ключ к spr_discipline
-    _discipline = Column("discipline", String(350)) # ИЗМЕНЕНИЕ: Переименовано в _discipline, чтобы не конфликтовать с relationship
-    id_period = Column(Integer) # Семестр
+    id_discipline = Column(Integer, ForeignKey("spr_discipline.id"))
+    
+    _discipline_from_table = Column("discipline", String(350)) 
+    
+    id_period = Column(Integer)
     num_row = Column(Integer)
-    id_type_record = Column(Integer) # FK к d_type_record, но саму таблицу не определяем, если не нужна
-    zet = Column(Integer) # Хранится как * 100
-    # ... другие поля, если нужны (id_block, id_part, id_module, id_group, id_type_control, amount, id_edizm)
+    id_type_record = Column(Integer)
+    zet = Column(Integer)
     id_type_control = Column(Integer)
     amount = Column(Integer)
 
-    # Отношение к SprDiscipline, если нужно будет доставать каноничное имя из справочника
-    spr_discipline = relationship("ExternalSprDiscipline", foreign_keys=[id_discipline], lazy='joined') # ИЗМЕНЕНИЕ: Добавлено отношение
+    spr_discipline = relationship("ExternalSprDiscipline", foreign_keys=[id_discipline], lazy='joined')
+
+    @hybrid_property
+    def discipline(self):
+        """
+        Это гибридное свойство возвращает правильное название дисциплины.
+        Оно будет работать и на уровне Python (self.spr_discipline), и на уровне SQL (пока не требуется).
+        """
+        if self.spr_discipline:
+            return self.spr_discipline.title
+        return self._discipline_from_table
 
     def as_dict(self) -> Dict[str, Any]:
-        data = {c.name: getattr(self, c.name) for c in self.__table__.columns}
-        if self.spr_discipline: # ИЗМЕНЕНИЕ: Проверяем наличие связанного объекта
-            data['discipline'] = self.spr_discipline.title # ИЗМЕНЕНИЕ: Возвращаем title из spr_discipline
-        else:
-            data['discipline'] = self._discipline # ИЗМЕНЕНИЕ: Если нет, используем _discipline
-        return data
+        """
+        Корректно формирует словарь, используя гибридное свойство `discipline`.
+        """
+        return {
+            'id': self.id,
+            'id_aup': self.id_aup,
+            'shifr': self.shifr,
+            'id_discipline': self.id_discipline,
+            'discipline': self.discipline,
+            'id_period': self.id_period,
+            'num_row': self.num_row,
+            'id_type_record': self.id_type_record,
+            'zet': self.zet,
+            'id_type_control': self.id_type_control,
+            'amount': self.amount,
+        }
 
 class ExternalSprDiscipline(ExternalBase):
     __tablename__ = "spr_discipline"

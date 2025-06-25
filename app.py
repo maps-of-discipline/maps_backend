@@ -8,17 +8,32 @@ from dotenv import load_dotenv
 import os
 import logging 
 
-from maps.models import db 
-from utils.cache import cache
+# --- НОВОЕ: Импортируем ВСЕ модели, чтобы SQLAlchemy их "увидел" ---
+# Эти импорты необходимы для того, чтобы SQLAlchemy metadata обнаружила все таблицы
+# и их связи перед инициализацией мапперов.
+import maps.models 
+import competencies_matrix.models 
+import auth.models 
+import cabinet.models 
+# Если есть другие модули с моделями (например, administration), их тоже нужно импортировать здесь
+# import administration.models 
+# --- КОНЕЦ ИМПОРТОВ МОДЕЛЕЙ ---
 
+# Теперь импортируем объект 'db' из maps.models, который является центральным Flask-SQLAlchemy объектом
+from maps.models import db 
+
+# Импортируем остальные части приложения (Blueprints и утилиты)
+from utils.cache import cache
 from cabinet.cabinet import cabinet
 from maps.routes import maps_module 
 from unification import unification_blueprint
 from auth.routes import auth as auth_blueprint
-from administration.routes import admin as admin_blueprint
-from competencies_matrix import competencies_matrix_bp # <-- ИМПОРТ competencies_matrix_bp
+from administration.routes import admin as admin_blueprint # assuming this is where admin models are defined, if any
+from competencies_matrix import competencies_matrix_bp 
 from utils.handlers import handle_exception
 
+# Импорт CLI команд (они могут импортировать models, но это происходит при регистрации команд,
+# что обычно уже после db.init_app, но лучше, если models уже известны)
 from cli_commands.db_seed import seed_command
 from cli_commands.db_unseed import unseed_command
 from cli_commands.import_aup import import_aup_command
@@ -30,11 +45,9 @@ load_dotenv()
 app = Flask(__name__)
 application = app
 
-# ИСПРАВЛЕНО: Настройка уровня логирования в самом начале
-logging.basicConfig(level=logging.INFO) # Общий уровень логирования INFO
-# ИСПРАВЛЕНО: Устанавливаем уровень WARNING для pdfminer.six, чтобы подавить его DEBUG-вывод
+# Настройка уровня логирования в самом начале
+logging.basicConfig(level=logging.INFO) 
 logging.getLogger('pdfminer').setLevel(logging.WARNING)
-# ИСПРАВЛЕНО: Устанавливаем уровень INFO для google_genai, чтобы видеть только важные HTTP-запросы
 logging.getLogger('google_genai').setLevel(logging.INFO)
 
 
@@ -42,7 +55,7 @@ app.config.from_pyfile('config.py')
 app.json.sort_keys = False
 
 config_cache = { 
-    "DEBUG": True, # Оставим True для отладки Flask-приложения, но логирование настроено выше
+    "DEBUG": True, 
     "CACHE_TYPE": "SimpleCache",
     "CACHE_DEFAULT_TIMEOUT": 300,
 }
@@ -81,9 +94,10 @@ convention = {
     "pk": "pk_%(table_name)s"
 }
 metadata = MetaData(naming_convention=convention)
-db.init_app(app) 
+db.init_app(app) # Это должно произойти ПОСЛЕ того, как ВСЕ модели импортированы
 migrate = Migrate(app, db, render_as_batch=True, compare_type=True, naming_convention=convention)
 
+# Регистрация Blueprint'ов
 app.register_blueprint(cabinet, url_prefix=app.config.get('URL_PREFIX_CABINET', '/api'))
 app.register_blueprint(maps_module, url_prefix=app.config.get('URL_PREFIX_MAPS', '/api/maps'))
 app.register_blueprint(auth_blueprint, url_prefix='/api/auth')
