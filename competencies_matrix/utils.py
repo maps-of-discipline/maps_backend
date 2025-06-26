@@ -1,13 +1,14 @@
+# filepath: competencies_matrix/utils.py
 import logging
 import traceback
 from typing import Dict, Any, Optional
 
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-import pandas as pd # Добавляем импорт pandas, так как он используется в find_or_create_name_op
+import pandas as pd
 
 # Импортируем модели из maps, чтобы не зависеть от них напрямую в logic.py
-from maps.models import db, NameOP, SprOKCO
+from maps.models import db, NameOP, SprOKCO, SprFaculty, Department, SprDegreeEducation, SprFormEducation
 
 logger = logging.getLogger(__name__)
 

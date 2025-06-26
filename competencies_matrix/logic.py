@@ -447,47 +447,23 @@ def get_external_aups_list(
 
 
 def get_external_aup_disciplines(aup_id: int) -> List[Dict[str, Any]]:
-    """
-    (ИСПРАВЛЕНО)
-    Fetches discipline entries (AupData) for a specific AUP from external KD DB.
-    Uses the model's as_dict() method to correctly format the output.
-    """
+    """Fetches discipline entries (AupData) for a specific AUP from external KD DB."""
     engine = get_external_db_engine()
     with Session(engine) as session:
         try:
-            # Eagerly load the related spr_discipline to avoid N+1 queries
-            aup_data_entries = session.query(ExternalAupData).options(
-                joinedload(ExternalAupData.spr_discipline)
-            ).filter(
-                ExternalAupData.id_aup == aup_id
-            ).order_by(
-                ExternalAupData.id_period, ExternalAupData.shifr, ExternalAupData.id
-            ).all()
+            aup_data_entries = session.query(ExternalAupData).filter(ExternalAupData.id_aup == aup_id)\
+                .order_by(ExternalAupData.id_period, ExternalAupData.shifr, ExternalAupData.id).all()
 
             result = []
             for entry in aup_data_entries:
-                entry_dict = entry.as_dict()
-                
-                # Формируем словарь для ответа, чтобы он соответствовал ожиданиям фронтенда
-                # и предыдущей логике. as_dict уже вернул нам 'discipline' с правильным названием.
-                result.append({
-                    'aup_data_id': entry_dict.get('id'),
-                    'id_aup': entry_dict.get('id_aup'),
-                    'discipline_id': entry_dict.get('id_discipline'),
-                    'title': entry_dict.get('discipline'), # <-- Используем поле из as_dict
-                    'semester': entry_dict.get('id_period'),
-                    'shifr': entry_dict.get('shifr'),
-                    'id_type_record': entry_dict.get('id_type_record'),
-                    'zet': (entry_dict.get('zet', 0) / 100) if entry_dict.get('zet') is not None else 0,
-                    'amount': entry_dict.get('amount'),
-                    'id_type_control': entry_dict.get('id_type_control')
-                })
-            
-            logger.info(f"Successfully fetched {len(result)} disciplines for external AUP ID {aup_id}.")
+                 result.append({
+                     'aup_data_id': entry.id, 'id_aup': entry.id_aup, 'discipline_id': entry.id_discipline,
+                     'title': entry.discipline, 'semester': entry.id_period, 'shifr': entry.shifr,
+                     'id_type_record': entry.id_type_record, 'zet': (entry.zet / 100) if entry.zet is not None else 0,
+                     'amount': entry.amount, 'id_type_control': entry.id_type_control
+                 })
             return result
-        except Exception as e:
-            logger.error(f"Error fetching external AupData for external AUP ID {aup_id}: {e}", exc_info=True)
-            raise
+        except Exception as e: logger.error(f"Error fetching external AupData for external AUP ID {aup_id}: {e}", exc_info=True); raise
 
 
 def get_matrix_for_aup(aup_num: str) -> Optional[Dict[str, Any]]:
@@ -734,29 +710,22 @@ def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True)
             if not existing_link:
                 link = CompetencyMatrix(aup_data_id=aup_data_id, indicator_id=indicator_id, is_manual=True)
                 session.add(link); logger.info(f"Link created: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
-                session.commit() # Added commit
                 return { 'success': True, 'status': 'created', 'message': "Link created." }
             else:
                 if not existing_link.is_manual:
                      existing_link.is_manual = True
                      session.add(existing_link); logger.info(f"Link updated to manual: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
-                     session.commit() # Added commit
                 return { 'success': True, 'status': 'already_exists', 'message': "Link already exists." }
         else:  # delete
             if existing_link:
                 session.delete(existing_link); logger.info(f"Link deleted: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
-                session.commit() # Added commit
                 return { 'success': True, 'status': 'deleted', 'message': "Link deleted." }
             else:
                 logger.warning(f"Link not found for deletion: External AupData ID {aup_data_id} <-> Indicator {indicator_id}")
                 return { 'success': True, 'status': 'not_found', 'message': "Link not found." }
 
-    except SQLAlchemyError as e:
-        session.rollback() # Added rollback
-        logger.error(f"Database error updating matrix link: {e}", exc_info=True); raise
-    except Exception as e:
-        session.rollback() # Added rollback
-        logger.error(f"Unexpected error updating matrix link: {e}", exc_info=True); raise
+    except SQLAlchemyError as e: logger.error(f"Database error updating matrix link: {e}", exc_info=True); raise
+    except Exception as e: logger.error(f"Unexpected error updating matrix link: {e}", exc_info=True); raise
 
 def get_all_competencies() -> List[Dict[str, Any]]:
     try:

@@ -498,7 +498,7 @@ class CompetencyMatrix(db.Model, BaseModel):
     def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None) -> Dict[str, Any]:
         return super().to_dict(rules=rules, only=only)
 
-from maps.models import AupData
+from maps.models import AupData # Убедимся, что AupData загружена
 @db.event.listens_for(AupData, 'mapper_configured', once=True)
 def add_aupdata_relationships(mapper, class_):
     if not hasattr(class_, 'matrix_entries'):
@@ -508,5 +508,3 @@ def add_aupdata_relationships(mapper, class_):
             cascade="all, delete-orphan",
             lazy='dynamic' # Используем lazy='dynamic' для эффективных запросов
         )
-    if hasattr(class_, 'indicators'):
-        delattr(class_, 'indicators')
