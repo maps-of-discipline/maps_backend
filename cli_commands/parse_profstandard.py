@@ -7,7 +7,7 @@ import traceback
 import logging
 
 from maps.models import db 
-from competencies_matrix.logic import (
+from competencies_matrix.logic.prof_standards import (
     save_prof_standard_data,
     handle_prof_standard_upload_parsing, 
     get_prof_standard_details, 

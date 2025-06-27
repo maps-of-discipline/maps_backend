@@ -7,9 +7,9 @@ import datetime
 import logging
 
 from maps.models import db
-from competencies_matrix.logic import save_fgos_data, delete_fgos, parse_fgos_file
+from competencies_matrix.logic.fgos_processing import save_fgos_data, delete_fgos, parse_fgos_file
 from competencies_matrix.models import FgosVo 
-from sqlalchemy.exc import IntegrityError # ИСПРАВЛЕНО: Импортируем IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 

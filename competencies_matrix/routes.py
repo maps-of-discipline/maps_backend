@@ -129,22 +129,29 @@ def manage_matrix_link():
     indicator_id = data['indicator_id']
     is_creating = (request.method == 'POST')
  
-    result = update_matrix_link(aup_data_id, indicator_id, create=is_creating)
+    try:
+        result = update_matrix_link(aup_data_id, indicator_id, create=is_creating)
  
-    if result['success']:
-        if is_creating:
-            status_code = 201 if result['status'] == 'created' else 200
-            return jsonify({"status": result['status'], "message": result.get('message', "Операция выполнена")}), status_code
+        if result['success']:
+            db.session.commit()
+            if is_creating:
+                status_code = 201 if result['status'] == 'created' else 200
+                return jsonify({"status": result['status'], "message": result.get('message', "Операция выполнена")}), status_code
+            else:
+                status_code = 200 if result['status'] == 'deleted' else 404 if result['status'] == 'not_found' else 200
+                return jsonify({"status": result['status'], "message": result.get('message', "Операция выполнена")}), status_code
         else:
-            status_code = 200 if result['status'] == 'deleted' else 404 if result['status'] == 'not_found' else 200
-            return jsonify({"status": result['status'], "message": result.get('message', "Операция выполнена")}), status_code
-    else:
-        error_msg = result.get('message', "Не удалось выполнить операцию")
-        status_code = 500
-        if result.get('error_type') == 'aup_data_not_found': status_code = 404
-        if result.get('error_type') == 'indicator_not_found': status_code = 404 # Added this, though logic already checks before link
-        logger.error(f"Error processing matrix link request via logic: {error_msg}. Details: {result.get('details')}")
-        return jsonify({"status": "error", "message": error_msg}), status_code
+            db.session.rollback()
+            error_msg = result.get('message', "Не удалось выполнить операцию")
+            status_code = 500
+            if result.get('error_type') == 'aup_data_not_found': status_code = 404
+            if result.get('error_type') == 'indicator_not_found': status_code = 404
+            logger.error(f"Error processing matrix link request via logic: {error_msg}. Details: {result.get('details')}")
+            return jsonify({"status": "error", "message": error_msg}), status_code
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Exception in manage_matrix_link: {e}", exc_info=True)
+        return jsonify({"error": "Внутренняя ошибка сервера при обработке связи."}), 500
 
 
 # Competencies and Indicators Endpoints
