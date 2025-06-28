@@ -155,20 +155,20 @@ def _sync_competencies(session: Session, fgos: FgosVo, data: dict):
             continue
 
         # Create or update competency
-        comp = session.query(Competency).filter_by(code=code, fgos_id=fgos.id).first()
+        comp = session.query(Competency).filter_by(code=code, fgos_vo_id=fgos.id).first()
         if not comp:
             comp = Competency(
                 code=code,
                 name=name,
-                category=category,
+                category_name=category,
                 competency_type_id=comp_type.id,
-                fgos_id=fgos.id
+                fgos_vo_id=fgos.id
             )
             session.add(comp)
             saved_count += 1
         else:
             comp.name = name
-            comp.category = category
+            comp.category_name = category
             comp.competency_type_id = comp_type.id
 
     if saved_count > 0:

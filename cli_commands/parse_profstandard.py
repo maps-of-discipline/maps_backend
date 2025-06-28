@@ -6,6 +6,8 @@ import os
 import traceback
 import logging
 
+from sqlalchemy.exc import IntegrityError
+
 from maps.models import db 
 from competencies_matrix.logic.prof_standards import (
     save_prof_standard_data,
