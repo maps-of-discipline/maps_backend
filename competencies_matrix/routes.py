@@ -7,7 +7,7 @@ from .logic import (
     get_educational_programs_list, get_program_details,
     get_matrix_for_aup, update_matrix_link,
     create_competency, create_indicator,
-    parse_fgos_file, save_fgos_data, get_fgos_list, get_fgos_details, delete_fgos,
+    parse_fgos_file, save_fgos_data, get_fgos_list, get_fgos_details, delete_fgos as logic_delete_fgos,
     handle_prof_standard_upload_parsing,
     save_prof_standard_data, 
     get_prof_standards_list, get_prof_standard_details,
@@ -483,109 +483,32 @@ def save_fgos():
 @approved_required
 @admin_only
 def delete_fgos_route(fgos_id):
-    """Delete a FGOS VO by ID."""
-    delete_related_competencies = request.args.get('delete_related_competencies', 'false').lower() == 'true'
- 
+    """Удаляет ФГОС и связанные с ним данные."""
     try:
-        deleted = delete_fgos(fgos_id, db.session, delete_related_competencies=delete_related_competencies)
-
+        with db.session.begin():
+            deleted = logic_delete_fgos(fgos_id, db.session)
+        
         if deleted:
-            db.session.commit()
-            return jsonify({"success": True, "message": "ФГОС успешно удален"}), 200
+            # db.session.commit() # commit is handled by begin()
+            logger.info(f"FGOS with id {fgos_id} deleted successfully.")
+            return jsonify({"message": f"ФГОС с ID {fgos_id} успешно удален."}), 200
         else:
-            db.session.rollback()
-            return jsonify({"success": False, "error": "ФГОС не найден"}), 404
+            # db.session.rollback() # rollback is handled by begin()
+            logger.warning(f"Attempted to delete non-existent FGOS with id {fgos_id}.")
+            return jsonify({"error": "ФГОС не найден."}), 404
+            
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error deleting FGOS {fgos_id}: {e}", exc_info=True)
-        abort(500, description=f"Не удалось удалить ФГОС: {e}")
-
-# --- НОВЫЕ ЭНДПОИНТЫ ДЛЯ РАСПОРЯЖЕНИЙ ---
-@competencies_matrix_bp.route('/fgos/uk-indicators/upload', methods=['POST'])
-@login_required
-@approved_required
-@admin_only
-def upload_uk_indicators_disposition():
-    """Upload and parse a PDF file containing UK indicators disposition."""
-    if 'file' not in request.files:
-        abort(400, description="Файл не найден в запросе.")
-    file = request.files['file']
-    if file.filename == '' or not file.filename.lower().endswith('.pdf'):
-        abort(400, description="Файл не выбран или неверный формат (требуется PDF).")
-    
-    # ИЗМЕНЕНИЕ: Получаем education_level из запроса
-    education_level = request.args.get('education_level')
-    if not education_level:
-        abort(400, description="Не указан уровень образования (education_level) для распоряжения.")
-
-    try:
-        file_bytes = file.read()
-        # ИЗМЕНЕНИЕ: Передаем education_level в логику
-        parsed_data = process_uk_indicators_disposition_file(file_bytes, file.filename, education_level)
-        
-        if not parsed_data or not parsed_data.get('disposition_metadata'):
-            logger.error(f"Upload UK Disposition: Parsing succeeded but essential metadata missing for {file.filename}.")
-            abort(400, description="Не удалось извлечь основные метаданные из файла распоряжения.")
-
-        return jsonify(parsed_data), 200
-    except ValueError as e:
-        logger.error(f"Upload UK Disposition: Parsing Error for {file.filename}: {e}", exc_info=True)
-        abort(400, description=f"Ошибка парсинга файла распоряжения: {e}")
-    except Exception as e:
-        logger.error(f"Upload UK Disposition: Unexpected error processing file {file.filename}: {e}", exc_info=True)
-        abort(500, description=f"Неожиданная ошибка сервера при обработке файла распоряжения: {e}")
-
-@competencies_matrix_bp.route('/fgos/uk-indicators/save', methods=['POST'])
-@login_required
-@approved_required
-@admin_only
-def save_uk_indicators_disposition():
-    """Save parsed UK indicators from disposition data to the DB."""
-    data = request.get_json()
-    parsed_disposition_data = data.get('parsed_data')
-    filename = data.get('filename')
-    # ИЗМЕНЕНИЕ: Принимаем список fgos_ids
-    fgos_ids = data.get('fgos_ids') 
-    options = data.get('options', {}) 
-
-    if not all([parsed_disposition_data, filename, fgos_ids]):
-        abort(400, description="Некорректные данные для сохранения (отсутствуют parsed_data, filename или fgos_ids).")
-    
-    if not isinstance(fgos_ids, list) or not fgos_ids:
-        abort(400, description="fgos_ids должен быть непустым списком.")
-
-    try:
-        save_result = save_uk_indicators_from_disposition(
-            parsed_disposition_data=parsed_disposition_data,
-            filename=filename,
-            session=db.session,
-            fgos_ids=fgos_ids, 
-            force_update_uk=options.get('force_update_uk', False),
-            resolutions=options.get('resolutions')
-        )
-        db.session.commit()
-        return jsonify({"success": True, "message": "Индикаторы УК успешно сохранены/обновлены.", "summary": save_result.get('summary')}), 201
-    except ValueError as e:
-        db.session.rollback()
-        logger.error(f"Validation error saving UK indicators from disposition: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 400
-    except IntegrityError as e:
-        db.session.rollback()
-        logger.error(f"Integrity error saving UK indicators from disposition: {e.orig}", exc_info=True)
-        return jsonify({"error": "Ошибка целостности данных при сохранении индикаторов УК. Возможно, дублирующийся код."}), 409
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Unexpected error saving UK indicators from disposition: {e}", exc_info=True)
-        return jsonify({"error": f"Неожиданная ошибка сервера при сохранении индикаторов УК: {e}"}), 500
-
+        return jsonify({"error": "Внутренняя ошибка сервера при удалении ФГОС."}), 500
 
 # Professional Standards Endpoints
-@competencies_matrix_bp.route('/profstandards/parse-preview', methods=['POST'])
+@competencies_matrix_bp.route('/prof-standards/upload', methods=['POST'])
 @login_required
 @approved_required
 @admin_only
-def parse_profstandard_for_preview():
-    """Upload a Professional Standard file (XML) for parsing and preview."""
+def upload_prof_standard():
+    """Upload a Professional Standard file (XML) for parsing."""
     if 'file' not in request.files:
         abort(400, description="Файл не найден в запросе")
     file = request.files['file']
@@ -601,7 +524,7 @@ def parse_profstandard_for_preview():
             if parse_result.get('error_type') == 'not_implemented': status_code = 501
             elif parse_result.get('error_type') == 'parsing_error': status_code = 400
             elif parse_result.get('error_type') == 'unsupported_format': status_code = 415
-            logger.error(f"Parse PS for preview: Failed processing file {file.filename}. Error: {parse_result.get('error')}. Type: {parse_result.get('error_type')}")
+            logger.error(f"Parse PS upload: Failed processing file {file.filename}. Error: {parse_result.get('error')}. Type: {parse_result.get('error_type')}")
             return jsonify({
                 "status": "error",
                 "message": parse_result.get('error', 'Ошибка обработки файла ПС'),
@@ -627,14 +550,14 @@ def parse_profstandard_for_preview():
         return jsonify(response_data), 200
 
     except Exception as e:
-        logger.error(f"Parse PS for preview: Unexpected error in /profstandards/parse-preview for {file.filename}: {e}", exc_info=True)
+        logger.error(f"Parse PS upload: Unexpected error in /prof-standards/upload for {file.filename}: {e}", exc_info=True)
         abort(500, description=f"Неожиданная ошибка сервера при обработке файла: {e}")
 
-@competencies_matrix_bp.route('/profstandards/save', methods=['POST'])
+@competencies_matrix_bp.route('/prof-standards/save', methods=['POST'])
 @login_required
 @approved_required
 @admin_only
-def save_profstandard():
+def save_prof_standard():
     """Save parsed Professional Standard data to the DB after user confirmation."""
     data = request.get_json()
     parsed_data = data.get('parsed_data')
@@ -673,7 +596,7 @@ def save_profstandard():
         abort(500, description=f"Неожиданная ошибка сервера при сохранении: {e}")
 
 
-@competencies_matrix_bp.route('/profstandards', methods=['GET'])
+@competencies_matrix_bp.route('/prof-standards', methods=['GET'])
 @login_required
 @approved_required
 def get_all_profstandards():
@@ -682,11 +605,11 @@ def get_all_profstandards():
         prof_standards = get_prof_standards_list()
         return jsonify(prof_standards), 200
     except Exception as e:
-        logger.error(f"Error in GET /profstandards: {e}", exc_info=True)
+        logger.error(f"Error in GET /prof-standards: {e}", exc_info=True)
         return jsonify({"error": f"Не удалось получить список профстандартов: {e}"}), 500
 
 
-@competencies_matrix_bp.route('/profstandards/<int:ps_id>', methods=['GET'])
+@competencies_matrix_bp.route('/prof-standards/<int:ps_id>', methods=['GET'])
 @login_required
 @approved_required
 def get_profstandard_details_route(ps_id):
@@ -697,11 +620,11 @@ def get_profstandard_details_route(ps_id):
             return jsonify({"error": "Профстандарт не найден"}), 404
         return jsonify(details), 200
     except Exception as e:
-        logger.error(f"Error in GET /profstandards/<id>: {e}", exc_info=True)
+        logger.error(f"Error in GET /prof-standards/<id>: {e}", exc_info=True)
         return jsonify({"error": f"Не удалось получить профстандарт: {e}"}), 500
 
 
-@competencies_matrix_bp.route('/profstandards/<int:ps_id>', methods=['DELETE'])
+@competencies_matrix_bp.route('/prof-standards/<int:ps_id>', methods=['DELETE'])
 @login_required
 @approved_required
 @admin_only
@@ -721,7 +644,7 @@ def delete_profstandard(ps_id):
         logger.error(f"Error deleting professional standard {ps_id}: {e}", exc_info=True)
         abort(500, description=f"Не удалось удалить профессиональный стандарт: {e}")
 
-@competencies_matrix_bp.route('/profstandards/search', methods=['GET'])
+@competencies_matrix_bp.route('/prof-standards/search', methods=['GET'])
 @login_required
 @approved_required
 def search_profstandards_route():
@@ -771,7 +694,7 @@ def search_profstandards_route():
         logger.warning(f"Search PS route: Validation error: {e}")
         return jsonify({"error": str(e)}), 400
     except Exception as e:
-        logger.error(f"Error in GET /profstandards/search: {e}", exc_info=True)
+        logger.error(f"Error in GET /prof-standards/search: {e}", exc_info=True)
         return jsonify({"error": f"Не удалось выполнить поиск по профстандартам: {e}"}), 500
 
 
@@ -819,7 +742,7 @@ def get_external_aup_disciplines_route(aup_id):
         logger.error(f"Error in GET /external/aups/{aup_id}/disciplines: {e}", exc_info=True)
         abort(500, description=f"Ошибка сервера при получении списка дисциплин из внешней БД: {e}");
 
-@competencies_matrix_bp.route('/profstandards/export-selected', methods=['POST'])
+@competencies_matrix_bp.route('/prof-standards/export-selected', methods=['POST'])
 @login_required
 @approved_required
 def export_selected_profstandards():

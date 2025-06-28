@@ -4,6 +4,7 @@ import logging
 import re
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+import httpx
 
 # Import configuration and client
 from .nlp_config import get_gemini_client, get_gemini_types, GOOGLE_GENAI_SDK_AVAILABLE, GEMINI_MODEL_NAME
@@ -239,15 +240,19 @@ def _call_gemini_api(prompt_content: str) -> Dict[str, Any]:
 
     logger.debug(f"Sending prompt to Gemini (first 500 chars):\n{prompt_content[:500]}...")
     
-    response = gemini_client.models.generate_content(
-        model=GEMINI_MODEL_NAME,
-        contents=[prompt_content],
-        config=gemini_types.GenerateContentConfig(
-            temperature=0.0,
-            max_output_tokens=8192
+    try:
+        response = gemini_client.models.generate_content(
+            model=GEMINI_MODEL_NAME,
+            contents=[prompt_content],
+            config=gemini_types.GenerateContentConfig(
+                temperature=0.0,
+                max_output_tokens=8192
+            )
         )
-    )
-    
+    except httpx.ConnectError as e:
+        logger.error(f"Network error connecting to Gemini API: {e}", exc_info=True)
+        raise RuntimeError(f"Ошибка сети при подключении к Gemini API. Проверьте ваше интернет-соединение и настройки DNS. {e}")
+
     try:
         response_text = response.text
     except Exception as e:
@@ -417,7 +422,9 @@ def parse_fgos_with_gemini(fgos_text: str) -> Dict[str, Any]:
 
         logger.info("Successfully parsed FGOS text using Gemini API.")
         return parsed_data
-
+    except httpx.ConnectError as e:
+        logger.error(f"Network error connecting to Gemini API: {e}", exc_info=True)
+        raise RuntimeError(f"Ошибка сети при подключении к Gemini API. Проверьте ваше интернет-соединение и настройки DNS. {e}")
     except Exception as e:
         logger.error(f"Error parsing FGOS with Gemini API: {e}", exc_info=True)
         raise RuntimeError(f"Ошибка при парсинге ФГОС с помощью Gemini API: {e}")
