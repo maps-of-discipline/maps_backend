@@ -7,7 +7,7 @@ from .logic import (
     get_educational_programs_list, get_program_details,
     get_matrix_for_aup, update_matrix_link,
     create_competency, create_indicator,
-    parse_fgos_file, save_fgos_data, get_fgos_list, get_fgos_details, delete_fgos as logic_delete_fgos,
+    parse_fgos_file, save_fgos_data, get_fgos_list, get_fgos_details, delete_fgos,
     handle_prof_standard_upload_parsing,
     save_prof_standard_data, 
     get_prof_standards_list, get_prof_standard_details,
@@ -27,7 +27,8 @@ from .logic import (
     handle_pk_ipk_generation,
     create_educational_program,
     batch_create_pk_and_ipk,
-    delete_educational_program, 
+    delete_educational_program,
+    import_aup_from_external_db # <--- НОВАЯ, КЛЮЧЕВАЯ ФУНКЦИЯ ИМПОРТА
 )
 
 from auth.logic import login_required, approved_required, admin_only
@@ -56,13 +57,15 @@ def get_programs():
 @competencies_matrix_bp.route('/programs', methods=['POST'])
 @login_required
 @approved_required
-@admin_only 
+@admin_only
 def create_program_route():
     """Создает новую образовательную программу (ОПОП) на основе данных от фронтенда."""
     data = request.get_json()
     if not data:
         abort(400, description="Отсутствуют данные в теле запроса.")
     try:
+        # Commit делается здесь, после того как логика создания ОПОП, возможно,
+        # вызвала импорт АУП и другие изменения.
         new_program_obj = create_educational_program(data, db.session)
         db.session.commit()
         
@@ -72,9 +75,9 @@ def create_program_route():
         db.session.rollback()
         logger.error(f"Validation error creating program: {e}")
         return jsonify({"error": str(e)}), 400
-    except IntegrityError:
+    except IntegrityError as e:
         db.session.rollback()
-        logger.error(f"Integrity error creating program", exc_info=True)
+        logger.error(f"Integrity error creating program: {e.orig}", exc_info=True)
         return jsonify({"error": "Образовательная программа с такими параметрами (код, профиль, год, форма) уже существует."}), 409
     except Exception as e:
         db.session.rollback()
@@ -91,39 +94,77 @@ def get_program(program_id):
         return jsonify({"error": "Образовательная программа не найдена"}), 404
     return jsonify(details)
 
+# НОВЫЙ РОУТ ДЛЯ ИМПОРТА АУП
+@competencies_matrix_bp.route('/programs/<int:program_id>/import-aup/<string:aup_num>', methods=['POST'])
+@login_required
+@approved_required
+@admin_only # Импорт - административная операция
+def import_aup_to_program(program_id: int, aup_num: str):
+    """
+    Импортирует АУП из внешней БД и привязывает его к указанной образовательной программе.
+    """
+    try:
+        result = import_aup_from_external_db(aup_num, program_id, db.session)
+        # Commit и Rollback теперь управляются внутри import_aup_from_external_db
+        # если он не использует with session.begin_nested() или похожий контекст.
+        # Если import_aup_from_external_db вызывает session.commit(), то здесь не нужно.
+        # Если не вызывает, то должен быть здесь.
+        # В текущей реализации import_aup_from_external_db вызывает session.commit()
+        
+        if result.get("success"):
+            return jsonify(result), 201
+        else:
+            # Этот случай маловероятен, т.к. logic выбросит исключение
+            return jsonify({"error": result.get("message", "Неизвестная ошибка импорта")}), 500
+    except FileNotFoundError as e:
+        db.session.rollback() # Rollback, т.к. возможно, логика пыталась что-то добавить перед ошибкой
+        return jsonify({"error": str(e)}), 404
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Неожиданная ошибка в роуте импорта АУП: {e}", exc_info=True)
+        return jsonify({"error": "Внутренняя ошибка сервера при импорте АУП."}), 500
+
 
 # Competency Matrix Endpoints
 @competencies_matrix_bp.route('/matrix/<string:aup_num>', methods=['GET'])
 @login_required
 @approved_required
 def get_matrix(aup_num: str):
-    """Get data for the competency matrix of a specific AUP by its number."""
+    """
+    (ИЗМЕНЕНО) Получает данные для матрицы компетенций.
+    Обрабатывает статус 'not_imported', если АУП не найден локально.
+    """
     logger.info(f"Received GET request for matrix for AUP num: {aup_num}")
     
     try:
-        matrix_data = get_matrix_for_aup(aup_num)
+        matrix_data = get_matrix_for_aup(aup_num) # Эта функция теперь только читает локально
 
-        if matrix_data is None or matrix_data.get('source') == 'not_found':
-            error_message = matrix_data.get('error_details', f"Данные матрицы для АУП с номером {aup_num} не найдены.") if matrix_data else f"Данные матрицы для АУП с номером {aup_num} не найдены."
-            logger.warning(f"Matrix data not found or source='not_found' for AUP num: {aup_num}. Error: {error_message}")
-            return jsonify({"error": error_message}), 404
+        if matrix_data.get("status") == "not_imported":
+            logger.warning(f"АУП '{aup_num}' не импортирован. Отправка ответа 404.")
+            return jsonify({"error": matrix_data["error"]}), 404
+            
+        if matrix_data.get("status") == "error":
+            logger.error(f"Ошибка при получении матрицы для АУП '{aup_num}': {matrix_data['error']}")
+            return jsonify({"error": matrix_data["error"]}), 500
 
-        logger.info(f"Successfully fetched matrix data for AUP num: {aup_num}")
-        return jsonify(matrix_data)
+        return jsonify(matrix_data), 200
         
     except Exception as e:
         logger.error(f"Error in GET /matrix/{aup_num}: {e}", exc_info=True)
-        abort(500, description=f"Неожиданная ошибка сервера при получении матрицы: {e}")
+        return jsonify({"error": "Внутренняя ошибка сервера при получении матрицы."}), 500
 
 
 @competencies_matrix_bp.route('/matrix/link', methods=['POST', 'DELETE'])
 @login_required
 @approved_required
 def manage_matrix_link():
-    """Create or delete a Discipline(AUP)-Indicator link in the matrix."""
+    """(ИСПРАВЛЕНО) Создает или удаляет связь 'Дисциплина-Индикатор'."""
     data = request.get_json()
     if not data or 'aup_data_id' not in data or 'indicator_id' not in data:
-        abort(400, description="Отсутствуют обязательные поля: aup_data_id, indicator_id")
+        return jsonify({"error": "Отсутствуют обязательные поля: aup_data_id, indicator_id"}), 400
 
     aup_data_id = data['aup_data_id']
     indicator_id = data['indicator_id']
@@ -131,27 +172,19 @@ def manage_matrix_link():
  
     try:
         result = update_matrix_link(aup_data_id, indicator_id, create=is_creating)
- 
-        if result['success']:
-            db.session.commit()
-            if is_creating:
-                status_code = 201 if result['status'] == 'created' else 200
-                return jsonify({"status": result['status'], "message": result.get('message', "Операция выполнена")}), status_code
-            else:
-                status_code = 200 if result['status'] == 'deleted' else 404 if result['status'] == 'not_found' else 200
-                return jsonify({"status": result['status'], "message": result.get('message', "Операция выполнена")}), status_code
-        else:
-            db.session.rollback()
-            error_msg = result.get('message', "Не удалось выполнить операцию")
-            status_code = 500
-            if result.get('error_type') == 'aup_data_not_found': status_code = 404
-            if result.get('error_type') == 'indicator_not_found': status_code = 404
-            logger.error(f"Error processing matrix link request via logic: {error_msg}. Details: {result.get('details')}")
-            return jsonify({"status": "error", "message": error_msg}), status_code
+        # Commit и Rollback теперь управляются внутри update_matrix_link, как в вашем исходном коде
+        
+        status_code = 201 if result['status'] == 'created' else 200
+        return jsonify(result), status_code
+
+    except (ValueError, IntegrityError) as e:
+        # Логика update_matrix_link уже делает rollback, но мы можем обработать здесь для ответа
+        logger.error(f"Ошибка целостности данных при обновлении матрицы: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 409 # 409 Conflict
     except Exception as e:
-        db.session.rollback()
-        logger.error(f"Exception in manage_matrix_link: {e}", exc_info=True)
-        return jsonify({"error": "Внутренняя ошибка сервера при обработке связи."}), 500
+        # Логика update_matrix_link уже делает rollback
+        logger.error(f"Ошибка сервера при обновлении матрицы: {e}", exc_info=True)
+        return jsonify({"error": "Внутренняя ошибка сервера."}), 500
 
 
 # Competencies and Indicators Endpoints
@@ -483,32 +516,106 @@ def save_fgos():
 @approved_required
 @admin_only
 def delete_fgos_route(fgos_id):
-    """Удаляет ФГОС и связанные с ним данные."""
+    """Delete a FGOS VO by ID."""
+    delete_related_competencies = request.args.get('delete_related_competencies', 'false').lower() == 'true'
+ 
     try:
-        with db.session.begin():
-            deleted = logic_delete_fgos(fgos_id, db.session)
-        
+        deleted = delete_fgos(fgos_id, db.session, delete_related_competencies=delete_related_competencies)
+
         if deleted:
-            # db.session.commit() # commit is handled by begin()
-            logger.info(f"FGOS with id {fgos_id} deleted successfully.")
-            return jsonify({"message": f"ФГОС с ID {fgos_id} успешно удален."}), 200
+            db.session.commit()
+            return jsonify({"success": True, "message": "ФГОС успешно удален"}), 200
         else:
-            # db.session.rollback() # rollback is handled by begin()
-            logger.warning(f"Attempted to delete non-existent FGOS with id {fgos_id}.")
-            return jsonify({"error": "ФГОС не найден."}), 404
-            
+            db.session.rollback()
+            return jsonify({"success": False, "error": "ФГОС не найден"}), 404
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error deleting FGOS {fgos_id}: {e}", exc_info=True)
-        return jsonify({"error": "Внутренняя ошибка сервера при удалении ФГОС."}), 500
+        abort(500, description=f"Не удалось удалить ФГОС: {e}")
 
-# Professional Standards Endpoints
-@competencies_matrix_bp.route('/prof-standards/upload', methods=['POST'])
+# --- НОВЫЕ ЭНДПОИНТЫ ДЛЯ РАСПОРЯЖЕНИЙ ---
+@competencies_matrix_bp.route('/fgos/uk-indicators/upload', methods=['POST'])
 @login_required
 @approved_required
 @admin_only
-def upload_prof_standard():
-    """Upload a Professional Standard file (XML) for parsing."""
+def upload_uk_indicators_disposition():
+    """Upload and parse a PDF file containing UK indicators disposition."""
+    if 'file' not in request.files:
+        abort(400, description="Файл не найден в запросе.")
+    file = request.files['file']
+    if file.filename == '' or not file.filename.lower().endswith('.pdf'):
+        abort(400, description="Файл не выбран или неверный формат (требуется PDF).")
+    
+    education_level = request.args.get('education_level')
+    if not education_level:
+        abort(400, description="Не указан уровень образования (education_level) для распоряжения.")
+
+    try:
+        file_bytes = file.read()
+        parsed_data = process_uk_indicators_disposition_file(file_bytes, file.filename, education_level)
+        
+        if not parsed_data or not parsed_data.get('disposition_metadata'):
+            logger.error(f"Upload UK Disposition: Parsing succeeded but essential metadata missing for {file.filename}.")
+            abort(400, description="Не удалось извлечь основные метаданные из файла распоряжения.")
+
+        return jsonify(parsed_data), 200
+    except ValueError as e:
+        logger.error(f"Upload UK Disposition: Parsing Error for {file.filename}: {e}", exc_info=True)
+        abort(400, description=f"Ошибка парсинга файла распоряжения: {e}")
+    except Exception as e:
+        logger.error(f"Upload UK Disposition: Unexpected error processing file {file.filename}: {e}", exc_info=True)
+        abort(500, description=f"Неожиданная ошибка сервера при обработке файла распоряжения: {e}")
+
+@competencies_matrix_bp.route('/fgos/uk-indicators/save', methods=['POST'])
+@login_required
+@approved_required
+@admin_only
+def save_uk_indicators_disposition():
+    """Save parsed UK indicators from disposition data to the DB."""
+    data = request.get_json()
+    parsed_disposition_data = data.get('parsed_data')
+    filename = data.get('filename')
+    fgos_ids = data.get('fgos_ids') 
+    options = data.get('options', {})
+
+    if not all([parsed_disposition_data, filename, fgos_ids]):
+        abort(400, description="Некорректные данные для сохранения (отсутствуют parsed_data, filename или fgos_ids).")
+    
+    if not isinstance(fgos_ids, list) or not fgos_ids:
+        abort(400, description="fgos_ids должен быть непустым списком.")
+
+    try:
+        save_result = save_uk_indicators_from_disposition(
+            parsed_disposition_data=parsed_disposition_data,
+            filename=filename,
+            session=db.session,
+            fgos_ids=fgos_ids,
+            force_update_uk=options.get('force_update_uk', False),
+            resolutions=options.get('resolutions')
+        )
+        db.session.commit()
+        return jsonify({"success": True, "message": "Индикаторы УК успешно сохранены/обновлены.", "summary": save_result.get('summary')}), 201
+    except ValueError as e:
+        db.session.rollback()
+        logger.error(f"Validation error saving UK indicators from disposition: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 400
+    except IntegrityError as e:
+        db.session.rollback()
+        logger.error(f"Integrity error saving UK indicators from disposition: {e.orig}", exc_info=True)
+        return jsonify({"error": "Ошибка целостности данных при сохранении индикаторов УК. Возможно, дублирующийся код."}), 409
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Unexpected error saving UK indicators from disposition: {e}", exc_info=True)
+        return jsonify({"error": f"Неожиданная ошибка сервера при сохранении индикаторов УК: {e}"}), 500
+
+
+# Professional Standards Endpoints
+@competencies_matrix_bp.route('/profstandards/parse-preview', methods=['POST'])
+@login_required
+@approved_required
+@admin_only
+def parse_profstandard_for_preview():
+    """Upload a Professional Standard file (XML) for parsing and preview."""
     if 'file' not in request.files:
         abort(400, description="Файл не найден в запросе")
     file = request.files['file']
@@ -524,7 +631,7 @@ def upload_prof_standard():
             if parse_result.get('error_type') == 'not_implemented': status_code = 501
             elif parse_result.get('error_type') == 'parsing_error': status_code = 400
             elif parse_result.get('error_type') == 'unsupported_format': status_code = 415
-            logger.error(f"Parse PS upload: Failed processing file {file.filename}. Error: {parse_result.get('error')}. Type: {parse_result.get('error_type')}")
+            logger.error(f"Parse PS for preview: Failed processing file {file.filename}. Error: {parse_result.get('error')}. Type: {parse_result.get('error_type')}")
             return jsonify({
                 "status": "error",
                 "message": parse_result.get('error', 'Ошибка обработки файла ПС'),
@@ -550,14 +657,14 @@ def upload_prof_standard():
         return jsonify(response_data), 200
 
     except Exception as e:
-        logger.error(f"Parse PS upload: Unexpected error in /prof-standards/upload for {file.filename}: {e}", exc_info=True)
+        logger.error(f"Parse PS for preview: Unexpected error in /profstandards/parse-preview for {file.filename}: {e}", exc_info=True)
         abort(500, description=f"Неожиданная ошибка сервера при обработке файла: {e}")
 
-@competencies_matrix_bp.route('/prof-standards/save', methods=['POST'])
+@competencies_matrix_bp.route('/profstandards/save', methods=['POST'])
 @login_required
 @approved_required
 @admin_only
-def save_prof_standard():
+def save_profstandard():
     """Save parsed Professional Standard data to the DB after user confirmation."""
     data = request.get_json()
     parsed_data = data.get('parsed_data')
@@ -587,16 +694,16 @@ def save_prof_standard():
         }), status_code
 
     except IntegrityError as e:
-        db.session.rollback() 
+        db.session.rollback()
         logger.error(f"Integrity error saving PS: {e.orig}", exc_info=True)
         return jsonify({"error": "Профессиональный стандарт с таким кодом уже существует."}), 409
     except Exception as e:
-        db.session.rollback() 
+        db.session.rollback()
         logger.error(f"Error saving PS data from file {filename}: {e}", exc_info=True)
         abort(500, description=f"Неожиданная ошибка сервера при сохранении: {e}")
 
 
-@competencies_matrix_bp.route('/prof-standards', methods=['GET'])
+@competencies_matrix_bp.route('/profstandards', methods=['GET'])
 @login_required
 @approved_required
 def get_all_profstandards():
@@ -605,11 +712,11 @@ def get_all_profstandards():
         prof_standards = get_prof_standards_list()
         return jsonify(prof_standards), 200
     except Exception as e:
-        logger.error(f"Error in GET /prof-standards: {e}", exc_info=True)
+        logger.error(f"Error in GET /profstandards: {e}", exc_info=True)
         return jsonify({"error": f"Не удалось получить список профстандартов: {e}"}), 500
 
 
-@competencies_matrix_bp.route('/prof-standards/<int:ps_id>', methods=['GET'])
+@competencies_matrix_bp.route('/profstandards/<int:ps_id>', methods=['GET'])
 @login_required
 @approved_required
 def get_profstandard_details_route(ps_id):
@@ -620,11 +727,11 @@ def get_profstandard_details_route(ps_id):
             return jsonify({"error": "Профстандарт не найден"}), 404
         return jsonify(details), 200
     except Exception as e:
-        logger.error(f"Error in GET /prof-standards/<id>: {e}", exc_info=True)
+        logger.error(f"Error in GET /profstandards/<id>: {e}", exc_info=True)
         return jsonify({"error": f"Не удалось получить профстандарт: {e}"}), 500
 
 
-@competencies_matrix_bp.route('/prof-standards/<int:ps_id>', methods=['DELETE'])
+@competencies_matrix_bp.route('/profstandards/<int:ps_id>', methods=['DELETE'])
 @login_required
 @approved_required
 @admin_only
@@ -644,7 +751,7 @@ def delete_profstandard(ps_id):
         logger.error(f"Error deleting professional standard {ps_id}: {e}", exc_info=True)
         abort(500, description=f"Не удалось удалить профессиональный стандарт: {e}")
 
-@competencies_matrix_bp.route('/prof-standards/search', methods=['GET'])
+@competencies_matrix_bp.route('/profstandards/search', methods=['GET'])
 @login_required
 @approved_required
 def search_profstandards_route():
@@ -654,9 +761,9 @@ def search_profstandards_route():
     Returns a paginated list of PS details with matching elements highlighted.
     """
     search_query = request.args.get('query', '').strip()
-    ps_ids_str = request.args.get('ps_ids') 
+    ps_ids_str = request.args.get('ps_ids')
     offset_str = request.args.get('offset', '0')
-    limit_str = request.args.get('limit', '50') 
+    limit_str = request.args.get('limit', '50')
 
     ps_ids = []
     if ps_ids_str:
@@ -670,7 +777,7 @@ def search_profstandards_route():
     if qualification_levels_str:
         try:
             qualification_levels = [int(level) for level in qualification_levels_str if level.isdigit()]
-            if not qualification_levels: qualification_levels = None 
+            if not qualification_levels: qualification_levels = None
         except ValueError:
             return jsonify({"error": "Неверный формат qualification_levels. Ожидается список целых чисел."}), 400
 
@@ -694,7 +801,7 @@ def search_profstandards_route():
         logger.warning(f"Search PS route: Validation error: {e}")
         return jsonify({"error": str(e)}), 400
     except Exception as e:
-        logger.error(f"Error in GET /prof-standards/search: {e}", exc_info=True)
+        logger.error(f"Error in GET /profstandards/search: {e}", exc_info=True)
         return jsonify({"error": f"Не удалось выполнить поиск по профстандартам: {e}"}), 500
 
 
@@ -742,7 +849,7 @@ def get_external_aup_disciplines_route(aup_id):
         logger.error(f"Error in GET /external/aups/{aup_id}/disciplines: {e}", exc_info=True)
         abort(500, description=f"Ошибка сервера при получении списка дисциплин из внешней БД: {e}");
 
-@competencies_matrix_bp.route('/prof-standards/export-selected', methods=['POST'])
+@competencies_matrix_bp.route('/profstandards/export-selected', methods=['POST'])
 @login_required
 @approved_required
 def export_selected_profstandards():
@@ -751,7 +858,7 @@ def export_selected_profstandards():
     Expects 'opop_id' and 'profStandards' in the JSON body.
     """
     data = request.get_json()
-    opop_id = data.get('opopId') 
+    opop_id = data.get('opopId')
 
     if not data or not data.get('profStandards'):
         abort(400, description="Нет данных о выбранных профстандартах для экспорта.")
@@ -790,7 +897,7 @@ def pk_name_correction_route():
     except ValueError as e:
         logger.error(f"Validation error for PK name correction: {e}")
         return jsonify({"error": str(e)}), 400
-    except RuntimeError as e: 
+    except RuntimeError as e:
         logger.error(f"NLP error for PK name correction: {e}")
         return jsonify({"error": f"Ошибка NLP: {e}"}), 500
     except Exception as e:
@@ -815,7 +922,7 @@ def generate_pk_ipk_route():
     except ValueError as e:
         logger.error(f"Validation error for PK/IPK generation: {e}")
         return jsonify({"error": str(e)}), 400
-    except RuntimeError as e: 
+    except RuntimeError as e:
         logger.error(f"NLP error for PK/IPK generation: {e}")
         return jsonify({"error": f"Ошибка NLP: {e}"}), 500
     except Exception as e:
@@ -831,7 +938,7 @@ def batch_create_competencies_from_tf():
     Пакетное создание ПК и их ИПК на основе массива данных из фронтенда.
     """
     data = request.get_json()
-    data_list = data.get('items', []) 
+    data_list = data.get('items', [])
     if not isinstance(data_list, list):
         abort(400, description="Ожидается массив объектов в поле 'items' для создания.")
 

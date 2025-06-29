@@ -17,7 +17,9 @@ from ..models import (
     CompetencyEducationalProgram
 )
 
-from .aup_external import get_external_aups_list, _clone_external_aup_to_local
+# НОВЫЙ ИМПОРТ: Теперь импорт AUP вынесен в aup_external.py
+from .aup_external import get_external_aups_list, import_aup_from_external_db 
+
 from ..utils import find_or_create_lookup, find_or_create_name_op
 
 logger = logging.getLogger(__name__)
@@ -64,8 +66,8 @@ def create_educational_program(
     data: Dict[str, Any], session: Session
 ) -> EducationalProgram:
     """
-    Создает ОПОП. Если АУП не найден локально, клонирует его из внешней БД.
-    Затем создает пустую матрицу.
+    (ИСПРАВЛЕНО v4)
+    Создает ОПОП. БЛОК АВТОМАТИЧЕСКОГО СОЗДАНИЯ ПУСТЫХ СВЯЗЕЙ УДАЛЕН.
     """
     required_fields = ['title', 'code', 'enrollment_year', 'form_of_education']
     if not all(data.get(field) for field in required_fields):
@@ -78,11 +80,7 @@ def create_educational_program(
     if existing_program:
         raise IntegrityError(f"Образовательная программа с такими параметрами уже существует (ID: {existing_program.id}).", {}, None)
 
-    fgos_vo = None
-    if data.get('fgos_id'):
-        fgos_vo = session.query(FgosVo).get(data['fgos_id'])
-        if not fgos_vo:
-            logger.warning(f"FGOS с ID {data['fgos_id']} не найден.")
+    fgos_vo = session.query(FgosVo).get(data['fgos_id']) if data.get('fgos_id') else None
 
     new_program = EducationalProgram(
         title=data['title'], code=data['code'], profile=data.get('profile'),
@@ -94,76 +92,34 @@ def create_educational_program(
 
     aup_info = None
     if data.get('num_aup'):
-        # --- НОВЫЙ БЛОК ЛОГИКИ С КЛОНИРОВАНИЕМ ---
         aup_num_to_link = data['num_aup']
-        # 1. Ищем АУП в локальной БД
         aup_info = session.query(LocalAupInfo).filter_by(num_aup=aup_num_to_link).first()
 
         if not aup_info:
-            logger.warning(f"АУП с номером '{aup_num_to_link}' не найден в локальной БД. Попытка клонирования из внешней БД...")
-            # 2. Если не нашли локально, ищем во внешней и клонируем
-            external_aups_list = get_external_aups_list(search_query=aup_num_to_link, limit=1)
-            if external_aups_list.get('items'):
-                external_aup_data = external_aups_list['items'][0]
-                aup_info = _clone_external_aup_to_local(external_aup_data, session)
-            else:
-                logger.error(f"АУП {aup_num_to_link} не найден и во внешней БД. Невозможно создать связь.")
-        # --- КОНЕЦ НОВОГО БЛОКА ---
+            logger.warning(f"АУП '{aup_num_to_link}' не найден локально. Попытка импорта...")
+            try:
+                import_result = import_aup_from_external_db(aup_num_to_link, new_program.id, session)
+                if import_result.get("aup_id"):
+                    aup_info = session.query(LocalAupInfo).get(import_result.get("aup_id"))
+                else:
+                    raise RuntimeError("Импорт АУП не вернул ID, не удалось продолжить.")
+            except Exception as e_import:
+                logger.error(f"Исключение при импорте АУП '{aup_num_to_link}' во время создания ОП: {e_import}", exc_info=True)
+                raise RuntimeError(f"Не удалось импортировать связанный АУП '{aup_num_to_link}'. Создание ОП прервано.")
 
-        if aup_info:
-            has_primary_aup = session.query(EducationalProgramAup).filter_by(educational_program_id=new_program.id, is_primary=True).count() > 0
-            link = EducationalProgramAup(educational_program_id=new_program.id, aup_id=aup_info.id_aup, is_primary=(not has_primary_aup))
-            session.add(link)
-            logger.info(f"Связь ОПОП (ID: {new_program.id}) с АУП (ID: {aup_info.id_aup}) создана.")
-        else:
-            logger.error(f"Не удалось ни найти, ни склонировать АУП {data.get('num_aup')}. Связь с ОПОП не создана.")
+    if aup_info:
+        logger.info(f"АУП (ID: {aup_info.id_aup}) успешно связан с новой ОП (ID: {new_program.id}).")
 
-
-    # --- Блок создания пустой матрицы (остается без изменений) ---
-    if aup_info and fgos_vo:
-        # ... (код создания пустой матрицы)
-        # ... (он теперь будет работать, так как aup_info - это локальный объект)
-        logger.info(f"Начинаем автоматическое создание пустой матрицы для АУП {aup_info.num_aup}")
-        try:
-            # 1. Получаем все дисциплины (aup_data_id) для данного АУП
-            discipline_entries = session.query(LocalAupData.id).filter_by(id_aup=aup_info.id_aup).all()
-            aup_data_ids = {entry.id for entry in discipline_entries}
-
-            # 2. Получаем все индикаторы, релевантные для этой ОП
-            # УК/ОПК из связанного ФГОС + ПК из самой ОП
-            relevant_competency_ids = session.query(Competency.id).filter(
-                (Competency.fgos_vo_id == fgos_vo.id) | # УК и ОПК
-                (Competency.educational_programs_assoc.any(educational_program_id=new_program.id)) # ПК
-            ).subquery()
-            
-            relevant_indicator_ids = {
-                indicator.id for indicator in session.query(Indicator.id).filter(Indicator.competency_id.in_(relevant_competency_ids)).all()
-            }
-
-            if not aup_data_ids or not relevant_indicator_ids:
-                logger.warning("Не найдены дисциплины или индикаторы для создания матрицы. Пропускаем.")
-            else:
-                # 3. Создаем "пустые" связи для каждой дисциплины и каждого индикатора
-                matrix_links_to_create = []
-                for aup_data_id in aup_data_ids:
-                    for indicator_id in relevant_indicator_ids:
-                        matrix_links_to_create.append(
-                            CompetencyMatrix(
-                                aup_data_id=aup_data_id,
-                                indicator_id=indicator_id,
-                                is_manual=False, # По умолчанию связь не ручная
-                                relevance_score=None
-                            )
-                        )
-                
-                if matrix_links_to_create:
-                    session.bulk_save_objects(matrix_links_to_create)
-                    logger.info(f"Успешно создано {len(matrix_links_to_create)} пустых связей для матрицы АУП {aup_info.num_aup}")
-
-        except Exception as e:
-            logger.error(f"Ошибка при автоматическом создании матрицы для АУП {aup_info.num_aup}: {e}", exc_info=True)
-            # Не прерываем основной процесс создания ОПОП из-за ошибки в создании матрицы
-            # Можно добавить логику для отката только этой части, если нужно
+    # # =========================================================================
+    # # ======================== ГЛАВНОЕ ИСПРАВЛЕНИЕ ========================
+    # # =========================================================================
+    # # БЛОК АВТОМАТИЧЕСКОГО СОЗДАНИЯ ПУСТЫХ СВЯЗЕЙ В МАТРИЦЕ ПОЛНОСТЬЮ УДАЛЕН.
+    # # Матрица будет создаваться пустой, связи будут добавляться только по действию пользователя.
+    # logger.info("Пропуск автоматического создания пустой матрицы. Связи будут создаваться по требованию.")
+    # # =========================================================================
+    
+    session.refresh(new_program)
+    return new_program
 
 def delete_educational_program(program_id: int, delete_cloned_aups: bool, session: Session) -> bool:
     """

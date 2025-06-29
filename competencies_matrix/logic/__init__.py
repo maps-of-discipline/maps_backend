@@ -1,5 +1,4 @@
-# This file makes 'logic' a Python package.
-
+# competencies_matrix/logic/__init__.py
 from .fgos_processing import (
     parse_fgos_file,
     save_fgos_data,
@@ -18,9 +17,9 @@ from .prof_standards import (
 )
 from .aup_external import (
     get_external_db_engine,
-    _clone_external_aup_to_local,
     get_external_aups_list,
-    get_external_aup_disciplines
+    get_external_aup_disciplines,
+    import_aup_from_external_db
 )
 from .educational_programs import (
     get_educational_programs_list,
@@ -46,7 +45,6 @@ from .matrix_operations import (
 )
 from .uk_pk_generation import (
     process_uk_indicators_disposition_file,
-    _shift_competency_codes,
     save_uk_indicators_from_disposition,
     handle_pk_name_correction,
     handle_pk_ipk_generation,
