@@ -9,7 +9,7 @@ from maps.models import db as local_db
 from ..models import Competency, Indicator, CompetencyType, FgosVo, LaborFunction, EducationalProgram
 from .competencies_indicators import create_competency, create_indicator
 
-from .. import nlp_logic
+from .. import nlp
 from pdfminer.high_level import extract_text
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ def process_uk_indicators_disposition_file(file_bytes: bytes, filename: str, edu
     
     try:
         text_content = extract_text(io.BytesIO(file_bytes))
-        parsed_disposition_data = nlp_logic.parse_uk_indicators_disposition_with_gemini(text_content, education_level=education_level)
+        parsed_disposition_data = nlp.parse_uk_indicators_disposition_with_llm(text_content, education_level=education_level)
 
         if not parsed_disposition_data or not parsed_disposition_data.get('disposition_metadata'):
             raise ValueError("Не удалось извлечь метаданные из файла распоряжения.")
@@ -279,7 +279,7 @@ def handle_pk_name_correction(raw_phrase: str) -> Dict[str, str]:
         raise ValueError("Некорректная сырая фраза для коррекции.")
     
     try:
-        corrected_name = nlp_logic.correct_pk_name_with_gemini(raw_phrase)
+        corrected_name = nlp.correct_pk_name_with_llm(raw_phrase)
         return corrected_name
     except RuntimeError as e:
         logger.error(f"NLP correction failed: {e}", exc_info=True)
@@ -299,7 +299,7 @@ def handle_pk_ipk_generation(
         raise ValueError("Необходимо выбрать Трудовые Функции или их элементы для генерации.")
     
     try:
-        generated_data = nlp_logic.generate_pk_ipk_with_gemini(selected_tfs_data, selected_zun_elements)
+        generated_data = nlp.generate_pk_ipk_with_llm(selected_tfs_data, selected_zun_elements)
         return generated_data
     except RuntimeError as e:
         logger.error(f"NLP generation failed: {e}", exc_info=True)

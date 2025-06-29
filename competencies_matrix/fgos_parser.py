@@ -1,11 +1,11 @@
 # filepath: competencies_matrix/fgos_parser.py
 import io
 import logging
-from typing import Dict, List, Any # Убираем Tuple, т.к. не используется
+from typing import Dict, Any
 
 from pdfminer.high_level import extract_text
 
-from .nlp_logic import parse_fgos_with_gemini 
+from .nlp import parse_fgos_with_llm
 
 logger = logging.getLogger(__name__)
 
@@ -14,14 +14,10 @@ def parse_fgos_pdf(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     Главная функция парсинга PDF файла ФГОС ВО.
     Теперь использует NLP-модуль для извлечения структурированных данных.
     """
-    logger.info(f"Starting PDF parsing for FGOS file: {filename} using NLP module.")
-    
+    logger.info(f"Starting PDF parsing for FGOS file: {filename} using configured NLP module.")
     try:
-        # Извлекаем весь текст из PDF с помощью pdfminer.six
         text_content = extract_text(io.BytesIO(file_bytes))
-        
-        # Передаем весь текст в NLP-парсер
-        parsed_data_from_nlp = parse_fgos_with_gemini(text_content)
+        parsed_data_from_nlp = parse_fgos_with_llm(text_content)
         
         # Добавляем сырой текст в итоговые данные для сохранения или отладки
         parsed_data_from_nlp['raw_text'] = text_content

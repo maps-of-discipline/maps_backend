@@ -6,7 +6,9 @@ from flask_migrate import Migrate
 from sqlalchemy import MetaData
 from dotenv import load_dotenv
 import os
-import logging 
+import logging
+import click # Import click for custom CLI commands
+from flask.cli import with_appcontext # Import with_appcontext for CLI commands
 
 # --- НОВОЕ: Импортируем ВСЕ модели, чтобы SQLAlchemy их "увидел" ---
 # Эти импорты необходимы для того, чтобы SQLAlchemy metadata обнаружила все таблицы
@@ -153,7 +155,26 @@ app.cli.add_command(seed_command)
 app.cli.add_command(unseed_command)
 app.cli.add_command(import_aup_command)
 app.cli.add_command(import_fgos_command)
-app.cli.add_command(parse_ps_command) 
+app.cli.add_command(parse_ps_command)
+
+@app.cli.command("run-llm")
+@click.option("--provider", default=None, help="Specify LLM provider: 'local' or 'klusterai'. Overrides .env and config.py.")
+@with_appcontext
+def run_llm_command(provider):
+    """Runs the Flask application with a specified LLM provider."""
+    if provider:
+        if provider.lower() not in ['local', 'klusterai']:
+            click.echo(f"Error: Invalid LLM provider '{provider}'. Must be 'local' or 'klusterai'.")
+            return
+        os.environ['LLM_PROVIDER'] = provider.lower()
+        app.config['LLM_PROVIDER'] = provider.lower() # Update app config directly
+        click.echo(f"LLM_PROVIDER set to '{provider.lower()}' for this run.")
+    else:
+        click.echo(f"Using default LLM_PROVIDER: {app.config.get('LLM_PROVIDER')}")
+
+    app.run(debug=app.config.get('DEBUG', False), host='0.0.0.0', port=5000)
 
 if __name__ == '__main__':
+    # When running directly via python app.py, the LLM_PROVIDER is determined by config.py
+    # For CLI commands, use 'flask run-llm'
     app.run(debug=app.config.get('DEBUG', False), host='0.0.0.0', port=5000)

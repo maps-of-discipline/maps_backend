@@ -9,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from maps.models import db as local_db
 from ..models import FgosVo, Competency, CompetencyType, FgosRecommendedPs, ProfStandard
 
-from .. import fgos_parser, nlp_logic
+from .. import fgos_parser, nlp
 from ..parsing_utils import parse_date_string
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ def parse_fgos_file(file_bytes: bytes, filename: str) -> dict:
     """Parses an FGOS PDF file and returns structured data."""
     try:
         text = fgos_parser.extract_text(io.BytesIO(file_bytes))
-        data = nlp_logic.parse_fgos_with_gemini(text)
+        data = nlp.parse_fgos_with_llm(text)
         if not data or not data.get('metadata'):
             logger.warning(f"Parsing failed or returned insufficient metadata for {filename}")
             # The 'data' dictionary is returned as is, to be handled by the caller
