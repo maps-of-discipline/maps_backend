@@ -7,6 +7,7 @@ from sqlalchemy import MetaData
 from dotenv import load_dotenv
 import os
 import logging
+from logging.handlers import RotatingFileHandler
 import click # Import click for custom CLI commands
 from flask.cli import with_appcontext # Import with_appcontext for CLI commands
 
@@ -48,7 +49,28 @@ app = Flask(__name__)
 application = app
 
 # Настройка уровня логирования в самом начале
-logging.basicConfig(level=logging.INFO) 
+# Define log file path
+log_file_path = os.path.join(os.path.dirname(__file__), 'app.log')
+
+# Configure logging
+# Set up the root logger
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.DEBUG) # Set to DEBUG as requested
+
+# Create a file handler for rotating logs
+# maxBytes: 1MB (approx 10,000 lines * 100 bytes/line)
+# backupCount: 1 (keeps one old log file)
+file_handler = RotatingFileHandler(log_file_path, maxBytes=1024 * 1024, backupCount=1)
+file_handler.setLevel(logging.DEBUG) # Ensure file handler also logs DEBUG
+
+# Create a formatter and add it to the handlers
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+
+# Add the file handler to the root logger
+root_logger.addHandler(file_handler)
+
+# Existing logging configuration for specific loggers
 logging.getLogger('pdfminer').setLevel(logging.WARNING)
 logging.getLogger('google_genai').setLevel(logging.INFO)
 
