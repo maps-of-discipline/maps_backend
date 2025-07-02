@@ -7,32 +7,31 @@ from sqlalchemy import MetaData
 from dotenv import load_dotenv
 import os
 import logging
-from logging.handlers import RotatingFileHandler
 import click # Import click for custom CLI commands
 from flask.cli import with_appcontext # Import with_appcontext for CLI commands
 
 # --- НОВОЕ: Импортируем ВСЕ модели, чтобы SQLAlchemy их "увидел" ---
 # Эти импорты необходимы для того, чтобы SQLAlchemy metadata обнаружила все таблицы
 # и их связи перед инициализацией мапперов.
-import maps.models 
-import competencies_matrix.models 
-import auth.models 
-import cabinet.models 
+import maps.models
+import competencies_matrix.models
+import auth.models
+import cabinet.models
 # Если есть другие модули с моделями (например, administration), их тоже нужно импортировать здесь
-# import administration.models 
+# import administration.models
 # --- КОНЕЦ ИМПОРТОВ МОДЕЛЕЙ ---
 
 # Теперь импортируем объект 'db' из maps.models, который является центральным Flask-SQLAlchemy объектом
-from maps.models import db 
+from maps.models import db
 
 # Импортируем остальные части приложения (Blueprints и утилиты)
 from utils.cache import cache
 from cabinet.cabinet import cabinet
-from maps.routes import maps_module 
+from maps.routes import maps_module
 from unification import unification_blueprint
 from auth.routes import auth as auth_blueprint
 from administration.routes import admin as admin_blueprint # assuming this is where admin models are defined, if any
-from competencies_matrix import competencies_matrix_bp 
+from competencies_matrix import competencies_matrix_bp
 from utils.handlers import handle_exception
 
 # Импорт CLI команд (они могут импортировать models, но это происходит при регистрации команд,
@@ -41,34 +40,12 @@ from cli_commands.db_seed import seed_command
 from cli_commands.db_unseed import unseed_command
 from cli_commands.import_aup import import_aup_command
 from cli_commands.fgos_import import import_fgos_command
-from cli_commands.parse_profstandard import parse_ps_command 
+from cli_commands.parse_profstandard import parse_ps_command
 
 load_dotenv()
 
 app = Flask(__name__)
 application = app
-
-# Настройка уровня логирования в самом начале
-# Define log file path
-log_file_path = os.path.join(os.path.dirname(__file__), 'app.log')
-
-# Configure logging
-# Set up the root logger
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.DEBUG) # Set to DEBUG as requested
-
-# Create a file handler for rotating logs
-# maxBytes: 1MB (approx 10,000 lines * 100 bytes/line)
-# backupCount: 1 (keeps one old log file)
-file_handler = RotatingFileHandler(log_file_path, maxBytes=1024 * 1024, backupCount=1)
-file_handler.setLevel(logging.DEBUG) # Ensure file handler also logs DEBUG
-
-# Create a formatter and add it to the handlers
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-file_handler.setFormatter(formatter)
-
-# Add the file handler to the root logger
-root_logger.addHandler(file_handler)
 
 # Existing logging configuration for specific loggers
 logging.getLogger('pdfminer').setLevel(logging.WARNING)
