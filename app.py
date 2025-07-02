@@ -195,8 +195,3 @@ def run_llm_command(provider):
         click.echo(f"Using default LLM_PROVIDER: {app.config.get('LLM_PROVIDER')}")
 
     app.run(debug=app.config.get('DEBUG', False), host='0.0.0.0', port=5000)
-
-if __name__ == '__main__':
-    # When running directly via python app.py, the LLM_PROVIDER is determined by config.py
-    # For CLI commands, use 'flask run-llm'
-    app.run(debug=app.config.get('DEBUG', False), host='0.0.0.0', port=5000)
