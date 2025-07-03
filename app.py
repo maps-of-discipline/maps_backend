@@ -10,18 +10,11 @@ import logging
 import click # Import click for custom CLI commands
 from flask.cli import with_appcontext # Import with_appcontext for CLI commands
 
-# --- НОВОЕ: Импортируем ВСЕ модели, чтобы SQLAlchemy их "увидел" ---
-# Эти импорты необходимы для того, чтобы SQLAlchemy metadata обнаружила все таблицы
-# и их связи перед инициализацией мапперов.
 import maps.models
 import competencies_matrix.models
 import auth.models
 import cabinet.models
-# Если есть другие модули с моделями (например, administration), их тоже нужно импортировать здесь
-# import administration.models
-# --- КОНЕЦ ИМПОРТОВ МОДЕЛЕЙ ---
 
-# Теперь импортируем объект 'db' из maps.models, который является центральным Flask-SQLAlchemy объектом
 from maps.models import db
 
 # Импортируем остальные части приложения (Blueprints и утилиты)
@@ -55,13 +48,17 @@ logging.getLogger('google_genai').setLevel(logging.INFO)
 app.config.from_pyfile('config.py')
 app.json.sort_keys = False
 
-config_cache = { 
-    "DEBUG": True, 
+# Determine environment and debug mode
+flask_env = os.getenv('FLASK_ENV', 'production') # Default to production if not set
+app.config['ENV'] = flask_env
+app.debug = (flask_env == 'development')
+
+config_cache = {
     "CACHE_TYPE": "SimpleCache",
     "CACHE_DEFAULT_TIMEOUT": 300,
 }
 app.config.from_mapping(config_cache)
-cache.init_app(app) 
+cache.init_app(app)
 
 CORS(
     app,
@@ -76,7 +73,7 @@ CORS(
         "Origin",
         "Aup" 
     ],
-    expose_headers=["Content-Disposition"], 
+    expose_headers=["Content-Disposition", "Content-Type"],
 )
 
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', app.config.get('SQLALCHEMY_DATABASE_URI'))
@@ -170,5 +167,3 @@ def run_llm_command(provider):
         click.echo(f"LLM_PROVIDER set to '{provider.lower()}' for this run.")
     else:
         click.echo(f"Using default LLM_PROVIDER: {app.config.get('LLM_PROVIDER')}")
-
-    app.run(debug=app.config.get('DEBUG', False), host='0.0.0.0', port=5000)
