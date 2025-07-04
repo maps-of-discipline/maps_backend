@@ -49,6 +49,6 @@ LOCAL_LLM_API_KEY = os.getenv("LOCAL_LLM_API_KEY", "not-needed") # Часто н
 LOCAL_LLM_MODEL_NAME = os.getenv("LOCAL_LLM_MODEL_NAME", "local-model")
 
 # --- Kluster.ai Configuration ---
-KLUDESTER_AI_API_KEY = os.getenv("KLUDESTER_AI_API_KEY", "d31cd353-3336-4b0f-abcc-12e595c2eefc")
-KLUDESTER_AI_BASE_URL = os.getenv("KLUDESTER_AI_BASE_URL", "https://api.kluster.ai/v1")
-KLUDESTER_AI_MODEL_NAME = os.getenv("KLUDESTER_AI_MODEL_NAME", "google/gemma-3-27b-it")
+KLUSTER_AI_API_KEY = os.getenv("KLUSTER_AI_API_KEY", "d31cd353-3336-4b0f-abcc-12e595c2eefc")
+KLUSTER_AI_BASE_URL = os.getenv("KLUSTER_AI_BASE_URL", "https://api.kluster.ai/v1")
+KLUSTER_AI_MODEL_NAME = os.getenv("KLUSTER_AI_MODEL_NAME", "deepseek-ai/DeepSeek-V3-0324")

@@ -16,7 +16,7 @@ except ImportError:
 from config import (
     LLM_PROVIDER,
     LOCAL_LLM_BASE_URL, LOCAL_LLM_API_KEY, LOCAL_LLM_MODEL_NAME,
-    KLUDESTER_AI_API_KEY, KLUDESTER_AI_BASE_URL, KLUDESTER_AI_MODEL_NAME
+    KLUSTER_AI_API_KEY, KLUSTER_AI_BASE_URL, KLUSTER_AI_MODEL_NAME
 )
 from .parsing_utils import parse_date_string
 
@@ -53,8 +53,8 @@ def _call_llm_api(prompt_content: str, model_name: str, temperature: float = 0.0
 
     if LLM_PROVIDER in ['local', 'klusterai']:
         try:
-            base_url = LOCAL_LLM_BASE_URL if LLM_PROVIDER == 'local' else KLUDESTER_AI_BASE_URL
-            api_key = LOCAL_LLM_API_KEY if LLM_PROVIDER == 'local' else KLUDESTER_AI_API_KEY
+            base_url = LOCAL_LLM_BASE_URL if LLM_PROVIDER == 'local' else KLUSTER_AI_BASE_URL
+            api_key = LOCAL_LLM_API_KEY if LLM_PROVIDER == 'local' else KLUSTER_AI_API_KEY
             client = _get_openai_compatible_client(base_url, api_key)
             messages = [{"role": "user", "content": prompt_content}]
             
@@ -306,7 +306,7 @@ JSON Schema:
 # --- Обновленные публичные функции ---
 def parse_fgos_with_llm(fgos_text: str) -> Dict[str, Any]:
     """Использует сконфигурированный LLM для парсинга ФГОС."""
-    model_name = KLUDESTER_AI_MODEL_NAME if LLM_PROVIDER == 'klusterai' else LOCAL_LLM_MODEL_NAME
+    model_name = KLUSTER_AI_MODEL_NAME if LLM_PROVIDER == 'klusterai' else LOCAL_LLM_MODEL_NAME
     prompt = _create_fgos_prompt(fgos_text)
     parsed_data = _call_llm_api(prompt, model_name=model_name)
     if parsed_data.get('metadata'):
@@ -318,7 +318,7 @@ def parse_fgos_with_llm(fgos_text: str) -> Dict[str, Any]:
 
 def parse_uk_indicators_disposition_with_llm(disposition_text: str, education_level: str) -> Dict[str, Any]:
     """Использует сконфигурированный LLM для парсинга Распоряжения."""
-    model_name = KLUDESTER_AI_MODEL_NAME if LLM_PROVIDER == 'klusterai' else LOCAL_LLM_MODEL_NAME
+    model_name = KLUSTER_AI_MODEL_NAME if LLM_PROVIDER == 'klusterai' else LOCAL_LLM_MODEL_NAME
     prompt = _create_uk_indicators_disposition_prompt(disposition_text, education_level)
     parsed_data = _call_llm_api(prompt, model_name=model_name)
 
@@ -343,7 +343,7 @@ def parse_uk_indicators_disposition_with_llm(disposition_text: str, education_le
 
 def correct_pk_name_with_llm(raw_phrase: str) -> Dict[str, str]:
     """Использует сконфигурированный LLM для коррекции названия ПК."""
-    model_name = KLUDESTER_AI_MODEL_NAME if LLM_PROVIDER == 'klusterai' else LOCAL_LLM_MODEL_NAME
+    model_name = KLUSTER_AI_MODEL_NAME if LLM_PROVIDER == 'klusterai' else LOCAL_LLM_MODEL_NAME
     prompt = _create_pk_correction_prompt(raw_phrase)
     response_data = _call_llm_api(prompt, model_name=model_name)
     
@@ -365,7 +365,7 @@ def correct_pk_name_with_llm(raw_phrase: str) -> Dict[str, str]:
 
 def generate_pk_ipk_with_llm(selected_tfs_data: List[Dict], selected_zun_elements: Dict[str, List[Dict]]) -> Dict[str, Any]:
     """Использует сконфигурированный LLM для генерации ПК/ИПК."""
-    model_name = KLUDESTER_AI_MODEL_NAME if LLM_PROVIDER == 'klusterai' else LOCAL_LLM_MODEL_NAME
+    model_name = KLUSTER_AI_MODEL_NAME if LLM_PROVIDER == 'klusterai' else LOCAL_LLM_MODEL_NAME
     prompt = _create_pk_ipk_generation_prompt(selected_tfs_data, selected_zun_elements)
     parsed_data = _call_llm_api(prompt, model_name=model_name)
     
