@@ -1,7 +1,8 @@
+# filepath: competencies_matrix/nlp.py
 import json
 import logging
 import re
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 # --- ИМПОРТЫ КЛИЕНТОВ LLM ---
 try:
@@ -43,13 +44,6 @@ def _call_llm_api(prompt_content: str, model_name: str, temperature: float = 0.0
     """Универсальная функция для вызова LLM API с логированием токенов и надежной обработкой ошибок."""
     response_text, prompt_tokens, completion_tokens = None, 0, 0
     logger.debug(f"Sending prompt to LLM ({LLM_PROVIDER}, model: {model_name}, first 500 chars):\n{prompt_content[:500]}...")
-
-    try:
-        with open("last_nlp_request.txt", "w", encoding="utf-8") as f:
-            f.write(prompt_content)
-        logger.info("Successfully wrote LLM prompt to last_nlp_request.txt")
-    except IOError as e:
-        logger.warning(f"Failed to write LLM prompt to file: {e}")
 
     if LLM_PROVIDER in ['local', 'klusterai']:
         try:
@@ -138,12 +132,20 @@ JSON должен быть отформатирован следующим об�
             "approval_date": "YYYY-MM-DD"
         }}
     ]
+}},
+    "warning": false,
+    "message": null
 }}
 ```
-- `order_number`: Строка с числом (например, "923").
+
+**Дополнительные правила и обработка ошибок:**
+- Если документ не кажется полным ФГОС 3++ документом (например, отсутствуют разделы с метаданными, УК, ОПК или рекомендованными ПС, или содержание кажется нерелевантным), установи `"warning": true` и добавь соответствующее сообщение в поле `"message"`.
+- Сообщение в `"message"` должно быть на русском языке и объяснять, почему документ может быть неполным или недействительным ФГОС 3++ (например, "Документ не содержит всех ожидаемых разделов ФГОС 3++" или "Не удалось извлечь универсальные компетенции.").
+- Если все данные извлечены успешно и документ кажется полным, установи `"warning": false` и `"message": null`.
+
 - `code`: Извлеки точный код (например, "26.001", "40.042").
 - `name`: Извлеки только *короткое, чистое название* Профессионального Стандарта, без юридических ссылок, регистрационных номеров или дат. Только основное название, например "Специалист по производству".
-- `approval_date`: Извлеки дату утверждения Профессионального Стандарта. В документе даты утверждения ПС прописаны. Если не найдена, установи в `null`. Формат "YYYY-MM-DD".
+- `approval_date`: Извлеки дату утверждения *самого Профессионального Стандарта*, если она явно указана в тексте рекомендации для этого конкретного ПС. Если не найдена, установи в `null`. Формат "YYYY-MM-DD".
 
 Вот текст документа ФГОС ВО для парсинга:
 
@@ -244,62 +246,71 @@ def _create_pk_correction_prompt(raw_phrase: str) -> str:
     return prompt
 
 def _create_pk_ipk_generation_prompt(
-    selected_tfs_data: List[Dict],
-    selected_zun_elements: Dict[str, List[Dict]]
+    batch_tfs_data: List[Dict]
 ) -> str:
     """
-    Создает промпт для LLM для генерации формулировок ПК и ИПК на основе
-    выбранных Трудовых Функций и ЗУН-элементов.
+    Создает промпт для LLM для пакетной генерации формулировок ПК и ИПК на основе
+    списка Трудовых Функций и их элементов (ТД, НУ, НЗ).
+    Каждый элемент в `batch_tfs_data` должен содержать:
+    - 'unique_tf_id': уникальный идентификатор ТФ, чтобы сопоставить результат
+    - 'tf_name': название ТФ
+    - 'labor_actions': список описаний ТД
+    - 'required_skills': список описаний НУ
+    - 'required_knowledge': список описаний НЗ
     """
-    tfs_json = json.dumps([{"code": tf['code'], "name": tf['name'], "qualification_level": tf.get('qualification_level')} for tf in selected_tfs_data], ensure_ascii=False, indent=2)
-    
-    actions_json = json.dumps([{"description": item['description']} for item in selected_zun_elements.get('labor_actions', [])], ensure_ascii=False, indent=2)
-    skills_json = json.dumps([{"description": item['description']} for item in selected_zun_elements.get('required_skills', [])], ensure_ascii=False, indent=2)
-    knowledge_json = json.dumps([{"description": item['description']} for item in selected_zun_elements.get('required_knowledge', [])], ensure_ascii=False, indent=2)
+    # Подготавливаем данные для LLM, чтобы они были максимально чистыми и структурированными
+    formatted_tfs = []
+    for tf_data in batch_tfs_data:
+        tf_dict = {
+            "unique_tf_id": tf_data.get('unique_tf_id'), # Важно для сопоставления ответа
+            "tf_name": tf_data.get('tf_name'),
+            "labor_actions": [a.get('description') for a in tf_data.get('labor_actions', []) if a.get('description')],
+            "required_skills": [s.get('description') for s in tf_data.get('required_skills', []) if s.get('description')],
+            "required_knowledge": [k.get('description') for k in tf_data.get('required_knowledge', []) if k.get('description')],
+        }
+        formatted_tfs.append(tf_dict)
+
+    tfs_json_str = json.dumps(formatted_tfs, ensure_ascii=False, indent=2)
 
     prompt = f"""
 Ты - эксперт-методист по разработке образовательных программ.
-Твоя задача - на основе предоставленных данных из Профессиональных Стандартов (Трудовых Функций и их элементов: Трудовых Действий, Необходимых Умений, Необходимых Знаний) сформулировать:
+Твоя задача - на основе предоставленного списка Трудовых Функций (ТФ) и их элементов
+(Трудовых Действий, Необходимых Умений, Необходимых Знаний) сформулировать для КАЖДОЙ ТФ:
 1.  Наименование Профессиональной Компетенции (ПК).
 2.  Три формулировки Индикаторов Достижения Компетенции (ИПК): "Знает", "Умеет", "Владеет".
 
 Строгие правила:
 1.  Возвращай ответ ТОЛЬКО в JSON-формате, обернутый в ```json ... ```.
 2.  НЕ добавляй никаких объяснений, преамбул, или других фраз вне JSON.
-3.  Формулировка ПК ДОЛЖНА начинаться со слова "Способен". Она должна быть обобщающей для всех предоставленных ТФ.
-4.  Формулировки ИПК "Знает", "Умеет", "Владеет" должны:
+3.  Выходной JSON ДОЛЖЕН быть СПИСКОМ объектов, где каждый объект соответствует одной входной ТФ.
+4.  Каждый выходной объект должен содержать `unique_tf_id` из соответствующей входной ТФ. Это критически важно для сопоставления.
+5.  Формулировка ПК ДОЛЖНА начинаться со слова "Способен". Она должна быть обобщающей для предоставленной ТФ.
+6.  Формулировки ИПК "Знает", "Умеет", "Владеет" должны:
     *   Быть КОРОТКИМИ, емкими, ОБОБЩАЮЩИМИ основные идеи из соответствующих разделов (НЗ, НУ, ТД).
     *   НЕ использовать прямую конкатенацию всех пунктов. СИНТЕЗИРУЙ суть.
-    *   "Знает": Обобщает Необходимые Знания.
-    *   "Умеет": Обобщает Необходимые Умения.
-    *   "Владеет": Обобщает Трудовые Действия.
-5.  Если какой-то раздел ЗУН пуст, соответствующее поле в JSON должно быть пустой строкой.
-6.  Все строки должны быть на русском языке.
+    *   "Знает": Обобщает Необходимые Знания из `required_knowledge`.
+    *   "Умеет": Обобщает Необходимые Умения из `required_skills`.
+    *   "Владеет": Обобщает Трудовые Действия из `labor_actions`.
+7.  Если какой-то раздел ЗУН пуст для ТФ, соответствующее поле в JSON должно быть пустой строкой.
+8.  Все строки должны быть на русском языке.
 
-JSON Schema:
+JSON Schema для каждого элемента в выходном списке:
 ```json
-{{
-    "pk_name": "STRING (Формулировка Профессиональной Компетенции)",
-    "ipk_indicators": {{
-        "znaet": "STRING (Обобщенная формулировка Знаний)",
-        "umeet": "STRING (Обобщенная формулировка Умений)",
-        "vladeet": "STRING (Обобщенная формулировка Владения/Действий)"
+[
+    {{
+        "unique_tf_id": "STRING (Идентификатор ТФ из входа)",
+        "pk_name": "STRING (Формулировка Профессиональной Компетенции)",
+        "ipk_indicators": {{
+            "znaet": "STRING (Обобщенная формулировка Знаний)",
+            "umeet": "STRING (Обобщенная формулировка Умений)",
+            "vladeet": "STRING (Обобщенная формулировка Владения/Действий)"
+        }}
     }}
-}}
+]
 ```
 
-Данные:
-Трудовые Функции (TF):
-{tfs_json}
-
-Трудовые Действия (Labor Actions):
-{actions_json}
-
-Необходимые Умения (Required Skills):
-{skills_json}
-
-Необходимые Знания (Required Knowledge):
-{knowledge_json}
+Данные для генерации (список Трудовых Функций):
+{tfs_json_str}
 """
     return prompt
 
@@ -309,11 +320,34 @@ def parse_fgos_with_llm(fgos_text: str) -> Dict[str, Any]:
     model_name = KLUSTER_AI_MODEL_NAME if LLM_PROVIDER == 'klusterai' else LOCAL_LLM_MODEL_NAME
     prompt = _create_fgos_prompt(fgos_text)
     parsed_data = _call_llm_api(prompt, model_name=model_name)
+
+    # Инициализация полей warning и message, если они отсутствуют (хотя промпт должен их включать)
+    parsed_data.setdefault('warning', False)
+    parsed_data.setdefault('message', None)
+
+    # Валидация и очистка данных
     if parsed_data.get('metadata'):
         parsed_data['metadata']['order_date'] = parse_date_string(parsed_data['metadata'].get('order_date'))
+    
     if parsed_data.get('recommended_ps'):
         for ps in parsed_data['recommended_ps']:
             ps['approval_date'] = parse_date_string(ps.get('approval_date'))
+
+    # Проверка на полноту данных для установки предупреждения
+    warning_messages = []
+    if not parsed_data.get('metadata') or not all(parsed_data['metadata'].get(k) for k in ['order_number', 'order_date', 'direction_code', 'education_level']):
+        warning_messages.append("Не удалось извлечь основные метаданные ФГОС (номер, дата, код направления, уровень образования).")
+    if not parsed_data.get('uk_competencies'):
+        warning_messages.append("Не удалось извлечь универсальные компетенции (УК).")
+    if not parsed_data.get('opk_competencies'):
+        warning_messages.append("Не удалось извлечь общепрофессиональные компетенции (ОПК).")
+    if not parsed_data.get('recommended_ps'):
+        warning_messages.append("Не удалось извлечь рекомендованные профессиональные стандарты.")
+
+    if warning_messages:
+        parsed_data['warning'] = True
+        parsed_data['message'] = "Документ может быть неполным или недействительным ФГОС 3++: " + "; ".join(warning_messages)
+    
     return parsed_data
 
 def parse_uk_indicators_disposition_with_llm(disposition_text: str, education_level: str) -> Dict[str, Any]:
@@ -345,7 +379,9 @@ def correct_pk_name_with_llm(raw_phrase: str) -> Dict[str, str]:
     """Использует сконфигурированный LLM для коррекции названия ПК."""
     model_name = KLUSTER_AI_MODEL_NAME if LLM_PROVIDER == 'klusterai' else LOCAL_LLM_MODEL_NAME
     prompt = _create_pk_correction_prompt(raw_phrase)
-    response_data = _call_llm_api(prompt, model_name=model_name)
+    # Максимальное количество токенов для коррекции обычно меньше, чем для генерации.
+    # Если название длинное, лучше дать побольше. Например, 50-100.
+    response_data = _call_llm_api(prompt, model_name=model_name, max_tokens=100)
     
     # Валидация и очистка, как в вашем предыдущем коде
     if isinstance(response_data, str):
@@ -357,33 +393,49 @@ def correct_pk_name_with_llm(raw_phrase: str) -> Dict[str, str]:
     if response_data is not None and isinstance(response_data, dict):
         logger.warning(f"Unexpected non-string response from PK correction prompt: {response_data}. Trying to extract text.")
         for key, value in response_data.items():
-            if isinstance(value, str) and len(value) > 20: # Эвристика: ищем длинную строку, которая может быть ответом
+            if isinstance(value, str) and (len(value) > 20 or (key == 'corrected_name' and len(value) > 0)):
                 return {"corrected_name": value.strip()}
 
     logger.error(f"LLM did not return expected string for PK name correction. Raw response: {response_data}")
     raise ValueError("NLP не смог сгенерировать корректное название ПК.")
 
-def generate_pk_ipk_with_llm(selected_tfs_data: List[Dict], selected_zun_elements: Dict[str, List[Dict]]) -> Dict[str, Any]:
-    """Использует сконфигурированный LLM для генерации ПК/ИПК."""
+def generate_pk_ipk_with_llm(batch_tfs_data: List[Dict]) -> List[Dict]:
+    """
+    (ИЗМЕНЕНО) Использует сконфигурированный LLM для пакетной генерации ПК/ИПК.
+    Принимает список словарей, каждый из которых представляет одну ТФ с ее элементами ЗУН.
+    Возвращает список сгенерированных результатов, сопоставленных по unique_tf_id.
+    """
     model_name = KLUSTER_AI_MODEL_NAME if LLM_PROVIDER == 'klusterai' else LOCAL_LLM_MODEL_NAME
-    prompt = _create_pk_ipk_generation_prompt(selected_tfs_data, selected_zun_elements)
-    parsed_data = _call_llm_api(prompt, model_name=model_name)
+    prompt = _create_pk_ipk_generation_prompt(batch_tfs_data)
     
-    # Валидация и очистка, как в вашем предыдущем коде
-    if not isinstance(parsed_data, dict) or \
-       'pk_name' not in parsed_data or \
-       not isinstance(parsed_data.get('ipk_indicators'), dict) or \
-       'znaet' not in parsed_data['ipk_indicators'] or \
-       'umeet' not in parsed_data['ipk_indicators'] or \
-       'vladeet' not in parsed_data['ipk_indicators']:
-        logger.error(f"Generated JSON from LLM has unexpected structure: {parsed_data}")
-        raise ValueError("Сгенерированный JSON имеет неверную структуру.")
+    # Увеличиваем max_tokens, так как ожидаем больше выходных данных
+    # Каждый PK/IPK генерирует ~150 токенов, 10 ТФ -> 1500 токенов
+    max_tokens_for_batch = max(2000, len(batch_tfs_data) * 200) # Динамически настраиваем
     
-    if isinstance(parsed_data['pk_name'], str):
-        parsed_data['pk_name'] = re.sub(r'\s+', ' ', parsed_data['pk_name']).strip()
+    generated_results = _call_llm_api(prompt, model_name=model_name, max_tokens=max_tokens_for_batch)
     
-    for key in ['znaet', 'umeet', 'vladeet']:
-        if isinstance(parsed_data['ipk_indicators'].get(key), str):
-            parsed_data['ipk_indicators'][key] = re.sub(r'\s+', ' ', parsed_data['ipk_indicators'][key]).strip()
+    if not isinstance(generated_results, list):
+        logger.error(f"Generated data is not a list: {generated_results}")
+        raise ValueError("NLP вернул неверный формат ответа для пакетной генерации (ожидается список).")
+
+    final_parsed_results = []
+    for item in generated_results:
+        # Валидация и очистка каждого элемента в пакете
+        if not isinstance(item, dict) or \
+           'unique_tf_id' not in item or \
+           'pk_name' not in item or \
+           not isinstance(item.get('ipk_indicators'), dict) or \
+           'znaet' not in item['ipk_indicators'] or \
+           'umeet' not in item['ipk_indicators'] or \
+           'vladeet' not in item['ipk_indicators']:
+            logger.warning(f"Skipping malformed generated item: {item}")
+            continue # Пропускаем некорректные элементы
+        
+        # Очистка строк
+        item['pk_name'] = re.sub(r'\s+', ' ', item['pk_name']).strip()
+        for key in ['znaet', 'umeet', 'vladeet']:
+            item['ipk_indicators'][key] = re.sub(r'\s+', ' ', item['ipk_indicators'].get(key, '')).strip()
+        
+        final_parsed_results.append(item)
     
-    return parsed_data
+    return final_parsed_results

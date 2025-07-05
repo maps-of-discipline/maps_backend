@@ -28,8 +28,14 @@ def parse_fgos_file(file_bytes: bytes, filename: str) -> dict:
         logger.error(f"Parser ValueError for {filename}: {e}")
         raise
     except Exception as e:
-        logger.error(f"Unexpected error parsing {filename}: {e}", exc_info=True)
-        raise Exception(f"Неожиданная ошибка при парсинге файла '{filename}': {e}")
+        error_message = str(e)
+        if "Input exceeds the maximum allowed size" in error_message:
+            # Avoid logging the same error multiple times - just log once and raise a user-friendly message
+            logger.error(f"LLM API input size error for {filename}: File too large for processing")
+            raise ValueError(f"Файл '{filename}' слишком большой для обработки. Пожалуйста, убедитесь, что вы загружаете корректный файл ФГОС ВО.")
+        else:
+            logger.error(f"Unexpected error parsing {filename}: {e}", exc_info=True)
+            raise ValueError(f"Неожиданная ошибка при парсинге файла '{filename}': {e}")
 
 
 def save_fgos_data(data: dict, filename: str, session: Session, force_update: bool = False) -> Optional[FgosVo]:

@@ -1,4 +1,3 @@
-# filepath: competencies_matrix/routes.py
 from flask import request, jsonify, abort, send_file
 from . import competencies_matrix_bp
 from typing import Optional, List
@@ -24,7 +23,7 @@ from .logic import (
     process_uk_indicators_disposition_file,
     save_uk_indicators_from_disposition,
     handle_pk_name_correction,
-    handle_pk_ipk_generation,
+    handle_pk_ipk_generation, # <--- ИЗМЕНЕНА ДЛЯ ПАКЕТНОЙ ГЕНЕРАЦИИ
     create_educational_program,
     batch_create_pk_and_ipk,
     delete_educational_program,
@@ -451,10 +450,10 @@ def get_fgos_details_route(fgos_id):
 def upload_fgos():
     """Upload and parse a FGOS VO PDF file."""
     if 'file' not in request.files:
-        abort(400, description="Файл не найден в запросе")
+        return jsonify({"error": "Файл не найден в запросе"}), 400
     file = request.files['file']
     if file.filename == '' or not file.filename.lower().endswith('.pdf'):
-        abort(400, description="Файл не выбран или неверный формат (требуется PDF)")
+        return jsonify({"error": "Файл не выбран или неверный формат (требуется PDF)"}), 400
     
     try:
         file_bytes = file.read()
@@ -462,15 +461,15 @@ def upload_fgos():
         
         if not parsed_data or not parsed_data.get('metadata'):
              logger.error(f"Upload FGOS: Parsing succeeded but essential metadata missing for {file.filename}.")
-             abort(400, description="Не удалось извлечь основные метаданные из файла ФГОС.")
+             return jsonify({"error": "Не удалось извлечь основные метаданные из файла ФГОС."}), 400
 
         return jsonify(parsed_data), 200
     except ValueError as e:
         logger.error(f"Upload FGOS: Parsing Error for {file.filename}: {e}")
-        abort(400, description=f"Ошибка парсинга файла: {e}")
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
-        logger.error(f"Upload FGOS: Unexpected error processing FGOS upload for {file.filename}: {e}", exc_info=True)
-        abort(500, description=f"Неожиданная ошибка сервера при обработке файла: {e}")
+        logger.error(f"Upload FGOS: Unexpected error processing FGOS upload for {file.filename}: {e}")
+        return jsonify({"error": f"Неожиданная ошибка сервера при обработке файла: {e}"}), 500
 
 
 @competencies_matrix_bp.route('/fgos/save', methods=['POST'])
@@ -908,16 +907,18 @@ def pk_name_correction_route():
 @login_required
 @approved_required
 def generate_pk_ipk_route():
-    """Generates PK name and IPK formulations using NLP based on selected TF and ZUNs."""
+    """
+    Генерирует ПК и ИПК с использованием NLP на основе списка ТФ и их ЗУН.
+    Ожидает в теле запроса JSON-объект с ключом 'items', который является списком.
+    """
     data = request.get_json()
-    selected_tfs_data = data.get('selected_tfs_data')
-    selected_zun_elements = data.get('selected_zun_elements')
+    batch_tfs_for_generation = data.get('items')
 
-    if not selected_tfs_data and not selected_zun_elements:
-        abort(400, description="Отсутствуют данные для генерации. Необходимо выбрать ТФ или ЗУН-элементы.")
+    if not batch_tfs_for_generation or not isinstance(batch_tfs_for_generation, list):
+        abort(400, description="Некорректные данные для генерации. Ожидается JSON-объект с полем 'items' (список ТФ).")
     
     try:
-        generated_data = handle_pk_ipk_generation(selected_tfs_data, selected_zun_elements)
+        generated_data = handle_pk_ipk_generation(batch_tfs_for_generation)
         return jsonify(generated_data), 200
     except ValueError as e:
         logger.error(f"Validation error for PK/IPK generation: {e}")
@@ -927,7 +928,7 @@ def generate_pk_ipk_route():
         return jsonify({"error": f"Ошибка NLP: {e}"}), 500
     except Exception as e:
         logger.error(f"Unexpected error in PK/IPK generation route: {e}", exc_info=True)
-        abort(500, description=f"Неожиданная ошибка сервера при генерации ПК/ИПК: {e}")
+        return jsonify({"error": f"Неожиданная ошибка сервера при генерации ПК/ИПК: {e}"}), 500
 
 @competencies_matrix_bp.route('/competencies/batch-create-from-tf', methods=['POST'])
 @login_required

@@ -1,3 +1,4 @@
+# filepath: competencies_matrix/logic/uk_pk_generation.py
 import logging
 import io
 from typing import Dict, List, Any, Optional, Tuple
@@ -6,8 +7,8 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import cast, Integer
 
 from maps.models import db as local_db
-from ..models import Competency, Indicator, CompetencyType, FgosVo, LaborFunction, EducationalProgram
-from .competencies_indicators import create_competency, create_indicator
+from ..models import Competency, Indicator, CompetencyType, FgosVo, LaborFunction, EducationalProgram, CompetencyEducationalProgram
+from .competencies_indicators import create_competency, create_indicator # Импортируем, если нужна именно эта обертка
 
 from .. import nlp
 from pdfminer.high_level import extract_text
@@ -279,8 +280,8 @@ def handle_pk_name_correction(raw_phrase: str) -> Dict[str, str]:
         raise ValueError("Некорректная сырая фраза для коррекции.")
     
     try:
-        corrected_name = nlp.correct_pk_name_with_llm(raw_phrase)
-        return corrected_name
+        corrected_name_data = nlp.correct_pk_name_with_llm(raw_phrase)
+        return corrected_name_data
     except RuntimeError as e:
         logger.error(f"NLP correction failed: {e}", exc_info=True)
         raise RuntimeError(f"Ошибка NLP при коррекции названия ПК: {e}")
@@ -288,18 +289,17 @@ def handle_pk_name_correction(raw_phrase: str) -> Dict[str, str]:
         logger.error(f"Unexpected error in handle_pk_name_correction: {e}", exc_info=True)
         raise RuntimeError(f"Неизвестная ошибка при коррекции названия ПК: {e}")
 
-def handle_pk_ipk_generation(
-    selected_tfs_data: List[Dict],
-    selected_zun_elements: Dict[str, List[Dict]]
-) -> Dict[str, Any]:
+def handle_pk_ipk_generation(batch_tfs_data: List[Dict]) -> List[Dict]:
     """
-    Обрабатывает запрос на генерацию ПК и ИПК с использованием NLP.
+    Обрабатывает запрос на пакетную генерацию ПК и ИПК с использованием NLP.
+    Принимает список словарей, каждый из которых представляет одну ТФ с ее элементами ЗУН.
+    Возвращает список сгенерированных результатов, сопоставленных по unique_tf_id.
     """
-    if not selected_tfs_data and not selected_zun_elements:
-        raise ValueError("Необходимо выбрать Трудовые Функции или их элементы для генерации.")
+    if not batch_tfs_data:
+        raise ValueError("Необходимо выбрать Трудовые Функции для генерации.")
     
     try:
-        generated_data = nlp.generate_pk_ipk_with_llm(selected_tfs_data, selected_zun_elements)
+        generated_data = nlp.generate_pk_ipk_with_llm(batch_tfs_data)
         return generated_data
     except RuntimeError as e:
         logger.error(f"NLP generation failed: {e}", exc_info=True)
@@ -309,33 +309,76 @@ def handle_pk_ipk_generation(
         raise RuntimeError(f"Неизвестная ошибка при генерации ПК/ИПК: {e}")
 
 def batch_create_pk_and_ipk(data_list: List[Dict[str, Any]], session: Session) -> Dict:
+    """
+    Пакетное создание ПК и их ИПК на основе массива данных из фронтенда.
+    """
     created_count = 0
     errors = []
+    
+    if not data_list:
+        return {"success_count": 0, "error_count": 0, "errors": []}
+
+    pk_type = session.query(CompetencyType).filter_by(code='ПК').first()
+    if not pk_type:
+        raise ValueError("Тип компетенции 'ПК' не найден в базе данных.")
+
     for item_data in data_list:
         try:
-            # Логика из create_competency
+            # 1. Создание Профессиональной Компетенции (ПК)
             pk_payload = {
                 'code': item_data.get('pk_code'),
                 'name': item_data.get('pk_name'),
-                'type_code': 'ПК',
+                'competency_type_id': pk_type.id,
                 'based_on_labor_function_id': item_data.get('tf_id')
             }
-            new_pk = create_competency(pk_payload, session)
+            # Проверка на существование, чтобы избежать IntegrityError
+            existing_pk = session.query(Competency).filter_by(code=pk_payload['code'], competency_type_id=pk_type.id).first()
+            if existing_pk:
+                 raise Exception(f"Компетенция с кодом '{pk_payload['code']}' уже существует.")
+                 
+            new_pk = Competency(**pk_payload)
+            session.add(new_pk)
             session.flush()
 
-            formulation = f"Знает: {item_data.get('ipk_znaet')}\\nУмеет: {item_data.get('ipk_umeet')}\\nВладеет: {item_data.get('ipk_vladeet')}"
+            # 2. Привязка ПК к выбранным Образовательным Программам
+            educational_program_ids = item_data.get('educational_program_ids', [])
+            if educational_program_ids:
+                for ep_id in educational_program_ids:
+                    ep = session.query(EducationalProgram).get(ep_id)
+                    if ep:
+                        assoc = CompetencyEducationalProgram(competency_id=new_pk.id, educational_program_id=ep_id)
+                        session.add(assoc)
+                    else:
+                        logger.warning(f"ОП с ID {ep_id} не найдена. Пропуск привязки.")
+
+            # 3. Создание одного Индикатора (ИПК) с тремя частями
+            formulation = f"Знает: {item_data.get('ipk_znaet', 'Н/Д')}\nУмеет: {item_data.get('ipk_umeet', 'Н/Д')}\nВладеет: {item_data.get('ipk_vladeet', 'Н/Д')}"
+            
+            # Проверяем, что код индикатора не занят для этой компетенции
+            indicator_code = f"ИПК-{new_pk.code.replace('ПК-', '')}.1" # Пример генерации кода
+            existing_indicator = session.query(Indicator).filter_by(code=indicator_code, competency_id=new_pk.id).first()
+            if existing_indicator:
+                raise Exception(f"Индикатор с кодом '{indicator_code}' уже существует для этой компетенции.")
+
             ipk_payload = {
                 'competency_id': new_pk.id,
-                'code': f"ИПК-{new_pk.code.replace('ПК-', '')}.1",
+                'code': indicator_code,
                 'formulation': formulation,
-                'source': f"ПС {item_data.get('ps_code')}"
+                'source': f"ПС {item_data.get('ps_code', 'N/A')}",
+                'selected_ps_elements_ids': item_data.get('selected_ps_elements_ids', {})
             }
-            create_indicator(ipk_payload, session)
+            new_indicator = Indicator(**ipk_payload)
+            session.add(new_indicator)
+            
             created_count += 1
+            
         except Exception as e:
+            # Не откатываем сессию здесь, чтобы собрать все ошибки, но затем откатим всё.
+            logger.error(f"Ошибка при пакетном создании для ПК {item_data.get('pk_code')}: {e}", exc_info=True)
             errors.append({'pk_code': item_data.get('pk_code'), 'error': str(e)})
 
     if errors:
-        raise Exception(f"Завершено с ошибками. Успешно: {created_count}, Ошибки: {len(errors)}. Подробности: {errors}")
+        session.rollback()
+        raise Exception(f"Обнаружены ошибки во время пакетного создания. Все изменения отменены. Подробности: {errors}")
 
     return {"success_count": created_count, "error_count": len(errors), "errors": errors}
