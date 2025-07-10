@@ -164,7 +164,11 @@ def couldBeCredited(target: Discipline, variant: Discipline) -> bool:
         "Курсовой проект": ["Курсовая работа", "Курсовой проект"],
     }
 
-    return variant.control in mapper[target.control] and target.zet <= variant.zet
+    return (
+        target.control in mapper
+        and variant.control in mapper[target.control]
+        and target.zet <= variant.zet
+    )
 
 
 def calculate_similar_disciplines(

@@ -168,6 +168,18 @@ class LoadTitlesCheck(AupValidator):
 
 
 class TotalZetCheck(AupValidator):
+    total_sum_by_level = {
+        "03": 240,
+        "04": 120,
+        "05": 300,
+    }
+
+    measure_to_zet = {
+        "Часы": 1 / 36,
+        "Недели": 1.5,
+        "Зет": 1,
+    }
+
     def validate(self) -> dict | None:
         """
         Метод для проверки, чтобы общая сумма ЗЕТ соответствовало норме (30 * кол-во семестров)
@@ -175,11 +187,14 @@ class TotalZetCheck(AupValidator):
         logger.debug("TotalZetCheck: validating...")
 
         self.add_skipped_to_df()
+        print(self.header.keys())
+        okso = self.header["Содержание"][4]
+        level_code = okso.split(".")[1]
 
-        periods = self.data.groupby("Период контроля")
-
-        total_sum = len(periods) * 30.0
-        s = self.data[~self.data["skipped"]]["ЗЕТ"].sum()
+        total_sum = self.total_sum_by_level[level_code]
+        df = self.data[~self.data["skipped"]]
+        s = df["Количество"] * df["Ед. изм."].map(lambda el: self.measure_to_zet[el])
+        s = s.sum()
 
         if abs(total_sum - s) < 0.1:
             logger.debug("IntegrityCheck: ok")

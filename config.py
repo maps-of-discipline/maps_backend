@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv(".env")
 
 SHOW_DEBUG_EXECUTION_TIME = False
-LOG_LEVEL = logging.INFO
+LOG_LEVEL = logging.DEBUG
 
 APP_URL_PREFIX = os.getenv("APP_URL_PREFIX") or "/api"
 
