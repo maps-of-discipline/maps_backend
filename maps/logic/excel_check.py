@@ -187,15 +187,11 @@ class TotalZetCheck(AupValidator):
         logger.debug("TotalZetCheck: validating...")
 
         self.add_skipped_to_df()
-        okso = self.header["Код специальности"]
+        print(self.header.keys())
+        okso = self.header["Содержание"][4]
         level_code = okso.split(".")[1]
 
         total_sum = self.total_sum_by_level[level_code]
-
-        # old
-        s = self.data[~self.data["skipped"]]["ЗЕТ"].sum()
-
-        # new
         df = self.data[~self.data["skipped"]]
         s = df["Количество"] * df["Ед. изм."].map(lambda el: self.measure_to_zet[el])
         s = s.sum()
