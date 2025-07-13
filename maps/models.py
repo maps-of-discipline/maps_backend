@@ -336,6 +336,14 @@ class Groups(db.Model):
     name_group = db.Column(db.String(255), nullable=False)
     color = db.Column(db.String(8), nullable=False)
     weight = db.Column(db.Integer, nullable=False, default=5)
+    is_deleted = db.Column(db.Boolean, default=False, nullable=False)
+    is_default_group = db.Column(db.Boolean, default=False, nullable=False)
+    created_by = db.Column(
+        db.Integer, 
+        db.ForeignKey("tbl_users.id_user", ondelete="RESTRICT"), 
+    )
+    
+    creator = db.relationship("Users", foreign_keys=[created_by])
 
     def __repr__(self):
         return "<Groups %r>" % self.name_group
