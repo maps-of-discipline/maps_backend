@@ -42,4 +42,10 @@ def init_app(app):
         handle_initialization_error(e)
 
 # Import routes AFTER creating Blueprint to avoid circular imports
-from . import routes
+from .routes import educational_programs_routes
+from .routes import matrix_operations_routes
+from .routes import competencies_indicators_routes
+from .routes import fgos_routes
+from .routes import prof_standards_routes
+from .routes import aup_external_routes
+from .routes import uk_pk_generation_routes
