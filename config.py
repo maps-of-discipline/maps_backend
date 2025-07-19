@@ -33,8 +33,8 @@ UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'upload
 MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
 
 # Прочие настройки
-ACCESS_TOKEN_LIFETIME = 3600  # 1 hour in seconds
-REFRESH_TOKEN_LIFETIME = 7 * 24 * 3600  # 7 days in seconds
+ACCESS_TOKEN_LIFETIME = 3600 * 24  # 1 день в секундах
+REFRESH_TOKEN_LIFETIME = 7 * 24 * 3600  # 7 дней в секундах
 
 TELEGRAM_URL = 'https://api.telegram.org'
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')

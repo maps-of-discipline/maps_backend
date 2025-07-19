@@ -1,3 +1,4 @@
+# filepath: competencies_matrix/routes.py
 from flask import request, jsonify, abort, send_file
 from . import competencies_matrix_bp
 from typing import Optional, List
@@ -23,11 +24,13 @@ from .logic import (
     process_uk_indicators_disposition_file,
     save_uk_indicators_from_disposition,
     handle_pk_name_correction,
-    handle_pk_ipk_generation, # <--- ИЗМЕНЕНА ДЛЯ ПАКЕТНОЙ ГЕНЕРАЦИИ
+    handle_pk_ipk_generation,
     create_educational_program,
+    # НОВОЕ: Импортируем функцию обновления ОПОП
+    update_educational_program as logic_update_educational_program, 
     batch_create_pk_and_ipk,
     delete_educational_program,
-    import_aup_from_external_db # <--- НОВАЯ, КЛЮЧЕВАЯ ФУНКЦИЯ ИМПОРТА
+    import_aup_from_external_db
 )
 
 from auth.logic import login_required, approved_required, admin_only
@@ -63,8 +66,6 @@ def create_program_route():
     if not data:
         abort(400, description="Отсутствуют данные в теле запроса.")
     try:
-        # Commit делается здесь, после того как логика создания ОПОП, возможно,
-        # вызвала импорт АУП и другие изменения.
         new_program_obj = create_educational_program(data, db.session)
         db.session.commit()
         
@@ -83,6 +84,40 @@ def create_program_route():
         logger.error(f"Unexpected error creating program: {e}", exc_info=True)
         return jsonify({"error": f"Неожиданная ошибка сервера при создании образовательной программы."}), 500
 
+# НОВЫЙ РОУТ ДЛЯ ОБНОВЛЕНИЯ ОПОП
+@competencies_matrix_bp.route('/programs/<int:program_id>', methods=['PATCH'])
+@login_required
+@approved_required
+@admin_only
+def update_program_route(program_id: int):
+    """Обновляет существующую образовательную программу по ID."""
+    data = request.get_json()
+    if not data:
+        abort(400, description="Отсутствуют данные для обновления.")
+
+    try:
+        updated_program_dict = logic_update_educational_program(program_id, data, db.session)
+        
+        if updated_program_dict:
+            db.session.commit()
+            return jsonify(updated_program_dict), 200
+        else:
+            db.session.rollback() # Rollback in case of partial changes before 'not found'
+            return jsonify({"error": "Образовательная программа не найдена."}), 404
+            
+    except ValueError as e:
+        db.session.rollback()
+        logger.error(f"Validation error updating program {program_id}: {e}")
+        return jsonify({"error": str(e)}), 400
+    except IntegrityError as e:
+        db.session.rollback()
+        logger.error(f"Integrity error updating program {program_id}: {e.orig}", exc_info=True)
+        return jsonify({"error": "Образовательная программа с такими параметрами уже существует."}), 409
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Unexpected error updating program {program_id}: {e}", exc_info=True)
+        return jsonify({"error": f"Неожиданная ошибка сервера при обновлении образовательной программы."}), 500
+
 
 @competencies_matrix_bp.route('/programs/<int:program_id>', methods=['GET'])
 @login_required
@@ -97,26 +132,20 @@ def get_program(program_id):
 @competencies_matrix_bp.route('/programs/<int:program_id>/import-aup/<string:aup_num>', methods=['POST'])
 @login_required
 @approved_required
-@admin_only # Импорт - административная операция
+@admin_only
 def import_aup_to_program(program_id: int, aup_num: str):
     """
     Импортирует АУП из внешней БД и привязывает его к указанной образовательной программе.
     """
     try:
         result = import_aup_from_external_db(aup_num, program_id, db.session)
-        # Commit и Rollback теперь управляются внутри import_aup_from_external_db
-        # если он не использует with session.begin_nested() или похожий контекст.
-        # Если import_aup_from_external_db вызывает session.commit(), то здесь не нужно.
-        # Если не вызывает, то должен быть здесь.
-        # В текущей реализации import_aup_from_external_db вызывает session.commit()
         
         if result.get("success"):
             return jsonify(result), 201
         else:
-            # Этот случай маловероятен, т.к. logic выбросит исключение
             return jsonify({"error": result.get("message", "Неизвестная ошибка импорта")}), 500
     except FileNotFoundError as e:
-        db.session.rollback() # Rollback, т.к. возможно, логика пыталась что-то добавить перед ошибкой
+        db.session.rollback()
         return jsonify({"error": str(e)}), 404
     except ValueError as e:
         db.session.rollback()
@@ -139,7 +168,7 @@ def get_matrix(aup_num: str):
     logger.info(f"Received GET request for matrix for AUP num: {aup_num}")
     
     try:
-        matrix_data = get_matrix_for_aup(aup_num) # Эта функция теперь только читает локально
+        matrix_data = get_matrix_for_aup(aup_num)
 
         if matrix_data.get("status") == "not_imported":
             logger.warning(f"АУП '{aup_num}' не импортирован. Отправка ответа 404.")
@@ -171,17 +200,14 @@ def manage_matrix_link():
  
     try:
         result = update_matrix_link(aup_data_id, indicator_id, create=is_creating)
-        # Commit и Rollback теперь управляются внутри update_matrix_link, как в вашем исходном коде
         
         status_code = 201 if result['status'] == 'created' else 200
         return jsonify(result), status_code
 
     except (ValueError, IntegrityError) as e:
-        # Логика update_matrix_link уже делает rollback, но мы можем обработать здесь для ответа
         logger.error(f"Ошибка целостности данных при обновлении матрицы: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 409 # 409 Conflict
+        return jsonify({"error": str(e)}), 409
     except Exception as e:
-        # Логика update_matrix_link уже делает rollback
         logger.error(f"Ошибка сервера при обновлении матрицы: {e}", exc_info=True)
         return jsonify({"error": "Внутренняя ошибка сервера."}), 500
 
