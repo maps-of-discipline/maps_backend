@@ -22,11 +22,7 @@ logger = logging.getLogger(__name__)
 
 def get_matrix_for_aup(aup_num: str) -> Dict[str, Any]:
     """
-    (ФИНАЛЬНАЯ СТАБИЛЬНАЯ ВЕРСИЯ 5.0)
-    Собирает все данные для матрицы компетенций.
-    1. Всегда работает только с локальной БД.
-    2. Гарантированно возвращает поле "disciplines" (пустым, если нет данных).
-    3. Упрощена логика, чтобы избежать путаницы.
+    Collects all data for the competency matrix.
     """
     logger.info(f"Запрос на построение матрицы для АУП: {aup_num}.")
     session: Session = local_db.session
@@ -36,7 +32,7 @@ def get_matrix_for_aup(aup_num: str) -> Dict[str, Any]:
         "status": "error",
         "aup_info": None,
         "program_info": None,
-        "disciplines": [], # ВАЖНО: всегда возвращаем этот ключ
+        "disciplines": [],
         "competencies": [],
         "links": [],
         "error": f"АУП '{aup_num}' не найден в системе или не привязан к ОП."
@@ -90,7 +86,6 @@ def get_matrix_for_aup(aup_num: str) -> Dict[str, Any]:
     
     if not disciplines_data:
         logger.warning(f"Для локального АУП ID {local_aup.id_aup} не найдено дисциплин.")
-        # Не возвращаем ошибку, просто будет пустая матрица.
         
     response_data["disciplines"] = disciplines_data
     local_aup_data_ids = [d['id'] for d in disciplines_data]
@@ -119,8 +114,8 @@ def get_matrix_for_aup(aup_num: str) -> Dict[str, Any]:
 
 def _get_relevant_competencies_for_program(session: Session, program: EducationalProgram) -> Tuple[List[Dict], set]:
     """
-    Вспомогательная функция для получения всех релевантных компетенций (УК, ОПК, ПК)
-    и их индикаторов для данной образовательной программы.
+    Helper function to retrieve all relevant competencies (UK, OPK, PK)
+    and their indicators for a given educational program.
     """
     relevant_competencies = []
     
@@ -143,9 +138,9 @@ def _get_relevant_competencies_for_program(session: Session, program: Educationa
         selectinload(Competency.indicators),
         selectinload(Competency.competency_type),
         # ИСПРАВЛЕНИЕ: Правильная цепочка отношений для загрузки ProfStandard
-        selectinload(Competency.based_on_labor_function) # Это отношение к LaborFunction
-            .selectinload(LaborFunction.generalized_labor_function) # Это отношение к GeneralizedLaborFunction
-            .selectinload(GeneralizedLaborFunction.prof_standard) # Это отношение к ProfStandard
+        selectinload(Competency.based_on_labor_function)
+            .selectinload(LaborFunction.generalized_labor_function)
+            .selectinload(GeneralizedLaborFunction.prof_standard)
     ).join(Competency.educational_programs_assoc).filter(
         CompetencyEducationalProgram.educational_program_id == program.id,
         Competency.competency_type.has(CompetencyType.code == 'ПК')
@@ -157,11 +152,9 @@ def _get_relevant_competencies_for_program(session: Session, program: Educationa
     competencies_data = []
     all_indicator_ids_for_matrix = set()
 
-    # Получаем все типы компетенций для сортировки
     all_comp_types = session.query(CompetencyType).all()
     comp_type_id_sort_order = {ct.id: i for i, ct_code in enumerate(['УК', 'ОПК', 'ПК']) for ct in all_comp_types if ct.code == ct_code}
     
-    # Сортировка компетенций: сначала по типу (УК, ОПК, ПК), затем по коду
     relevant_competencies.sort(key=lambda c: (comp_type_id_sort_order.get(c.competency_type_id, 999), c.code))
 
     for comp in relevant_competencies:
@@ -171,7 +164,6 @@ def _get_relevant_competencies_for_program(session: Session, program: Educationa
         comp_dict['type_code'] = comp.competency_type.code if comp.competency_type else "UNKNOWN"
         comp_dict['indicators'] = []
 
-        # Добавление информации об источнике (ФГОС или Профстандарт)
         comp_dict['source_document_id'] = None
         comp_dict['source_document_code'] = None
         comp_dict['source_document_name'] = None
@@ -192,18 +184,16 @@ def _get_relevant_competencies_for_program(session: Session, program: Educationa
                 comp_dict['source_document_code'] = ps.code
                 comp_dict['source_document_name'] = ps.name
                 comp_dict['source_document_type'] = "Профстандарт"
-            else: # ПК создана вручную без привязки к ТФ
+            else:
                 comp_dict['source_document_type'] = "Ручной ввод"
                 comp_dict['source_document_code'] = "N/A"
                 comp_dict['source_document_name'] = "Введено вручную"
 
-        # Добавление информации о ТФ, на основе которой создана ПК (если есть)
         if comp.based_on_labor_function:
             comp_dict['based_on_labor_function_id'] = comp.based_on_labor_function.id
             comp_dict['based_on_labor_function_code'] = comp.based_on_labor_function.code
             comp_dict['based_on_labor_function_name'] = comp.based_on_labor_function.name
 
-        # Добавление индикаторов
         if comp.indicators:
             sorted_indicators = sorted(comp.indicators, key=lambda i: i.code)
             for ind in sorted_indicators:
@@ -212,7 +202,6 @@ def _get_relevant_competencies_for_program(session: Session, program: Educationa
                 ind_dict['competency_code'] = comp.code; ind_dict['competency_name'] = comp.name
                 ind_dict['competency_type_code'] = comp_dict['type_code']
                 
-                # Передача информации об источнике индикатора
                 ind_dict['source_document_id'] = comp_dict['source_document_id']
                 ind_dict['source_document_code'] = comp_dict['source_document_code']
                 ind_dict['source_document_name'] = comp_dict['source_document_name']
@@ -228,19 +217,16 @@ def _get_relevant_competencies_for_program(session: Session, program: Educationa
 
 def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True) -> Dict[str, Any]:
     """
-    (ИСПРАВЛЕНО v2 - "Удаление вместо Флага")
-    Создает или удаляет запись о связи в таблице CompetencyMatrix.
+    Creates or deletes a link entry in the CompetencyMatrix table.
     """
     session: Session = local_db.session
     try:
-        # Проверяем существование родительских записей
         if not session.query(exists().where(LocalAupData.id == aup_data_id)).scalar():
             raise ValueError(f"Дисциплина с ID {aup_data_id} не найдена в локальной БД.")
 
         if not session.query(exists().where(Indicator.id == indicator_id)).scalar():
             raise ValueError(f"Индикатор с ID {indicator_id} не найден в локальной БД.")
 
-        # Ищем существующую связь
         existing_link = session.query(CompetencyMatrix).filter_by(
             aup_data_id=aup_data_id,
             indicator_id=indicator_id
@@ -248,17 +234,15 @@ def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True)
 
         if create:
             if existing_link:
-                # Если уже существует, ничего не делаем, возвращаем успех
                 logger.warning(f"Попытка создать уже существующую связь: AupData={aup_data_id}, Indicator={indicator_id}")
                 return {'success': True, 'status': 'already_exists', 'message': "Связь уже существует."}
             else:
-                # Создаем новую запись
                 link = CompetencyMatrix(aup_data_id=aup_data_id, indicator_id=indicator_id, is_manual=True)
                 session.add(link)
                 logger.info(f"Связь создана: AupData ID {aup_data_id} <-> Indicator ID {indicator_id}")
                 session.commit()
                 return {'success': True, 'status': 'created', 'message': "Связь успешно создана."}
-        else:  # Операция удаления
+        else:
             if existing_link:
                 session.delete(existing_link)
                 logger.info(f"Связь удалена: AupData ID {aup_data_id} <-> Indicator ID {indicator_id}")

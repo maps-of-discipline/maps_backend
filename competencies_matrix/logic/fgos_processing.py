@@ -22,7 +22,6 @@ def parse_fgos_file(file_bytes: bytes, filename: str) -> dict:
         data = nlp.parse_fgos_with_llm(text)
         if not data or not data.get('metadata'):
             logger.warning(f"Parsing failed or returned insufficient metadata for {filename}")
-            # The 'data' dictionary is returned as is, to be handled by the caller
         return data
     except ValueError as e:
         logger.error(f"Parser ValueError for {filename}: {e}")
@@ -30,7 +29,6 @@ def parse_fgos_file(file_bytes: bytes, filename: str) -> dict:
     except Exception as e:
         error_message = str(e)
         if "Input exceeds the maximum allowed size" in error_message:
-            # Avoid logging the same error multiple times - just log once and raise a user-friendly message
             logger.error(f"LLM API input size error for {filename}: File too large for processing")
             raise ValueError(f"Файл '{filename}' слишком большой для обработки. Пожалуйста, убедитесь, что вы загружаете корректный файл ФГОС ВО.")
         else:
@@ -78,7 +76,6 @@ def save_fgos_data(data: dict, filename: str, session: Session, force_update: bo
         logger.warning("Parsed 'recommended_ps' data is not a list of dictionaries. Skipping.")
         raw_ps_list = []
 
-    # Clean up dates in recommended PS list for JSON serialization
     cleaned_ps_list = []
     for ps_item in raw_ps_list:
         clean_item = ps_item.copy()
@@ -160,7 +157,6 @@ def _sync_competencies(session: Session, fgos: FgosVo, data: dict):
             logger.warning(f"Skipping competency with unknown type: {code}")
             continue
 
-        # Create or update competency
         comp = session.query(Competency).filter_by(code=code, fgos_vo_id=fgos.id).first()
         if not comp:
             comp = Competency(
@@ -186,7 +182,6 @@ def _sync_recommended_ps(session: Session, fgos: FgosVo, raw_ps_list: list):
     if not raw_ps_list:
         return
 
-    # Clear existing associations
     session.query(FgosRecommendedPs).filter_by(fgos_id=fgos.id).delete()
 
     for ps_data in raw_ps_list:
@@ -230,7 +225,6 @@ def get_fgos_details(fgos_id: int) -> Optional[dict]:
 
         details = fgos.to_dict(rules=['-competencies', '-recommended_ps_assoc', '-educational_programs'])
 
-        # Organize competencies by type
         uk_competencies = []
         opk_competencies = []
 
@@ -253,7 +247,6 @@ def get_fgos_details(fgos_id: int) -> Optional[dict]:
         details['uk_competencies'] = uk_competencies
         details['opk_competencies'] = opk_competencies
 
-        # Structure recommended professional standards
         recommended_ps = []
         # Use parsed data as the source of truth, supplemented by DB info
         parsed_recommended_ps = fgos.recommended_ps_parsed_data or []
@@ -290,7 +283,6 @@ def delete_fgos(fgos_id: int, session: Session) -> bool:
             return False
 
         logger.info(f"Deleting FGOS {fgos_id} ('{fgos.direction_code} - {fgos.direction_name}')...")
-        # Related competencies and PS links are deleted via cascade settings in the model.
         session.delete(fgos)
         logger.info(f"FGOS {fgos_id} and related data marked for deletion.")
         return True

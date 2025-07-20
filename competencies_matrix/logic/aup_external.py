@@ -7,18 +7,15 @@ from sqlalchemy import create_engine, select, and_, or_, exc
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
-# --- Импорты локальных моделей Maps ---
-from maps.models import db as local_db, SprDiscipline
+from maps.models import db as local_db
 from maps.models import (
     AupInfo as LocalAupInfo, AupData as LocalAupData,
     SprFaculty, Department, SprDegreeEducation, SprFormEducation,
-    D_Blocks, D_Part, D_Modules, Groups, D_TypeRecord, D_ControlType, D_EdIzmereniya, D_Period, NameOP, SprOKCO # Добавлены NameOP, SprOKCO
+    D_Blocks, D_Part, D_Modules, Groups, D_TypeRecord, D_ControlType, D_EdIzmereniya, D_Period, NameOP, SprOKCO 
 )
 
-# --- Импорты моделей модуля Компетенций ---
 from ..models import EducationalProgramAup, EducationalProgram, CompetencyMatrix, Competency, Indicator
 
-# --- Импорты внешних моделей из external_models.py ---
 from ..external_models import (
     ExternalAupInfo, ExternalNameOP, ExternalSprOKCO, ExternalSprFormEducation,
     ExternalSprDegreeEducation, ExternalAupData, ExternalSprDiscipline, ExternalSprFaculty,
@@ -27,7 +24,6 @@ from ..external_models import (
     ExternalDTypeRecord, ExternalDControlType, ExternalDEdIzmereniya, ExternalDPeriod
 )
 
-# --- Утилиты ---
 from ..utils import find_or_create_lookup, find_or_create_name_op
 
 logger = logging.getLogger(__name__)
@@ -70,15 +66,12 @@ def import_aup_from_external_db(aup_num: str, program_id: int, session: Session)
     """
     logger.info(f"Начало импорта АУП '{aup_num}' для ОП ID {program_id}.")
 
-    # 1. Проверяем, существует ли ОП
     program = session.query(EducationalProgram).get(program_id)
     if not program:
         raise ValueError(f"Образовательная программа с ID {program_id} не найдена.")
 
-    # 2. Проверяем, не импортирован ли уже АУП
     existing_local_aup = session.query(LocalAupInfo).filter_by(num_aup=aup_num).first()
     if existing_local_aup:
-        # Если АУП уже есть, просто привязываем его к программе, если он еще не привязан
         existing_link = session.query(EducationalProgramAup).filter_by(
             educational_program_id=program_id,
             aup_id=existing_local_aup.id_aup
@@ -89,10 +82,8 @@ def import_aup_from_external_db(aup_num: str, program_id: int, session: Session)
             logger.info(f"Существующий локальный АУП '{aup_num}' привязан к ОП ID {program_id}.")
         else:
             logger.info(f"Связь существующего локального АУП '{aup_num}' с ОП ID {program_id} уже существует.")
-        # Не коммитим здесь, коммит будет на уровне роута.
         return {"success": True, "message": "АУП уже был импортирован и успешно привязан к программе.", "aup_id": existing_local_aup.id_aup}
 
-    # 3. Ищем АУП во внешней БД
     external_engine = get_external_db_engine()
     with Session(external_engine) as external_session:
         external_aup = external_session.query(ExternalAupInfo).options(
@@ -103,7 +94,6 @@ def import_aup_from_external_db(aup_num: str, program_id: int, session: Session)
         if not external_aup:
             raise FileNotFoundError(f"АУП с номером '{aup_num}' не найден во внешней базе данных.")
 
-        # Получаем дисциплины из внешней БД, включая все связанные справочники
         external_disciplines_query = external_session.query(ExternalAupData).options(
             joinedload(ExternalAupData.spr_discipline),
             joinedload(ExternalAupData.block), joinedload(ExternalAupData.part),
@@ -114,10 +104,7 @@ def import_aup_from_external_db(aup_num: str, program_id: int, session: Session)
             ExternalAupData.id_period, ExternalAupData.shifr, ExternalAupData.id
         ).all()
         
-    # 4. Клонируем АУП и дисциплины в локальную БД в одной транзакции
     try:
-        # 4.1 Клонируем связанные справочники для `LocalAupInfo`
-        # Используем find_or_create_lookup для каждой сущности
         local_faculty = find_or_create_lookup(SprFaculty, {'name_faculty': external_aup.faculty.name_faculty}, {'id_branch': 1}, session) if external_aup.faculty else None
         local_department = find_or_create_lookup(Department, {'name_department': external_aup.department.name_department}, {}, session) if external_aup.department else None
         local_degree = find_or_create_lookup(SprDegreeEducation, {'name_deg': external_aup.degree.name_deg}, {}, session) if external_aup.degree else None
@@ -133,7 +120,6 @@ def import_aup_from_external_db(aup_num: str, program_id: int, session: Session)
         if not all([local_faculty, local_degree, local_form, local_name_op]):
             raise ValueError("Не удалось найти или создать обязательные связанные сущности для AupInfo (факультет, степень, форма, ОП).")
 
-        # 4.2 Создаем локальную запись `LocalAupInfo`
         new_local_aup = LocalAupInfo(
             num_aup=aup_num,
             id_faculty=local_faculty.id_faculty,
@@ -154,26 +140,21 @@ def import_aup_from_external_db(aup_num: str, program_id: int, session: Session)
             file=f"imported_from_kd_{aup_num}"
         )
         session.add(new_local_aup)
-        session.flush() # Получаем ID для `new_local_aup`
+        session.flush()
 
-        # 4.3 Клонируем дисциплины (`LocalAupData`)
         cloned_disciplines_count = 0
         for ext_disc_data in external_disciplines_query:
             try:
-                # Клонируем SprDiscipline (по названию)
                 local_spr_discipline = find_or_create_lookup(SprDiscipline, {'title': ext_disc_data.discipline}, {'title': ext_disc_data.discipline}, session)
                 if not local_spr_discipline:
                     logger.warning(f"Пропуск дисциплины '{ext_disc_data.discipline}' из-за невозможности создать SprDiscipline.")
                     continue
 
-                # Клонируем остальные справочники по ID (если есть) или по названию
-                # Эти справочники уже имеют `id` во внешней БД, стараемся сохранить его
                 local_period = find_or_create_lookup(D_Period, {'id': ext_disc_data.id_period}, {'title': ext_disc_data.period_rel.title if ext_disc_data.period_rel else f"Период {ext_disc_data.id_period}"}, session)
                 local_type_record = find_or_create_lookup(D_TypeRecord, {'id': ext_disc_data.id_type_record}, {'title': ext_disc_data.type_record_rel.title if ext_disc_data.type_record_rel else f"Тип записи {ext_disc_data.id_type_record}"}, session)
                 local_type_control = find_or_create_lookup(D_ControlType, {'id': ext_disc_data.id_type_control}, {'title': ext_disc_data.type_control_rel.title if ext_disc_data.type_control_rel else f"Тип контроля {ext_disc_data.id_type_control}"}, session)
                 local_edizm = find_or_create_lookup(D_EdIzmereniya, {'id': ext_disc_data.id_edizm}, {'title': ext_disc_data.ed_izmereniya_rel.title if ext_disc_data.ed_izmereniya_rel else f"Ед. изм. {ext_disc_data.id_edizm}"}, session)
                 
-                # `block`, `part`, `module`, `group` могут быть `NULL` в `aup_data`
                 local_block = find_or_create_lookup(D_Blocks, {'id': ext_disc_data.id_block}, {'title': ext_disc_data.block.title if ext_disc_data.block else "Без блока"}, session) if ext_disc_data.id_block else None
                 local_part = find_or_create_lookup(D_Part, {'id': ext_disc_data.id_part}, {'title': ext_disc_data.part.title if ext_disc_data.part else "Без части"}, session) if ext_disc_data.id_part else None
                 local_module = find_or_create_lookup(D_Modules, {'id': ext_disc_data.id_module}, {'title': ext_disc_data.module.title if ext_disc_data.module else "Без названия", 'color': ext_disc_data.module.color if ext_disc_data.module else "#CCCCCC"}, session) if ext_disc_data.id_module else None
@@ -187,7 +168,7 @@ def import_aup_from_external_db(aup_num: str, program_id: int, session: Session)
                     id_aup=new_local_aup.id_aup,
                     shifr=ext_disc_data.shifr,
                     id_discipline=local_spr_discipline.id,
-                    _discipline=ext_disc_data.discipline, # Сохраняем raw название на всякий случай
+                    _discipline=ext_disc_data.discipline,
                     id_period=local_period.id,
                     num_row=ext_disc_data.num_row,
                     zet=int((ext_disc_data.zet or 0) * 100), # Zet хранится умноженным на 100
@@ -205,18 +186,16 @@ def import_aup_from_external_db(aup_num: str, program_id: int, session: Session)
                 cloned_disciplines_count += 1
             except exc.IntegrityError as e_inner_integrity:
                 logger.error(f"IntegrityError при клонировании дисциплины '{ext_disc_data.discipline}': {e_inner_integrity.orig.args[1]}", exc_info=True)
-                session.rollback() # Откатываем внутреннюю транзакцию (если была), чтобы можно было продолжить
+                session.rollback()
                 raise RuntimeError(f"Ошибка целостности при клонировании дисциплины: {e_inner_integrity.orig.args[1]}")
             except Exception as e_inner:
                 logger.error(f"Непредвиденная ошибка при клонировании дисциплины '{ext_disc_data.discipline}': {e_inner}", exc_info=True)
                 session.rollback()
                 raise RuntimeError(f"Неизвестная ошибка при клонировании дисциплины: {e_inner}")
 
-        # 4.4 Привязываем импортированный АУП к ОП
         link = EducationalProgramAup(educational_program_id=program_id, aup_id=new_local_aup.id_aup)
         session.add(link)
 
-        # Не коммитим здесь, коммит будет на уровне роута.
         logger.info(f"Успешно импортирован АУП '{aup_num}' ({cloned_disciplines_count} дисциплин) и привязан к ОП ID {program_id}.")
         return {"success": True, "message": "АУП успешно импортирован.", "aup_id": new_local_aup.id_aup}
 
@@ -315,6 +294,6 @@ def get_external_aup_disciplines(aup_id: int) -> List[Dict[str, Any]]:
 
             result = []
             for entry in aup_data_entries:
-                 result.append(entry.as_dict()) # as_dict() из ExternalAupData теперь возвращает названия
+                result.append(entry.as_dict())
             return result
         except Exception as e: logger.error(f"Error fetching external AupData for external AUP ID {aup_id}: {e}", exc_info=True); raise

@@ -17,8 +17,7 @@ logger = logging.getLogger(__name__)
 
 def process_uk_indicators_disposition_file(file_bytes: bytes, filename: str, education_level: str) -> Dict[str, Any]:
     """
-    Обрабатывает PDF-файл распоряжения.
-    Принимает education_level для фильтрации запроса к NLP и поиска ФГОС.
+    Processes a PDF disposition file.
     """
     logger.info(f"Processing UK indicators disposition file: {filename} for education level: {education_level}")
     
@@ -89,8 +88,7 @@ def _shift_competency_codes(
     prefix: str = 'УК-'
 ):
     """
-    Сдвигает номера кодов компетенций на +1, начиная с указанного номера.
-    Например, при вставке новой УК-7, старая УК-7 -> УК-8, УК-8 -> УК-9 и т.д.
+    Shifts competency codes by +1, starting from the specified number.
     """
     competencies_to_shift = session.query(Competency).filter(
         Competency.fgos_vo_id == fgos_id,
@@ -127,10 +125,7 @@ def save_uk_indicators_from_disposition(
     resolutions: Optional[Dict[str, str]] = None
 ) -> Dict[str, Any]:
     """
-    Сохраняет/обновляет индикаторы УК из распоряжения.
-    1. Уважает 'resolutions' для выбора "старой" формулировки.
-    2. Использует отредактированные коды из 'resolutions'.
-    3. Выполняет сдвиг кодов существующих УК/ИУК при необходимости.
+    Saves/updates UK indicators from a disposition.
     """
     if resolutions is None:
         resolutions = {}
@@ -274,7 +269,7 @@ def save_uk_indicators_from_disposition(
     
 def handle_pk_name_correction(raw_phrase: str) -> Dict[str, str]:
     """
-    Обрабатывает запрос на коррекцию имени ПК с использованием NLP.
+    Handles PK name correction using NLP.
     """
     if not raw_phrase or not isinstance(raw_phrase, str):
         raise ValueError("Некорректная сырая фраза для коррекции.")
@@ -291,9 +286,7 @@ def handle_pk_name_correction(raw_phrase: str) -> Dict[str, str]:
 
 def handle_pk_ipk_generation(batch_tfs_data: List[Dict]) -> List[Dict]:
     """
-    Обрабатывает запрос на пакетную генерацию ПК и ИПК с использованием NLP.
-    Принимает список словарей, каждый из которых представляет одну ТФ с ее элементами ЗУН.
-    Возвращает список сгенерированных результатов, сопоставленных по unique_tf_id.
+    Handles batch generation of PK and IPK using NLP.
     """
     if not batch_tfs_data:
         raise ValueError("Необходимо выбрать Трудовые Функции для генерации.")
@@ -310,7 +303,7 @@ def handle_pk_ipk_generation(batch_tfs_data: List[Dict]) -> List[Dict]:
 
 def batch_create_pk_and_ipk(data_list: List[Dict[str, Any]], session: Session) -> Dict:
     """
-    Пакетное создание ПК и их ИПК на основе массива данных из фронтенда.
+    Batch creation of PKs and their IPKs based on frontend data.
     """
     created_count = 0
     errors = []
@@ -324,14 +317,12 @@ def batch_create_pk_and_ipk(data_list: List[Dict[str, Any]], session: Session) -
 
     for item_data in data_list:
         try:
-            # 1. Создание Профессиональной Компетенции (ПК)
             pk_payload = {
                 'code': item_data.get('pk_code'),
                 'name': item_data.get('pk_name'),
                 'competency_type_id': pk_type.id,
                 'based_on_labor_function_id': item_data.get('tf_id')
             }
-            # Проверка на существование, чтобы избежать IntegrityError
             existing_pk = session.query(Competency).filter_by(code=pk_payload['code'], competency_type_id=pk_type.id).first()
             if existing_pk:
                  raise Exception(f"Компетенция с кодом '{pk_payload['code']}' уже существует.")
@@ -340,7 +331,6 @@ def batch_create_pk_and_ipk(data_list: List[Dict[str, Any]], session: Session) -
             session.add(new_pk)
             session.flush()
 
-            # 2. Привязка ПК к выбранным Образовательным Программам
             educational_program_ids = item_data.get('educational_program_ids', [])
             if educational_program_ids:
                 for ep_id in educational_program_ids:
@@ -351,11 +341,9 @@ def batch_create_pk_and_ipk(data_list: List[Dict[str, Any]], session: Session) -
                     else:
                         logger.warning(f"ОП с ID {ep_id} не найдена. Пропуск привязки.")
 
-            # 3. Создание одного Индикатора (ИПК) с тремя частями
             formulation = f"Знает: {item_data.get('ipk_znaet', 'Н/Д')}\nУмеет: {item_data.get('ipk_umeet', 'Н/Д')}\nВладеет: {item_data.get('ipk_vladeet', 'Н/Д')}"
             
-            # Проверяем, что код индикатора не занят для этой компетенции
-            indicator_code = f"ИПК-{new_pk.code.replace('ПК-', '')}.1" # Пример генерации кода
+            indicator_code = f"ИПК-{new_pk.code.replace('ПК-', '')}.1"
             existing_indicator = session.query(Indicator).filter_by(code=indicator_code, competency_id=new_pk.id).first()
             if existing_indicator:
                 raise Exception(f"Индикатор с кодом '{indicator_code}' уже существует для этой компетенции.")
@@ -373,7 +361,6 @@ def batch_create_pk_and_ipk(data_list: List[Dict[str, Any]], session: Session) -
             created_count += 1
             
         except Exception as e:
-            # Не откатываем сессию здесь, чтобы собрать все ошибки, но затем откатим всё.
             logger.error(f"Ошибка при пакетном создании для ПК {item_data.get('pk_code')}: {e}", exc_info=True)
             errors.append({'pk_code': item_data.get('pk_code'), 'error': str(e)})
 

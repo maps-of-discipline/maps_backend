@@ -26,7 +26,7 @@ def search_prof_standards(
     limit: int = 50,
     qualification_levels: Optional[List[int]] = None
 ) -> Dict[str, Any]:
-    """(Оптимизированная версия) Ищет в профстандартах, используя полнотекстовый поиск."""
+    """Ищет в профстандартах, используя полнотекстовый поиск."""
     if not search_query and not qualification_levels and (ps_ids is None or len(ps_ids) == 0):
         raise ValueError("Необходимо указать поисковый запрос, выбрать уровни квалификации или выбрать конкретные профстандарты.")
     

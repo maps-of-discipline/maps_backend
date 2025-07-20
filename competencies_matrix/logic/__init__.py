@@ -1,4 +1,3 @@
-# competencies_matrix/logic/__init__.py
 from .fgos_processing import (
     parse_fgos_file,
     save_fgos_data,
@@ -25,8 +24,7 @@ from .educational_programs import (
     get_educational_programs_list,
     get_program_details,
     create_educational_program,
-    # НОВОЕ: Добавляем функцию обновления
-    update_educational_program, 
+    update_educational_program,
     delete_educational_program
 )
 from .competencies_indicators import (

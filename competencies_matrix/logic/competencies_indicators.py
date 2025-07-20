@@ -25,7 +25,7 @@ def get_all_competencies() -> List[Dict[str, Any]]:
         ).all()
         result = []
         for comp in competencies:
-            comp_dict = comp.to_dict(rules=['-indicators', '-fgos', '-based_on_labor_function', '-matrix_entries', '-educational_programs_assoc'])
+            comp_dict = comp.to_dict(rules=['-indicators', '-fgos', '-based_on_labor_function', '-matrix_entries', '-educational_programs_assoc'], include_source_info=True)
             comp_dict['type_code'] = comp.competency_type.code if comp.competency_type else "UNKNOWN"
             
             comp_dict['source_document_id'] = None
