@@ -1,3 +1,4 @@
+# filepath: competencies_matrix/logic/educational_programs.py
 import datetime
 import logging
 from typing import Dict, List, Any, Optional, Tuple
@@ -7,24 +8,23 @@ from sqlalchemy.orm import Session, selectinload, joinedload
 
 from maps.models import db as local_db
 from maps.models import (
-    AupInfo as LocalAupInfo, AupData as LocalAupData,
+    AupInfo as LocalAupInfo, AupData as LocalAupData, SprDiscipline,
     SprFaculty, Department, SprDegreeEducation, SprFormEducation
 )
 
 from ..models import (
     EducationalProgram, Competency, Indicator, CompetencyMatrix,
-    FgosVo, EducationalProgramAup, EducationalProgramPs,
+    FgosVo, EducationalProgramAup, EducationalProgramPs, CompetencyType,
+    LaborFunction, GeneralizedLaborFunction, ProfStandard,
     CompetencyEducationalProgram
 )
 
 from .aup_external import get_external_aups_list, import_aup_from_external_db
 
-from ..utils import find_or_create_lookup, find_or_create_name_op
-
 logger = logging.getLogger(__name__)
 
 def get_educational_programs_list() -> List[EducationalProgram]:
-    """Fetches list of all educational programs."""
+    """Получает список всех образовательных программ."""
     try:
         return local_db.session.query(EducationalProgram).options(selectinload(EducationalProgram.aup_assoc).selectinload(EducationalProgramAup.aup)).order_by(EducationalProgram.title).all()
     except SQLAlchemyError as e:
@@ -32,23 +32,78 @@ def get_educational_programs_list() -> List[EducationalProgram]:
         return []
 
 def get_program_details(program_id: int) -> Optional[Dict[str, Any]]:
-    """Fetches detailed information about an educational program."""
+    """
+    Получает детальную информацию об образовательной программе,
+    активно собирая полный список соответствующих компетенций.
+    """
     try:
-        program = local_db.session.query(EducationalProgram).options(
+        logger.debug(f"Fetching details for program ID: {program_id}")
+        session: Session = local_db.session
+
+        program = session.query(EducationalProgram).options(
             selectinload(EducationalProgram.fgos),
             selectinload(EducationalProgram.aup_assoc).selectinload(EducationalProgramAup.aup),
             selectinload(EducationalProgram.selected_ps_assoc).selectinload(EducationalProgramPs.prof_standard),
-            selectinload(EducationalProgram.competencies_assoc).selectinload(CompetencyEducationalProgram.competency).selectinload(Competency.competency_type)
         ).get(program_id)
 
         if not program:
             logger.warning(f"Program with id {program_id} not found.")
             return None
-        
+
         details = program.to_dict(
             include_fgos=True, include_aup_list=True, include_selected_ps_list=True,
-            include_recommended_ps_list=True, include_competencies_list=True
+            include_recommended_ps_list=True,
+            include_competencies_list=False
         )
+
+        relevant_competencies = []
+        comp_types_q = session.query(CompetencyType).filter(CompetencyType.code.in_(['УК', 'ОПК', 'ПК'])).all()
+        comp_types = {ct.code: ct for ct in comp_types_q}
+
+        if program.fgos:
+            fgos_id_to_load = program.fgos.id
+            uk_type = comp_types.get('УК')
+            opk_type = comp_types.get('ОПК')
+            uk_opk_ids_to_load = [tid.id for tid in [uk_type, opk_type] if tid]
+
+            if uk_opk_ids_to_load:
+                uk_opk_competencies = session.query(Competency).options(
+                    selectinload(Competency.indicators),
+                    selectinload(Competency.competency_type)
+                ).filter(
+                    Competency.fgos_vo_id == fgos_id_to_load,
+                    Competency.competency_type_id.in_(uk_opk_ids_to_load)
+                ).all()
+                relevant_competencies.extend(uk_opk_competencies)
+                logger.info(f"Loaded {len(uk_opk_competencies)} УК/ОПК competencies from FGOS ID {fgos_id_to_load}.")
+            else:
+                logger.warning("Competency types УК/ОПК not found. Cannot load competencies.")
+        else:
+            logger.warning(f"Program {program_id} has no FGOS linked. Skipping УК/ОПК loading.")
+
+        pk_type = comp_types.get('ПК')
+        if pk_type:
+            pk_competencies = session.query(Competency).join(CompetencyEducationalProgram).options(
+                selectinload(Competency.indicators),
+                selectinload(Competency.competency_type)
+            ).filter(
+                Competency.competency_type_id == pk_type.id,
+                CompetencyEducationalProgram.educational_program_id == program_id
+            ).all()
+            relevant_competencies.extend(pk_competencies)
+            logger.debug(f"Loaded {len(pk_competencies)} ПК competencies linked to Program ID {program_id}.")
+        else:
+            logger.warning("Competency type ПК not found. Skipping ПК loading.")
+        
+        competencies_list_data = []
+        for comp in relevant_competencies:
+            comp_dict = comp.to_dict(rules=['-indicators'], include_type=True, include_indicators=True)
+            competencies_list_data.append(comp_dict)
+        
+        details['competencies_list'] = competencies_list_data
+        
+        logger.debug(f"Program {program_id} details assembled with a total of {len(details['competencies_list'])} competencies.")
+        
         return details
 
     except AttributeError as ae:
@@ -76,7 +131,7 @@ def create_educational_program(
         enrollment_year=data.get('enrollment_year'), form_of_education=data.get('form_of_education')
     ).first()
     if existing_program:
-        raise IntegrityError(f"Образовательная программа с такими параметрами уже существует (ID: {existing_program.id}).", {}, None)
+        raise IntegrityError(f"Образовательная программа с такими параметрами (код, профиль, год, форма) уже существует (ID: {existing_program.id}).", {}, None)
 
     fgos_vo = session.query(FgosVo).get(data['fgos_id']) if data.get('fgos_id') else None
 
@@ -96,7 +151,6 @@ def create_educational_program(
         if not aup_info:
             logger.warning(f"АУП '{aup_num_to_link}' не найден локально. Попытка импорта...")
             try:
-                # В случае, если AUP не найден локально, но есть в внешней БД, импортируем его.
                 import_result = import_aup_from_external_db(aup_num_to_link, new_program.id, session)
                 if import_result.get("aup_id"):
                     aup_info = session.query(LocalAupInfo).get(import_result.get("aup_id"))
@@ -106,13 +160,11 @@ def create_educational_program(
                 logger.error(f"Исключение при импорте АУП '{aup_num_to_link}' во время создания ОП: {e_import}", exc_info=True)
                 raise RuntimeError(f"Не удалось импортировать связанный АУП '{aup_num_to_link}'. Создание ОП прервано.")
     
-    if aup_info: # Если AUP найден или успешно импортирован, устанавливаем его как основной.
-        # Удаляем старые primary связи для этой ОП, если они есть.
+    if aup_info:
         session.query(EducationalProgramAup).filter_by(
             educational_program_id=new_program.id, is_primary=True
         ).update({"is_primary": False})
         
-        # Создаем или обновляем связь, чтобы она была основной
         existing_link = session.query(EducationalProgramAup).filter_by(
             educational_program_id=new_program.id, aup_id=aup_info.id_aup
         ).first()
@@ -175,7 +227,6 @@ def update_educational_program(program_id: int, data: Dict[str, Any], session: S
         if current_primary_aup_num != new_num_aup:
             logger.info(f"Changing primary AUP for program {program_id} from '{current_primary_aup_num}' to '{new_num_aup}'.")
             
-            # Удаляем старые primary связи для этой ОП
             session.query(EducationalProgramAup).filter_by(
                 educational_program_id=program.id, is_primary=True
             ).update({"is_primary": False})
@@ -208,13 +259,13 @@ def update_educational_program(program_id: int, data: Dict[str, Any], session: S
                     session.add(new_link)
                 updated = True
                 logger.info(f"АУП '{new_num_aup}' связан как основной с ОП ID {program_id}.")
-            else: # new_num_aup is None, meaning primary AUP is being removed
+            else:
                 updated = True
                 logger.info(f"Основной АУП для ОП ID {program_id} был удален.")
             
     if updated:
         session.add(program)
-        session.flush() # Flush to apply changes before refresh
+        session.flush()
 
     session.refresh(program)
     session.expire(program, ['aup_assoc', 'fgos']) 
@@ -241,7 +292,6 @@ def delete_educational_program(program_id: int, delete_cloned_aups: bool, sessio
             return False
 
         if delete_cloned_aups:
-            # Находим все АУПы, связанные с этой программой
             aup_ids_to_delete = [assoc.aup_id for assoc in program_to_delete.aup_assoc]
             if aup_ids_to_delete:
                 logger.info(f"Cascading delete for program {program_id}: Deleting associated local AUPs with IDs: {aup_ids_to_delete}")

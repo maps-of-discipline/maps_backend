@@ -1,3 +1,4 @@
+# filepath: competencies_matrix/logic/aup_external.py
 import datetime
 import logging
 from typing import Dict, List, Any, Optional
@@ -11,14 +12,16 @@ from maps.models import db as local_db
 from maps.models import (
     AupInfo as LocalAupInfo, AupData as LocalAupData,
     SprFaculty, Department, SprDegreeEducation, SprFormEducation,
-    D_Blocks, D_Part, D_Modules, Groups, D_TypeRecord, D_ControlType, D_EdIzmereniya, D_Period, NameOP, SprOKCO 
+    D_Blocks, D_Part, D_Modules, Groups, D_TypeRecord, D_ControlType, D_EdIzmereniya, D_Period, NameOP, SprOKCO,
+    SprDiscipline 
 )
 
 from ..models import EducationalProgramAup, EducationalProgram, CompetencyMatrix, Competency, Indicator
 
 from ..external_models import (
     ExternalAupInfo, ExternalNameOP, ExternalSprOKCO, ExternalSprFormEducation,
-    ExternalSprDegreeEducation, ExternalAupData, ExternalSprDiscipline, ExternalSprFaculty,
+    ExternalSprDegreeEducation, ExternalAupData, ExternalSprDiscipline as ExternalSprDisciplineModel, 
+    ExternalSprFaculty,
     ExternalDepartment,
     ExternalDBlocks, ExternalDPart, ExternalDModules, ExternalGroups,
     ExternalDTypeRecord, ExternalDControlType, ExternalDEdIzmereniya, ExternalDPeriod
@@ -136,7 +139,7 @@ def import_aup_from_external_db(aup_num: str, program_id: int, session: Session)
             years=external_aup.years,
             months=external_aup.months,
             is_actual=external_aup.is_actual,
-            is_delete=False, # При импорте всегда не удален
+            is_delete=False, 
             file=f"imported_from_kd_{aup_num}"
         )
         session.add(new_local_aup)
@@ -171,7 +174,7 @@ def import_aup_from_external_db(aup_num: str, program_id: int, session: Session)
                     _discipline=ext_disc_data.discipline,
                     id_period=local_period.id,
                     num_row=ext_disc_data.num_row,
-                    zet=int((ext_disc_data.zet or 0) * 100), # Zet хранится умноженным на 100
+                    zet=int((ext_disc_data.zet or 0) * 100),
                     amount=ext_disc_data.amount,
                     used_for_report=ext_disc_data.used_for_report,
                     id_block=local_block.id if local_block else None,

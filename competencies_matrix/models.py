@@ -17,6 +17,8 @@ import datetime
 import re
 
 from sqlalchemy.types import TypeEngine 
+from sqlalchemy.ext.hybrid import hybrid_property # Добавлено
+
 try:
     _ = db.JSON
 except AttributeError:
@@ -81,7 +83,6 @@ class FgosVo(db.Model, BaseModel):
     recommended_ps_parsed_data = db.Column(db.JSON, nullable=True, comment='JSON массив рекомендованных ПС из PDF ФГОС')
 
 
-    # ИЗМЕНЕНИЕ: Добавлено primaryjoin для явного определения условия объединения
     educational_programs = relationship(
         'EducationalProgram',
         back_populates='fgos',
@@ -231,7 +232,6 @@ class ProfStandard(db.Model, BaseModel):
     order_date = db.Column(db.Date, nullable=True, comment='Дата приказа')
     registration_number = db.Column(db.String(50), nullable=True, comment='Рег. номер Минюста')
     registration_date = db.Column(db.Date, nullable=True, comment='Дата регистрации в Минюсте')
-    # ИСПРАВЛЕНО: Добавлены отсутствующие поля
     activity_area_name = db.Column(db.String(500), nullable=True, comment='Наименование вида профессиональной деятельности')
     activity_purpose = db.Column(db.Text, nullable=True, comment='Основная цель вида профессиональной деятельности')
 
@@ -384,13 +384,82 @@ class Competency(db.Model, BaseModel):
     __table_args__ = (
         db.UniqueConstraint('code', 'fgos_vo_id', 'competency_type_id', name='uq_competency_code_fgos_type'),
     )
+    
+    serialize_rules_plus = (
+        'source_document_id', 'source_document_type', 'source_document_code',
+        'source_document_name', 'based_on_labor_function_id',
+        'based_on_labor_function_code', 'based_on_labor_function_name'
+    )
+
+    @hybrid_property
+    def source_document_type(self):
+        """Возвращает тип документа-источника в виде строки."""
+        if self.competency_type and self.competency_type.code in ['УК', 'ОПК']:
+            return 'ФГОС ВО'
+        if self.based_on_labor_function:
+            return 'Профстандарт'
+        return 'Ручной ввод'
+
+    @hybrid_property
+    def source_document_id(self):
+        """Возвращает ID документа-источника."""
+        if self.source_document_type == 'ФГОС ВО' and self.fgos:
+            return self.fgos.id
+        if self.source_document_type == 'Профстандарт' and self.based_on_labor_function and \
+           self.based_on_labor_function.generalized_labor_function and \
+           self.based_on_labor_function.generalized_labor_function.prof_standard:
+            return self.based_on_labor_function.generalized_labor_function.prof_standard.id
+        return None
+
+    @hybrid_property
+    def source_document_code(self):
+        """Возвращает код документа-источника."""
+        if self.source_document_type == 'ФГОС ВО' and self.fgos:
+            # ИЗМЕНЕНИЕ: Возвращаем direction_code вместо number
+            return self.fgos.direction_code
+        if self.source_document_type == 'Профстандарт' and self.based_on_labor_function and \
+           self.based_on_labor_function.generalized_labor_function and \
+           self.based_on_labor_function.generalized_labor_function.prof_standard:
+            return self.based_on_labor_function.generalized_labor_function.prof_standard.code
+        return "N/A"
+
+    @hybrid_property
+    def source_document_name(self):
+        """Возвращает название документа-источника."""
+        if self.source_document_type == 'ФГОС ВО' and self.fgos:
+            return self.fgos.direction_name
+        if self.source_document_type == 'Профстандарт' and self.based_on_labor_function and \
+           self.based_on_labor_function.generalized_labor_function and \
+           self.based_on_labor_function.generalized_labor_function.prof_standard:
+            return self.based_on_labor_function.generalized_labor_function.prof_standard.name
+        return "Введено вручную"
+        
+    @hybrid_property
+    def based_on_labor_function_code(self):
+        if self.based_on_labor_function:
+            return self.based_on_labor_function.code
+        return None
+        
+    @hybrid_property
+    def based_on_labor_function_name(self):
+        if self.based_on_labor_function:
+            return self.based_on_labor_function.name
+        return None
 
     def __repr__(self): return f"<{self.code} {self.name[:30]}...>"
 
     def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None,
                 include_indicators: bool = False, include_type: bool = False,
                 include_educational_programs: bool = False) -> Dict[str, Any]:
-        data = super().to_dict(rules=rules, only=only)
+        
+        final_rules = list(rules) if rules else []
+        final_rules.extend([f"-{prop}" for prop in self.serialize_rules_plus])
+        
+        data = super().to_dict(rules=final_rules, only=only) 
+        
+        for prop in self.serialize_rules_plus:
+            data[prop] = getattr(self, prop, None)
+
         if include_indicators and hasattr(self, 'indicators') and self.indicators is not None:
              data['indicators'] = [ind.to_dict() for ind in self.indicators]
         if include_type and hasattr(self, 'competency_type') and self.competency_type is not None:
@@ -430,9 +499,6 @@ class Indicator(db.Model, BaseModel):
     code = db.Column(db.String(20), nullable=False, comment='Код индикатора (ИУК-1.1, ИОПК-2.3, ИПК-3.2...)')
     formulation = db.Column(db.Text, nullable=False, comment='Формулировка индикатора')
     source = db.Column(db.String(255), nullable=True, comment='Источник (ФГОС, ПООП, ВУЗ, ПС...)')
-    # НОВОЕ ПОЛЕ: Для хранения ID выбранных элементов ЗУН из ПС
-    # Ключи: 'labor_actions', 'required_skills', 'required_knowledge'
-    # Значения: список ID соответствующих элементов.
     selected_ps_elements_ids = db.Column(db.JSON, nullable=True, default={
         'labor_actions': [],
         'required_skills': [],
@@ -472,9 +538,7 @@ class IndicatorPsLink(db.Model, BaseModel):
 class CompetencyMatrix(db.Model, BaseModel):
     """Матрица компетенций - связь между дисциплиной (AupData) и индикатором компетенции"""
 
-    # --- ДОБАВЛЕНО ЯВНОЕ ИМЯ ТАБЛИЦЫ ---
     __tablename__ = 'competencies_matrix'
-    # -------------------------------------
 
     aup_data_id = db.Column(db.Integer, db.ForeignKey('aup_data.id', ondelete="CASCADE"), nullable=False)
     indicator_id = db.Column(db.Integer, db.ForeignKey('competencies_indicator.id', ondelete="CASCADE"), nullable=False)
@@ -498,7 +562,7 @@ class CompetencyMatrix(db.Model, BaseModel):
     def to_dict(self, rules: Optional[List[str]] = None, only: Optional[List[str]] = None) -> Dict[str, Any]:
         return super().to_dict(rules=rules, only=only)
 
-from maps.models import AupData # Убедимся, что AupData загружена
+from maps.models import AupData
 @db.event.listens_for(AupData, 'mapper_configured', once=True)
 def add_aupdata_relationships(mapper, class_):
     if not hasattr(class_, 'matrix_entries'):
@@ -506,5 +570,5 @@ def add_aupdata_relationships(mapper, class_):
             'CompetencyMatrix',
             back_populates='aup_data_entry',
             cascade="all, delete-orphan",
-            lazy='dynamic' # Используем lazy='dynamic' для эффективных запросов
+            lazy='dynamic'
         )

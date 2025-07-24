@@ -7,7 +7,7 @@ from sqlalchemy import MetaData
 from dotenv import load_dotenv
 import os
 import logging
-import click # Import click for custom CLI commands
+import click # Import click for custom CLI commands (unused)
 from flask.cli import with_appcontext # Import with_appcontext for CLI commands
 
 import maps.models
@@ -17,7 +17,6 @@ import cabinet.models
 
 from maps.models import db
 
-# Импортируем остальные части приложения (Blueprints и утилиты)
 from utils.cache import cache
 from cabinet.cabinet import cabinet
 from maps.routes import maps_module
@@ -27,8 +26,6 @@ from administration.routes import admin as admin_blueprint # assuming this is wh
 from competencies_matrix import competencies_matrix_bp
 from utils.handlers import handle_exception
 
-# Импорт CLI команд (они могут импортировать models, но это происходит при регистрации команд,
-# что обычно уже после db.init_app, но лучше, если models уже известны)
 from cli_commands.db_seed import seed_command
 from cli_commands.db_unseed import unseed_command
 from cli_commands.import_aup import import_aup_command
@@ -40,9 +37,29 @@ load_dotenv()
 app = Flask(__name__)
 application = app
 
-# Existing logging configuration for specific loggers
-logging.getLogger('pdfminer').setLevel(logging.WARNING)
-logging.getLogger('google_genai').setLevel(logging.INFO)
+def configure_logging():
+    """Configure application logging based on config settings."""
+    from config import LOG_LEVEL
+    
+    logging.basicConfig(
+        level=LOG_LEVEL,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[logging.StreamHandler()]
+    )
+    
+    app.logger.setLevel(LOG_LEVEL)
+    
+    logging.getLogger('pdfminer').setLevel(logging.WARNING)
+    logging.getLogger('google_genai').setLevel(logging.INFO)
+    
+    if LOG_LEVEL == logging.DEBUG:
+        logging.getLogger('competencies_matrix').setLevel(logging.DEBUG)
+        logging.getLogger('maps').setLevel(logging.DEBUG)
+        logging.getLogger('auth').setLevel(logging.DEBUG)
+        logging.getLogger('cabinet').setLevel(logging.DEBUG)
+        logging.getLogger('administration').setLevel(logging.DEBUG)
+
+configure_logging()
 
 
 app.config.from_pyfile('config.py')

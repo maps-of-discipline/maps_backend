@@ -2,7 +2,7 @@ import logging
 from typing import Dict, List, Any, Optional
 
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from maps.models import db as local_db
 
@@ -25,38 +25,13 @@ def get_all_competencies() -> List[Dict[str, Any]]:
         ).all()
         result = []
         for comp in competencies:
-            comp_dict = comp.to_dict(rules=['-indicators', '-fgos', '-based_on_labor_function', '-matrix_entries', '-educational_programs_assoc'], include_source_info=True)
-            comp_dict['type_code'] = comp.competency_type.code if comp.competency_type else "UNKNOWN"
-            
-            comp_dict['source_document_id'] = None
-            comp_dict['source_document_code'] = None
-            comp_dict['source_document_name'] = None
-            comp_dict['source_document_type'] = None
-
-            if comp.competency_type and comp.competency_type.code in ['УК', 'ОПК']:
-                if comp.fgos:
-                    comp_dict['source_document_id'] = comp.fgos.id
-                    comp_dict['source_document_code'] = comp.fgos.direction_code
-                    comp_dict['source_document_name'] = comp.fgos.direction_name
-                    comp_dict['source_document_type'] = "ФГОС ВО"
-            elif comp.competency_type and comp.competency_type.code == 'ПК':
-                if comp.based_on_labor_function and \
-                   comp.based_on_labor_function.generalized_labor_function and \
-                   comp.based_on_labor_function.generalized_labor_function.prof_standard:
-                    ps = comp.based_on_labor_function.generalized_labor_function.prof_standard
-                    comp_dict['source_document_id'] = ps.id
-                    comp_dict['source_document_code'] = ps.code
-                    comp_dict['source_document_name'] = ps.name
-                    comp_dict['source_document_type'] = "Профстандарт"
-                else:
-                    comp_dict['source_document_type'] = "Ручной ввод"
-                    comp_dict['source_document_code'] = "N/A"
-                    comp_dict['source_document_name'] = "Введено вручную"
-
-            if comp.based_on_labor_function:
-                 comp_dict['based_on_labor_function_id'] = comp.based_on_labor_function.id
-                 comp_dict['based_on_labor_function_code'] = comp.based_on_labor_function.code
-                 comp_dict['based_on_labor_function_name'] = comp.based_on_labor_function.name
+            # Убираем `include_source_info=True`. Теперь `to_dict` сам добавит нужные поля.
+            # Мы также передаем include_type=True, чтобы `type_code` был в ответе.
+            comp_dict = comp.to_dict(
+                rules=['-indicators', '-fgos', '-based_on_labor_function', '-matrix_entries', '-educational_programs_assoc'], 
+                include_type=True
+            )
+            # source_document_* и based_on_labor_function_* поля теперь добавляются методом to_dict модели Competency
             result.append(comp_dict)
         return result
     except Exception as e:
@@ -66,17 +41,24 @@ def get_all_competencies() -> List[Dict[str, Any]]:
 def get_competency_details(comp_id: int) -> Optional[Dict[str, Any]]:
     try:
         competency = local_db.session.query(Competency).options(
-            joinedload(Competency.competency_type),
-            joinedload(Competency.indicators)
+            joinedload(Competency.competency_type), # Добавлено для получения type_code
+            joinedload(Competency.indicators),
+            joinedload(Competency.fgos), # Добавлено для source_document_type
+            joinedload(Competency.based_on_labor_function) # Добавлено для source_document_type
+                .joinedload(LaborFunction.generalized_labor_function)
+                .joinedload(GeneralizedLaborFunction.prof_standard)
         ).get(comp_id)
         if not competency:
             logger.warning(f"Competency with id {comp_id} not found.")
             return None
-        result = competency.to_dict(rules=['-fgos', '-based_on_labor_function'], include_indicators=True, include_type=True, include_educational_programs=True)
-        if competency.based_on_labor_function:
-            result['based_on_labor_function_id'] = competency.based_on_labor_function.id
-            result['based_on_labor_function_code'] = competency.based_on_labor_function.code
-            result['based_on_labor_function_name'] = competency.based_on_labor_function.name
+        
+        # Теперь все source_* и based_on_labor_function_* поля генерируются в to_dict
+        result = competency.to_dict(
+            rules=['-fgos', '-based_on_labor_function', '-matrix_entries', '-educational_programs_assoc'], # Исключаем отношения, чтобы не было рекурсии
+            include_indicators=True, 
+            include_type=True, 
+            include_educational_programs=True
+        )
         return result
     except Exception as e:
         logger.error(f"Error fetching competency {comp_id} details: {e}", exc_info=True)
@@ -86,7 +68,7 @@ def create_competency(data: Dict[str, Any], session: Session) -> Optional[Compet
     required_fields = ['type_code', 'code', 'name']
     if not all(field in data and data[field] is not None and str(data[field]).strip() for field in required_fields):
         raise ValueError("Отсутствуют обязательные поля: type_code, code, name.")
-    if data['type_code'] != 'ПК':
+    if data['type_code'] != 'ПК': # Сейчас этот эндпоинт только для ПК
         raise ValueError(f"Данный эндпоинт предназначен только для создания ПК. Получен тип '{data['type_code']}'.")
 
     educational_program_ids = data.get('educational_program_ids', [])
@@ -116,7 +98,8 @@ def create_competency(data: Dict[str, Any], session: Session) -> Optional[Compet
             competency_type_id=comp_type.id, code=str(data['code']).strip(),
             name=str(data['name']).strip(),
             description=str(data['description']).strip() if data.get('description') is not None else None,
-            based_on_labor_function_id=based_on_labor_function_id
+            fgos_vo_id=data.get('fgos_id') if data.get('type_code') in ['УК', 'ОПК'] else None, # Если это УК/ОПК, привязываем к ФГОС
+            based_on_labor_function_id=based_on_labor_function_id if data.get('type_code') == 'ПК' else None # Если это ПК, привязываем к ТФ
         )
         session.add(competency)
         session.flush()
@@ -146,10 +129,14 @@ def update_competency(comp_id: int, data: Dict[str, Any], session: Session) -> O
         raise ValueError("Отсутствуют данные для обновления.")
     educational_program_ids = data.get('educational_program_ids')
     try:
-        competency = session.query(Competency).get(comp_id)
+        competency = session.query(Competency).options(
+            selectinload(Competency.educational_programs_assoc)
+        ).get(comp_id)
         if not competency:
             return None
         
+        # Разрешаем редактировать название и описание для всех типов,
+        # но привязка к ФГОС/ТФ только через отдельный эндпоинт, если потребуется
         allowed_fields = {'name', 'description'}
         updated = False
         
@@ -162,7 +149,7 @@ def update_competency(comp_id: int, data: Dict[str, Any], session: Session) -> O
                  if getattr(competency, field) != processed_value:
                      setattr(competency, field, processed_value)
                      updated = True
-            elif field == 'educational_program_ids':
+            elif field == 'educational_program_ids': # Обрабатываем отдельно
                 pass
             else:
                 logger.warning(f"Ignoring field '{field}' for update of comp {comp_id} as it is not allowed via this endpoint.")
@@ -193,13 +180,14 @@ def update_competency(comp_id: int, data: Dict[str, Any], session: Session) -> O
                         else:
                             logger.warning(f"Educational Program with ID {ep_id} not found when adding link for competency {comp_id}. Skipping.")
                 if to_delete_ids or to_add_ids:
-                    session.flush()
+                    session.flush() # Применяем изменения связей немедленно
         
         if updated:
             session.add(competency)
             session.flush()
         
         session.refresh(competency)
+        # Теперь все source_* и based_on_labor_function_* поля генерируются в to_dict
         return competency.to_dict(rules=['-indicators', '-fgos', '-based_on_labor_function'], include_type=True, include_educational_programs=True)
 
     except IntegrityError as e:
@@ -233,10 +221,7 @@ def get_all_indicators() -> List[Dict[str, Any]]:
         indicators = local_db.session.query(Indicator).options(joinedload(Indicator.competency)).all()
         result = []
         for ind in indicators:
-             ind_dict = ind.to_dict(rules=['-labor_functions', '-matrix_entries'])
-             if ind.competency:
-                 ind_dict['competency_code'] = ind.competency.code
-                 ind_dict['competency_name'] = ind.competency.name
+             ind_dict = ind.to_dict(rules=['-labor_functions', '-matrix_entries'], include_competency=True) # include_competency=True для получения code/name
              result.append(ind_dict)
         return result
     except Exception as e:
@@ -249,10 +234,7 @@ def get_indicator_details(ind_id: int) -> Optional[Dict[str, Any]]:
         if not indicator:
             logger.warning(f"Indicator with id {ind_id} not found.")
             return None
-        result = indicator.to_dict(rules=['-competency', '-labor_functions', '-matrix_entries'])
-        if indicator.competency:
-            result['competency_code'] = indicator.competency.code
-            result['competency_name'] = indicator.competency.name
+        result = indicator.to_dict(rules=['-competency', '-labor_functions', '-matrix_entries'], include_competency=True)
         return result
     except Exception as e:
         logger.error(f"Error fetching indicator {ind_id} details: {e}", exc_info=True)
@@ -300,7 +282,9 @@ def update_indicator(ind_id: int, data: Dict[str, Any], session: Session) -> Opt
     if not data:
         raise ValueError("Отсутствуют данные для обновления.")
     try:
-        indicator = session.query(Indicator).get(ind_id)
+        indicator = session.query(Indicator).options(
+            selectinload(Indicator.competency) # Загружаем для получения кода/названия в to_dict
+        ).get(ind_id)
         if not indicator:
             return None
         
@@ -338,7 +322,7 @@ def update_indicator(ind_id: int, data: Dict[str, Any], session: Session) -> Opt
             session.flush()
         
         session.refresh(indicator)
-        return indicator
+        return indicator.to_dict(include_competency=True) # Включаем компетенцию для фронтенда
 
     except IntegrityError as e:
         logger.error(f"Database IntegrityError updating indicator {ind_id}: {e}", exc_info=True)
