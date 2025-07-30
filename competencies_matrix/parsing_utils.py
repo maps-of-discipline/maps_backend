@@ -3,68 +3,76 @@ import datetime
 import re
 import logging
 from typing import Optional, Any
+from collections import Counter
 
 logger = logging.getLogger(__name__)
 
-def parse_date_string(date_str: Optional[str]) -> Optional[datetime.date]:
+
+def preprocess_text_for_llm(text: str) -> str:
     """
-    Attempts to parse date strings from common formats (YYYY-MM-DD, DD.MM.YYYY, DD MonthName YYYY,
-    and DayName, DD MonName YYYY HH:MM:SS GMT/UTC).
-    Handles variations in format and returns a datetime.date object or None if parsing fails.
+    Очистка посылаемого текста от мусора в целях экономии на инференсе языковыми моделями
     """
-    if not date_str:
-        logger.debug("parse_date_string: Input date string is empty.")
-        return None
+    lines = text.splitlines()
+    processed_lines = []
+    
+    page_number = re.compile(r'^\s*(\d+\s*/\s*\d+|\d+)\s*$')
+    garant = re.compile(r'система гарант', re.IGNORECASE)
+    date_and_page = re.compile(r'^\s*\d{2}\.\d{2}\.\d{4}\s+\d+/\d+\s*$', re.IGNORECASE) # e.g., "21.06.2021 1/13"
+    long_string = re.compile(r'^[^\s]{100,}$')
 
-    date_str = date_str.strip()
+    for line in lines:
+        stripped_line = line.strip()
 
-    # Try YYYY-MM-DD format (common in XML, or requested from LLM)
-    try:
-        parsed_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
-        logger.debug(f"parse_date_string: Successfully parsed '{date_str}' as YYYY-MM-DD.")
-        return parsed_date
-    except ValueError:
-        logger.debug(f"parse_date_string: '{date_str}' did not match YYYY-MM-DD format. Trying other formats.")
-        pass 
+        if not stripped_line:
+            continue
+            
+        if page_number.match(stripped_line) or date_and_page.match(stripped_line):
+            continue
+            
+        if garant.search(stripped_line):
+            continue
 
-    # Try DD.MM.YYYY format
-    try:
-        parsed_date = datetime.datetime.strptime(date_str, '%d.%m.%Y').date()
-        logger.debug(f"parse_date_string: Successfully parsed '{date_str}' as DD.MM.YYYY.")
-        return parsed_date
-    except ValueError:
-        logger.debug(f"parse_date_string: '{date_str}' did not match DD.MM.YYYY format.")
-        pass 
-
-    # Try DD MonthName YYYY format (e.g., '7 августа 2020', '19 сентября 2017 г.')
-    month_names = {
-        'января': 1, 'февраля': 2, 'марта': 3, 'апреля': 4, 'мая': 5, 'июня': 6,
-        'июля': 7, 'августа': 8, 'сентября': 9, 'октября': 10, 'ноября': 11, 'декабря': 12
-    }
-    match = re.match(r'(\d{1,2})\s+([а-яА-Я]+)(?:\s+года)?\s+(\d{4})\s*г?\.?', date_str, re.IGNORECASE)
-    if match:
-        day_str, month_name_str, year_str = match.groups()[:3] 
-        month = month_names.get(month_name_str.lower())
-        if month:
-            try:
-                parsed_date = datetime.date(int(year_str), month, int(day_str))
-                logger.debug(f"parse_date_string: Successfully parsed '{date_str}' as DD MonthName YYYY.")
-                return parsed_date
-            except ValueError:
-                logger.warning(f"parse_date_string: Invalid date components for format 'DD MonthName YYYY': {year_str}-{month}-{day_str}")
-                return None
+        if long_string.match(stripped_line):
+            logger.debug(f"Skipping long unbroken line: {stripped_line[:50]}...")
+            continue
+            
+        if processed_lines and processed_lines[-1].endswith('-'):
+            processed_lines[-1] = processed_lines[-1][:-1] + stripped_line
         else:
-            logger.warning(f"parse_date_string: Unknown month name '{month_name_str}' for format 'DD MonthName YYYY'.")
-            return None
+            processed_lines.append(stripped_line)
 
+    cleaned_text = "\n".join(processed_lines)
+    
+    cleaned_text = re.sub(r'\n{3,}', '\n\n', cleaned_text)
+
+    original_len = len(text)
+    cleaned_len = len(cleaned_text)
+    reduction_percent = (1 - cleaned_len / original_len) * 100 if original_len > 0 else 0
+    
+    logger.info(
+        f"Text preprocessing completed. Original length: {original_len}, "
+        f"Cleaned length: {cleaned_len}, Reduction: {reduction_percent:.2f}%"
+    )
+    
+    return cleaned_text
+
+
+def parse_date_string(date_str: Optional[str]) -> Optional[datetime.date]:
+    """Парсит строку даты в объект datetime.date, обрабатывая несколько форматов."""
+    if not date_str:
+        return None
+    
     try:
-        cleaned_date_str = re.sub(r'\s*(GMT|UTC)$', '', date_str, flags=re.IGNORECASE).strip()
-        parsed_date = datetime.datetime.strptime(cleaned_date_str, '%a, %d %b %Y %H:%M:%S').date()
-        logger.debug(f"parse_date_string: Successfully parsed '{date_str}' as DayName, DD MonName YYYY HH:MM:SS.")
-        return parsed_date
-    except ValueError:
-        logger.debug(f"parse_date_string: '{date_str}' did not match DayName, DD MonName YYYY HH:MM:SS format.")
+        return datetime.date.fromisoformat(date_str)
+    except (ValueError, TypeError):
         pass
-
-    logger.warning(f"parse_date_string: Could not parse date string: '{date_str}' using any known format.")
+    
+    try:
+        if isinstance(date_str, str):
+            day, month, year = map(int, date_str.split('.'))
+            return datetime.date(year, month, day)
+    except (ValueError, TypeError):
+        pass
+    
+    logger.warning(f"Не удалось распознать формат даты: '{date_str}'. Возвращаем None.")
     return None

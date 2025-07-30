@@ -98,7 +98,6 @@ class ExternalGroups(ExternalBase):
     color = Column(String(8))
     weight = Column(Integer)
     def as_dict(self) -> Dict[str, Any]: return {c.name: getattr(self, c.name) for c in self.__table__.columns}
-# <<< КОНЕЦ НОВЫХ МОДЕЛЕЙ И ИХ as_dict >>>
 
 class ExternalSprDiscipline(ExternalBase):
     __tablename__ = "spr_discipline"
@@ -195,7 +194,7 @@ class ExternalAupData(ExternalBase):
             'num_row': self.num_row,
             'zet': (self.zet / 100) if self.zet is not None else 0,
             'amount': self.amount,
-            'used_for_report': self.used_for_report, # <-- ДОБАВЛЕНО
+            'used_for_report': self.used_for_report,
             'id_block': self.id_block, 'block_title': self.block.title if self.block else None,
             'id_part': self.id_part, 'part_title': self.part.title if self.part else None,
             'id_module': self.id_module, 'module_title': self.module.title if self.module else None,

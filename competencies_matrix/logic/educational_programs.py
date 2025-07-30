@@ -1,4 +1,3 @@
-# filepath: competencies_matrix/logic/educational_programs.py
 import datetime
 import logging
 from typing import Dict, List, Any, Optional, Tuple
@@ -8,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload, joinedload
 
 from maps.models import db as local_db
 from maps.models import (
-    AupInfo as LocalAupInfo, AupData as LocalAupData, SprDiscipline,
+    AupInfo as LocalAupInfo, AupData as LocalAupData,
     SprFaculty, Department, SprDegreeEducation, SprFormEducation
 )
 
@@ -75,7 +74,7 @@ def get_program_details(program_id: int) -> Optional[Dict[str, Any]]:
                     Competency.competency_type_id.in_(uk_opk_ids_to_load)
                 ).all()
                 relevant_competencies.extend(uk_opk_competencies)
-                logger.info(f"Loaded {len(uk_opk_competencies)} УК/ОПК competencies from FGOS ID {fgos_id_to_load}.")
+                logger.debug(f"Loaded {len(uk_opk_competencies)} УК/ОПК competencies from FGOS ID {fgos_id_to_load}.")
             else:
                 logger.warning("Competency types УК/ОПК not found. Cannot load competencies.")
         else:
@@ -120,7 +119,7 @@ def create_educational_program(
     data: Dict[str, Any], session: Session
 ) -> EducationalProgram:
     """
-    Создает ОПОП. БЛОК АВТОМАТИЧЕСКОГО СОЗДАНИЯ ПУСТЫХ СВЯЗЕЙ УДАЛЕН.
+    Создает ОПОП.
     """
     required_fields = ['title', 'code', 'enrollment_year', 'form_of_education']
     if not all(data.get(field) for field in required_fields):

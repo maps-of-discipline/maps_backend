@@ -19,11 +19,6 @@ SQLALCHEMY_TRACK_MODIFICATIONS = False
 # Настройка подключения к внешней БД Карт Дисциплин (KD)
 EXTERNAL_KD_DATABASE_URL = os.getenv('EXTERNAL_KD_DATABASE_URL') # Must be set in production environment variables
 
-# Конфигурация множественных БД (если используется)
-# SQLALCHEMY_BINDS = {
-#     'kd_external': EXTERNAL_KD_DATABASE_URL
-# }
-
 # Настройки CORS
 CORS_HEADERS = 'Content-Type'
 
@@ -40,15 +35,21 @@ TELEGRAM_URL = 'https://api.telegram.org'
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-# Провайдер по умолчанию: 'local', 'klusterai'
-LLM_PROVIDER = os.getenv('LLM_PROVIDER', 'klusterai').lower()
+LLM_PROVIDER = os.getenv('LLM_PROVIDER', 'openrouter')
 
-# --- Local OpenAI-compatible LLM (e.g., LM Studio, Ollama) ---
-LOCAL_LLM_BASE_URL = os.getenv("LOCAL_LLM_BASE_URL", "http://localhost:1234/v1")
-LOCAL_LLM_API_KEY = os.getenv("LOCAL_LLM_API_KEY", "not-needed") # Часто не требуется
-LOCAL_LLM_MODEL_NAME = os.getenv("LOCAL_LLM_MODEL_NAME", "local-model")
+# Local LLM Configuration
+LOCAL_LLM_BASE_URL = os.getenv("LOCAL_LLM_BASE_URL")
+LOCAL_LLM_API_KEY = os.getenv("LOCAL_LLM_API_KEY")
+LOCAL_LLM_MODEL_NAME = os.getenv("LOCAL_LLM_MODEL_NAME")
 
-# --- Kluster.ai Configuration ---
-KLUSTER_AI_API_KEY = os.getenv("KLUSTER_AI_API_KEY", "d31cd353-3336-4b0f-abcc-12e595c2eefc")
-KLUSTER_AI_BASE_URL = os.getenv("KLUSTER_AI_BASE_URL", "https://api.kluster.ai/v1")
-KLUSTER_AI_MODEL_NAME = os.getenv("KLUSTER_AI_MODEL_NAME", "deepseek-ai/DeepSeek-V3-0324")
+# Kluster AI Configuration
+KLUSTER_AI_API_KEY = os.getenv("KLUSTER_AI_API_KEY")
+KLUSTER_AI_BASE_URL = os.getenv("KLUSTER_AI_BASE_URL")
+KLUSTER_AI_MODEL_NAME = os.getenv("KLUSTER_AI_MODEL_NAME")
+
+# OpenRouter Configuration
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_MODEL_NAME = os.getenv("OPENROUTER_MODEL_NAME", "deepseek/deepseek-r1-0528-qwen3-8b:free")
+OPENROUTER_SITE_URL = os.getenv("OPENROUTER_SITE_URL")
+OPENROUTER_SITE_NAME = os.getenv("OPENROUTER_SITE_NAME")

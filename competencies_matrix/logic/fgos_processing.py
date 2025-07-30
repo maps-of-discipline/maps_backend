@@ -1,3 +1,4 @@
+# filepath: competencies_matrix/logic/fgos_processing.py
 import datetime
 import io
 import logging
@@ -9,31 +10,28 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from maps.models import db as local_db
 from ..models import FgosVo, Competency, CompetencyType, FgosRecommendedPs, ProfStandard
 
-from .. import fgos_parser, nlp
+from .. import fgos_parser
 from ..parsing_utils import parse_date_string
 
 logger = logging.getLogger(__name__)
 
 
 def parse_fgos_file(file_bytes: bytes, filename: str) -> dict:
-    """Parses an FGOS PDF file and returns structured data."""
+    """
+    (ИСПРАВЛЕНО) Оркестрирует парсинг файла ФГОС, делегируя всю работу модулю fgos_parser.
+    """
     try:
-        text = fgos_parser.extract_text(io.BytesIO(file_bytes))
-        data = nlp.parse_fgos_with_llm(text)
-        if not data or not data.get('metadata'):
-            logger.warning(f"Parsing failed or returned insufficient metadata for {filename}")
+        # Просто передаем байты и имя файла в парсер. Вся логика (извлечение, очистка, вызов nlp) теперь внутри него.
+        data = fgos_parser.parse_fgos_file(file_bytes, filename)
         return data
     except ValueError as e:
-        logger.error(f"Parser ValueError for {filename}: {e}")
+        # Перехватываем и пробрасываем ошибки валидации из парсера
+        logger.error(f"FGOS Processing: Parser raised ValueError for {filename}: {e}")
         raise
     except Exception as e:
-        error_message = str(e)
-        if "Input exceeds the maximum allowed size" in error_message:
-            logger.error(f"LLM API input size error for {filename}: File too large for processing")
-            raise ValueError(f"Файл '{filename}' слишком большой для обработки. Пожалуйста, убедитесь, что вы загружаете корректный файл ФГОС ВО.")
-        else:
-            logger.error(f"Unexpected error parsing {filename}: {e}", exc_info=True)
-            raise ValueError(f"Неожиданная ошибка при парсинге файла '{filename}': {e}")
+        # Перехватываем и пробрасываем другие неожиданные ошибки
+        logger.error(f"FGOS Processing: Unexpected error during parsing of {filename}: {e}", exc_info=True)
+        raise ValueError(f"Неожиданная ошибка при парсинге файла '{filename}': {e}")
 
 
 def save_fgos_data(data: dict, filename: str, session: Session, force_update: bool = False) -> Optional[FgosVo]:
@@ -115,7 +113,7 @@ def save_fgos_data(data: dict, filename: str, session: Session, force_update: bo
                 recommended_ps_parsed_data=cleaned_ps_list
             )
             session.add(fgos)
-            session.flush()  # Flush to get fgos.id for relationships
+            session.flush()
 
         _sync_competencies(session, fgos, data)
         _sync_recommended_ps(session, fgos, raw_ps_list)
@@ -232,7 +230,7 @@ def get_fgos_details(fgos_id: int) -> Optional[dict]:
             try:
                 return int(c.code.split('-')[-1])
             except (ValueError, IndexError):
-                return float('inf')  # Put unsortable items at the end
+                return float('inf')
 
         sorted_competencies = sorted(fgos.competencies, key=competency_sort_key)
 
@@ -248,7 +246,6 @@ def get_fgos_details(fgos_id: int) -> Optional[dict]:
         details['opk_competencies'] = opk_competencies
 
         recommended_ps = []
-        # Use parsed data as the source of truth, supplemented by DB info
         parsed_recommended_ps = fgos.recommended_ps_parsed_data or []
 
         if parsed_recommended_ps and isinstance(parsed_recommended_ps, list):
@@ -274,7 +271,7 @@ def get_fgos_details(fgos_id: int) -> Optional[dict]:
         return None
 
 
-def delete_fgos(fgos_id: int, session: Session) -> bool:
+def delete_fgos(fgos_id: int, session: Session, delete_related_competencies: bool = True) -> bool:
     """Deletes an FGOS and its related data from the database."""
     try:
         fgos = session.query(FgosVo).get(fgos_id)
@@ -283,6 +280,11 @@ def delete_fgos(fgos_id: int, session: Session) -> bool:
             return False
 
         logger.info(f"Deleting FGOS {fgos_id} ('{fgos.direction_code} - {fgos.direction_name}')...")
+        
+        if delete_related_competencies:
+            session.query(Competency).filter(Competency.fgos_vo_id == fgos_id).delete(synchronize_session=False)
+            logger.info(f"Deleted related competencies for FGOS {fgos_id}.")
+
         session.delete(fgos)
         logger.info(f"FGOS {fgos_id} and related data marked for deletion.")
         return True

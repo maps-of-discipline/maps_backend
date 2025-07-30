@@ -39,34 +39,39 @@ application = app
 
 def configure_logging():
     """Configure application logging based on config settings."""
-    from config import LOG_LEVEL
-    
+    from config import LOG_LEVEL # Убедитесь, что LOG_LEVEL в config.py установлен в logging.DEBUG
+
     logging.basicConfig(
         level=LOG_LEVEL,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[logging.StreamHandler()]
     )
     
-    app.logger.setLevel(LOG_LEVEL)
+    # Устанавливаем уровень для всего приложения
+    app.logger.setLevel(LOG_LEVEL) 
     
+    # Уменьшаем шум от внешних библиотек
     logging.getLogger('pdfminer').setLevel(logging.WARNING)
-    logging.getLogger('google_genai').setLevel(logging.INFO)
+    logging.getLogger('google_genai').setLevel(logging.INFO) # или WARNING, если хотите меньше сообщений от самого Gemini SDK
+    logging.getLogger('httpx').setLevel(logging.INFO) # Это важно, чтобы видеть запросы к LLM API
     
-    if LOG_LEVEL == logging.DEBUG:
+    # Если LOG_LEVEL в config.py установлен в DEBUG, то эти строки не нужны
+    # если вы хотите, чтобы все DEBUG-логи попадали
+    # Если же LOG_LEVEL выше (например, INFO), но вы хотите видеть DEBUG-логи конкретного модуля:
+    if LOG_LEVEL > logging.DEBUG: # Если основной уровень выше DEBUG
         logging.getLogger('competencies_matrix').setLevel(logging.DEBUG)
-        logging.getLogger('maps').setLevel(logging.DEBUG)
-        logging.getLogger('auth').setLevel(logging.DEBUG)
-        logging.getLogger('cabinet').setLevel(logging.DEBUG)
-        logging.getLogger('administration').setLevel(logging.DEBUG)
+        logging.getLogger('maps').setLevel(logging.INFO) # Можно оставить INFO для других
+        logging.getLogger('auth').setLevel(logging.INFO)
+        logging.getLogger('cabinet').setLevel(logging.INFO)
+        logging.getLogger('administration').setLevel(logging.INFO)
 
 configure_logging()
-
 
 app.config.from_pyfile('config.py')
 app.json.sort_keys = False
 
 # Determine environment and debug mode
-flask_env = os.getenv('FLASK_ENV', 'production') # Default to production if not set
+flask_env = os.getenv('FLASK_ENV', 'production') 
 app.config['ENV'] = flask_env
 app.debug = (flask_env == 'development')
 
@@ -169,18 +174,3 @@ app.cli.add_command(unseed_command)
 app.cli.add_command(import_aup_command)
 app.cli.add_command(import_fgos_command)
 app.cli.add_command(parse_ps_command)
-
-@app.cli.command("run-llm")
-@click.option("--provider", default=None, help="Specify LLM provider: 'local' or 'klusterai'. Overrides .env and config.py.")
-@with_appcontext
-def run_llm_command(provider):
-    """Runs the Flask application with a specified LLM provider."""
-    if provider:
-        if provider.lower() not in ['local', 'klusterai']:
-            click.echo(f"Error: Invalid LLM provider '{provider}'. Must be 'local' or 'klusterai'.")
-            return
-        os.environ['LLM_PROVIDER'] = provider.lower()
-        app.config['LLM_PROVIDER'] = provider.lower() # Update app config directly
-        click.echo(f"LLM_PROVIDER set to '{provider.lower()}' for this run.")
-    else:
-        click.echo(f"Using default LLM_PROVIDER: {app.config.get('LLM_PROVIDER')}")

@@ -5,60 +5,41 @@ from typing import Dict, Any
 
 from pdfminer.high_level import extract_text
 
-from .nlp import parse_fgos_with_llm
+from . import nlp
+from .parsing_utils import preprocess_text_for_llm
 
 logger = logging.getLogger(__name__)
 
-def parse_fgos_pdf(file_bytes: bytes, filename: str) -> Dict[str, Any]:
-    """
-    Главная функция парсинга PDF файла ФГОС ВО.
-    Теперь использует NLP-модуль для извлечения структурированных данных.
-    """
-    logger.info(f"Starting PDF parsing for FGOS file: {filename} using configured NLP module.")
+
+def parse_fgos_file(file_bytes: bytes, filename: str) -> dict:
+    """Parses an FGOS PDF file and returns structured data."""
     try:
-        text_content = extract_text(io.BytesIO(file_bytes))
-        parsed_data_from_nlp = parse_fgos_with_llm(text_content)
+        logger.debug(f"FGOS Parser: Starting text extraction from {filename}")
+        raw_text = extract_text(io.BytesIO(file_bytes))
+        logger.debug(f"FGOS Parser: Raw text extracted. Length: {len(raw_text)} chars.")
         
-        # Добавляем сырой текст в итоговые данные для сохранения или отладки
-        parsed_data_from_nlp['raw_text'] = text_content
-
-        # Проверяем наличие критически важных метаданных
-        if 'metadata' not in parsed_data_from_nlp or not isinstance(parsed_data_from_nlp['metadata'], dict):
-            logger.error(f"Critical 'metadata' key missing or not a dict after NLP parsing for {filename}.")
-            raise ValueError(f"Ключ 'metadata' отсутствует или имеет неверный формат в ответе NLP-парсера для файла '{filename}'.")
-
-        critical_fields = ['order_number', 'direction_code', 'education_level']
-        # ИСПРАВЛЕНО: Правильная переменная для доступа к метаданным
-        missing_critical = [field for field in critical_fields if not parsed_data_from_nlp['metadata'].get(field)]
+        clean_text = preprocess_text_for_llm(raw_text)
+        logger.debug(f"FGOS Parser: Cleaned text prepared. Length: {len(clean_text)} chars.")
         
-        if missing_critical:
-             logger.error(f"Missing one or more CRITICAL metadata fields after NLP parsing for {filename}. Missing: {', '.join(missing_critical)}.")
-             raise ValueError(f"Не удалось извлечь критически важные метаданные из файла ФГОС '{filename}' через NLP-парсер. Отсутствуют: {', '.join(missing_critical)}.")
+        if not clean_text.strip():
+            logger.error(f"FGOS Parser: Cleaned text is empty or only whitespace for {filename}. Cannot send to LLM.")
+            raise ValueError("Извлеченный текст из файла пуст или содержит только пробелы после очистки.")
 
-        # Basic check for other expected top-level keys from NLP
-        expected_keys = ['uk_competencies', 'opk_competencies', 'recommended_ps']
-        for key in expected_keys:
-            if key not in parsed_data_from_nlp:
-                 logger.warning(f"Expected key '{key}' missing from NLP parser result for {filename}. Initializing to empty list.")
-                 parsed_data_from_nlp[key] = [] # Инициализируем пустым списком, если LLM что-то не вернул.
-
-
-        logger.info(f"PDF parsing for FGOS {filename} finished via NLP. Metadata Extracted: {bool(parsed_data_from_nlp.get('metadata'))}, UK Found: {len(parsed_data_from_nlp.get('uk_competencies', []))}, OPK Found: {len(parsed_data_from_nlp.get('opk_competencies', []))}, Recommended PS Found: {len(parsed_data_from_nlp.get('recommended_ps', []))}")
+        data = nlp.parse_fgos_with_llm(clean_text)
         
-        return parsed_data_from_nlp
+        if not data or not data.get('metadata'):
+             logger.error(f"Upload FGOS: Parsing succeeded but essential metadata missing for {filename}. Parsed data: {data}")
+             raise ValueError("Не удалось извлечь основные метаданные из файла ФГОС.")
 
-    except FileNotFoundError:
-        logger.error(f"File not found: {filename}")
+        return data
+    except ValueError as e:
+        logger.error(f"FGOS Parser: ValueError for {filename}: {e}", exc_info=True)
         raise
-    except ImportError as e:
-        logger.error(f"Missing dependency (pdfminer.six or google-genai): {e}.")
-        raise ImportError(f"Отсутствует зависимость: {e}. Пожалуйста, установите необходимые пакеты.")
-    except ValueError as e: # Catch custom ValueErrors or from NLP parser
-        logger.error(f"Data validation or parsing error for {filename}: {e}")
-        raise # Re-raise to be handled by calling code
-    except RuntimeError as e: # Catch RuntimeError from nlp_parser for API issues
-        logger.error(f"NLP parsing failed for {filename}: {e}", exc_info=True)
-        raise Exception(f"Не удалось спарсить ФГОС с помощью NLP-модуля: {e}")
     except Exception as e:
-        logger.error(f"Unexpected error during PDF parsing for {filename}: {e}", exc_info=True)
-        raise Exception(f"Неожиданная ошибка при парсинге файла '{filename}': {e}")
+        error_message = str(e)
+        if "maximum context length" in error_message:
+            logger.error(f"LLM API input size error for {filename} AFTER cleaning: File too large for processing. Error: {error_message}")
+            raise ValueError(f"Текст файла '{filename}' слишком большой для обработки LLM. Возможно, это нестандартный или очень объемный документ.")
+        else:
+            logger.error(f"FGOS Parser: Unexpected error parsing {filename}: {e}", exc_info=True)
+            raise ValueError(f"Неожиданная ошибка при парсинге файла '{filename}': {e}")

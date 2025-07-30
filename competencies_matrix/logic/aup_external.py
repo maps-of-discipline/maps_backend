@@ -1,4 +1,3 @@
-# filepath: competencies_matrix/logic/aup_external.py
 import datetime
 import logging
 from typing import Dict, List, Any, Optional
@@ -13,7 +12,7 @@ from maps.models import (
     AupInfo as LocalAupInfo, AupData as LocalAupData,
     SprFaculty, Department, SprDegreeEducation, SprFormEducation,
     D_Blocks, D_Part, D_Modules, Groups, D_TypeRecord, D_ControlType, D_EdIzmereniya, D_Period, NameOP, SprOKCO,
-    SprDiscipline 
+    SprDiscipline # <-- ДОБАВЛЕНО
 )
 
 from ..models import EducationalProgramAup, EducationalProgram, CompetencyMatrix, Competency, Indicator

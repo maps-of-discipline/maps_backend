@@ -2,6 +2,8 @@
 import json
 import logging
 import re
+import os
+from datetime import datetime
 from typing import Dict, List, Any, Optional
 
 # --- ИМПОРТЫ КЛИЕНТОВ LLM ---
@@ -9,22 +11,90 @@ try:
     from openai import OpenAI, APIConnectionError, RateLimitError, APIStatusError
     OPENAI_SDK_AVAILABLE = True
 except ImportError:
-    logging.warning("openai package not found. Providers 'local' and 'klusterai' will be unavailable.")
+    logging.warning("openai package not found. OpenRouter provider will be unavailable.")
     OpenAI, APIConnectionError, RateLimitError, APIStatusError = None, None, None, None
     OPENAI_SDK_AVAILABLE = False
 
-# Импорт конфигурации и утилит
 from config import (
+    DEBUG,
     LLM_PROVIDER,
-    LOCAL_LLM_BASE_URL, LOCAL_LLM_API_KEY, LOCAL_LLM_MODEL_NAME,
-    KLUSTER_AI_API_KEY, KLUSTER_AI_BASE_URL, KLUSTER_AI_MODEL_NAME
+OPENROUTER_BASE_URL, OPENROUTER_API_KEY, OPENROUTER_MODEL_NAME,
+OPENROUTER_SITE_URL, OPENROUTER_SITE_NAME
 )
 from .parsing_utils import parse_date_string
 
 logger = logging.getLogger(__name__)
 
-# --- ГЛОБАЛЬНЫЕ КЛИЕНТЫ (ленивая инициализация) ---
-_openai_compatible_clients: Dict[str, Any] = {} # Словарь для хранения клиентов по base_url
+_openai_compatible_clients: Dict[str, Any] = {}
+
+def _save_debug_prompt(prompt_content: str, model_name: str) -> None:
+    """
+    Сохраняет промпт в отладочный файл, если включен режим разработки.
+    """
+    if not DEBUG:
+        return
+    
+    try:
+        # Определяем путь к файлу в той же директории, что и nlp.py
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        debug_file_path = os.path.join(current_dir, "last_sent_prompt.txt")
+        
+        # Создаем заголовок с метаданными
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        header = f"""=== LLM PROMPT DEBUG OUTPUT ===
+Timestamp: {timestamp}
+Provider: {LLM_PROVIDER}
+Model: {model_name}
+Prompt Length: {len(prompt_content)} characters
+==============================
+
+"""
+        
+        # Записываем в файл
+        with open(debug_file_path, 'w', encoding='utf-8') as f:
+            f.write(header)
+            f.write(prompt_content)
+        
+        logger.debug(f"Debug prompt saved to: {debug_file_path}")
+        
+    except Exception as e:
+        logger.warning(f"Failed to save debug prompt: {e}")
+
+def _save_debug_response(response_text: str, model_name: str, prompt_tokens: int = 0, completion_tokens: int = 0) -> None:
+    """
+    Сохраняет ответ LLM в отладочный файл, если включен режим разработки.
+    """
+    # if not DEBUG:
+    #     return
+    
+    try:
+        # Определяем путь к файлу в той же директории, что и nlp.py
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        debug_file_path = os.path.join(current_dir, "last_received_response.txt")
+        
+        # Создаем заголовок с метаданными
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        header = f"""=== LLM RESPONSE DEBUG OUTPUT ===
+Timestamp: {timestamp}
+Provider: {LLM_PROVIDER}
+Model: {model_name}
+Response Length: {len(response_text)} characters
+Prompt Tokens: {prompt_tokens}
+Completion Tokens: {completion_tokens}
+Total Tokens: {prompt_tokens + completion_tokens}
+=================================
+
+"""
+        
+        # Записываем в файл
+        with open(debug_file_path, 'w', encoding='utf-8') as f:
+            f.write(header)
+            f.write(response_text)
+        
+        logger.debug(f"Debug response saved to: {debug_file_path}")
+        
+    except Exception as e:
+        logger.warning(f"Failed to save debug response: {e}")
 
 def _get_openai_compatible_client(base_url: str, api_key: str):
     global _openai_compatible_clients
@@ -40,48 +110,78 @@ def _get_openai_compatible_client(base_url: str, api_key: str):
             raise RuntimeError(f"Failed to initialize OpenAI-compatible client: {e}")
     return _openai_compatible_clients[base_url]
 
-def _call_llm_api(prompt_content: str, model_name: str, temperature: float = 0.0, max_tokens: int = 4000) -> Dict[str, Any]:
+def _call_llm_api(prompt_content: str, model_name: str, temperature: float = 0.0, max_tokens: int = 16000) -> Dict[str, Any]:
     """Универсальная функция для вызова LLM API с логированием токенов и надежной обработкой ошибок."""
-    response_text, prompt_tokens, completion_tokens = None, 0, 0
-    logger.debug(f"Sending prompt to LLM ({LLM_PROVIDER}, model: {model_name}, first 500 chars):\n{prompt_content[:500]}...")
+    response_text = None
+    prompt_tokens = 0
+    completion_tokens = 0
+    
+    logger.debug(f"NLP: Sending prompt to LLM ({LLM_PROVIDER}, model: {model_name}, first 500 chars):\n{prompt_content[:500]}...")
+    
+    # Сохраняем полный промпт в отладочный файл если включен DEBUG режим
+    _save_debug_prompt(prompt_content, model_name)
 
-    if LLM_PROVIDER in ['local', 'klusterai']:
-        try:
-            base_url = LOCAL_LLM_BASE_URL if LLM_PROVIDER == 'local' else KLUSTER_AI_BASE_URL
-            api_key = LOCAL_LLM_API_KEY if LLM_PROVIDER == 'local' else KLUSTER_AI_API_KEY
-            client = _get_openai_compatible_client(base_url, api_key)
-            messages = [{"role": "user", "content": prompt_content}]
-            
-            completion = client.chat.completions.create(
-                model=model_name, messages=messages, temperature=temperature, max_tokens=max_tokens
-            )
-            response_text = completion.choices[0].message.content
-            if completion.usage:
-                prompt_tokens = completion.usage.prompt_tokens
-                completion_tokens = completion.usage.completion_tokens
-        except (APIConnectionError, RateLimitError, APIStatusError, RuntimeError) as e:
-            logger.error(f"LLM API error ({LLM_PROVIDER}): {e}", exc_info=True)
-            raise RuntimeError(f"Ошибка LLM API ({LLM_PROVIDER}): {e}")
+    if LLM_PROVIDER == 'local':
+        # ... (Здесь был конфиг для локальной языковой модели, его больше не надо использовать) ...
+        raise NotImplementedError("Local LLM provider is not yet fully implemented.")
+    elif LLM_PROVIDER == 'klusterai':
+        # ... (Здесь был конфиг провайдера KlusterAI, они перестали предлагать услуги) ...
+        raise NotImplementedError("KlusterAI LLM provider is not yet fully implemented.")
+    elif LLM_PROVIDER == 'openrouter':
+        base_url = OPENROUTER_BASE_URL
+        api_key = OPENROUTER_API_KEY
+        selected_model_name = OPENROUTER_MODEL_NAME
+        extra_headers = {
+            "HTTP-Referer": OPENROUTER_SITE_URL,
+            "X-Title": OPENROUTER_SITE_NAME,
+        }
     else:
-        raise RuntimeError(f"LLM_PROVIDER '{LLM_PROVIDER}' is not supported. Please set LLM_PROVIDER to 'local' or 'klusterai'.")
+        raise RuntimeError(f"LLM_PROVIDER '{LLM_PROVIDER}' is not supported. Please set LLM_PROVIDER to 'local', 'klusterai', or 'openrouter'.")
 
-    logger.info(f"LLM Token Usage: Prompt Tokens = {prompt_tokens}, Completion Tokens = {completion_tokens}")
-    # logger.info(f"LLM Raw Response:\n{response_text}")
-
-    if not response_text:
-        raise ValueError("LLM response text is empty.")
+    try:
+        client = _get_openai_compatible_client(base_url, api_key)
+        messages = [{"role": "user", "content": prompt_content}]
+        
+        completion = client.chat.completions.create(
+            model=selected_model_name,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            extra_headers=extra_headers if extra_headers else None,
+            extra_body={}
+        )
+        response_text = completion.choices[0].message.content
+        if completion.usage:
+            prompt_tokens = completion.usage.prompt_tokens
+            completion_tokens = completion.usage.completion_tokens
+            logger.info(f"LLM Token Usage: Prompt Tokens = {prompt_tokens}, Completion Tokens = {completion_tokens}")
+        else:
+            logger.warning("LLM response did not contain usage information.")
+        
+        # Сохраняем полный ответ в отладочный файл если включен DEBUG режим
+        _save_debug_response(response_text, selected_model_name, prompt_tokens, completion_tokens)
+            
+    except (APIConnectionError, RateLimitError, APIStatusError, RuntimeError) as e:
+        logger.error(f"LLM API error ({LLM_PROVIDER}): {e}", exc_info=True)
+        raise RuntimeError(f"Ошибка LLM API ({LLM_PROVIDER}): {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error calling LLM API ({LLM_PROVIDER}): {e}", exc_info=True)
+        raise RuntimeError(f"Неизвестная ошибка при вызове LLM API ({LLM_PROVIDER}): {e}")
 
     json_match = re.search(r'```\s*json\s*(.*?)\s*```', response_text, re.DOTALL | re.IGNORECASE)
     if json_match:
-        return json.loads(json_match.group(1).strip())
+        try:
+            return json.loads(json_match.group(1).strip())
+        except json.JSONDecodeError as err:
+            logger.error(f"NLP: LLM response contained a JSON block, but it's invalid. Error: {err}. Full response:\n{response_text[:500]}...")
+            raise ValueError(f"LLM response contained a JSON block, but it's invalid. Error: {err}. (Partial response logged)")
     
-    logger.warning("LLM response did not contain a JSON markdown block. Attempting to parse raw response.")
+    logger.warning("NLP: LLM response did not contain a JSON markdown block. Attempting to parse raw response.")
     try:
         return json.loads(response_text)
     except json.JSONDecodeError as err:
-        raise ValueError(f"LLM response was not valid JSON. Error: {err}. Full response:\n{response_text}")
-
-# --- Промпты ---
+        logger.error(f"NLP: LLM response was not valid JSON. Error: {err}. Full response:\n{response_text[:500]}...")
+        raise ValueError(f"LLM response was not valid JSON. Error: {err}. (Partial response logged)")
 
 def _create_fgos_prompt(fgos_text: str) -> str:
     """
@@ -258,11 +358,10 @@ def _create_pk_ipk_generation_prompt(
     - 'required_skills': список описаний НУ
     - 'required_knowledge': список описаний НЗ
     """
-    # Подготавливаем данные для LLM, чтобы они были максимально чистыми и структурированными
     formatted_tfs = []
     for tf_data in batch_tfs_data:
         tf_dict = {
-            "unique_tf_id": tf_data.get('unique_tf_id'), # Важно для сопоставления ответа
+            "unique_tf_id": tf_data.get('unique_tf_id'),
             "tf_name": tf_data.get('tf_name'),
             "labor_actions": [a.get('description') for a in tf_data.get('labor_actions', []) if a.get('description')],
             "required_skills": [s.get('description') for s in tf_data.get('required_skills', []) if s.get('description')],
@@ -314,18 +413,14 @@ JSON Schema для каждого элемента в выходном спис�
 """
     return prompt
 
-# --- Обновленные публичные функции ---
 def parse_fgos_with_llm(fgos_text: str) -> Dict[str, Any]:
     """Использует сконфигурированный LLM для парсинга ФГОС."""
-    model_name = KLUSTER_AI_MODEL_NAME if LLM_PROVIDER == 'klusterai' else LOCAL_LLM_MODEL_NAME
     prompt = _create_fgos_prompt(fgos_text)
-    parsed_data = _call_llm_api(prompt, model_name=model_name)
+    parsed_data = _call_llm_api(prompt, model_name=OPENROUTER_MODEL_NAME)
 
-    # Инициализация полей warning и message, если они отсутствуют (хотя промпт должен их включать)
     parsed_data.setdefault('warning', False)
     parsed_data.setdefault('message', None)
 
-    # Валидация и очистка данных
     if parsed_data.get('metadata'):
         parsed_data['metadata']['order_date'] = parse_date_string(parsed_data['metadata'].get('order_date'))
     
@@ -333,7 +428,6 @@ def parse_fgos_with_llm(fgos_text: str) -> Dict[str, Any]:
         for ps in parsed_data['recommended_ps']:
             ps['approval_date'] = parse_date_string(ps.get('approval_date'))
 
-    # Проверка на полноту данных для установки предупреждения
     warning_messages = []
     if not parsed_data.get('metadata') or not all(parsed_data['metadata'].get(k) for k in ['order_number', 'order_date', 'direction_code', 'education_level']):
         warning_messages.append("Не удалось извлечь основные метаданные ФГОС (номер, дата, код направления, уровень образования).")
@@ -352,11 +446,9 @@ def parse_fgos_with_llm(fgos_text: str) -> Dict[str, Any]:
 
 def parse_uk_indicators_disposition_with_llm(disposition_text: str, education_level: str) -> Dict[str, Any]:
     """Использует сконфигурированный LLM для парсинга Распоряжения."""
-    model_name = KLUSTER_AI_MODEL_NAME if LLM_PROVIDER == 'klusterai' else LOCAL_LLM_MODEL_NAME
     prompt = _create_uk_indicators_disposition_prompt(disposition_text, education_level)
-    parsed_data = _call_llm_api(prompt, model_name=model_name)
+    parsed_data = _call_llm_api(prompt, model_name=OPENROUTER_MODEL_NAME)
 
-    # Валидация и очистка данных, как в вашем предыдущем коде
     if 'disposition_metadata' in parsed_data and isinstance(parsed_data['disposition_metadata'], dict):
         date_val = parsed_data['disposition_metadata'].get('date')
         parsed_data['disposition_metadata']['date'] = parse_date_string(date_val)
@@ -377,13 +469,10 @@ def parse_uk_indicators_disposition_with_llm(disposition_text: str, education_le
 
 def correct_pk_name_with_llm(raw_phrase: str) -> Dict[str, str]:
     """Использует сконфигурированный LLM для коррекции названия ПК."""
-    model_name = KLUSTER_AI_MODEL_NAME if LLM_PROVIDER == 'klusterai' else LOCAL_LLM_MODEL_NAME
     prompt = _create_pk_correction_prompt(raw_phrase)
-    # Максимальное количество токенов для коррекции обычно меньше, чем для генерации.
-    # Если название длинное, лучше дать побольше. Например, 50-100.
-    response_data = _call_llm_api(prompt, model_name=model_name, max_tokens=100)
+    max_tokens_for_correction = 100
+    response_data = _call_llm_api(prompt, model_name=OPENROUTER_MODEL_NAME, max_tokens=max_tokens_for_correction)
     
-    # Валидация и очистка, как в вашем предыдущем коде
     if isinstance(response_data, str):
         return {"corrected_name": response_data.strip()}
     
@@ -401,18 +490,15 @@ def correct_pk_name_with_llm(raw_phrase: str) -> Dict[str, str]:
 
 def generate_pk_ipk_with_llm(batch_tfs_data: List[Dict]) -> List[Dict]:
     """
-    (ИЗМЕНЕНО) Использует сконфигурированный LLM для пакетной генерации ПК/ИПК.
+    Использует сконфигурированный LLM для пакетной генерации ПК/ИПК.
     Принимает список словарей, каждый из которых представляет одну ТФ с ее элементами ЗУН.
     Возвращает список сгенерированных результатов, сопоставленных по unique_tf_id.
     """
-    model_name = KLUSTER_AI_MODEL_NAME if LLM_PROVIDER == 'klusterai' else LOCAL_LLM_MODEL_NAME
     prompt = _create_pk_ipk_generation_prompt(batch_tfs_data)
     
-    # Увеличиваем max_tokens, так как ожидаем больше выходных данных
-    # Каждый PK/IPK генерирует ~150 токенов, 10 ТФ -> 1500 токенов
-    max_tokens_for_batch = max(2000, len(batch_tfs_data) * 200) # Динамически настраиваем
+    max_tokens_for_batch = max(2000, len(batch_tfs_data) * 200)
     
-    generated_results = _call_llm_api(prompt, model_name=model_name, max_tokens=max_tokens_for_batch)
+    generated_results = _call_llm_api(prompt, model_name=OPENROUTER_MODEL_NAME, max_tokens=max_tokens_for_batch)
     
     if not isinstance(generated_results, list):
         logger.error(f"Generated data is not a list: {generated_results}")
@@ -420,7 +506,6 @@ def generate_pk_ipk_with_llm(batch_tfs_data: List[Dict]) -> List[Dict]:
 
     final_parsed_results = []
     for item in generated_results:
-        # Валидация и очистка каждого элемента в пакете
         if not isinstance(item, dict) or \
            'unique_tf_id' not in item or \
            'pk_name' not in item or \
@@ -429,9 +514,8 @@ def generate_pk_ipk_with_llm(batch_tfs_data: List[Dict]) -> List[Dict]:
            'umeet' not in item['ipk_indicators'] or \
            'vladeet' not in item['ipk_indicators']:
             logger.warning(f"Skipping malformed generated item: {item}")
-            continue # Пропускаем некорректные элементы
+            continue
         
-        # Очистка строк
         item['pk_name'] = re.sub(r'\s+', ' ', item['pk_name']).strip()
         for key in ['znaet', 'umeet', 'vladeet']:
             item['ipk_indicators'][key] = re.sub(r'\s+', ' ', item['ipk_indicators'].get(key, '')).strip()

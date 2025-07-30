@@ -1,5 +1,3 @@
-# filepath: competencies_matrix/logic/matrix_operations.py
-
 import logging
 from typing import Dict, List, Any, Optional, Tuple
 
@@ -10,7 +8,6 @@ from sqlalchemy.orm import Session, selectinload, joinedload
 from maps.models import db as local_db
 from maps.models import AupInfo as LocalAupInfo, AupData as LocalAupData, D_Period, SprDiscipline
 
-# Импорты моделей модуля Компетенций
 from ..models import (
     EducationalProgram, Competency, Indicator, CompetencyMatrix,
     FgosVo, EducationalProgramAup, CompetencyType,

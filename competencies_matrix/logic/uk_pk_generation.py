@@ -8,7 +8,8 @@ from sqlalchemy import cast, Integer
 
 from maps.models import db as local_db
 from ..models import Competency, Indicator, CompetencyType, FgosVo, LaborFunction, EducationalProgram, CompetencyEducationalProgram
-from .competencies_indicators import create_competency, create_indicator # Импортируем, если нужна именно эта обертка
+from .competencies_indicators import create_competency, create_indicator
+from ..parsing_utils import preprocess_text_for_llm
 
 from .. import nlp
 from pdfminer.high_level import extract_text
@@ -22,8 +23,10 @@ def process_uk_indicators_disposition_file(file_bytes: bytes, filename: str, edu
     logger.info(f"Processing UK indicators disposition file: {filename} for education level: {education_level}")
     
     try:
-        text_content = extract_text(io.BytesIO(file_bytes))
-        parsed_disposition_data = nlp.parse_uk_indicators_disposition_with_llm(text_content, education_level=education_level)
+        raw_text_content = extract_text(io.BytesIO(file_bytes))
+        cleaned_text_content = preprocess_text_for_llm(raw_text_content)
+        
+        parsed_disposition_data = nlp.parse_uk_indicators_disposition_with_llm(cleaned_text_content, education_level=education_level)
 
         if not parsed_disposition_data or not parsed_disposition_data.get('disposition_metadata'):
             raise ValueError("Не удалось извлечь метаданные из файла распоряжения.")

@@ -1,4 +1,3 @@
-# filepath: competencies_matrix/models.py
 from maps.models import db, AupInfo, AupData, SprDiscipline
 try:
     from auth.models import Users
@@ -17,7 +16,7 @@ import datetime
 import re
 
 from sqlalchemy.types import TypeEngine 
-from sqlalchemy.ext.hybrid import hybrid_property # Добавлено
+from sqlalchemy.ext.hybrid import hybrid_property
 
 try:
     _ = db.JSON
@@ -415,7 +414,6 @@ class Competency(db.Model, BaseModel):
     def source_document_code(self):
         """Возвращает код документа-источника."""
         if self.source_document_type == 'ФГОС ВО' and self.fgos:
-            # ИЗМЕНЕНИЕ: Возвращаем direction_code вместо number
             return self.fgos.direction_code
         if self.source_document_type == 'Профстандарт' and self.based_on_labor_function and \
            self.based_on_labor_function.generalized_labor_function and \
