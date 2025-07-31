@@ -50,6 +50,6 @@ KLUSTER_AI_MODEL_NAME = os.getenv("KLUSTER_AI_MODEL_NAME")
 # OpenRouter Configuration
 OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_MODEL_NAME = os.getenv("OPENROUTER_MODEL_NAME", "deepseek/deepseek-r1-0528-qwen3-8b:free")
+OPENROUTER_MODEL_NAME = os.getenv("OPENROUTER_MODEL_NAME", "z-ai/glm-4.5-air:free")
 OPENROUTER_SITE_URL = os.getenv("OPENROUTER_SITE_URL")
 OPENROUTER_SITE_NAME = os.getenv("OPENROUTER_SITE_NAME")

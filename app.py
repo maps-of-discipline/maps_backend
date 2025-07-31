@@ -10,10 +10,6 @@ import logging
 import click # Import click for custom CLI commands (unused)
 from flask.cli import with_appcontext # Import with_appcontext for CLI commands
 
-import maps.models
-import competencies_matrix.models
-import auth.models
-import cabinet.models
 
 from maps.models import db
 
@@ -22,15 +18,12 @@ from cabinet.cabinet import cabinet
 from maps.routes import maps_module
 from unification import unification_blueprint
 from auth.routes import auth as auth_blueprint
-from administration.routes import admin as admin_blueprint # assuming this is where admin models are defined, if any
+from administration.routes import admin as admin_blueprint
 from competencies_matrix import competencies_matrix_bp
 from utils.handlers import handle_exception
 
-from cli_commands.db_seed import seed_command
-from cli_commands.db_unseed import unseed_command
-from cli_commands.import_aup import import_aup_command
-from cli_commands.fgos_import import import_fgos_command
-from cli_commands.parse_profstandard import parse_ps_command
+
+from cli_commands import register_cli_commands
 
 load_dotenv()
 
@@ -47,17 +40,12 @@ def configure_logging():
         handlers=[logging.StreamHandler()]
     )
     
-    # Устанавливаем уровень для всего приложения
     app.logger.setLevel(LOG_LEVEL) 
     
-    # Уменьшаем шум от внешних библиотек
     logging.getLogger('pdfminer').setLevel(logging.WARNING)
     logging.getLogger('google_genai').setLevel(logging.INFO) # или WARNING, если хотите меньше сообщений от самого Gemini SDK
     logging.getLogger('httpx').setLevel(logging.INFO) # Это важно, чтобы видеть запросы к LLM API
     
-    # Если LOG_LEVEL в config.py установлен в DEBUG, то эти строки не нужны
-    # если вы хотите, чтобы все DEBUG-логи попадали
-    # Если же LOG_LEVEL выше (например, INFO), но вы хотите видеть DEBUG-логи конкретного модуля:
     if LOG_LEVEL > logging.DEBUG: # Если основной уровень выше DEBUG
         logging.getLogger('competencies_matrix').setLevel(logging.DEBUG)
         logging.getLogger('maps').setLevel(logging.INFO) # Можно оставить INFO для других
@@ -93,7 +81,7 @@ CORS(
         "X-Requested-With",
         "Accept",
         "Origin",
-        "Aup" 
+        "Aup"
     ],
     expose_headers=["Content-Disposition", "Content-Type"],
 )
@@ -114,7 +102,7 @@ convention = {
     "pk": "pk_%(table_name)s"
 }
 metadata = MetaData(naming_convention=convention)
-db.init_app(app) # Это должно произойти ПОСЛЕ того, как ВСЕ модели импортированы
+db.init_app(app)
 migrate = Migrate(app, db, render_as_batch=True, compare_type=True, naming_convention=convention)
 
 # Регистрация Blueprint'ов
@@ -132,45 +120,42 @@ if not app.config.get('DEBUG'):
 def index():
     return jsonify({'message': 'Maps and Competencies API is running'}), 200
 
-@app.route('/test/external-db')
-def test_external_db():
-    """Тестовый эндпоинт для проверки подключения к внешней БД."""
-    try:
-        if app.config['SQLALCHEMY_BINDS'].get('kd_external'):
-            from sqlalchemy import text
-            engine = db.get_engine(bind_key='kd_external')
-            with engine.connect() as connection:
-                result = connection.execute(text("SELECT 1")).scalar_one()
-            return jsonify({'success': True, 'message': 'Успешное подключение к внешней БД', 'result': result}), 200
-        else:
-            return jsonify({'success': False, 'message': 'Внешняя БД не сконфигурирована в SQLAlchemy binds'}), 500
-    except Exception as e:
-        logging.error(f"Error testing external DB: {e}", exc_info=True)
-        return jsonify({
-            'success': False,
-            'message': 'Ошибка подключения к внешней БД',
-            'error': str(e)
-        }), 500
+if app.debug:
+    @app.route('/test/external-db')
+    def test_external_db():
+        """Тестовый эндпоинт для проверки подключения к внешней БД."""
+        try:
+            if app.config['SQLALCHEMY_BINDS'].get('kd_external'):
+                from sqlalchemy import text
+                engine = db.get_engine(bind_key='kd_external')
+                with engine.connect() as connection:
+                    result = connection.execute(text("SELECT 1")).scalar_one()
+                return jsonify({'success': True, 'message': 'Успешное подключение к внешней БД', 'result': result}), 200
+            else:
+                return jsonify({'success': False, 'message': 'Внешняя БД не сконфигурирована в SQLAlchemy binds'}), 500
+        except Exception as e:
+            logging.error(f"Error testing external DB: {e}", exc_info=True)
+            return jsonify({
+                'success': False,
+                'message': 'Ошибка подключения к внешней БД',
+                'error': str(e)
+            }), 500
 
-@app.route('/debug/routes')
-def list_routes():
-    """List all registered routes with their endpoints and HTTP methods."""
-    import urllib
-    output = []
-    for rule in app.url_map.iter_rules():
-        options = {}
-        for arg in rule.arguments:
-            options[arg] = "[{0}]".format(arg)
-        methods = ','.join(rule.methods)
-        url = urllib.parse.unquote(str(rule)) 
-        line = "{:50s} {:20s} {}".format(rule.endpoint, methods, url)
-        output.append(line)
+    @app.route('/debug/routes')
+    def list_routes():
+        """List all registered routes with their endpoints and HTTP methods."""
+        import urllib
+        output = []
+        for rule in app.url_map.iter_rules():
+            options = {}
+            for arg in rule.arguments:
+                options[arg] = "[{0}]".format(arg)
+            methods = ','.join(rule.methods)
+            url = urllib.parse.unquote(str(rule))
+            line = "{:50s} {:20s} {}".format(rule.endpoint, methods, url)
+            output.append(line)
 
-    output.sort()
-    return jsonify(output) 
+        output.sort()
+        return jsonify(output)
 
-app.cli.add_command(seed_command)
-app.cli.add_command(unseed_command)
-app.cli.add_command(import_aup_command)
-app.cli.add_command(import_fgos_command)
-app.cli.add_command(parse_ps_command)
+register_cli_commands(app)
