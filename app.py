@@ -32,7 +32,7 @@ application = app
 
 def configure_logging():
     """Configure application logging based on config settings."""
-    from config import LOG_LEVEL # Убедитесь, что LOG_LEVEL в config.py установлен в logging.DEBUG
+    from config import LOG_LEVEL
 
     logging.basicConfig(
         level=LOG_LEVEL,
@@ -43,12 +43,12 @@ def configure_logging():
     app.logger.setLevel(LOG_LEVEL) 
     
     logging.getLogger('pdfminer').setLevel(logging.WARNING)
-    logging.getLogger('google_genai').setLevel(logging.INFO) # или WARNING, если хотите меньше сообщений от самого Gemini SDK
-    logging.getLogger('httpx').setLevel(logging.INFO) # Это важно, чтобы видеть запросы к LLM API
+    logging.getLogger('google_genai').setLevel(logging.INFO)
+    logging.getLogger('httpx').setLevel(logging.INFO) # Чтобы видеть запросы к LLM API
     
-    if LOG_LEVEL > logging.DEBUG: # Если основной уровень выше DEBUG
+    if LOG_LEVEL > logging.DEBUG:
         logging.getLogger('competencies_matrix').setLevel(logging.DEBUG)
-        logging.getLogger('maps').setLevel(logging.INFO) # Можно оставить INFO для других
+        logging.getLogger('maps').setLevel(logging.INFO)
         logging.getLogger('auth').setLevel(logging.INFO)
         logging.getLogger('cabinet').setLevel(logging.INFO)
         logging.getLogger('administration').setLevel(logging.INFO)
@@ -58,8 +58,7 @@ configure_logging()
 app.config.from_pyfile('config.py')
 app.json.sort_keys = False
 
-# Determine environment and debug mode
-flask_env = os.getenv('FLASK_ENV', 'production') 
+flask_env = os.getenv('FLASK_ENV', 'development') # development, production
 app.config['ENV'] = flask_env
 app.debug = (flask_env == 'development')
 
