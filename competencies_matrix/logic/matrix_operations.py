@@ -23,23 +23,23 @@ def get_matrix_for_aup(aup_num: str) -> Dict[str, Any]:
     Собирает данные для матрицы компетенций,
     используя локальные данные АУП и дисциплин.
     """
-    logger.info(f"Запрос на построение матрицы для АУП: {aup_num}.")
+    logger.info(f"Строится матрица АУП: {aup_num}.")
     session: Session = local_db.session
 
     response_data: Dict[str, Any] = {
-        "status": "error", "error": "Неизвестная ошибка при загрузке матрицы.",
+        "status": "error", "error": "!!! Ошибка при загрузке матрицы.",
         "disciplines": [], "links": [], "aup_info": None, "program_info": None,
     }
     
     local_aup = session.query(LocalAupInfo).filter_by(num_aup=aup_num).first()
     if not local_aup:
         response_data["status"] = "not_imported"
-        response_data["error"] = f"АУП '{aup_num}' не импортирован в систему. Пожалуйста, импортируйте его."
+        response_data["error"] = f"АУП '{aup_num}' не импортирован в систему. Необходимо импортировать его."
         return response_data
     
     program_assoc = session.query(EducationalProgramAup).filter_by(aup_id=local_aup.id_aup).first()
     if not program_assoc:
-        response_data["error"] = f"АУП '{aup_num}' существует, но не привязан к образовательной программе."
+        response_data["error"] = f"АУП '{aup_num}' существует, но не привязан к ОПОП."
         return response_data
     program = program_assoc.educational_program
 
@@ -91,7 +91,7 @@ def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True)
 
         if create:
             if existing_link:
-                logger.warning(f"Попытка создать уже существующую связь: AupData={aup_data_id}, Indicator={indicator_id}")
+                logger.warning(f"Warn: Связь уже существует: AupData={aup_data_id}, Indicator={indicator_id}")
                 return {'success': True, 'status': 'already_exists', 'message': "Связь уже существует."}
             else:
                 link = CompetencyMatrix(aup_data_id=aup_data_id, indicator_id=indicator_id, is_manual=True)
@@ -106,7 +106,7 @@ def update_matrix_link(aup_data_id: int, indicator_id: int, create: bool = True)
                 session.commit()
                 return {'success': True, 'status': 'deleted', 'message': "Связь успешно удалена."}
             else:
-                logger.warning(f"Связь для удаления не найдена: AupData ID {aup_data_id} <-> Indicator ID {indicator_id}")
+                logger.warning(f"Warn: Связь для удаления не найдена: AupData ID {aup_data_id} <-> Indicator ID {indicator_id}")
                 return {'success': True, 'status': 'not_found', 'message': "Связь не найдена."}
 
     except ValueError as e:
