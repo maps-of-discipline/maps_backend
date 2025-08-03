@@ -8,7 +8,8 @@ from ..logic import (
     create_educational_program,
     update_educational_program as logic_update_educational_program,
     delete_educational_program,
-    import_aup_from_external_db
+    import_aup_from_external_db,
+    check_aup_version
 )
 
 from auth.logic import login_required, approved_required, admin_only
@@ -61,7 +62,6 @@ def create_program_route():
         logger.error(f"Unexpected error creating program: {e}", exc_info=True)
         return jsonify({"error": f"Неожиданная ошибка сервера при создании образовательной программы."}), 500
 
-# НОВЫЙ РОУТ ДЛЯ ОБНОВЛЕНИЯ ОПОП
 @competencies_matrix_bp.route('/programs/<int:program_id>', methods=['PATCH'])
 @login_required
 @approved_required
@@ -79,7 +79,7 @@ def update_program_route(program_id: int):
             db.session.commit()
             return jsonify(updated_program_dict), 200
         else:
-            db.session.rollback() # Rollback in case of partial changes before 'not found'
+            db.session.rollback()
             return jsonify({"error": "Образовательная программа не найдена."}), 404
             
     except ValueError as e:
@@ -105,7 +105,24 @@ def get_program(program_id):
         return jsonify({"error": "Образовательная программа не найдена"}), 404
     return jsonify(details)
 
-# НОВЫЙ РОУТ ДЛЯ ИМПОРТА АУП
+@competencies_matrix_bp.route('/programs/<int:program_id>/check-aup-version', methods=['GET'])
+@login_required
+@approved_required
+def check_aup_version_route(program_id: int):
+    """
+    Проверяет актуальность основного АУП для ОПОП.
+    """
+    try:
+        result = check_aup_version(program_id, db.session)
+        return jsonify(result), 200
+    except RuntimeError as e:
+        logger.error(f"Ошибка выполнения при проверке версии АУП: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": f"Ошибка при проверке версии АУП: {e}"}), 500
+    except Exception as e:
+        logger.error(f"Неожиданная ошибка в роуте проверки версии АУП: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": "Внутренняя ошибка сервера при проверке версии АУП."}), 500
+
+
 @competencies_matrix_bp.route('/programs/<int:program_id>/import-aup/<string:aup_num>', methods=['POST'])
 @login_required
 @approved_required

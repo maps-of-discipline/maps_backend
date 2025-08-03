@@ -1,10 +1,9 @@
-# competencies_matrix/external_models.py
+# filepath: competencies_matrix/external_models.py
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, Date, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship, declarative_base, Session
 from sqlalchemy.ext.hybrid import hybrid_property
 from typing import Dict, Any
 
-# Создаем свою базу для этих моделей, она не будет связана с db из Flask-SQLAlchemy
 ExternalBase = declarative_base()
 
 class ExternalSprFaculty(ExternalBase):
@@ -46,7 +45,6 @@ class ExternalNameOP(ExternalBase):
     okco = relationship("ExternalSprOKCO", primaryjoin="ExternalNameOP.program_code == ExternalSprOKCO.program_code", foreign_keys=[program_code])
     def as_dict(self) -> Dict[str, Any]: return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
-# <<< НОВЫЕ МОДЕЛИ ВНЕШНИХ СПРАВОЧНИКОВ И ИХ as_dict >>>
 class ExternalDBlocks(ExternalBase):
     __tablename__ = "d_blocks"
     id = Column(Integer, primary_key=True)

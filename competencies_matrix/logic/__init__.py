@@ -25,7 +25,8 @@ from .educational_programs import (
     get_program_details,
     create_educational_program,
     update_educational_program,
-    delete_educational_program
+    delete_educational_program,
+    check_aup_version
 )
 from .competencies_indicators import (
     get_all_competencies,
