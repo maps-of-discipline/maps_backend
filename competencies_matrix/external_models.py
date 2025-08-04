@@ -104,7 +104,7 @@ class ExternalSprDiscipline(ExternalBase):
     def as_dict(self) -> Dict[str, Any]: return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
 
-class ExternalAupInfo(ExternalBase):
+class ExtAupInfo(ExternalBase):
     __tablename__ = "tbl_aup"
     id_aup = Column(Integer, primary_key=True)
     num_aup = Column(String(255), nullable=False, unique=True)
@@ -142,7 +142,7 @@ class ExternalAupInfo(ExternalBase):
         if self.department: data['department_name'] = self.department.name_department
         return data
 
-class ExternalAupData(ExternalBase):
+class ExtAupData(ExternalBase):
     __tablename__ = "aup_data"
     id = Column(Integer, primary_key=True)
     id_aup = Column(Integer, ForeignKey("tbl_aup.id_aup"))
@@ -171,7 +171,7 @@ class ExternalAupData(ExternalBase):
     module = relationship("ExternalDModules", foreign_keys=[id_module], lazy='joined')
     type_record_rel = relationship("ExternalDTypeRecord", foreign_keys=[id_type_record], lazy='joined')
     type_control_rel = relationship("ExternalDControlType", foreign_keys=[id_type_control], lazy='joined')
-    ed_izmereniya_rel = relationship("ExternalDEdIzmereniya", foreign_keys=[id_edizm], lazy='joined')
+    ed_measurements_rel = relationship("ExternalDEdIzmereniya", foreign_keys=[id_edizm], lazy='joined')
     group_rel = relationship("ExternalGroups", foreign_keys=[id_group], lazy='joined')
     period_rel = relationship("ExternalDPeriod", foreign_keys=[id_period], lazy='joined')
 
@@ -183,7 +183,7 @@ class ExternalAupData(ExternalBase):
 
     def as_dict(self) -> Dict[str, Any]:
         """
-        Formats ExternalAupData into a dictionary, including names of related lookup tables.
+        Formats ExtAupData into a dictionary, including names of related lookup tables.
         """
         data = {
             'id': self.id, 'id_aup': self.id_aup, 'shifr': self.shifr,
@@ -201,7 +201,7 @@ class ExternalAupData(ExternalBase):
             'group_color': self.group_rel.color if self.group_rel else None,
             'id_type_record': self.id_type_record, 'type_record_title': self.type_record_rel.title if self.type_record_rel else None,
             'id_type_control': self.id_type_control, 'type_control_title': self.type_control_rel.title if self.type_control_rel else None,
-            'id_edizm': self.id_edizm, 'ed_izmereniya_title': self.ed_izmereniya_rel.title if self.ed_izmereniya_rel else None,
+            'id_edizm': self.id_edizm, 'ed_izmereniya_title': self.ed_measurements_rel.title if self.ed_measurements_rel else None,
             'period_title': self.period_rel.title if self.period_rel else None,
         }
         return data

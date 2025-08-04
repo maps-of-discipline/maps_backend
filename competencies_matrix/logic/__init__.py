@@ -1,3 +1,4 @@
+# filepath: competencies_matrix/logic/__init__.py
 from .fgos_processing import (
     parse_fgos_file,
     save_fgos_data,
@@ -15,7 +16,7 @@ from .prof_standards import (
     generate_prof_standard_excel_export_logic
 )
 from .aup_external import (
-    get_external_db_engine,
+    # get_external_db_engine, # <-- ЭТА СТРОКА УДАЛЕНА
     get_external_aups_list,
     get_external_aup_disciplines,
     import_aup_from_external_db

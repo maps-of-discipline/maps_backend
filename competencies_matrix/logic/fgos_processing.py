@@ -1,39 +1,36 @@
 # filepath: competencies_matrix/logic/fgos_processing.py
 import datetime
-import io
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Optional
 
 from sqlalchemy.orm import Session, selectinload
-from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
 from maps.models import db as local_db
 from ..models import FgosVo, Competency, CompetencyType, FgosRecommendedPs, ProfStandard
 
 from .. import fgos_parser
 from ..parsing_utils import parse_date_string
+from .error_utils import handle_db_errors
 
 logger = logging.getLogger(__name__)
 
 
 def parse_fgos_file(file_bytes: bytes, filename: str) -> dict:
     """
-    (ИСПРАВЛЕНО) Оркестрирует парсинг файла ФГОС, делегируя всю работу модулю fgos_parser.
+    Оркестрирует парсинг файла ФГОС, делегируя всю работу модулю fgos_parser.
     """
     try:
-        # Просто передаем байты и имя файла в парсер. Вся логика (извлечение, очистка, вызов nlp) теперь внутри него.
         data = fgos_parser.parse_fgos_file(file_bytes, filename)
         return data
     except ValueError as e:
-        # Перехватываем и пробрасываем ошибки валидации из парсера
         logger.error(f"FGOS Processing: Parser raised ValueError for {filename}: {e}")
         raise
     except Exception as e:
-        # Перехватываем и пробрасываем другие неожиданные ошибки
         logger.error(f"FGOS Processing: Unexpected error during parsing of {filename}: {e}", exc_info=True)
         raise ValueError(f"Неожиданная ошибка при парсинге файла '{filename}': {e}")
 
 
+@handle_db_errors()
 def save_fgos_data(data: dict, filename: str, session: Session, force_update: bool = False) -> Optional[FgosVo]:
     """Saves parsed FGOS data to the database."""
     if not data or not data.get('metadata'):
@@ -81,56 +78,43 @@ def save_fgos_data(data: dict, filename: str, session: Session, force_update: bo
             clean_item['approval_date'] = clean_item['approval_date'].isoformat()
         cleaned_ps_list.append(clean_item)
 
-    try:
-        existing_fgos = session.query(FgosVo).filter_by(
-            direction_code=direction_code,
-            education_level=education_level,
-            number=order_number,
-            date=order_date
-        ).first()
+    existing_fgos = session.query(FgosVo).filter_by(
+        direction_code=direction_code,
+        education_level=education_level,
+        number=order_number,
+        date=order_date
+    ).first()
 
-        if existing_fgos:
-            if force_update:
-                logger.info(f"Updating existing FGOS {existing_fgos.id} for file '{filename}'.")
-                fgos = existing_fgos
-                fgos.direction_name = meta.get('direction_name') or 'Not specified'
-                fgos.generation = generation
-                fgos.file_path = filename
-                fgos.recommended_ps_parsed_data = cleaned_ps_list
-            else:
-                logger.info(f"FGOS for '{filename}' already exists (ID: {existing_fgos.id}) and force_update is False. Skipping.")
-                return existing_fgos
+    if existing_fgos:
+        if force_update:
+            logger.info(f"Updating existing FGOS {existing_fgos.id} for file '{filename}'.")
+            fgos = existing_fgos
+            fgos.direction_name = meta.get('direction_name') or 'Not specified'
+            fgos.generation = generation
+            fgos.file_path = filename
+            fgos.recommended_ps_parsed_data = cleaned_ps_list
         else:
-            logger.info(f"Creating new FGOS for file '{filename}'.")
-            fgos = FgosVo(
-                number=order_number,
-                date=order_date,
-                direction_code=direction_code,
-                direction_name=meta.get('direction_name') or 'Not specified',
-                education_level=education_level,
-                generation=generation,
-                file_path=filename,
-                recommended_ps_parsed_data=cleaned_ps_list
-            )
-            session.add(fgos)
-            session.flush()
+            logger.info(f"FGOS for '{filename}' already exists (ID: {existing_fgos.id}) and force_update is False. Skipping.")
+            return existing_fgos
+    else:
+        logger.info(f"Creating new FGOS for file '{filename}'.")
+        fgos = FgosVo(
+            number=order_number,
+            date=order_date,
+            direction_code=direction_code,
+            direction_name=meta.get('direction_name') or 'Not specified',
+            education_level=education_level,
+            generation=generation,
+            file_path=filename,
+            recommended_ps_parsed_data=cleaned_ps_list
+        )
+        session.add(fgos)
+        session.flush()
 
-        _sync_competencies(session, fgos, data)
-        _sync_recommended_ps(session, fgos, raw_ps_list)
+    _sync_competencies(session, fgos, data)
+    _sync_recommended_ps(session, fgos, raw_ps_list)
 
-        return fgos
-    except IntegrityError as e:
-        logger.error(f"Integrity error for FGOS from '{filename}': {e}", exc_info=True)
-        session.rollback()
-        raise
-    except SQLAlchemyError as e:
-        logger.error(f"Database error for FGOS from '{filename}': {e}", exc_info=True)
-        session.rollback()
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error saving FGOS from '{filename}': {e}", exc_info=True)
-        session.rollback()
-        raise
+    return fgos
 
 
 def _sync_competencies(session: Session, fgos: FgosVo, data: dict):
@@ -189,7 +173,7 @@ def _sync_recommended_ps(session: Session, fgos: FgosVo, raw_ps_list: list):
 
         prof_standard = session.query(ProfStandard).filter_by(code=ps_code).first()
         if prof_standard:
-            assoc = FgosRecommendedPs(fgos_id=fgos.id, ps_id=prof_standard.id)
+            assoc = FgosRecommendedPs(fgos_vo_id=fgos.id, prof_standard_id=prof_standard.id)
             session.add(assoc)
         else:
             logger.warning(f"ProfStandard with code '{ps_code}' not found. Cannot link to FGOS {fgos.id}.")
@@ -197,97 +181,82 @@ def _sync_recommended_ps(session: Session, fgos: FgosVo, raw_ps_list: list):
     logger.info(f"Synced recommended PS for FGOS {fgos.id}.")
 
 
+@handle_db_errors(default_return=[])
 def get_fgos_list() -> list:
     """Fetches a list of all FGOS from the database."""
-    try:
-        return local_db.session.query(FgosVo).order_by(FgosVo.direction_code, FgosVo.date.desc()).all()
-    except SQLAlchemyError as e:
-        logger.error(f"Database error fetching FGOS list: {e}", exc_info=True)
-        return []
-    except Exception as e:
-        logger.error(f"Unexpected error fetching FGOS list: {e}", exc_info=True)
-        return []
+    return local_db.session.query(FgosVo).order_by(FgosVo.direction_code, FgosVo.date.desc()).all()
 
 
+@handle_db_errors()
 def get_fgos_details(fgos_id: int) -> Optional[dict]:
     """Fetches detailed information for a single FGOS."""
-    try:
-        session: Session = local_db.session
-        fgos = session.query(FgosVo).options(
-            selectinload(FgosVo.competencies).selectinload(Competency.indicators),
-            selectinload(FgosVo.competencies).selectinload(Competency.competency_type),
-            selectinload(FgosVo.recommended_ps_assoc).selectinload(FgosRecommendedPs.prof_standard)
-        ).get(fgos_id)
-        if not fgos:
-            return None
-
-        details = fgos.to_dict(rules=['-competencies', '-recommended_ps_assoc', '-educational_programs'])
-
-        uk_competencies = []
-        opk_competencies = []
-
-        def competency_sort_key(c: Competency):
-            try:
-                return int(c.code.split('-')[-1])
-            except (ValueError, IndexError):
-                return float('inf')
-
-        sorted_competencies = sorted(fgos.competencies, key=competency_sort_key)
-
-        for comp in sorted_competencies:
-            comp_dict = comp.to_dict(rules=['-fgos', '-competency_type', '-indicators.competency'])
-            comp_dict['type'] = comp.competency_type.code
-            if comp.competency_type.code == 'УК':
-                uk_competencies.append(comp_dict)
-            elif comp.competency_type.code == 'ОПК':
-                opk_competencies.append(comp_dict)
-
-        details['uk_competencies'] = uk_competencies
-        details['opk_competencies'] = opk_competencies
-
-        recommended_ps = []
-        parsed_recommended_ps = fgos.recommended_ps_parsed_data or []
-
-        if parsed_recommended_ps and isinstance(parsed_recommended_ps, list):
-            for ps_data in parsed_recommended_ps:
-                ps_code = ps_data.get('code')
-                prof_standard = next((assoc.prof_standard for assoc in fgos.recommended_ps_assoc if assoc.prof_standard.code == ps_code), None)
-                recommended_ps.append({
-                    "code": ps_code,
-                    "name": ps_data.get("name"),
-                    "approval_date": ps_data.get("approval_date"),
-                    "registration_number": ps_data.get("registration_number"),
-                    "is_linked": prof_standard is not None,
-                    "id": prof_standard.id if prof_standard else None
-                })
-
-        details['recommended_ps'] = recommended_ps
-        return details
-    except SQLAlchemyError as e:
-        logger.error(f"Database error fetching FGOS {fgos_id} details: {e}", exc_info=True)
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error fetching FGOS {fgos_id} details: {e}", exc_info=True)
+    session: Session = local_db.session
+    fgos = session.query(FgosVo).options(
+        selectinload(FgosVo.competencies).selectinload(Competency.indicators),
+        selectinload(FgosVo.competencies).selectinload(Competency.competency_type),
+        selectinload(FgosVo.recommended_ps_assoc).selectinload(FgosRecommendedPs.prof_standard)
+    ).get(fgos_id)
+    if not fgos:
         return None
 
+    details = fgos.to_dict(rules=['-competencies', '-recommended_ps_assoc', '-educational_programs'])
 
+    uk_competencies = []
+    opk_competencies = []
+
+    def competency_sort_key(c: Competency):
+        try:
+            return int(c.code.split('-')[-1])
+        except (ValueError, IndexError):
+            return float('inf')
+
+    sorted_competencies = sorted(fgos.competencies, key=competency_sort_key)
+
+    for comp in sorted_competencies:
+        comp_dict = comp.to_dict(rules=['-fgos', '-competency_type', '-indicators.competency'])
+        comp_dict['type'] = comp.competency_type.code
+        if comp.competency_type.code == 'УК':
+            uk_competencies.append(comp_dict)
+        elif comp.competency_type.code == 'ОПК':
+            opk_competencies.append(comp_dict)
+
+    details['uk_competencies'] = uk_competencies
+    details['opk_competencies'] = opk_competencies
+
+    recommended_ps = []
+    parsed_recommended_ps = fgos.recommended_ps_parsed_data or []
+
+    if parsed_recommended_ps and isinstance(parsed_recommended_ps, list):
+        for ps_data in parsed_recommended_ps:
+            ps_code = ps_data.get('code')
+            prof_standard = next((assoc.prof_standard for assoc in fgos.recommended_ps_assoc if assoc.prof_standard and assoc.prof_standard.code == ps_code), None)
+            recommended_ps.append({
+                "code": ps_code,
+                "name": ps_data.get("name"),
+                "approval_date": ps_data.get("approval_date"),
+                "registration_number": ps_data.get("registration_number"),
+                "is_linked": prof_standard is not None,
+                "id": prof_standard.id if prof_standard else None
+            })
+
+    details['recommended_ps'] = recommended_ps
+    return details
+
+
+@handle_db_errors(default_return=False)
 def delete_fgos(fgos_id: int, session: Session, delete_related_competencies: bool = True) -> bool:
     """Deletes an FGOS and its related data from the database."""
-    try:
-        fgos = session.query(FgosVo).get(fgos_id)
-        if not fgos:
-            logger.warning(f"Delete failed: FGOS with ID {fgos_id} not found.")
-            return False
+    fgos = session.get(FgosVo, fgos_id)
+    if not fgos:
+        logger.warning(f"Delete failed: FGOS with ID {fgos_id} not found.")
+        return False
 
-        logger.info(f"Deleting FGOS {fgos_id} ('{fgos.direction_code} - {fgos.direction_name}')...")
-        
-        if delete_related_competencies:
-            session.query(Competency).filter(Competency.fgos_vo_id == fgos_id).delete(synchronize_session=False)
-            logger.info(f"Deleted related competencies for FGOS {fgos_id}.")
+    logger.info(f"Deleting FGOS {fgos_id} ('{fgos.direction_code} - {fgos.direction_name}')...")
+    
+    if delete_related_competencies:
+        session.query(Competency).filter(Competency.fgos_vo_id == fgos_id).delete(synchronize_session=False)
+        logger.info(f"Deleted related competencies for FGOS {fgos_id}.")
 
-        session.delete(fgos)
-        logger.info(f"FGOS {fgos_id} and related data marked for deletion.")
-        return True
-    except SQLAlchemyError as e:
-        logger.error(f"Database error deleting FGOS {fgos_id}: {e}", exc_info=True)
-        raise
+    session.delete(fgos)
+    logger.info(f"FGOS {fgos_id} and related data marked for deletion.")
+    return True

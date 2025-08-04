@@ -1,18 +1,18 @@
 # filepath: competencies_matrix/logic/uk_pk_generation.py
 import logging
 import io
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 
 from sqlalchemy.orm import Session, selectinload
-from sqlalchemy import cast, Integer
+from sqlalchemy import Integer
 
 from maps.models import db as local_db
-from ..models import Competency, Indicator, CompetencyType, FgosVo, LaborFunction, EducationalProgram, CompetencyEducationalProgram
-from .competencies_indicators import create_competency, create_indicator
+from ..models import Competency, Indicator, CompetencyType, FgosVo, EducationalProgram, CompetencyEducationalProgram
 from ..parsing_utils import preprocess_text_for_llm
 
 from .. import nlp
 from pdfminer.high_level import extract_text
+from .error_utils import handle_db_errors
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +119,7 @@ def _shift_competency_codes(
     session.flush()
     logger.info("Сдвиг кодов компетенций завершен.")
 
+@handle_db_errors()
 def save_uk_indicators_from_disposition(
     parsed_disposition_data: Dict[str, Any],
     filename: str,
@@ -141,134 +142,129 @@ def save_uk_indicators_from_disposition(
         "shifted_uk": 0, "shifted_indicator": 0
     }
 
-    try:
-        fgos_records = session.query(FgosVo).filter(FgosVo.id.in_(fgos_ids)).all()
-        if len(fgos_records) != len(fgos_ids):
-            found_ids = {r.id for r in fgos_records}
-            missing_ids = set(fgos_ids) - found_ids
-            raise ValueError(f"Один или несколько ФГОС ВО не найдены в БД: ID={list(missing_ids)}.")
+    fgos_records = session.query(FgosVo).filter(FgosVo.id.in_(fgos_ids)).all()
+    if len(fgos_records) != len(fgos_ids):
+        found_ids = {r.id for r in fgos_records}
+        missing_ids = set(fgos_ids) - found_ids
+        raise ValueError(f"Один или несколько ФГОС ВО не найдены в БД: ID={list(missing_ids)}.")
 
-        uk_type = session.query(CompetencyType).filter_by(code='УК').first()
-        if not uk_type:
-            raise ValueError("Тип компетенции 'УК' не найден в БД.")
+    uk_type = session.query(CompetencyType).filter_by(code='УК').first()
+    if not uk_type:
+        raise ValueError("Тип компетенции 'УК' не найден в БД.")
 
-        disposition_meta = parsed_disposition_data.get('disposition_metadata', {})
-        source_string = f"Распоряжение №{disposition_meta.get('number', 'N/A')} от {disposition_meta.get('date', 'N/A')}"
+    disposition_meta = parsed_disposition_data.get('disposition_metadata', {})
+    source_string = f"Распоряжение №{disposition_meta.get('number', 'N/A')} от {disposition_meta.get('date', 'N/A')}"
 
-        for fgos_vo in fgos_records:
-            logger.info(f"Обработка ФГОС ID: {fgos_vo.id} ({fgos_vo.direction_code})")
+    for fgos_vo in fgos_records:
+        logger.info(f"Обработка ФГОС ID: {fgos_vo.id} ({fgos_vo.direction_code})")
 
-            if force_update_uk:
-                logger.info(f"Принудительное обновление для ФГОС {fgos_vo.id}. Удаление существующих УК.")
-                session.query(Competency).filter(
-                    Competency.fgos_vo_id == fgos_vo.id,
-                    Competency.competency_type_id == uk_type.id
-                ).delete(synchronize_session='fetch')
-                session.flush()
+        if force_update_uk:
+            logger.info(f"Принудительное обновление для ФГОС {fgos_vo.id}. Удаление существующих УК.")
+            session.query(Competency).filter(
+                Competency.fgos_vo_id == fgos_vo.id,
+                Competency.competency_type_id == uk_type.id
+            ).delete(synchronize_session='fetch')
+            session.flush()
 
-            for parsed_uk_data in parsed_disposition_data.get('uk_competencies_with_indicators', []):
-                original_uk_code = parsed_uk_data.get('code')
-                
-                final_uk_code_resolution_key = f"uk_code_{original_uk_code}"
-                final_uk_code = resolutions.get(final_uk_code_resolution_key, original_uk_code)
-                
-                if not final_uk_code:
-                    logger.warning(f"Пропуск УК: код пустой после резолвинга для {original_uk_code}")
+        for parsed_uk_data in parsed_disposition_data.get('uk_competencies_with_indicators', []):
+            original_uk_code = parsed_uk_data.get('code')
+            
+            final_uk_code_resolution_key = f"uk_code_{original_uk_code}"
+            final_uk_code = resolutions.get(final_uk_code_resolution_key, original_uk_code)
+            
+            if not final_uk_code:
+                logger.warning(f"Пропуск УК: код пустой после резолвинга для {original_uk_code}")
+                summary['skipped_uk'] += 1
+                continue
+            
+            use_old_name_resolution_key = f"uk_comp_{original_uk_code}_name"
+            if resolutions.get(use_old_name_resolution_key) == 'use_old':
+                logger.info(f"Пропуск обновления названия для УК {original_uk_code} согласно решению пользователя.")
+                summary['skipped_uk'] += 1
+                existing_uk_comp = session.query(Competency).filter_by(code=original_uk_code, fgos_vo_id=fgos_vo.id, competency_type_id=uk_type.id).first()
+                if not existing_uk_comp:
+                    logger.warning(f"Не удалось найти существующую УК {original_uk_code} для добавления индикаторов.")
+                    continue
+                current_uk_comp = existing_uk_comp
+            else:
+                uk_name = parsed_uk_data.get('name')
+                uk_category_name = parsed_uk_data.get('category_name')
+                if not uk_name:
+                    logger.warning(f"Пропуск УК {final_uk_code}: отсутствует название.")
                     summary['skipped_uk'] += 1
                     continue
+
+                existing_uk_comp = session.query(Competency).filter_by(code=final_uk_code, fgos_vo_id=fgos_vo.id, competency_type_id=uk_type.id).first()
                 
-                use_old_name_resolution_key = f"uk_comp_{original_uk_code}_name"
-                if resolutions.get(use_old_name_resolution_key) == 'use_old':
-                    logger.info(f"Пропуск обновления названия для УК {original_uk_code} согласно решению пользователя.")
-                    summary['skipped_uk'] += 1
-                    existing_uk_comp = session.query(Competency).filter_by(code=original_uk_code, fgos_vo_id=fgos_vo.id, competency_type_id=uk_type.id).first()
-                    if not existing_uk_comp:
-                        logger.warning(f"Не удалось найти существующую УК {original_uk_code} для добавления индикаторов.")
-                        continue
+                if existing_uk_comp:
+                    existing_uk_comp.name = uk_name
+                    existing_uk_comp.category_name = uk_category_name
+                    session.add(existing_uk_comp)
+                    summary['updated_uk'] += 1
                     current_uk_comp = existing_uk_comp
                 else:
-                    uk_name = parsed_uk_data.get('name')
-                    uk_category_name = parsed_uk_data.get('category_name')
-                    if not uk_name:
-                        logger.warning(f"Пропуск УК {final_uk_code}: отсутствует название.")
-                        summary['skipped_uk'] += 1
-                        continue
+                    is_code_busy = session.query(Competency).filter_by(code=final_uk_code, fgos_vo_id=fgos_vo.id).count() > 0
+                    if is_code_busy:
+                        try:
+                            start_num_to_shift = int(final_uk_code.split('-')[-1])
+                            _shift_competency_codes(session, fgos_vo.id, uk_type.id, start_num_to_shift)
+                            summary['shifted_uk'] += 1
+                        except (ValueError, IndexError):
+                            raise ValueError(f"Не удалось распарсить числовую часть кода '{final_uk_code}' для сдвига.")
 
-                    existing_uk_comp = session.query(Competency).filter_by(code=final_uk_code, fgos_vo_id=fgos_vo.id, competency_type_id=uk_type.id).first()
-                    
-                    if existing_uk_comp:
-                        existing_uk_comp.name = uk_name
-                        existing_uk_comp.category_name = uk_category_name
-                        session.add(existing_uk_comp)
-                        summary['updated_uk'] += 1
-                        current_uk_comp = existing_uk_comp
-                    else:
-                        is_code_busy = session.query(Competency).filter_by(code=final_uk_code, fgos_vo_id=fgos_vo.id).count() > 0
-                        if is_code_busy:
-                            try:
-                                start_num_to_shift = int(final_uk_code.split('-')[-1])
-                                _shift_competency_codes(session, fgos_vo.id, uk_type.id, start_num_to_shift)
-                                summary['shifted_uk'] += 1
-                            except (ValueError, IndexError):
-                                raise ValueError(f"Не удалось распарсить числовую часть кода '{final_uk_code}' для сдвига.")
+                    current_uk_comp = Competency(
+                        competency_type_id=uk_type.id, fgos_vo_id=fgos_vo.id,
+                        code=final_uk_code, name=uk_name, category_name=uk_category_name
+                    )
+                    session.add(current_uk_comp)
+                    summary['saved_uk'] += 1
+            
+            session.flush()
 
-                        current_uk_comp = Competency(
-                            competency_type_id=uk_type.id, fgos_vo_id=fgos_vo.id,
-                            code=final_uk_code, name=uk_name, category_name=uk_category_name
-                        )
-                        session.add(current_uk_comp)
-                        summary['saved_uk'] += 1
+            for parsed_indicator_data in parsed_uk_data.get('indicators', []):
+                original_ind_code = parsed_indicator_data.get('code')
                 
-                session.flush()
-
-                for parsed_indicator_data in parsed_uk_data.get('indicators', []):
-                    original_ind_code = parsed_indicator_data.get('code')
+                final_ind_code_resolution_key = f"indicator_{original_uk_code}_{original_ind_code}_code"
+                final_ind_code = resolutions.get(final_ind_code_resolution_key, original_ind_code)
+                
+                if not final_ind_code:
+                    logger.warning(f"Пропуск индикатора: код пустой для {original_ind_code}")
+                    summary['skipped_indicator'] += 1
+                    continue
                     
-                    final_ind_code_resolution_key = f"indicator_{original_uk_code}_{original_ind_code}_code"
-                    final_ind_code = resolutions.get(final_ind_code_resolution_key, original_ind_code)
+                use_old_formulation_key = f"indicator_{original_uk_code}_{original_ind_code}_formulation"
+                if resolutions.get(use_old_formulation_key) == 'use_old':
+                    logger.info(f"Пропуск обновления формулировки для индикатора {original_ind_code} согласно решению пользователя.")
+                    summary['skipped_indicator'] += 1
+                    continue
                     
-                    if not final_ind_code:
-                        logger.warning(f"Пропуск индикатора: код пустой для {original_ind_code}")
+                indicator_formulation = parsed_indicator_data.get('formulation')
+                if not indicator_formulation:
+                    summary['skipped_indicator'] += 1
+                    continue
+                
+                existing_indicator = session.query(Indicator).filter_by(code=final_ind_code, competency_id=current_uk_comp.id).first()
+                
+                if existing_indicator:
+                    existing_indicator.formulation = indicator_formulation
+                    existing_indicator.source = source_string
+                    session.add(existing_indicator)
+                    summary['updated_indicator'] += 1
+                else:
+                    is_ind_code_busy = session.query(Indicator).filter_by(code=final_ind_code, competency_id=current_uk_comp.id).count() > 0
+                    if is_ind_code_busy:
+                        logger.error(f"Код индикатора '{final_ind_code}' уже занят для компетенции {current_uk_comp.code}. Пропуск.")
                         summary['skipped_indicator'] += 1
                         continue
                         
-                    use_old_formulation_key = f"indicator_{original_uk_code}_{original_ind_code}_formulation"
-                    if resolutions.get(use_old_formulation_key) == 'use_old':
-                        logger.info(f"Пропуск обновления формулировки для индикатора {original_ind_code} согласно решению пользователя.")
-                        summary['skipped_indicator'] += 1
-                        continue
-                        
-                    indicator_formulation = parsed_indicator_data.get('formulation')
-                    if not indicator_formulation:
-                        summary['skipped_indicator'] += 1
-                        continue
-                    
-                    existing_indicator = session.query(Indicator).filter_by(code=final_ind_code, competency_id=current_uk_comp.id).first()
-                    
-                    if existing_indicator:
-                        existing_indicator.formulation = indicator_formulation
-                        existing_indicator.source = source_string
-                        session.add(existing_indicator)
-                        summary['updated_indicator'] += 1
-                    else:
-                        is_ind_code_busy = session.query(Indicator).filter_by(code=final_ind_code, competency_id=current_uk_comp.id).count() > 0
-                        if is_ind_code_busy:
-                           logger.error(f"Код индикатора '{final_ind_code}' уже занят для компетенции {current_uk_comp.code}. Пропуск.")
-                           summary['skipped_indicator'] += 1
-                           continue
-                           
-                        new_indicator = Indicator(
-                            competency_id=current_uk_comp.id, code=final_ind_code,
-                            formulation=indicator_formulation, source=source_string
-                        )
-                        session.add(new_indicator)
-                        summary['saved_indicator'] += 1
+                    new_indicator = Indicator(
+                        competency_id=current_uk_comp.id, code=final_ind_code,
+                        formulation=indicator_formulation, source=source_string
+                    )
+                    session.add(new_indicator)
+                    summary['saved_indicator'] += 1
 
-        return {"success": True, "message": "Индикаторы УК успешно обработаны.", "summary": summary}
-    except Exception as e:
-        logger.error(f"Error saving UK indicators from disposition: {e}", exc_info=True)
-        session.rollback()
-        raise e
+    return {"success": True, "message": "Индикаторы УК успешно обработаны.", "summary": summary}
     
 def handle_pk_name_correction(raw_phrase: str) -> Dict[str, str]:
     """
@@ -304,6 +300,7 @@ def handle_pk_ipk_generation(batch_tfs_data: List[Dict]) -> List[Dict]:
         logger.error(f"Unexpected error in handle_pk_ipk_generation: {e}", exc_info=True)
         raise RuntimeError(f"Неизвестная ошибка при генерации ПК/ИПК: {e}")
 
+@handle_db_errors()
 def batch_create_pk_and_ipk(data_list: List[Dict[str, Any]], session: Session) -> Dict:
     """
     Batch creation of PKs and their IPKs based on frontend data.
@@ -337,7 +334,7 @@ def batch_create_pk_and_ipk(data_list: List[Dict[str, Any]], session: Session) -
             educational_program_ids = item_data.get('educational_program_ids', [])
             if educational_program_ids:
                 for ep_id in educational_program_ids:
-                    ep = session.query(EducationalProgram).get(ep_id)
+                    ep = session.get(EducationalProgram, ep_id)
                     if ep:
                         assoc = CompetencyEducationalProgram(competency_id=new_pk.id, educational_program_id=ep_id)
                         session.add(assoc)
@@ -368,7 +365,6 @@ def batch_create_pk_and_ipk(data_list: List[Dict[str, Any]], session: Session) -
             errors.append({'pk_code': item_data.get('pk_code'), 'error': str(e)})
 
     if errors:
-        session.rollback()
         raise Exception(f"Обнаружены ошибки во время пакетного создания. Все изменения отменены. Подробности: {errors}")
 
     return {"success_count": created_count, "error_count": len(errors), "errors": errors}
