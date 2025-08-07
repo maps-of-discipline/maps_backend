@@ -37,16 +37,6 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 LLM_PROVIDER = os.getenv('LLM_PROVIDER', 'openrouter')
 
-# Local LLM Configuration
-LOCAL_LLM_BASE_URL = os.getenv("LOCAL_LLM_BASE_URL")
-LOCAL_LLM_API_KEY = os.getenv("LOCAL_LLM_API_KEY")
-LOCAL_LLM_MODEL_NAME = os.getenv("LOCAL_LLM_MODEL_NAME")
-
-# Kluster AI Configuration
-KLUSTER_AI_API_KEY = os.getenv("KLUSTER_AI_API_KEY")
-KLUSTER_AI_BASE_URL = os.getenv("KLUSTER_AI_BASE_URL")
-KLUSTER_AI_MODEL_NAME = os.getenv("KLUSTER_AI_MODEL_NAME")
-
 # OpenRouter Configuration
 OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
