@@ -2,8 +2,7 @@
 import datetime
 import re
 import logging
-from typing import Optional, Any
-from collections import Counter
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +16,7 @@ def preprocess_text_for_llm(text: str) -> str:
     
     page_number = re.compile(r'^\s*(\d+\s*/\s*\d+|\d+)\s*$')
     garant = re.compile(r'система гарант', re.IGNORECASE)
-    date_and_page = re.compile(r'^\s*\d{2}\.\d{2}\.\d{4}\s+\d+/\d+\s*$', re.IGNORECASE) # e.g., "21.06.2021 1/13"
+    date_and_page = re.compile(r'^\s*\d{2}\.\d{2}\.\d{4}\s+\d+/\d+\s*$', re.IGNORECASE)
     long_string = re.compile(r'^[^\s]{100,}$')
 
     for line in lines:
@@ -58,21 +57,24 @@ def preprocess_text_for_llm(text: str) -> str:
 
 
 def parse_date_string(date_str: Optional[str]) -> Optional[datetime.date]:
-    """Парсит строку даты в объект datetime.date, обрабатывая несколько форматов."""
-    if not date_str:
+    """Парсит строку даты в объект datetime.date, обрабатывая простые форматы."""
+    if not date_str or not isinstance(date_str, str):
         return None
     
+    date_str = date_str.strip()
+
+    # Попытка 1: Парсинг формата YYYY-MM-DD (основной ожидаемый формат от NLP)
     try:
         return datetime.date.fromisoformat(date_str)
     except (ValueError, TypeError):
         pass
     
+    # Попытка 2: Парсинг формата DD.MM.YYYY (запасной вариант)
     try:
-        if isinstance(date_str, str):
-            day, month, year = map(int, date_str.split('.'))
-            return datetime.date(year, month, day)
+        day, month, year = map(int, date_str.split('.'))
+        return datetime.date(year, month, day)
     except (ValueError, TypeError):
         pass
-    
-    logger.warning(f"Не удалось распознать формат даты: '{date_str}'. Возвращаем None.")
+
+    logger.warning(f"Не удалось распознать формат даты: '{date_str}'. Ожидался YYYY-MM-DD или DD.MM.YYYY.")
     return None

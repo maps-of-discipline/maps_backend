@@ -16,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger(__name__)
 
-# FGOS Endpoints
+
 @competencies_matrix_bp.route('/fgos', methods=['GET'])
 @login_required
 @approved_required
@@ -98,6 +98,10 @@ def save_fgos():
             "message": "Данные ФГОС успешно сохранены."
         }), 201
  
+    except ValueError as e:
+        db.session.rollback()
+        logger.warning(f"Validation error saving FGOS from '{filename}': {e}")
+        return jsonify({"error": f"Ошибка валидации данных: {e}"}), 400
     except IntegrityError as e:
         db.session.rollback()
         logger.error(f"Integrity error saving FGOS: {e.orig}", exc_info=True)
@@ -105,7 +109,7 @@ def save_fgos():
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error saving FGOS data from file {filename}: {e}", exc_info=True)
-        abort(500, description=f"Неожиданная ошибка сервера при сохранении: {e}")
+        return jsonify({"error": f"Внутренняя ошибка сервера при сохранении: {e}"}), 500
 
 
 @competencies_matrix_bp.route('/fgos/<int:fgos_id>', methods=['DELETE'])
@@ -128,9 +132,8 @@ def delete_fgos_route(fgos_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error deleting FGOS {fgos_id}: {e}", exc_info=True)
-        abort(500, description=f"Не удалось удалить ФГОС: {e}")
+        return jsonify({"error": f"Не удалось удалить ФГОС: {e}"}), 500
 
-# --- НОВЫЕ ЭНДПОИНТЫ ДЛЯ РАСПОРЯЖЕНИЙ ---
 @competencies_matrix_bp.route('/fgos/uk-indicators/upload', methods=['POST'])
 @login_required
 @approved_required
@@ -158,10 +161,10 @@ def upload_uk_indicators_disposition():
         return jsonify(parsed_data), 200
     except ValueError as e:
         logger.error(f"Upload UK Disposition: Parsing Error for {file.filename}: {e}", exc_info=True)
-        abort(400, description=f"Ошибка парсинга файла распоряжения: {e}")
+        return jsonify({"error": f"Ошибка парсинга файла распоряжения: {e}"}), 400
     except Exception as e:
         logger.error(f"Upload UK Disposition: Unexpected error processing file {file.filename}: {e}", exc_info=True)
-        abort(500, description=f"Неожиданная ошибка сервера при обработке файла распоряжения: {e}")
+        return jsonify({"error": f"Неожиданная ошибка сервера при обработке файла распоряжения: {e}"}), 500
 
 @competencies_matrix_bp.route('/fgos/uk-indicators/save', methods=['POST'])
 @login_required
@@ -195,7 +198,7 @@ def save_uk_indicators_disposition():
     except ValueError as e:
         db.session.rollback()
         logger.error(f"Validation error saving UK indicators from disposition: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 400
+        return jsonify({"error": f"Ошибка валидации: {e}"}), 400
     except IntegrityError as e:
         db.session.rollback()
         logger.error(f"Integrity error saving UK indicators from disposition: {e.orig}", exc_info=True)

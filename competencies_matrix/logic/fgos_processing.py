@@ -164,7 +164,7 @@ def _sync_recommended_ps(session: Session, fgos: FgosVo, raw_ps_list: list):
     if not raw_ps_list:
         return
 
-    session.query(FgosRecommendedPs).filter_by(fgos_id=fgos.id).delete()
+    session.query(FgosRecommendedPs).filter_by(fgos_vo_id=fgos.id).delete()
 
     for ps_data in raw_ps_list:
         ps_code = ps_data.get('code')
